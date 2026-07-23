@@ -115,6 +115,31 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     repeating-linear-gradient(115deg, rgba(255,255,255,.04) 0 2px, transparent 2px 9px),
     linear-gradient(160deg,#120a1c 0%,#07050c 70%) !important;box-shadow:0 10px 26px rgba(0,0,0,.6), 0 0 30px -4px #c9a8ff;}
 
+.pcard .pattern-layer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.65;}
+.pcard.pattern-attack .pattern-layer{background:repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 3px, transparent 3px 15px);}
+.pcard.pattern-defense .pattern-layer{background:
+  repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 2px, transparent 2px 17px),
+  repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 2px, transparent 2px 26px);}
+.pcard.pattern-creative .pattern-layer{background:radial-gradient(rgba(255,255,255,.09) 1px, transparent 1.4px);background-size:11px 11px;}
+.pcard.pattern-speed .pattern-layer{background:repeating-linear-gradient(100deg, rgba(255,255,255,.07) 0 2px, transparent 2px 22px);}
+.pcard.pattern-legacy .pattern-layer{background:repeating-conic-gradient(from 0deg at 50% 0%, rgba(255,255,255,.07) 0deg 4deg, transparent 4deg 13deg);}
+.pcard.pattern-keeper .pattern-layer{background:
+  repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 1.5px, transparent 1.5px 13px),
+  repeating-linear-gradient(-45deg, rgba(255,255,255,.06) 0 1.5px, transparent 1.5px 13px);}
+.pcard.pattern-retro .pattern-layer{background:repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 5px);}
+.pcard.pattern-wc .pattern-layer{background:
+  radial-gradient(circle at 50% 8%, rgba(255,215,0,.3), transparent 55%),
+  repeating-conic-gradient(from 0deg at 50% 8%, rgba(255,255,255,.06) 0deg 5deg, transparent 5deg 16deg);}
+.pcard.pattern-blk .pattern-layer{background:radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);background-size:6px 6px;opacity:.8;}
+
+.pcard .variant-badge{position:absolute;bottom:6px;right:6px;width:26px;height:26px;border-radius:8px;
+  background:rgba(6,8,12,.72);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;z-index:2;}
+.pcard .variant-badge svg{width:15px;height:15px;color:var(--acc);}
+.pcard.mini .variant-badge{width:20px;height:20px;bottom:4px;right:4px;border-radius:6px;}
+.pcard.mini .variant-badge svg{width:11px;height:11px;}
+.pcard.xs .variant-badge{width:16px;height:16px;bottom:3px;right:3px;border-radius:5px;}
+.pcard.xs .variant-badge svg{width:9px;height:9px;}
+
 .pcard .photo-frame{position:relative;z-index:0;width:100%;height:160px;flex-shrink:0;overflow:hidden;}
 .pcard .avatar{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   font-family:'Anton';font-size:44px;color:var(--chalk);letter-spacing:.02em;
@@ -756,6 +781,38 @@ function openModal(innerHTML){
 function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
 
 // ===== card rendering =====
+const VARIANT_ICON = {
+  fs:'<path d="M12 3l2.4 5.3 5.6.6-4.2 3.9 1.2 5.6L12 15.9 6.9 18.4l1.2-5.6L3.9 8.9l5.6-.6z" fill="currentColor"/>',
+  otw:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/>',
+  pm:'<path d="M22 2L2 9.5l7 3 2 7.5 3-4.5 5 3z" fill="currentColor"/>',
+  gb:'<path d="M5 3h4v6l6 2.5A3 3 0 0117 14v4H4V8a2 2 0 011-1.7z" fill="currentColor"/>',
+  wall:'<rect x="3" y="6" width="7" height="4" fill="currentColor"/><rect x="12" y="6" width="9" height="4" fill="currentColor"/><rect x="3" y="12" width="9" height="4" fill="currentColor"/><rect x="14" y="12" width="7" height="4" fill="currentColor"/>',
+  phenom:'<path d="M12 2l4 9h-3v9h-2v-9H8z" fill="currentColor"/>',
+  setpiece:'<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',
+  derby:'<path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="currentColor"/>',
+  tots:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
+  flash:'<circle cx="12" cy="13" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 9v4l3 2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.5 4.5l-2 3 3 1" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  sd:'<line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="1.9"/><line x1="20" y1="4" x2="4" y2="20" stroke="currentColor" stroke-width="1.9"/>',
+  iron:'<path d="M12 2l7 3v6c0 5-3 8.5-7 11-4-2.5-7-6-7-11V5z" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  wonder:'<path d="M12 21V11" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M12 11c0-4 3-6 6-6 0 4-2 6-6 6z" fill="currentColor"/><path d="M12 14c0-3-3-5-6-5 0 3 2 5 6 5z" fill="currentColor"/>',
+  icon:'<path d="M3 8l4 3 5-6 5 6 4-3-2 10H5z" fill="currentColor"/>',
+  cent:'<path d="M6 4c-3 4-3 12 0 16" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M18 4c3 4 3 12 0 16" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2" fill="currentColor"/>',
+  hof:'<circle cx="12" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 13l-2 7 5-3 5 3-2-7" fill="currentColor"/>',
+  gal:'<circle cx="17" cy="7" r="2.2" fill="currentColor"/><path d="M15 9C10 10 5 14 3 19" stroke="currentColor" stroke-width="1.6" fill="none"/>',
+  gg:'<path d="M6 12V6a2 2 0 014 0v3M10 9V5a2 2 0 014 0v4M14 9V6a2 2 0 014 0v6c0 4-3 7-7 7s-7-3-7-7v-2a2 2 0 014 0v1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  wc:'<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  blk:'<path d="M14 3a9 9 0 100 18 7 7 0 010-18z" fill="currentColor"/>',
+};
+const PATTERN_FAMILY = {
+  fs:'attack', gb:'attack', phenom:'attack', sd:'attack', gal:'attack',
+  wall:'defense', iron:'defense',
+  otw:'creative', pm:'creative', setpiece:'creative', tots:'creative', hof:'creative',
+  derby:'speed', wonder:'speed',
+  icon:'legacy', cent:'legacy',
+  gg:'keeper',
+  flash:'retro',
+  wc:'wc', blk:'blk',
+};
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
 }
@@ -770,14 +827,18 @@ function statBar(label, val){
 function cardEl(card, size=''){
   const r = rarityInfo(card.ov);
   const hasVariant = card.variant && card.variant!=='base';
+  const family = hasVariant ? (PATTERN_FAMILY[card.theme]||'') : '';
   const div = document.createElement('div');
-  div.className = `pcard ${r.cls} ${hasVariant?'theme-'+card.theme:''} ${size}`.trim();
+  div.className = `pcard ${r.cls} ${hasVariant?'theme-'+card.theme:''} ${family?'pattern-'+family:''} ${size}`.trim();
   const varTag = hasVariant ? `<div class="var-tag">${card.variantLabel}</div>` : '';
+  const badge = hasVariant && VARIANT_ICON[card.theme] ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON[card.theme]}</svg></div>` : '';
   div.innerHTML = `
+    ${hasVariant ? '<div class="pattern-layer"></div>' : ''}
     <div class="photo-frame">
       <div class="avatar">${initialsOf(card.n)}</div>
       <img class="face-photo" src="${proxyImg(card.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">
       <div class="photo-tint"></div>
+      ${badge}
     </div>
     <div class="top">
       <div><div class="ov">${card.ov}</div><div class="ov-underline"></div></div>
