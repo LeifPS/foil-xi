@@ -116,13 +116,32 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     linear-gradient(160deg,#0d2b28 0%,#0d1a1e 62%,#0a1114 100%);}
 .pcard.r-icon{--acc:var(--r-icon);background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.045) 0 2px, transparent 2px 9px),
-    linear-gradient(160deg,#26173a 0%,#180f26 62%,#100a1a 100%);}
+    linear-gradient(160deg,#26173a 0%,#180f26 62%,#100a1a 100%);
+  animation:iconGlow 2.6s ease-in-out infinite;}
+.pcard.r-icon::before{animation:autoShine 2.8s ease-in-out infinite;}
+@keyframes iconGlow{
+  0%,100%{box-shadow:0 10px 24px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.02) inset, 0 0 20px -6px var(--r-icon);}
+  50%{box-shadow:0 10px 24px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.02) inset, 0 0 34px -4px var(--r-icon);}
+}
+@keyframes autoShine{
+  0%{background-position:130% 0%;}
+  50%{background-position:-30% 100%;}
+  100%{background-position:130% 0%;}
+}
 .pcard.r-ultimate{border:1.5px solid transparent;
   background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 9px) padding-box,
     linear-gradient(160deg,#241733,#120a1c 60%) padding-box,
     var(--r-ultimate) border-box;
-  box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 26px -4px #d98bff;}
+  animation:ultimateGlow 3.2s linear infinite, ultimateBreathe 2.6s ease-in-out infinite;}
+.pcard.r-ultimate::before{animation:autoShine 1.9s ease-in-out infinite;}
+@keyframes ultimateGlow{
+  0%{box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 28px -4px #ff8bd0;}
+  33%{box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 32px -4px #8bd0ff;}
+  66%{box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 32px -4px #ffe98b;}
+  100%{box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 28px -4px #ff8bd0;}
+}
+@keyframes ultimateBreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.018);}}
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
 .pcard.theme-gb{--acc:#ffb84d;} .pcard.theme-wall{--acc:#8fb4d1;} .pcard.theme-tots{--acc:#f5d76e;}
 .pcard.theme-flash{--acc:#ff7a59;} .pcard.theme-sd{--acc:#ff5fa8;} .pcard.theme-icon{--acc:#c78bf5;}
@@ -391,6 +410,53 @@ MANAGERS.forEach(m=>{
 });
 const MGR_TIER_ACC = {Bronze:'#b08d57', Silber:'#adb5bd', Gold:'#e8c468', Elite:'#5fe1c9', 'Legend\u00e4r':'#ffd76a'};
 
+// ===== German display translations (nationality, variant names, positions, stats) =====
+const NAT_DE = {
+  Albania:'Albanien', Algeria:'Algerien', Angola:'Angola', Argentina:'Argentinien', Armenia:'Armenien',
+  Australia:'Australien', Austria:'\u00d6sterreich', Azerbaijan:'Aserbaidschan', Bangladesh:'Bangladesch',
+  Belgium:'Belgien', Benin:'Benin', Bermuda:'Bermuda', Bolivia:'Bolivien', 'Bosnia and Herzegovina':'Bosnien und Herzegowina',
+  Brazil:'Brasilien', Bulgaria:'Bulgarien', 'Burkina Faso':'Burkina Faso', Burundi:'Burundi', 'Cabo Verde':'Kap Verde',
+  Cameroon:'Kamerun', Canada:'Kanada', 'Central African Republic':'Zentralafrikanische Republik', Chad:'Tschad',
+  Chile:'Chile', 'China PR':'China', 'Chinese Taipei':'Taiwan', Colombia:'Kolumbien', Comoros:'Komoren',
+  Congo:'Kongo', 'Congo DR':'DR Kongo', 'Costa Rica':'Costa Rica', Croatia:'Kroatien', Curacao:'Cura\u00e7ao',
+  Cyprus:'Zypern', Czechia:'Tschechien', "C\u00f4te d'Ivoire":'Elfenbeink\u00fcste', Denmark:'D\u00e4nemark',
+  'Dominican Republic':'Dominikanische Republik', Ecuador:'Ecuador', Egypt:'\u00c4gypten', 'El Salvador':'El Salvador',
+  England:'England', 'Equatorial Guinea':'\u00c4quatorialguinea', Estonia:'Estland', Finland:'Finnland',
+  France:'Frankreich', Gabon:'Gabun', Gambia:'Gambia', Georgia:'Georgien', Germany:'Deutschland', Ghana:'Ghana',
+  Greece:'Griechenland', Guatemala:'Guatemala', Guinea:'Guinea', 'Guinea-Bissau':'Guinea-Bissau', Guyana:'Guyana',
+  Haiti:'Haiti', Honduras:'Honduras', Hungary:'Ungarn', Iceland:'Island', Indonesia:'Indonesien', Iran:'Iran',
+  Israel:'Israel', Italy:'Italien', Jamaica:'Jamaika', Japan:'Japan', Jordan:'Jordanien', Kenya:'Kenia',
+  'Korea Republic':'S\u00fcdkorea', Kosovo:'Kosovo', Latvia:'Lettland', Liberia:'Liberia', Libya:'Libyen',
+  Lithuania:'Litauen', Luxembourg:'Luxemburg', Madagascar:'Madagaskar', Malaysia:'Malaysia', Mali:'Mali',
+  Malta:'Malta', Mauritania:'Mauretanien', Mexico:'Mexiko', Montenegro:'Montenegro', Morocco:'Marokko',
+  Mozambique:'Mosambik', Netherlands:'Niederlande', 'New Zealand':'Neuseeland', Nigeria:'Nigeria',
+  'North Macedonia':'Nordmazedonien', 'Northern Ireland':'Nordirland', Norway:'Norwegen', Panama:'Panama',
+  Paraguay:'Paraguay', Peru:'Peru', Philippines:'Philippinen', Poland:'Polen', Portugal:'Portugal', Qatar:'Katar',
+  'Republic of Ireland':'Irland', Romania:'Rum\u00e4nien', Russia:'Russland', 'Saudi Arabia':'Saudi-Arabien',
+  Scotland:'Schottland', Senegal:'Senegal', Serbia:'Serbien', 'Sierra Leone':'Sierra Leone', Slovakia:'Slowakei',
+  Slovenia:'Slowenien', 'South Africa':'S\u00fcdafrika', Spain:'Spanien', Suriname:'Suriname', Sweden:'Schweden',
+  Switzerland:'Schweiz', Syria:'Syrien', Tanzania:'Tansania', Togo:'Togo', Tunisia:'Tunesien',
+  'T\u00fcrkiye':'T\u00fcrkei', Ukraine:'Ukraine', 'United Arab Emirates':'Vereinigte Arabische Emirate',
+  'United States':'USA', Uruguay:'Uruguay', Uzbekistan:'Usbekistan', Venezuela:'Venezuela', Wales:'Wales',
+  Zambia:'Sambia', Zimbabwe:'Simbabwe',
+};
+function natDE(n){ return NAT_DE[n] || n; }
+const VARIANT_LABEL_DE = {
+  fs:'Zukunftsstern', otw:'Spieler im Blick', pm:'Spielmacher', gb:'Torsch\u00fctzenk\u00f6nig', wall:'Die Mauer',
+  phenom:'Aufstrebendes Talent', setpiece:'Standard-Spezialist', derby:'Derbytag',
+  tots:'Team der Saison', flash:'R\u00fcckblende', sd:'Duell', iron:'Eiserner Vorhang', wonder:'Wunderkind',
+  icon:'Ikone', cent:'Zenturio', hof:'Ruhmeshalle', gal:'Gal\u00e1ctico', gg:'Goldener Handschuh',
+  wc:'WM-Moment', blk:'Blackout',
+};
+ALL_SPECIAL.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
+EXCLUSIVE_SPECIALS.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
+const POS_DE = {
+  GK:'TW', CB:'IV', LB:'LV', RB:'RV', LWB:'LAV', RWB:'RAV', CDM:'DM', CM:'ZM', CAM:'ZOM',
+  LM:'LM', RM:'RM', LW:'LA', RW:'RA', ST:'ST', CF:'MS',
+};
+function posDE(label){ return POS_DE[label] || label; }
+const STAT_DE = {PAC:'TEM', SHO:'SCH', PAS:'PAS', DRI:'DRI', DEF:'DEF', PHY:'PHY'};
+
 // ===== online backend (Firebase Firestore, lite/REST client - no IndexedDB/localStorage) =====
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyBViVDKpq_nXMTMsScWrP8dkenBFtikgkc",
@@ -478,32 +544,32 @@ const PACKS = [
     draw(){ const pool=poolByRange(78,88,true), hi=poolByRange(85,91,true);
       const out=Array.from({length:4},()=>pick(pool)); out.push(pick(hi)); return out; }},
   {id:'scout',name:'Wonderkid Scout Pack',cost:6000,tier:'premium',count:3,
-    desc:'3 Spieler, alle garantiert Nachwuchs-Sonderkarten (Future Star, Ones to Watch, Rising Phenom oder Wonderkid).',
+    desc:'3 Spieler, alle garantiert Nachwuchs-Sonderkarten (Zukunftsstern, Spieler im Blick, Aufstrebendes Talent oder Wunderkind).',
     draw(){ const pool=specialsByVariant(['fut_star','otw','rising_phenom','wonderkid']);
       return Array.from({length:3},()=>pick(pool)); }},
   {id:'goldenglove',name:'Golden Glove Pack',cost:5500,tier:'premium',count:2,
-    desc:'2 Torh\u00fcter, beide garantiert Golden-Glove-Sonderkarten. Die einzige Quelle f\u00fcr diese Variante.',
+    desc:'2 Torh\u00fcter, beide garantiert Goldener-Handschuh-Sonderkarten. Die einzige Quelle f\u00fcr diese Variante.',
     draw(){ const pool=specialsByVariant(['golden_glove']); return Array.from({length:2},()=>pick(pool)); }},
   {id:'iconmoment',name:'Icon Moments Pack',cost:9500,tier:'premium',count:3,
     desc:'3 Spieler. 1 garantierte Sonderkarte beliebiger Art.',
     draw(){ const pool=poolByRange(80,90,false);
       const out=Array.from({length:2},()=>pick(pool)); out.push(pick(ALL_SPECIAL)); return out; }},
   {id:'tots',name:'Team of the Season Pack',cost:16000,tier:'premium',count:4,
-    desc:'4 Spieler, 2 garantierte Team-of-the-Season-Karten. Einziges Pack mit garantierten TOTS.',
+    desc:'4 Spieler, 2 garantierte Team-der-Saison-Karten. Einziges Pack mit garantierten Team-der-Saison-Karten.',
     draw(){ const totsPool=specialsByVariant(['tots']), hi=poolByRange(85,99,true);
       return [pick(totsPool),pick(totsPool),pick(hi),pick(hi)]; }},
   {id:'sevenof88',name:'7\u00d7 88+ Pack',cost:24000,tier:'premium',count:7,
     desc:'7 Spieler, alle garantiert mit Rating 88 oder h\u00f6her.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
   {id:'hof',name:'Hall of Fame Pack',cost:42000,tier:'ultimate',count:1,
-    desc:'1 Spieler, garantiert Icon, Centurion, Hall of Fame oder Galactico \u2014 Rating 95+. Das einzige Pack mit diesen Karten.',
+    desc:'1 Spieler, garantiert Ikone, Zenturio, Ruhmeshalle oder Gal\u00e1ctico \u2014 Rating 95+. Das einzige Pack mit diesen Karten.',
     draw(){ const pool=specialsByVariant(['icon','centurion','hall_of_fame','galactico']).filter(c=>c.ov>=95);
       return [pick(pool.length?pool:specialsByVariant(['icon','centurion','hall_of_fame','galactico']))]; }},
   {id:'twoof95',name:'Pick 2 of 4: 95+ Pack',cost:52000,tier:'ultimate',count:4,pickCount:2,
     desc:'4 Spieler, alle mit Rating 95+. W\u00e4hle 2 davon zum Behalten.',
     draw(){ const ultra=poolByRange(95,99,true); return Array.from({length:4},()=>pick(ultra)); }},
   {id:'blackout',name:'Blackout Pack',cost:100000,tier:'ultimate',count:1,
-    desc:'1 Spieler, garantiert World Cup Moment oder Blackout \u2014 Rating 97-99. Die seltensten Karten im Spiel, sonst nirgends erh\u00e4ltlich.',
+    desc:'1 Spieler, garantiert WM-Moment oder Blackout \u2014 Rating 97-99. Die seltensten Karten im Spiel, sonst nirgends erh\u00e4ltlich.',
     draw(){ return [pick(EXCLUSIVE_SPECIALS)]; }},
   {id:'trainer',name:'Trainer Pack',cost:8000,tier:'premium',count:1,
     desc:'1 Trainer, zuf\u00e4llig aus allen Vereinen. Die Seltenheit richtet sich nach der St\u00e4rke des Vereins \u2014 Trainer geben deinem Kader einen Rating-Bonus.',
@@ -655,10 +721,27 @@ async function submitSBC(){
 
 
 // ===== TRADING =====
-let tradeSelection = new Set();
+const POS_GROUP_DE = {ANY:'Beliebig', GK:'Torh\u00fcter', DEF:'Verteidiger', MID:'Mittelfeld', FWD:'Sturm'};
+const MGR_TIER_LIST = ['Bronze','Silber','Gold','Elite','Legend\u00e4r'];
+let tradeOfferCards = new Set();
+let tradeOfferManagers = new Set();
+function describeOffer(t){
+  const parts = [];
+  if(t.offerCards.length) parts.push(`${t.offerCards.length} Karte${t.offerCards.length>1?'n':''}`);
+  if(t.offerManagers && t.offerManagers.length) parts.push(`${t.offerManagers.length} Trainer`);
+  if(t.offerCoins) parts.push(`${t.offerCoins.toLocaleString('de-DE')} Coins`);
+  return parts.join(' + ') || 'nichts';
+}
+function describeWant(want){
+  if(want.kind==='coins') return `${want.amount.toLocaleString('de-DE')} Coins`;
+  if(want.kind==='nothing') return 'nichts (Geschenk)';
+  if(want.kind==='cards') return `${want.count} Karte${want.count>1?'n':''} (mind. ${want.minOvr} Rating${want.pos&&want.pos!=='ANY'?', '+POS_GROUP_DE[want.pos]:''})`;
+  if(want.kind==='manager') return `1 Trainerkarte (mind. Stufe ${want.minTier})`;
+  return '';
+}
 function renderTrade(view){
   view.innerHTML = `
-    <div class="view-head"><h2>Handel</h2><p>Biete Karten aus deinem Verein anderen Spielern gegen Coins an. Spieler, die aktuell in deinem Kader stehen, kannst du nicht anbieten \u2014 entferne sie zuerst im Kader-Editor.</p></div>
+    <div class="view-head"><h2>Handel</h2><p>Biete Karten, Trainer und/oder Coins aus deinem Verein anderen Spielern an \u2014 im Tausch gegen Coins, bestimmte Karten (z.\u00a0B. Mindest-Rating) oder Trainerkarten. Spieler, die aktuell in deinem Kader stehen, kannst du nicht anbieten.</p></div>
     <div class="toolbar" style="margin-bottom:18px;">
       <button class="action-btn" id="trade-new" style="width:auto;padding:9px 18px;">+ Neues Angebot erstellen</button>
     </div>
@@ -697,10 +780,10 @@ async function loadTrades(){
     const row = document.createElement('div');
     row.className = 'leader-row';
     row.style.flexWrap = 'wrap';
-    row.innerHTML = `<span style="flex:1;">${t.fromName} bietet ${t.cards.length} Karte${t.cards.length>1?'n':''} f\u00fcr <b style="color:var(--gold);">${t.askPrice.toLocaleString('de-DE')} Coins</b></span>`;
+    row.innerHTML = `<span style="flex:1;"><b>${t.fromName}</b> bietet ${describeOffer(t)} f\u00fcr: <b style="color:var(--gold);">${describeWant(t.want)}</b></span>`;
     const btns = document.createElement('div');
     btns.style.display = 'flex'; btns.style.gap = '8px'; btns.style.marginTop='6px'; btns.style.width='100%';
-    const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Karten ansehen';
+    const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Ansehen';
     viewBtn.addEventListener('click', ()=>showTradeCardsModal(t));
     const acceptBtn = document.createElement('button'); acceptBtn.className='action-btn'; acceptBtn.style.width='auto'; acceptBtn.style.padding='6px 12px'; acceptBtn.textContent='Annehmen';
     acceptBtn.addEventListener('click', ()=>acceptTrade(t));
@@ -716,10 +799,10 @@ async function loadTrades(){
     const row = document.createElement('div');
     row.className = 'leader-row';
     row.style.flexWrap = 'wrap';
-    row.innerHTML = `<span style="flex:1;">An <b>${t.toName}</b>: ${t.cards.length} Karte${t.cards.length>1?'n':''} f\u00fcr ${t.askPrice.toLocaleString('de-DE')} Coins</span>`;
+    row.innerHTML = `<span style="flex:1;">An <b>${t.toName}</b>: ${describeOffer(t)} f\u00fcr ${describeWant(t.want)}</span>`;
     const btns = document.createElement('div');
     btns.style.display='flex'; btns.style.gap='8px'; btns.style.marginTop='6px'; btns.style.width='100%';
-    const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Karten ansehen';
+    const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Ansehen';
     viewBtn.addEventListener('click', ()=>showTradeCardsModal(t));
     const withdrawBtn = document.createElement('button'); withdrawBtn.className='action-btn secondary'; withdrawBtn.style.width='auto'; withdrawBtn.style.padding='6px 12px'; withdrawBtn.textContent='Zur\u00fcckziehen';
     withdrawBtn.addEventListener('click', ()=>withdrawTrade(t));
@@ -730,24 +813,59 @@ async function loadTrades(){
 }
 function showTradeCardsModal(t){
   openModal(`
-    <h2 style="margin-bottom:14px;">Angebotene Karten</h2>
+    <h2 style="margin-bottom:2px;">Angebot</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">Im Tausch gegen: ${describeWant(t.want)}</p>
     <div class="reveal-strip" id="trade-cards-grid"></div>
     <button class="modal-close" id="trade-cards-close">Schlie\u00dfen</button>`);
   const grid = document.getElementById('trade-cards-grid');
-  t.cards.forEach(c=>{ const card = BY_ID.get(c.cardId); if(card) grid.appendChild(cardEl(card,'mini')); });
+  (t.offerCards||[]).forEach(c=>{ const card = BY_ID.get(c.cardId); if(card) grid.appendChild(cardEl(card,'mini')); });
+  (t.offerManagers||[]).forEach(m=>{ const mgr = MGR_BY_ID.get(m.mgrId); if(mgr) grid.appendChild(cardEl(mgr,'mini')); });
   document.getElementById('trade-cards-close').addEventListener('click', closeModal);
 }
 function openTradeBuilder(){
-  tradeSelection = new Set();
+  tradeOfferCards = new Set(); tradeOfferManagers = new Set();
   const usedInSquad = new Set(Object.values(squad.slots));
   openModal(`
     <h2 style="margin-bottom:4px;">Neues Handelsangebot</h2>
-    <p class="hint" style="margin-top:0;">W\u00e4hle Karten aus, die du anbieten m\u00f6chtest, gib den Vereinsnamen des Empf\u00e4ngers und deinen Preis in Coins ein.</p>
-    <div class="mono" style="color:var(--muted);margin:10px 0;" id="trade-sel-count">0 Karten ausgew\u00e4hlt</div>
-    <div class="club-grid" id="trade-pick-grid" style="max-height:320px;overflow:auto;margin-bottom:16px;"></div>
+    <p class="hint" style="margin-top:0;">W\u00e4hle, was du anbietest, was du daf\u00fcr willst, und wer es bekommen soll.</p>
+    <div class="lbl" style="margin:14px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Spieler</div>
+    <div class="mono" style="color:var(--muted);margin-bottom:8px;" id="trade-sel-count">0 Karten ausgew\u00e4hlt</div>
+    <div class="club-grid" id="trade-pick-grid" style="max-height:260px;overflow:auto;margin-bottom:14px;"></div>
+    <div class="lbl" style="margin:6px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Trainer (optional)</div>
+    <div class="club-grid" id="trade-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
+    <div class="toolbar" style="margin-bottom:14px;">
+      <input id="trade-coins" type="number" min="0" placeholder="Coins zus\u00e4tzlich anbieten (optional)">
+    </div>
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Das willst du daf\u00fcr</div>
+    <div class="toolbar" style="margin-bottom:10px;">
+      <select id="trade-want-kind">
+        <option value="coins">Coins</option>
+        <option value="cards">Karte(n) mit Mindest-Rating</option>
+        <option value="manager">Trainerkarte (Mindeststufe)</option>
+        <option value="nothing">Nichts (Geschenk)</option>
+      </select>
+    </div>
+    <div class="toolbar" id="trade-want-coins" style="margin-bottom:14px;">
+      <input id="want-coins-amount" type="number" min="0" placeholder="Gew\u00fcnschte Coins">
+    </div>
+    <div class="toolbar" id="trade-want-cards" style="margin-bottom:14px;display:none;">
+      <input id="want-cards-count" type="number" min="1" value="1" placeholder="Anzahl Karten" style="max-width:110px;">
+      <input id="want-cards-minovr" type="number" min="1" max="99" value="80" placeholder="Mindest-Rating" style="max-width:130px;">
+      <select id="want-cards-pos">
+        <option value="ANY">Beliebige Position</option>
+        <option value="GK">Torh\u00fcter</option>
+        <option value="DEF">Verteidiger</option>
+        <option value="MID">Mittelfeld</option>
+        <option value="FWD">Sturm</option>
+      </select>
+    </div>
+    <div class="toolbar" id="trade-want-manager" style="margin-bottom:14px;display:none;">
+      <select id="want-mgr-tier">
+        ${MGR_TIER_LIST.map(t=>`<option value="${t}">${t}+</option>`).join('')}
+      </select>
+    </div>
     <div class="toolbar" style="margin-bottom:14px;">
       <input id="trade-target" placeholder="Vereinsname des Empf\u00e4ngers">
-      <input id="trade-price" type="number" min="0" placeholder="Preis in Coins">
     </div>
     <button class="action-btn" id="trade-submit" style="width:220px;">Angebot senden</button>
   `);
@@ -766,31 +884,71 @@ function openTradeBuilder(){
     }
     wrap.addEventListener('click', ()=>{
       if(inSquad){ toast('Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung. Entferne ihn dort zuerst.'); return; }
-      if(tradeSelection.has(uid)){ tradeSelection.delete(uid); el.style.outline=''; el.style.transform=''; }
-      else{ tradeSelection.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
-      document.getElementById('trade-sel-count').textContent = `${tradeSelection.size} Karte${tradeSelection.size===1?'':'n'} ausgew\u00e4hlt`;
+      if(tradeOfferCards.has(uid)){ tradeOfferCards.delete(uid); el.style.outline=''; el.style.transform=''; }
+      else{ tradeOfferCards.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
+      document.getElementById('trade-sel-count').textContent = `${tradeOfferCards.size} Karte${tradeOfferCards.size===1?'':'n'} ausgew\u00e4hlt`;
     });
     grid.appendChild(wrap);
+  });
+  const mgrGrid = document.getElementById('trade-mgr-grid');
+  const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr);
+  if(!ownedMgrs.length){ mgrGrid.innerHTML = `<p class="hint">Noch keine Trainer im Besitz.</p>`; }
+  ownedMgrs.forEach(({uid,mgr})=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'club-card-wrap';
+    wrap.style.cursor = 'pointer';
+    const el = cardEl(mgr,'mini');
+    wrap.appendChild(el);
+    wrap.addEventListener('click', ()=>{
+      if(tradeOfferManagers.has(uid)){ tradeOfferManagers.delete(uid); el.style.outline=''; el.style.transform=''; }
+      else{ tradeOfferManagers.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
+    });
+    mgrGrid.appendChild(wrap);
+  });
+  const kindSelect = document.getElementById('trade-want-kind');
+  kindSelect.addEventListener('change', ()=>{
+    document.getElementById('trade-want-coins').style.display = kindSelect.value==='coins' ? 'flex':'none';
+    document.getElementById('trade-want-cards').style.display = kindSelect.value==='cards' ? 'flex':'none';
+    document.getElementById('trade-want-manager').style.display = kindSelect.value==='manager' ? 'flex':'none';
   });
   document.getElementById('trade-submit').addEventListener('click', submitTradeOffer);
 }
 async function submitTradeOffer(){
-  if(!tradeSelection.size){ toast('W\u00e4hle mindestens eine Karte aus.'); return; }
+  if(!tradeOfferCards.size && !tradeOfferManagers.size){ toast('W\u00e4hle mindestens eine Karte oder einen Trainer zum Anbieten aus.'); return; }
   const targetRaw = document.getElementById('trade-target').value;
   const targetId = sanitizeClubId(targetRaw || '');
   if(!targetId){ toast('Bitte einen g\u00fcltigen Vereinsnamen eingeben.'); return; }
   if(targetId===profile.userId){ toast('Du kannst dir selbst kein Angebot senden.'); return; }
-  const price = Math.max(0, Math.floor(Number(document.getElementById('trade-price').value)||0));
+  const offerCoins = Math.max(0, Math.floor(Number(document.getElementById('trade-coins').value)||0));
+  if(offerCoins > profile.coins){ toast('Du bietest mehr Coins an, als du besitzt.'); return; }
+  const kind = document.getElementById('trade-want-kind').value;
+  let want;
+  if(kind==='coins'){
+    want = {kind:'coins', amount: Math.max(0, Math.floor(Number(document.getElementById('want-coins-amount').value)||0))};
+  } else if(kind==='cards'){
+    want = {kind:'cards',
+      count: Math.max(1, Math.floor(Number(document.getElementById('want-cards-count').value)||1)),
+      minOvr: Math.max(1, Math.min(99, Math.floor(Number(document.getElementById('want-cards-minovr').value)||1))),
+      pos: document.getElementById('want-cards-pos').value};
+  } else if(kind==='manager'){
+    want = {kind:'manager', minTier: document.getElementById('want-mgr-tier').value};
+  } else {
+    want = {kind:'nothing'};
+  }
   await fbReady;
   if(!fb){ toast('Handel ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.'); return; }
-  const cards = [...tradeSelection].map(uid=>{
+  const offerCards = [...tradeOfferCards].map(uid=>{
     const entry = collection.find(c=>c.uid===uid);
     return {uid, cardId: entry.cardId};
+  });
+  const offerManagers = [...tradeOfferManagers].map(uid=>{
+    const entry = managerCollection.find(m=>m.uid===uid);
+    return {uid, mgrId: entry.mgrId};
   });
   const tradeDoc = {
     fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
     toUserId: targetId, toName: targetRaw.trim(),
-    cards, askPrice: price, status:'pending', createdAt: Date.now()
+    offerCards, offerManagers, offerCoins, want, status:'pending', createdAt: Date.now()
   };
   try{
     await fb.setDoc(fb.doc(fb.db,'trades', genId()), tradeDoc);
@@ -812,37 +970,122 @@ async function declineTrade(t){
   toast('Angebot abgelehnt.');
   loadTrades();
 }
-async function acceptTrade(t){
-  if(profile.coins < t.askPrice){ toast('Nicht genug Coins f\u00fcr dieses Angebot.'); return; }
+async function finalizeTradeAccept(t, payment){
+  // payment = {coins, cardUids:[], managerUid:null} -- what I (recipient) send back to the sender
   await fbReady;
   if(!fb){ toast('Backend nicht erreichbar.'); return; }
   try{
-    // 1) credit the sender: remove their traded cards, add the coins
     const senderSnap = await fb.getDoc(fb.doc(fb.db,'saves', t.fromUserId));
-    if(senderSnap.exists()){
-      const senderData = senderSnap.data();
-      const senderProfile = senderData.profile || {};
-      const senderCollection = senderData.collection || [];
-      const tradedUids = new Set(t.cards.map(c=>c.uid));
-      const newSenderCollection = senderCollection.filter(c=>!tradedUids.has(c.uid));
-      senderProfile.coins = (senderProfile.coins||0) + t.askPrice;
-      await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile, collection:newSenderCollection}, {merge:true});
+    if(!senderSnap.exists()){ toast('Absender-Daten nicht gefunden \u2014 Angebot eventuell veraltet.'); return; }
+    const senderData = senderSnap.data();
+    let senderProfile = senderData.profile || {coins:0};
+    let senderCollection = senderData.collection || [];
+    let senderManagerCollection = senderData.managerCollection || [];
+
+    const offerCardUids = new Set((t.offerCards||[]).map(c=>c.uid));
+    const offerMgrUids = new Set((t.offerManagers||[]).map(m=>m.uid));
+    senderCollection = senderCollection.filter(c=>!offerCardUids.has(c.uid));
+    senderManagerCollection = senderManagerCollection.filter(m=>!offerMgrUids.has(m.uid));
+    senderProfile.coins = (senderProfile.coins||0) - (t.offerCoins||0) + (payment.coins||0);
+
+    payment.cardUids.forEach(uid=>{
+      const entry = collection.find(c=>c.uid===uid);
+      if(entry) senderCollection.push({uid:genId(), cardId:entry.cardId});
+    });
+    if(payment.managerUid){
+      const entry = managerCollection.find(m=>m.uid===payment.managerUid);
+      if(entry) senderManagerCollection.push({uid:genId(), mgrId:entry.mgrId});
     }
-    // 2) charge myself and add the cards
-    profile.coins -= t.askPrice;
-    t.cards.forEach(c=>collection.push({uid:genId(), cardId:c.cardId}));
+    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile, collection:senderCollection, managerCollection:senderManagerCollection}, {merge:true});
+
+    collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
+    if(payment.managerUid) managerCollection = managerCollection.filter(m=>m.uid!==payment.managerUid);
+    (t.offerCards||[]).forEach(c=>collection.push({uid:genId(), cardId:c.cardId}));
+    (t.offerManagers||[]).forEach(m=>managerCollection.push({uid:genId(), mgrId:m.mgrId}));
+    profile.coins += (t.offerCoins||0) - (payment.coins||0);
     await sSet('profile', profile);
     await sSet('collection', collection);
-    // 3) close out the trade
+    await sSet('managerCollection', managerCollection);
+
     await fb.deleteDoc(fb.doc(fb.db,'trades', t.id));
     updateCoinDisplay();
-    toast(`Handel abgeschlossen! ${t.cards.length} Karte${t.cards.length>1?'n':''} erhalten.`);
+    toast('Handel abgeschlossen!');
+    closeModal();
     loadTrades();
   }catch(e){
     console.warn('accept trade failed', e);
     toast('Handel konnte nicht abgeschlossen werden.');
   }
 }
+async function acceptTrade(t){
+  const want = t.want || {kind:'coins', amount:0};
+  if(want.kind==='coins'){
+    if(profile.coins < want.amount){ toast('Nicht genug Coins f\u00fcr dieses Angebot.'); return; }
+    await finalizeTradeAccept(t, {coins:want.amount, cardUids:[], managerUid:null});
+  } else if(want.kind==='nothing'){
+    await finalizeTradeAccept(t, {coins:0, cardUids:[], managerUid:null});
+  } else if(want.kind==='cards'){
+    openAcceptCardsModal(t, want);
+  } else if(want.kind==='manager'){
+    openAcceptManagerModal(t, want);
+  }
+}
+function openAcceptCardsModal(t, want){
+  const usedInSquad = new Set(Object.values(squad.slots));
+  const eligible = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)}))
+    .filter(x=>x.card && !usedInSquad.has(x.uid) && x.card.ov>=want.minOvr && (want.pos==='ANY' || posGroup(x.card.pos)===want.pos));
+  const picked = new Set();
+  openModal(`
+    <h2 style="margin-bottom:4px;">Karten ausw\u00e4hlen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle genau ${want.count} Karte${want.count>1?'n':''} (mind. ${want.minOvr} Rating${want.pos!=='ANY'?', '+POS_GROUP_DE[want.pos]:''}) zum Abgeben.</p>
+    <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="accept-sel-count">0 / ${want.count} ausgew\u00e4hlt</div>
+    <div class="club-grid" id="accept-cards-grid" style="max-height:320px;overflow:auto;margin-bottom:16px;"></div>
+    ${!eligible.length?'<p class="hint">Du besitzt keine passenden Karten daf\u00fcr.</p>':''}
+    <button class="action-btn" id="accept-cards-confirm" disabled style="opacity:.4;width:220px;">Best\u00e4tigen</button>`);
+  const grid = document.getElementById('accept-cards-grid');
+  eligible.forEach(({uid,card})=>{
+    const wrap = document.createElement('div');
+    wrap.style.cursor = 'pointer';
+    const el = cardEl(card,'mini');
+    wrap.appendChild(el);
+    wrap.addEventListener('click', ()=>{
+      if(picked.has(uid)){ picked.delete(uid); el.style.outline=''; el.style.transform=''; }
+      else{
+        if(picked.size>=want.count) return;
+        picked.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)';
+      }
+      document.getElementById('accept-sel-count').textContent = `${picked.size} / ${want.count} ausgew\u00e4hlt`;
+      const btn = document.getElementById('accept-cards-confirm');
+      const ok = picked.size===want.count;
+      btn.disabled = !ok; btn.style.opacity = ok?'1':'.4';
+    });
+    grid.appendChild(wrap);
+  });
+  document.getElementById('accept-cards-confirm').addEventListener('click', ()=>{
+    finalizeTradeAccept(t, {coins:0, cardUids:[...picked], managerUid:null});
+  });
+}
+function openAcceptManagerModal(t, want){
+  const minRank = MGR_TIER_ORDER[want.minTier] ?? 0;
+  const eligible = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)}))
+    .filter(x=>x.mgr && (MGR_TIER_ORDER[x.mgr.tier]??0) >= minRank);
+  openModal(`
+    <h2 style="margin-bottom:4px;">Trainer ausw\u00e4hlen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle einen Trainer der Stufe ${want.minTier} oder h\u00f6her zum Abgeben.</p>
+    <div class="picker-list" id="accept-mgr-list"></div>
+    ${!eligible.length?'<p class="hint">Du besitzt keinen passenden Trainer daf\u00fcr.</p>':''}`);
+  const list = document.getElementById('accept-mgr-list');
+  eligible.forEach(({uid,mgr})=>{
+    const wrap = document.createElement('div');
+    wrap.style.cursor = 'pointer';
+    wrap.appendChild(cardEl(mgr,'mini'));
+    wrap.addEventListener('click', ()=>{
+      finalizeTradeAccept(t, {coins:0, cardUids:[], managerUid:uid});
+    });
+    list.appendChild(wrap);
+  });
+}
+
 
 const FORMATIONS = {
  '433': {label:'4-3-3', slots:[
@@ -1107,19 +1350,19 @@ function cardEl(card, size=''){
     ? `<div><div class="ov">${boostText}</div><div class="ov-underline"></div></div>
        <div class="pos-label"><div class="pt">TRAINER</div><div class="pu"></div></div>`
     : `<div><div class="ov">${card.ov}</div><div class="ov-underline"></div></div>
-       <div class="pos-label"><div class="pt">${mainPos(card.pos)}</div><div class="pu"></div></div>`;
+       <div class="pos-label"><div class="pt">${posDE(mainPos(card.pos))}</div><div class="pu"></div></div>`;
   const bodyInner = card.isManager
     ? `${varTag}
        <div class="name">${card.n}</div>
-       <div class="nat-club">${card.nat} \u00b7 ${card.club}</div>
+       <div class="nat-club">${natDE(card.nat)} \u00b7 ${card.club}</div>
        <div class="mgr-boost">Team-Rating ${card.boostType==='percent'?`${boostText}`:`${boostText} Punkte`}</div>`
     : `${varTag}
        <div class="name">${card.n}</div>
-       <div class="nat-club">${card.nat} \u00b7 ${card.club}</div>
+       <div class="nat-club">${natDE(card.nat)} \u00b7 ${card.club}</div>
        <div class="stats">
-         ${statBar('PAC',card.pac)}${statBar('DRI',card.dri)}
-         ${statBar('SHO',card.sho)}${statBar('DEF',card.defn)}
-         ${statBar('PAS',card.pas)}${statBar('PHY',card.phy)}
+         ${statBar(STAT_DE.PAC,card.pac)}${statBar(STAT_DE.DRI,card.dri)}
+         ${statBar(STAT_DE.SHO,card.sho)}${statBar(STAT_DE.DEF,card.defn)}
+         ${statBar(STAT_DE.PAS,card.pas)}${statBar(STAT_DE.PHY,card.phy)}
        </div>`;
   div.innerHTML = `
     ${hasVariant || card.isManager ? '<div class="pattern-layer"></div>' : ''}
@@ -1537,7 +1780,7 @@ function renderSquad(view){
       }
       el.appendChild(cardNode);
     } else {
-      el.innerHTML = `<div class="empty-slot-inner">${slot.label}</div>`;
+      el.innerHTML = `<div class="empty-slot-inner">${posDE(slot.label)}</div>`;
     }
     el.addEventListener('click', ()=>openPicker(slot));
     pitch.appendChild(el);
@@ -1564,8 +1807,8 @@ function openPicker(slot){
   });
   const currentUid = squad.slots[slot.id];
   openModal(`
-    <h2 style="margin-bottom:4px;">${slot.label} ausw\u00e4hlen</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${slot.label} abdecken k\u00f6nnen, werden angezeigt. Abweichende Positionen kosten einen Rating-Abzug (angezeigt als \u2212N).</p>
+    <h2 style="margin-bottom:4px;">${posDE(slot.label)} ausw\u00e4hlen</h2>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${posDE(slot.label)} abdecken k\u00f6nnen, werden angezeigt. Abweichende Positionen kosten einen Rating-Abzug (angezeigt als \u2212N).</p>
     ${currentUid?`<button class="action-btn secondary" id="clear-slot" style="margin-bottom:14px;width:180px;">Spieler entfernen</button>`:''}
     <div class="picker-list" id="picker-list"></div>
     ${!items.length?'<p class="hint">Noch keine passenden Spieler in deinem Verein f\u00fcr diese Position.</p>':''}`);
@@ -1728,7 +1971,7 @@ function cardElLite(player){
     </div>
     <div class="top">
       <div><div class="ov">${player.ov}</div><div class="ov-underline"></div></div>
-      <div class="pos-label"><div class="pt">${player.pos}</div><div class="pu"></div></div>
+      <div class="pos-label"><div class="pt">${posDE(player.pos)}</div><div class="pu"></div></div>
     </div>
     <div class="card-body" style="margin-top:-8px;">
       <div class="name">${player.n}</div>
