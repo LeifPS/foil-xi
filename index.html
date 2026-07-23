@@ -435,7 +435,131 @@ const PACKS = [
     draw(){ return [pick(EXCLUSIVE_SPECIALS)]; }},
 ];
 
-// ===== formations =====
+// ===== SBCs (Squad Building Challenges) =====
+function avgOv(cards){ return Math.round(cards.reduce((s,c)=>s+c.ov,0)/cards.length); }
+function req(label, check, progress){ return {label, check, progress}; }
+const SBC_DEFS = [
+  {id:'bronze_squad', name:'Bronze Beginnings', reward:'bronze',
+    desc:'Any 11 players, average rating 65+.',
+    reqs:[ req('Average rating 65+', c=>avgOv(c)>=65, c=>`${avgOv(c)} / 65`) ]},
+  {id:'gold_standard', name:'Gold Standard', reward:'gold',
+    desc:'11 players, average rating 80+, nobody below 70 OVR.',
+    reqs:[ req('Average rating 80+', c=>avgOv(c)>=80, c=>`${avgOv(c)} / 80`),
+           req('No player below 70 OVR', c=>c.every(x=>x.ov>=70), c=>`${c.filter(x=>x.ov<70).length} below 70`) ]},
+  {id:'one_nation', name:'One Nation', reward:'derby',
+    desc:'All 11 players must share the same nationality.',
+    reqs:[ req('Same nationality', c=>new Set(c.map(x=>x.nat)).size===1, c=>`${new Set(c.map(x=>x.nat)).size} nations used`) ]},
+  {id:'league_royalty', name:'League Royalty', reward:'raregold',
+    desc:'All 11 players from the same league.',
+    reqs:[ req('Same league', c=>new Set(c.map(x=>x.lg)).size===1, c=>`${new Set(c.map(x=>x.lg)).size} leagues used`) ]},
+  {id:'special_selection', name:'Special Selection', reward:'iconmoment',
+    desc:'At least 5 of your 11 players must be special variant cards.',
+    reqs:[ req('5+ special cards', c=>c.filter(x=>x.variant!=='base').length>=5, c=>`${c.filter(x=>x.variant!=='base').length} / 5 specials`) ]},
+  {id:'champions_xi', name:'Champions XI', reward:'tots',
+    desc:'Average rating 85+, at least 3 special variant cards.',
+    reqs:[ req('Average rating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
+           req('3+ special cards', c=>c.filter(x=>x.variant!=='base').length>=3, c=>`${c.filter(x=>x.variant!=='base').length} / 3 specials`) ]},
+  {id:'elite_xi', name:'Elite XI', reward:'sevenof88',
+    desc:'Average rating 88+, at least 3 players rated 90 or higher.',
+    reqs:[ req('Average rating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`),
+           req('3+ players rated 90+', c=>c.filter(x=>x.ov>=90).length>=3, c=>`${c.filter(x=>x.ov>=90).length} / 3`) ]},
+  {id:'world_class', name:'World Class Finale', reward:'twoof95',
+    desc:'Average rating 92+, nobody below 88 OVR, at least 2 players rated 95+.',
+    reqs:[ req('Average rating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`),
+           req('No player below 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} below 88`),
+           req('2+ players rated 95+', c=>c.filter(x=>x.ov>=95).length>=2, c=>`${c.filter(x=>x.ov>=95).length} / 2`) ]},
+  {id:'ultimate_icons', name:'Ultimate Icons', reward:'blackout',
+    desc:'Average rating 93+, at least 4 players rated 95 or higher.',
+    reqs:[ req('Average rating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
+           req('4+ players rated 95+', c=>c.filter(x=>x.ov>=95).length>=4, c=>`${c.filter(x=>x.ov>=95).length} / 4`) ]},
+];
+let activeSBC = null;
+let sbcSelection = new Set();
+function renderSBCList(view){
+  const completed = new Set(profile.completedSBCs||[]);
+  view.innerHTML = `
+    <div class="view-head"><h2>SBC Challenges</h2><p>Build a squad from your club that meets the requirements. Submit it and those players are consumed in exchange for a guaranteed pack \u2014 each challenge can only be completed once.</p></div>
+    <div class="pack-grid" id="sbc-grid"></div>`;
+  const grid = document.getElementById('sbc-grid');
+  SBC_DEFS.forEach(sbc=>{
+    const done = completed.has(sbc.id);
+    const pack = PACKS.find(p=>p.id===sbc.reward);
+    const card = document.createElement('div');
+    card.className = `pack-card ${pack.tier}`;
+    card.innerHTML = `
+      <div class="pack-glyph">11<span class="ov-badge">PLAYERS</span></div>
+      <h3>${sbc.name}</h3>
+      <div class="desc">${sbc.desc}</div>
+      <div class="buyrow"><div class="price" style="font-size:11.5px;">Reward: ${pack.name}</div>
+      <button class="buy-btn" ${done?'disabled':''}>${done?'Completed':'Build'}</button></div>`;
+    if(!done) card.querySelector('.buy-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
+    grid.appendChild(card);
+  });
+}
+function openSBCBuilder(sbc){
+  activeSBC = sbc; sbcSelection = new Set();
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc}</p></div>
+    <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Back to Challenges</button></div>
+    <div id="sbc-reqs" style="margin-bottom:14px;"></div>
+    <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / 11 selected</div>
+    <div class="club-grid" id="sbc-club-grid"></div>
+    <button class="action-btn" id="sbc-submit" disabled style="opacity:.4;margin-top:16px;width:220px;">Submit Squad</button>
+  `;
+  document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const grid = document.getElementById('sbc-club-grid');
+  collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card).forEach(({uid,card})=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'club-card-wrap';
+    wrap.style.cursor = 'pointer';
+    const el = cardEl(card, 'mini');
+    wrap.appendChild(el);
+    wrap.addEventListener('click', ()=>{
+      if(sbcSelection.has(uid)){
+        sbcSelection.delete(uid); el.style.outline=''; el.style.transform='';
+      } else {
+        if(sbcSelection.size>=11){ toast('11 players already selected \u2014 deselect one first.'); return; }
+        sbcSelection.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)';
+      }
+      updateSBCState();
+    });
+    grid.appendChild(wrap);
+  });
+  updateSBCState();
+  document.getElementById('sbc-submit').addEventListener('click', submitSBC);
+}
+function updateSBCState(){
+  const selectedCards = [...sbcSelection].map(uid=>ownedCard(uid));
+  const full = sbcSelection.size===11;
+  let allOk = full;
+  const reqsBox = document.getElementById('sbc-reqs');
+  reqsBox.innerHTML = activeSBC.reqs.map(r=>{
+    const ok = full && r.check(selectedCards);
+    if(!ok) allOk = false;
+    return `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">${r.label}</span><span class="mono" style="color:${ok?'var(--turf-bright)':'var(--danger)'};">${full?r.progress(selectedCards):'\u2014'}</span></div>`;
+  }).join('');
+  const countEl = document.getElementById('sbc-count'); if(countEl) countEl.textContent = `${sbcSelection.size} / 11 selected`;
+  const btn = document.getElementById('sbc-submit');
+  if(btn){ btn.disabled = !allOk; btn.style.opacity = allOk ? '1' : '.4'; }
+}
+async function submitSBC(){
+  const uids = [...sbcSelection];
+  collection = collection.filter(c=>!uids.includes(c.uid));
+  profile.completedSBCs = profile.completedSBCs || [];
+  profile.completedSBCs.push(activeSBC.id);
+  await sSet('collection', collection);
+  await sSet('profile', profile);
+  const pack = PACKS.find(p=>p.id===activeSBC.reward);
+  const drawn = pack.draw();
+  currentTab = 'sbc';
+  renderNav();
+  renderView('sbc');
+  toast(`SBC complete! Opening your ${pack.name} reward\u2026`);
+  showPackOpening(pack, drawn);
+}
+
+
 const FORMATIONS = {
  '433': {label:'4-3-3', slots:[
    {id:'gk',label:'GK',x:50,y:92},
@@ -589,10 +713,11 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[]};
     await sSet('profile', profile);
-  } else if(!profile.userId){
-    profile.userId = clubId; profile.displayName = profile.displayName || clubId;
+  } else {
+    if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
+    if(!profile.completedSBCs) profile.completedSBCs = [];
   }
   collection = await sGet('collection');
   if(!collection){
@@ -672,7 +797,7 @@ function cardEl(card, size=''){
 }
 
 // ===== nav & routing =====
-const TABS = [['store','Pack Store'],['club','My Club'],['squad','Squad Builder'],['play','Play Online']];
+const TABS = [['store','Pack Store'],['club','My Club'],['squad','Squad Builder'],['sbc','SBC Challenges'],['play','Play Online']];
 function renderNav(){
   const nav = document.getElementById('nav');
   nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${label}</button>`).join('');
@@ -684,6 +809,7 @@ function renderView(tab){
   if(tab==='store') return renderStore(view);
   if(tab==='club') return renderClub(view);
   if(tab==='squad') return renderSquad(view);
+  if(tab==='sbc') return renderSBCList(view);
   if(tab==='play') return renderPlay(view);
 }
 
