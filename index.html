@@ -117,14 +117,15 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard .top{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;}
 .pcard .ov{font-family:'Anton';font-size:27px;line-height:1;color:var(--chalk);}
 .pcard .ov-underline{width:22px;height:2.5px;background:var(--acc);border-radius:2px;margin-top:3px;}
-.pcard .pos-hex{clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:var(--panel2);border:1px solid var(--acc);
-  font-size:9.5px;font-weight:700;color:var(--chalk);padding:4px 9px;font-family:'JetBrains Mono';letter-spacing:.02em;}
+.pcard .pos-label{text-align:right;}
+.pcard .pos-label .pt{font-size:13px;font-weight:700;color:var(--chalk);font-family:'JetBrains Mono';letter-spacing:.03em;}
+.pcard .pos-label .pu{width:18px;height:2.5px;background:var(--acc);border-radius:2px;margin:3px 0 0 auto;}
 
 .pcard .photo-frame{position:relative;z-index:1;width:100%;height:112px;border-radius:10px;overflow:hidden;margin:5px 0 6px;flex-shrink:0;}
 .pcard .avatar{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   font-family:'Anton';font-size:40px;color:var(--chalk);letter-spacing:.02em;
   background:radial-gradient(circle at 38% 26%, color-mix(in srgb, var(--acc) 45%, #1b2016) 0%, #0c0e09 78%);}
-.pcard .face-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 18%;z-index:1;background:transparent;}
+.pcard .face-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;z-index:1;background:transparent;}
 .pcard .photo-frame::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
   background:linear-gradient(180deg, rgba(0,0,0,0) 62%, color-mix(in srgb, var(--acc) 18%, #0c0e09) 100%);}
 .pcard .photo-frame::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;border:1px solid color-mix(in srgb, var(--acc) 55%, transparent);border-radius:10px;}
@@ -140,7 +141,8 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 
 .pcard.mini{width:128px;height:198px;padding:9px 8px 7px;}
 .pcard.mini .ov{font-size:20px;}
-.pcard.mini .pos-hex{font-size:7.5px;padding:3px 6px;}
+.pcard.mini .pos-label .pt{font-size:10px;}
+.pcard.mini .pos-label .pu{width:14px;}
 .pcard.mini .photo-frame{height:80px;margin:3px 0 4px;}
 .pcard.mini .avatar{font-size:26px;}
 .pcard.mini .name{font-size:11px;}
@@ -153,7 +155,8 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.xs .photo-frame{height:38px;margin:2px 0 3px;border-radius:6px;}
 .pcard.xs .avatar{font-size:14px;}
 .pcard.xs .name{font-size:7.5px;}
-.pcard.xs .pos-hex{font-size:6px;padding:2px 5px;}
+.pcard.xs .pos-label .pt{font-size:7px;}
+.pcard.xs .pos-label .pu{display:none;}
 .pcard.xs .stats{display:none;}
 .pcard.xs .nat-club{display:none;}
 
@@ -477,7 +480,7 @@ function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
 
 // ===== card rendering =====
 function proxyImg(url){
-  return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=300&h=300&fit=cover&a=attention&err=404';
+  return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=400&h=300&fit=cover&a=attention&err=404';
 }
 function initialsOf(name){
   const parts = name.replace(/\./g,'').trim().split(/\s+/);
@@ -496,7 +499,7 @@ function cardEl(card, size=''){
   div.innerHTML = `
     <div class="top">
       <div><div class="ov">${card.ov}</div><div class="ov-underline"></div></div>
-      <div class="pos-hex">${mainPos(card.pos)}</div>
+      <div class="pos-label"><div class="pt">${mainPos(card.pos)}</div><div class="pu"></div></div>
     </div>
     ${varTag}
     <div class="photo-frame">
@@ -533,6 +536,10 @@ function renderView(tab){
 function renderStore(view){
   view.innerHTML = `
     <div class="view-head"><h2>Pack Store</h2><p>Open packs to add players to your club. Odds are guaranteed minimums \u2014 every pack can also over-deliver.</p></div>
+    <div class="toolbar" style="margin-bottom:18px;">
+      <input id="redeem-input" placeholder="Redeem code..." style="max-width:220px;">
+      <button class="action-btn secondary" id="redeem-btn" style="width:auto;padding:9px 16px;">Redeem</button>
+    </div>
     <div class="pack-grid" id="pack-grid"></div>`;
   const grid = document.getElementById('pack-grid');
   PACKS.forEach(pack=>{
@@ -547,6 +554,24 @@ function renderStore(view){
     card.querySelector('.buy-btn').addEventListener('click', ()=>buyPack(pack));
     grid.appendChild(card);
   });
+  document.getElementById('redeem-btn').addEventListener('click', redeemCode);
+  document.getElementById('redeem-input').addEventListener('keydown', e=>{ if(e.key==='Enter') redeemCode(); });
+}
+const REDEEM_CODES = {
+  'UNLIMITED': ()=>{ profile.coins = 999999999; toast('Cheat activated: unlimited coins.'); },
+  'TESTCOINS': ()=>{ profile.coins += 100000; toast('+100,000 coins added.'); },
+};
+async function redeemCode(){
+  const input = document.getElementById('redeem-input');
+  const code = (input.value||'').trim().toUpperCase();
+  if(!code) return;
+  const fn = REDEEM_CODES[code];
+  if(!fn){ toast('Invalid code.'); return; }
+  fn();
+  await sSet('profile', profile);
+  updateCoinDisplay();
+  input.value = '';
+  renderStore(document.getElementById('view'));
 }
 
 async function buyPack(pack){
