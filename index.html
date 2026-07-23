@@ -198,12 +198,13 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pitch{position:relative;background:radial-gradient(ellipse at 50% 20%, #163a24, #0c1f14 70%);border:1px solid var(--line);border-radius:16px;aspect-ratio:4/5;overflow:hidden;}
 .pitch::before{content:"";position:absolute;inset:8%;border:1px solid rgba(255,255,255,.12);border-radius:6px;}
 .pitch::after{content:"";position:absolute;left:50%;top:8%;bottom:8%;width:1px;background:rgba(255,255,255,.12);}
-.slot{position:absolute;transform:translate(-50%,-50%);width:66px;text-align:center;cursor:pointer;}
-.slot .badge{width:52px;height:52px;border-radius:50%;background:var(--panel);border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:15px;margin:0 auto;transition:.15s;}
-.slot:hover .badge{border-color:var(--turf-bright);}
-.slot.filled .badge{border:2px solid var(--r-gold);background:#181c10;}
-.slot .slabel{font-size:9.5px;color:var(--muted);margin-top:3px;font-weight:700;}
-.slot .sname{font-size:9px;color:var(--chalk);margin-top:1px;max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pitch-slot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:.15s;z-index:1;}
+.pitch-slot:hover{transform:translate(-50%,-50%) translateY(-3px);z-index:2;}
+.empty-slot-inner{width:66px;height:96px;border:2px dashed var(--line);border-radius:9px;display:flex;align-items:center;
+  justify-content:center;font-family:'Anton';font-size:12.5px;color:var(--muted);background:rgba(255,255,255,.02);}
+.pitch-slot:hover .empty-slot-inner{border-color:var(--turf-bright);color:var(--chalk);}
+.oop-tag{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;font-size:9px;font-weight:700;
+  padding:2px 5px;border-radius:100px;font-family:'JetBrains Mono';z-index:5;box-shadow:0 2px 5px rgba(0,0,0,.4);}
 .side-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;height:fit-content;}
 .rating-hero{display:flex;align-items:center;gap:14px;}
 .rating-hero .num{font-family:'Anton';font-size:44px;line-height:1;}
@@ -232,18 +233,48 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';}
-.match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:12px;max-height:120px;overflow:auto;}
+.match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
+.goal-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:6px 10px;border-radius:8px;animation:trayIn .3s;}
+.goal-row.opp{border-left:2px solid var(--danger);}
+.goal-row.me{border-left:2px solid var(--turf-bright);}
+.goal-row .gm{font-family:'JetBrains Mono';font-size:10.5px;color:var(--muted);width:26px;flex-shrink:0;}
+.goal-row .gav-wrap{position:relative;width:22px;height:22px;border-radius:50%;flex-shrink:0;overflow:hidden;background:var(--panel2);}
+.goal-row .gav-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:8.5px;color:var(--chalk);}
+.goal-row img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.goal-row .gname{font-size:12px;color:var(--chalk);font-weight:600;flex:1;}
+.goal-row .gteam{font-size:9.5px;color:var(--muted);}
 
 /* ---- modal / pack opening ---- */
 .modal-overlay{position:fixed;inset:0;background:rgba(4,5,8,.86);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
 .modal-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:960px;width:100%;max-height:88vh;overflow:auto;}
 .reveal-strip{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;padding:20px 0;}
-.pack-anim{width:180px;height:250px;margin:0 auto;border-radius:14px;background:linear-gradient(145deg,#1c2116,#10130c);border:1px solid var(--gold-dim);display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:20px;color:var(--gold);cursor:pointer;box-shadow:0 0 40px rgba(232,196,104,.15);transition:transform .25s;}
-.pack-anim:hover{transform:scale(1.03) rotate(-1deg);}
-.pack-anim.opening{animation:packshake .5s ease-in-out;}
-@keyframes packshake{0%,100%{transform:rotate(0)}20%{transform:rotate(-3deg)}40%{transform:rotate(3deg)}60%{transform:rotate(-2deg)}80%{transform:rotate(2deg)}}
-.reveal-card{opacity:0;transform:translateY(16px) scale(.9);animation:cardin .45s forwards;}
-@keyframes cardin{to{opacity:1;transform:translateY(0) scale(1);}}
+.pack-visual-wrap{display:flex;justify-content:center;padding:14px 0 10px;}
+.pack-visual{width:200px;height:270px;border-radius:16px;position:relative;cursor:pointer;overflow:hidden;
+  background:linear-gradient(160deg,#1c2116,#10130c 60%);border:1px solid var(--gold-dim);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 0 46px -8px var(--gold);animation:packFloat 3s ease-in-out infinite;transition:transform .3s, opacity .3s;}
+.pack-visual::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 10px);}
+.pack-visual .pv-count{font-family:'Anton';font-size:42px;color:var(--chalk);position:relative;z-index:1;}
+.pack-visual .pv-label{font-family:'JetBrains Mono';font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);position:relative;z-index:1;}
+.pack-visual .pv-tap{font-size:11px;color:var(--gold);position:relative;z-index:1;letter-spacing:.05em;font-weight:700;}
+@keyframes packFloat{0%,100%{transform:translateY(0) rotate(0);}50%{transform:translateY(-8px) rotate(-1deg);}}
+.pack-visual.premium{border-color:#c78bf5;box-shadow:0 0 46px -8px #c78bf5;}
+.pack-visual.ultimate{border:1.5px solid transparent;
+  background:linear-gradient(160deg,#1c2116,#10130c 60%) padding-box, var(--r-ultimate) border-box;
+  box-shadow:0 0 56px -6px #ffd76a;}
+.pack-visual.opening{animation:none;transform:scale(1.35);opacity:0;}
+
+.spotlight-stage{display:flex;justify-content:center;align-items:flex-start;min-height:264px;position:relative;perspective:800px;}
+.spotlight-card{animation:spotlightIn .5s cubic-bezier(.2,.7,.3,1);}
+@keyframes spotlightIn{from{transform:rotateY(90deg) scale(.6);opacity:0;}to{transform:rotateY(0) scale(1);opacity:1;}}
+.spotlight-card.leaving{animation:spotlightOut .32s forwards;}
+@keyframes spotlightOut{to{transform:scale(.3) translateY(140px);opacity:0;}}
+
+.pack-progress{text-align:center;color:var(--muted);font-size:11.5px;font-family:'JetBrains Mono';margin-top:2px;}
+.collected-tray{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px;min-height:10px;}
+.tray-thumb{animation:trayIn .3s;}
+@keyframes trayIn{from{opacity:0;transform:translateY(10px) scale(.8);}to{opacity:1;transform:translateY(0) scale(1);}}
 .modal-close{display:block;margin:18px auto 0;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 22px;border-radius:9px;font-weight:600;}
 .toast-wrap{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;}
 .toast{background:var(--panel2);border:1px solid var(--line);padding:10px 18px;border-radius:100px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.4);animation:toastin .2s;}
@@ -301,7 +332,7 @@ async function initFirebase(){
     // connectivity probe - if this fails/hangs we fall back to local mode
     await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1))), 6000);
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
-      getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit};
+      getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc};
     return true;
   }catch(e){
     console.warn('Firebase backend unavailable, using local shared storage fallback:', e);
@@ -678,29 +709,44 @@ async function addCardsToCollection(cards){
 function showPackOpening(pack, drawn){
   const ordered = drawn.slice().sort((a,b)=>a.ov-b.ov);
   openModal(`
-    <h2 style="text-align:center;margin-bottom:6px;">${pack.name}</h2>
-    <p style="text-align:center;color:var(--muted);font-size:12.5px;">Tap the pack to reveal your players</p>
-    <div class="pack-anim" id="pack-anim">OPEN</div>
-    <div class="reveal-strip" id="reveal-strip"></div>
+    <h2 style="text-align:center;margin-bottom:2px;">${pack.name}</h2>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">Tap the pack to begin</p>
+    <div class="pack-visual-wrap" id="pack-visual-wrap">
+      <div class="pack-visual ${pack.tier}" id="pack-visual">
+        <div class="pv-count">${pack.count}</div><div class="pv-label">Players</div><div class="pv-tap">TAP TO OPEN</div>
+      </div>
+    </div>
+    <div class="spotlight-stage" id="spotlight-stage"></div>
+    <div class="pack-progress" id="pack-progress"></div>
+    <div class="collected-tray" id="collected-tray"></div>
     <button class="modal-close" id="modal-close-btn" style="display:none;">Continue</button>
   `);
-  document.getElementById('pack-anim').addEventListener('click', function handler(){
+  document.getElementById('pack-visual').addEventListener('click', function handler(){
     this.classList.add('opening');
+    const sub = document.getElementById('pack-sub'); if(sub) sub.textContent = '';
     setTimeout(()=>{
-      this.remove();
+      const wrap = document.getElementById('pack-visual-wrap');
+      if(wrap) wrap.remove();
       revealQueue(ordered, 0, pack);
-    }, 480);
+    }, 420);
   }, {once:true});
 }
-function appendCard(c, strip){
-  const el = cardEl(c);
-  el.classList.add('reveal-card');
-  strip.appendChild(el);
+function updatePackProgress(i, total){
+  const el = document.getElementById('pack-progress');
+  if(el) el.textContent = `${Math.min(i,total)} / ${total} revealed`;
+}
+function addToTray(c){
+  const tray = document.getElementById('collected-tray');
+  if(!tray) return;
+  const el = cardEl(c, 'xs');
+  el.classList.add('tray-thumb');
+  tray.appendChild(el);
 }
 function revealQueue(cards, i, pack){
-  const strip = document.getElementById('reveal-strip');
-  if(!strip) return; // modal closed early
+  const stage = document.getElementById('spotlight-stage');
+  if(!stage) return; // modal closed early
   if(i>=cards.length){
+    stage.innerHTML = `<p class="hint" style="text-align:center;width:100%;">Pack complete!</p>`;
     if(pack.pickCount && pack.pickCount < cards.length){
       showPickScreen(cards, pack.pickCount);
     } else {
@@ -712,15 +758,27 @@ function revealQueue(cards, i, pack){
   }
   const c = cards[i];
   if(isSpecialPull(c)){
-    showCutscene(c, ()=>{ appendCard(c, strip); revealQueue(cards, i+1, pack); });
+    showCutscene(c, ()=>{
+      addToTray(c);
+      updatePackProgress(i+1, cards.length);
+      revealQueue(cards, i+1, pack);
+    });
   } else {
-    appendCard(c, strip);
-    setTimeout(()=>revealQueue(cards, i+1, pack), 220);
+    stage.innerHTML = '';
+    const big = cardEl(c);
+    big.classList.add('spotlight-card');
+    stage.appendChild(big);
+    updatePackProgress(i+1, cards.length);
+    setTimeout(()=>{
+      big.classList.add('leaving');
+      setTimeout(()=>{
+        addToTray(c);
+        revealQueue(cards, i+1, pack);
+      }, 320);
+    }, 850);
   }
 }
 function showPickScreen(cards, pickCount){
-  const box = document.getElementById('modal-root');
-  const selected = new Set();
   const container = document.createElement('div');
   container.innerHTML = `
     <h3 style="text-align:center;margin:18px 0 4px;">Choose ${pickCount} to keep</h3>
@@ -746,6 +804,7 @@ function showPickScreen(cards, pickCount){
     });
     grid.appendChild(el);
   });
+  const selected = new Set();
   container.querySelector('#pick-confirm').addEventListener('click', async ()=>{
     const kept = cards.filter((_,idx)=>selected.has(idx));
     await addCardsToCollection(kept);
@@ -849,22 +908,50 @@ function confirmSell(uid, card){
 }
 
 // ===== SQUAD BUILDER =====
+// Position compatibility: exact match = 0 penalty. Listed alternates = playable with a rating penalty.
+// Anything not listed for a slot cannot be assigned there at all (e.g. GK<->outfield, CB<->wide/forward).
+const POSITION_COMPAT = {
+  GK:  {GK:0},
+  CB:  {CB:0, LB:3, RB:3},
+  LB:  {LB:0, LWB:2, CB:3},
+  RB:  {RB:0, RWB:2, CB:3},
+  LWB: {LWB:0, LB:2, LM:3},
+  RWB: {RWB:0, RB:2, RM:3},
+  CDM: {CDM:0, CM:2},
+  CM:  {CM:0, CDM:2, CAM:2},
+  CAM: {CAM:0, CM:2, CF:3},
+  LM:  {LM:0, LW:2, LWB:3},
+  RM:  {RM:0, RW:2, RWB:3},
+  LW:  {LW:0, LM:2, RW:4},
+  RW:  {RW:0, RM:2, LW:4},
+  ST:  {ST:0, CF:2},
+  CF:  {CF:0, ST:2, CAM:3},
+};
+function compatPenalty(slotLabel, playerMainPos){
+  const table = POSITION_COMPAT[slotLabel];
+  if(!table) return null;
+  return (playerMainPos in table) ? table[playerMainPos] : null;
+}
+function canPlaySlot(slotLabel, playerMainPos){ return compatPenalty(slotLabel, playerMainPos) !== null; }
+
 function squadRating(){
   const form = FORMATIONS[squad.formation];
-  let filled=0, ovSum=0, chem=0;
+  let filled=0, effSum=0, exactCount=0;
   form.slots.forEach(slot=>{
     const uid = squad.slots[slot.id];
     if(!uid) return;
     const card = ownedCard(uid);
     if(!card) return;
-    filled++; ovSum += card.ov;
+    filled++;
     const mp = mainPos(card.pos);
-    if(mp===slot.label) chem += 1;
-    else if(posGroup(card.pos)===posGroup2(slot.label)) chem += 0.4;
+    const pen = compatPenalty(slot.label, mp);
+    const usedPen = pen==null ? 8 : pen;
+    if(pen===0) exactCount++;
+    effSum += Math.max(0, card.ov - usedPen);
   });
   if(filled===0) return {rating:0, filled:0};
-  const base = ovSum/filled;
-  const bonus = (chem/11)*3;
+  const base = effSum/filled;
+  const bonus = (exactCount/11)*2;
   return {rating: Math.min(99, Math.round(base+bonus)), filled};
 }
 function posGroup2(label){
@@ -877,7 +964,7 @@ function renderSquad(view){
   const form = FORMATIONS[squad.formation];
   const {rating, filled} = squadRating();
   view.innerHTML = `
-    <div class="view-head"><h2>Squad Builder</h2><p>Tap a position on the pitch to assign a player from your club. Fill all 11 to publish your squad for online matches.</p></div>
+    <div class="view-head"><h2>Squad Builder</h2><p>Tap a position on the pitch to assign a player from your club. Only players who can realistically cover that position are offered \u2014 close alternates carry a rating penalty. Fill all 11 to publish your squad for online matches.</p></div>
     <div class="squad-layout">
       <div class="pitch" id="pitch"></div>
       <div class="side-panel">
@@ -896,9 +983,23 @@ function renderSquad(view){
     const uid = squad.slots[slot.id];
     const card = uid ? ownedCard(uid) : null;
     const el = document.createElement('div');
-    el.className = `slot ${card?'filled':''}`;
+    el.className = 'pitch-slot';
     el.style.left = slot.x+'%'; el.style.top = slot.y+'%';
-    el.innerHTML = `<div class="badge">${card?card.ov:slot.label}</div><div class="slabel">${slot.label}</div>${card?`<div class="sname">${card.n}</div>`:''}`;
+    if(card){
+      const pen = compatPenalty(slot.label, mainPos(card.pos)) || 0;
+      const cardNode = cardEl(card, 'xs');
+      if(pen>0){
+        cardNode.style.filter = 'saturate(.75)';
+        const tag = document.createElement('div');
+        tag.className = 'oop-tag';
+        tag.textContent = '-' + pen;
+        cardNode.style.position = 'relative';
+        cardNode.appendChild(tag);
+      }
+      el.appendChild(cardNode);
+    } else {
+      el.innerHTML = `<div class="empty-slot-inner">${slot.label}</div>`;
+    }
     el.addEventListener('click', ()=>openPicker(slot));
     pitch.appendChild(el);
   });
@@ -915,20 +1016,20 @@ function renderSquad(view){
   document.getElementById('publish-squad').addEventListener('click', publishSquad);
 }
 function openPicker(slot){
-  const group = posGroup2(slot.label);
   const used = new Set(Object.values(squad.slots));
   let items = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  items = items.map(x=>({...x, pen:compatPenalty(slot.label, mainPos(x.card.pos))})).filter(x=>x.pen!==null);
   items.sort((a,b)=>{
-    const ag = posGroup(a.card.pos)===group?0:1, bg = posGroup(b.card.pos)===group?0:1;
-    if(ag!==bg) return ag-bg;
+    if(a.pen!==b.pen) return a.pen-b.pen;
     return b.card.ov-a.card.ov;
   });
   const currentUid = squad.slots[slot.id];
   openModal(`
     <h2 style="margin-bottom:4px;">Choose ${slot.label}</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Players matching this position are shown first.</p>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Only players who can cover ${slot.label} are shown. Off-position alternates carry a rating penalty (shown as \u2212N).</p>
     ${currentUid?`<button class="action-btn secondary" id="clear-slot" style="margin-bottom:14px;width:180px;">Remove player</button>`:''}
-    <div class="picker-list" id="picker-list"></div>`);
+    <div class="picker-list" id="picker-list"></div>
+    ${!items.length?'<p class="hint">No eligible players in your club for this position yet.</p>':''}`);
   if(currentUid){
     document.getElementById('clear-slot').addEventListener('click', async ()=>{
       delete squad.slots[slot.id];
@@ -936,11 +1037,16 @@ function openPicker(slot){
     });
   }
   const list = document.getElementById('picker-list');
-  items.forEach(({uid,card})=>{
+  items.forEach(({uid,card,pen})=>{
     const wrap = document.createElement('div');
     wrap.style.cursor='pointer';
+    wrap.style.position='relative';
     wrap.style.opacity = uid===currentUid ? '1' : (used.has(uid) ? '.35':'1');
     wrap.appendChild(cardEl(card,'mini'));
+    if(pen>0){
+      const tag=document.createElement('div'); tag.className='oop-tag'; tag.textContent='-'+pen;
+      wrap.appendChild(tag);
+    }
     wrap.addEventListener('click', async ()=>{
       Object.keys(squad.slots).forEach(s=>{ if(squad.slots[s]===uid) delete squad.slots[s]; });
       squad.slots[slot.id]=uid;
@@ -976,10 +1082,15 @@ async function publishSquad(){
 }
 
 // ===== PLAY / ONLINE =====
-let currentOpponent = null;
+const MATCH_DURATION_MS = 45000; // ~45s for a full 90' match
+const QUEUE_TIMEOUT_MS = 25000;
+const QUEUE_POLL_MS = 2000;
+let queueActive = false;
+let queueTimer = null;
+
 function renderPlay(view){
   view.innerHTML = `
-    <div class="view-head"><h2>Play Online</h2><p>Simulate matches against squads published by other players. No live play needed \u2014 just kick off and watch the result.
+    <div class="view-head"><h2>Play Online</h2><p>Join the queue to find a real opponent. If nobody's around, you'll face a CPU squad instead.
       <span class="mono" id="backend-badge" style="color:var(--muted);">\u00b7 checking backend\u2026</span></p></div>
     <div class="stat-row">
       <div class="stat-box"><div class="n" id="stat-wins">${profile.wins}</div><div class="l">Wins</div></div>
@@ -989,7 +1100,7 @@ function renderPlay(view){
     </div>
     <div class="play-grid">
       <div class="vs-panel" id="vs-panel">
-        <button class="action-btn" id="find-opp">Find Opponent</button>
+        <button class="action-btn" id="find-opp">Search for Opponent</button>
         <div id="match-area"></div>
       </div>
       <div>
@@ -997,7 +1108,7 @@ function renderPlay(view){
         <div class="leader-list" id="leader-list"><p class="hint">Loading...</p></div>
       </div>
     </div>`;
-  document.getElementById('find-opp').addEventListener('click', findOpponent);
+  document.getElementById('find-opp').addEventListener('click', joinQueue);
   fbReady.then(()=>{
     const badge = document.getElementById('backend-badge');
     if(badge) badge.textContent = '\u00b7 backend: ' + (fb ? 'Firebase (live)' : 'local fallback');
@@ -1029,42 +1140,6 @@ async function loadLeaderboard(){
     <div class="leader-row"><span class="rk">${i+1}</span><span style="flex:1;">${s.owner||'Unnamed Club'}</span><span class="mono">${s.rating} OVR</span></div>
   `).join('');
 }
-async function findOpponent(){
-  const {rating, filled} = squadRating();
-  if(filled<11){ toast('Fill and save all 11 positions in Squad Builder first.'); return; }
-  await fbReady;
-  let opp = null;
-  if(fb){
-    try{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'squads'), fb.orderBy('updatedAt','desc'), fb.limit(30)));
-      const candidates = snap.docs.map(d=>d.data()).filter(s=>s.userId!==profile.userId);
-      if(candidates.length) opp = candidates[Math.floor(Math.random()*candidates.length)];
-    }catch(e){ console.warn('Firebase opponent lookup failed', e); }
-  }
-  if(!opp){
-    const keys = (await sList('squad:', true)).filter(k=>k!==('squad:'+profile.userId));
-    if(keys.length){
-      const k = keys[Math.floor(Math.random()*keys.length)];
-      opp = await sGet(k, true);
-    }
-  }
-  if(!opp){
-    const botRating = Math.max(70, Math.min(94, rating + Math.round((Math.random()*10)-5)));
-    opp = {owner:'CPU XI', rating:botRating, formation:'4-3-3', players:[], isBot:true};
-    toast('No other clubs online right now \u2014 facing a CPU squad instead.');
-  }
-  currentOpponent = opp;
-  const area = document.getElementById('match-area');
-  area.innerHTML = `
-    <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Your Club'}</div></div>
-      <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner}${opp.isBot?' (CPU)':''}</div></div>
-    </div>
-    <button class="action-btn" id="kickoff">Kick Off</button>
-    <div id="result-area"></div>`;
-  document.getElementById('kickoff').addEventListener('click', ()=>playMatch(rating, opp));
-}
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function simGoals(lambda){
   const r = lambda*0.7 + Math.random()*lambda*1.1 + Math.random()*0.6;
@@ -1076,23 +1151,24 @@ function getMySquadPlayers(){
   form.slots.forEach(slot=>{
     const uid = squad.slots[slot.id];
     const card = uid ? ownedCard(uid) : null;
-    if(card) list.push({n:card.n, pos:slot.label});
+    if(card) list.push({n:card.n, pos:slot.label, img:card.img});
   });
   return list;
 }
 function pickScorer(players){
   if(!players || !players.length){
     const p = ALL_BASE[Math.floor(Math.random()*ALL_BASE.length)];
-    return p.n;
+    return {n:p.n, img:p.img};
   }
   const weighted = [];
   players.forEach(p=>{
-    const g = posGroup2 ? posGroup2(p.pos) : posGroup(p.pos);
+    const g = posGroup2(p.pos);
     const w = g==='FWD' ? 4 : g==='MID' ? 3 : g==='DEF' ? 1 : 0.3;
     const reps = Math.max(1, Math.round(w*10));
-    for(let i=0;i<reps;i++) weighted.push(p.n);
+    for(let i=0;i<reps;i++) weighted.push(p);
   });
-  return weighted[Math.floor(Math.random()*weighted.length)] || players[0].n;
+  const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
+  return {n:chosen.n, img:chosen.img};
 }
 function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers){
   const used = new Set();
@@ -1107,53 +1183,58 @@ function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers){
   events.sort((a,b)=>a.minute-b.minute);
   return events;
 }
-function animateMatch(events, myName, oppName){
+function goalRowHTML(minute, scorer, teamName, side){
+  const initials = initialsOf(scorer.n || '??');
+  const imgTag = scorer.img
+    ? `<img src="${proxyImg(scorer.img)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">`
+    : '';
+  return `<div class="goal-row ${side}">
+      <span class="gm">${minute}'</span>
+      <span class="gav-wrap"><span class="gav-fallback">${initials}</span>${imgTag}</span>
+      <span class="gname">${scorer.n}</span>
+      <span class="gteam">${teamName}</span>
+    </div>`;
+}
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs){
   return new Promise(resolve=>{
     const area = document.getElementById('match-area');
-    const live = document.createElement('div');
-    live.id = 'live-match';
+    let live = document.getElementById('live-match');
+    if(!live){ live = document.createElement('div'); live.id='live-match'; area.appendChild(live); }
     live.innerHTML = `
       <div class="score" id="live-score">0 \u2013 0</div>
       <div class="mono" id="live-minute" style="text-align:center;color:var(--muted);margin-bottom:8px;">0'</div>
       <div class="match-log" id="live-log"></div>`;
-    area.appendChild(live);
-    let minute = 0, myTally = 0, oppTally = 0;
-    const stepMs = 8500/90;
+    const stepMs = durationMs/90;
     const logEl = document.getElementById('live-log');
+    let lastMinute = 0, myTally = 0, oppTally = 0;
     const timer = setInterval(()=>{
-      minute++;
-      const due = events.filter(e=>e.minute===minute);
-      due.forEach(e=>{
-        if(e.side==='me') myTally++; else oppTally++;
-        const row = document.createElement('div');
-        row.textContent = `${minute}' \u26bd ${e.scorer} (${e.side==='me'?myName:oppName})`;
-        logEl.prepend(row);
+      const elapsed = Date.now()-startedAt;
+      const minute = Math.max(0, Math.min(90, Math.floor(elapsed/stepMs)));
+      if(minute>lastMinute){
+        for(let m=lastMinute+1; m<=minute; m++){
+          events.filter(e=>e.minute===m).forEach(e=>{
+            if(e.side==='me') myTally++; else oppTally++;
+            const row = document.createElement('div');
+            row.innerHTML = goalRowHTML(m, e.scorer, e.side==='me'?myName:oppName, e.side);
+            logEl.prepend(row.firstElementChild);
+          });
+        }
+        lastMinute = minute;
         const scoreEl = document.getElementById('live-score');
         if(scoreEl){
           scoreEl.textContent = `${myTally} \u2013 ${oppTally}`;
           scoreEl.style.transition = 'transform .18s';
-          scoreEl.style.transform = 'scale(1.18)';
+          scoreEl.style.transform = 'scale(1.15)';
           setTimeout(()=>{ if(scoreEl) scoreEl.style.transform = 'scale(1)'; }, 200);
         }
-      });
-      const minEl = document.getElementById('live-minute');
-      if(minEl) minEl.textContent = minute + "'";
-      if(minute>=90){ clearInterval(timer); resolve(); }
-    }, stepMs);
+        const minEl = document.getElementById('live-minute');
+        if(minEl) minEl.textContent = minute + "'";
+      }
+      if(elapsed>=durationMs){ clearInterval(timer); resolve(); }
+    }, 250);
   });
 }
-async function playMatch(myRating, opp){
-  const btn = document.getElementById('kickoff');
-  if(btn){ btn.disabled = true; btn.textContent = 'Match in progress\u2026'; }
-  const diff = myRating - opp.rating;
-  const myExp = clamp(1.35 + diff/9, 0.3, 4.5);
-  const oppExp = clamp(1.35 - diff/9, 0.3, 4.5);
-  const myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
-  const myPlayers = getMySquadPlayers();
-  const events = buildMatchEvents(myGoals, oppGoals, myPlayers, opp.players);
-  const myName = profile.displayName || 'Your Club';
-  const oppName = opp.owner + (opp.isBot ? ' (CPU)' : '');
-  await animateMatch(events, myName, oppName);
+async function applyMatchResult(myGoals, oppGoals){
   let result, reward;
   if(myGoals>oppGoals){ result='WIN'; reward=900; profile.wins++; }
   else if(myGoals<oppGoals){ result='LOSS'; reward=250; profile.losses++; }
@@ -1170,7 +1251,155 @@ async function playMatch(myRating, opp){
     area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':result==='LOSS'?'var(--danger)':'var(--chalk)'};">Full Time \u2014 ${result}</div>
       <div class="mono" style="color:var(--gold);margin-top:6px;">+${reward} coins</div>`;
   }
-  if(btn){ btn.disabled = true; btn.textContent = 'Match Finished'; }
+}
+async function runLocalMatch(myRating, opp){
+  const diff = myRating - opp.rating;
+  const myExp = clamp(1.35 + diff/9, 0.3, 4.5), oppExp = clamp(1.35 - diff/9, 0.3, 4.5);
+  const myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
+  const myPlayers = getMySquadPlayers();
+  const events = buildMatchEvents(myGoals, oppGoals, myPlayers, opp.players);
+  const myName = profile.displayName || 'Your Club';
+  const oppName = opp.owner + (opp.isBot ? ' (CPU)' : '');
+  await animateTimedMatch(events, myName, oppName, Date.now(), MATCH_DURATION_MS);
+  await applyMatchResult(myGoals, oppGoals);
+}
+function startBotMatch(rating){
+  const botRating = Math.max(70, Math.min(94, rating + Math.round((Math.random()*10)-5)));
+  const opp = {owner:'CPU XI', rating:botRating, players:[], isBot:true};
+  const area = document.getElementById('match-area');
+  area.innerHTML = `
+    <div class="vs-teams">
+      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Your Club'}</div></div>
+      <div class="vs-x">VS</div>
+      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (CPU)</div></div>
+    </div>
+    <div id="result-area"></div>`;
+  runLocalMatch(rating, opp);
+}
+function matchIdFor(a,b){ return [a,b].sort().join('__vs__'); }
+async function leaveQueueSilently(){
+  if(queueTimer){ clearTimeout(queueTimer); queueTimer=null; }
+  try{ if(fb) await fb.deleteDoc(fb.doc(fb.db,'queue',profile.userId)); }catch(e){}
+}
+async function leaveQueue(){
+  queueActive = false;
+  await leaveQueueSilently();
+  const area = document.getElementById('match-area');
+  if(area) area.innerHTML = '';
+  toast('Left the queue.');
+}
+async function enterSyncedMatch(matchDoc){
+  const amP1 = matchDoc.p1.userId === profile.userId;
+  const meSide = amP1 ? matchDoc.p1 : matchDoc.p2;
+  const oppSide = amP1 ? matchDoc.p2 : matchDoc.p1;
+  const myGoalsFinal = amP1 ? matchDoc.p1Goals : matchDoc.p2Goals;
+  const oppGoalsFinal = amP1 ? matchDoc.p2Goals : matchDoc.p1Goals;
+  const events = matchDoc.events.map(e=>({minute:e.minute, scorer:e.scorer, side:(e.side==='p1')===amP1 ? 'me':'opp'}));
+  const area = document.getElementById('match-area');
+  area.innerHTML = `
+    <div class="vs-teams">
+      <div class="team-blob"><div class="r">${meSide.rating}</div><div class="t">${meSide.name}</div></div>
+      <div class="vs-x">VS</div>
+      <div class="team-blob"><div class="r">${oppSide.rating}</div><div class="t">${oppSide.name}</div></div>
+    </div>
+    <p class="hint" style="text-align:center;">Live match vs a real opponent \u2014 you're both watching the same game.</p>
+    <div id="result-area"></div>`;
+  const waitMs = matchDoc.startedAt - Date.now();
+  if(waitMs>0) await new Promise(r=>setTimeout(r, waitMs));
+  await animateTimedMatch(events, meSide.name, oppSide.name, matchDoc.startedAt, matchDoc.durationMs);
+  await applyMatchResult(myGoalsFinal, oppGoalsFinal);
+}
+async function joinQueue(){
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fill and save all 11 positions in Squad Builder first.'); return; }
+  await fbReady;
+  if(!fb){
+    toast('Online backend unavailable \u2014 facing a CPU squad instead.');
+    startBotMatch(rating);
+    return;
+  }
+  queueActive = true;
+  const myPlayers = getMySquadPlayers();
+  const startTime = Date.now();
+  try{
+    await fb.setDoc(fb.doc(fb.db,'queue',profile.userId), {
+      userId: profile.userId, name: profile.displayName || profile.userId, rating, players: myPlayers, joinedAt: startTime
+    });
+  }catch(e){
+    console.warn('queue join failed', e);
+    queueActive = false;
+    toast('Could not reach matchmaking \u2014 facing a CPU squad instead.');
+    startBotMatch(rating);
+    return;
+  }
+  const area = document.getElementById('match-area');
+  area.innerHTML = `
+    <div style="text-align:center;">
+      <div class="mono" style="color:var(--muted);margin-bottom:10px;">Searching for an opponent\u2026 <span id="queue-timer">0s</span></div>
+      <button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Cancel</button>
+    </div>`;
+  document.getElementById('queue-cancel').addEventListener('click', leaveQueue);
+
+  const poll = async ()=>{
+    if(!queueActive) return;
+    const timerEl = document.getElementById('queue-timer');
+    if(timerEl) timerEl.textContent = Math.round((Date.now()-startTime)/1000) + 's';
+
+    if(Date.now()-startTime > QUEUE_TIMEOUT_MS){
+      queueActive = false;
+      await leaveQueueSilently();
+      toast('No opponent joined in time \u2014 facing a CPU squad instead.');
+      startBotMatch(rating);
+      return;
+    }
+    try{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'queue'), fb.orderBy('joinedAt','asc'), fb.limit(20)));
+      const others = snap.docs.map(d=>d.data()).filter(q=>q.userId!==profile.userId);
+      for(const other of others){
+        const mid = matchIdFor(profile.userId, other.userId);
+        if(profile.userId < other.userId){
+          try{
+            const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
+            if(!existing.exists()){
+              const diff = rating - other.rating;
+              const p1Goals = simGoals(clamp(1.35+diff/9,0.3,4.5));
+              const p2Goals = simGoals(clamp(1.35-diff/9,0.3,4.5));
+              const rawEvents = buildMatchEvents(p1Goals, p2Goals, myPlayers, other.players);
+              const events = rawEvents.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me' ? 'p1':'p2'}));
+              const matchDoc = {
+                p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating},
+                p2:{userId:other.userId, name:other.name, rating:other.rating},
+                p1Goals, p2Goals, events, startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
+              };
+              await fb.setDoc(fb.doc(fb.db,'matches',mid), matchDoc);
+              queueActive = false;
+              await leaveQueueSilently();
+              try{ await fb.deleteDoc(fb.doc(fb.db,'queue',other.userId)); }catch(_){}
+              enterSyncedMatch(matchDoc);
+              return;
+            } else {
+              queueActive = false;
+              await leaveQueueSilently();
+              enterSyncedMatch(existing.data());
+              return;
+            }
+          }catch(e){ console.warn('match create/check failed', e); }
+        } else {
+          try{
+            const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
+            if(existing.exists()){
+              queueActive = false;
+              await leaveQueueSilently();
+              enterSyncedMatch(existing.data());
+              return;
+            }
+          }catch(e){}
+        }
+      }
+    }catch(e){ console.warn('queue poll failed', e); }
+    if(queueActive) queueTimer = setTimeout(poll, QUEUE_POLL_MS);
+  };
+  poll();
 }
 
 boot();
