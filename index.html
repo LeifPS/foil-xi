@@ -58,20 +58,40 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .view-head p{color:var(--muted);font-size:13.5px;margin-top:4px;max-width:640px;line-height:1.5;}
 
 /* ---- pack grid ---- */
-.pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;}
-.pack-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden;transition:.2s;}
-.pack-card:hover{border-color:var(--turf-bright);transform:translateY(-2px);}
-.pack-card.premium{border-color:var(--gold-dim);background:linear-gradient(160deg,#171208,var(--panel) 60%);}
-.pack-card.ultimate{border-color:#7a5fe0;background:linear-gradient(160deg,#1a1428,var(--panel) 55%);}
-.pack-glyph{width:100%;height:96px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:30px;background:linear-gradient(145deg,var(--panel2),#0b0e15);border:1px solid var(--line);position:relative;}
-.pack-glyph .ov-badge{position:absolute;bottom:8px;right:10px;font-family:'JetBrains Mono';font-size:11px;color:var(--muted);}
-.pack-card h3{font-size:16px;letter-spacing:.02em;}
-.pack-card .desc{font-size:12px;color:var(--muted);line-height:1.5;min-height:34px;}
-.pack-card .buyrow{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:6px;}
-.price{font-family:'JetBrains Mono';font-weight:700;font-size:14px;color:var(--gold);}
-.buy-btn{background:var(--turf);color:#eafff2;padding:9px 16px;border-radius:8px;font-weight:700;font-size:12.5px;letter-spacing:.03em;text-transform:uppercase;transition:.15s;}
-.buy-btn:hover{background:var(--turf-bright);}
-.buy-btn:disabled{background:#333;color:#777;cursor:not-allowed;}
+.pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;}
+.pack-card{
+  background:linear-gradient(165deg,#141912,#0f120c 60%);border:1px solid var(--line);border-radius:16px;
+  padding:0;display:flex;flex-direction:column;position:relative;overflow:hidden;
+  transition:transform .2s, box-shadow .2s, border-color .2s;
+  box-shadow:0 8px 20px rgba(0,0,0,.35);
+}
+.pack-card:hover{border-color:var(--turf-bright);transform:translateY(-4px);box-shadow:0 14px 30px rgba(0,0,0,.5), 0 0 24px -8px var(--turf-bright);}
+.pack-card.premium{border-color:#c78bf5;background:linear-gradient(165deg,#1b1424,#120e19 60%);}
+.pack-card.premium:hover{box-shadow:0 14px 30px rgba(0,0,0,.5), 0 0 24px -6px #c78bf5;}
+.pack-card.ultimate{border:1px solid transparent;
+  background:linear-gradient(165deg,#1c1508,#120e19 60%) padding-box, var(--r-ultimate) border-box;}
+.pack-card.ultimate:hover{box-shadow:0 14px 30px rgba(0,0,0,.55), 0 0 30px -4px #ffd76a;}
+.pack-tier-ribbon{position:absolute;top:12px;left:12px;z-index:2;font-family:'JetBrains Mono';font-size:8.5px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:100px;background:rgba(6,8,12,.7);
+  border:1px solid var(--line);color:var(--muted);}
+.pack-card.premium .pack-tier-ribbon{border-color:#c78bf5;color:#c78bf5;}
+.pack-card.ultimate .pack-tier-ribbon{border-color:#ffd76a;color:#ffd76a;}
+.pack-glyph{width:100%;height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Anton';font-size:34px;color:var(--chalk);position:relative;overflow:hidden;
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,.04) 0 3px, transparent 3px 15px), linear-gradient(180deg,#1b2116,#12150d 85%);
+  border-bottom:1px solid var(--line);}
+.pack-card.premium .pack-glyph{background:repeating-linear-gradient(135deg, rgba(199,139,245,.08) 0 3px, transparent 3px 15px), linear-gradient(180deg,#1f1830,#140f1d 85%);}
+.pack-card.ultimate .pack-glyph{background:repeating-conic-gradient(from 0deg at 50% 0%, rgba(255,215,106,.09) 0deg 4deg, transparent 4deg 13deg), linear-gradient(180deg,#241a0c,#150f1d 85%);}
+.pack-glyph .pv-lbl{font-family:'JetBrains Mono';font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:1px;}
+.pack-card-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;flex:1;}
+.pack-card h3{font-size:15.5px;letter-spacing:.01em;}
+.pack-card .desc{font-size:11.8px;color:var(--muted);line-height:1.5;min-height:34px;}
+.pack-card .buyrow{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);}
+.price-pill{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;color:var(--gold);}
+.price-pill .pdot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px var(--gold);}
+.buy-btn{background:var(--turf);color:#eafff2;padding:8px 15px;border-radius:8px;font-weight:700;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;transition:.15s;box-shadow:0 2px 8px rgba(47,157,103,.25);}
+.buy-btn:hover{background:var(--turf-bright);box-shadow:0 3px 12px rgba(63,163,77,.4);}
+.buy-btn:disabled{background:#2a2d27;color:#666;cursor:not-allowed;box-shadow:none;}
 
 /* ---- card component ---- */
 .pcard{
@@ -371,7 +391,7 @@ async function initFirebase(){
     // connectivity probe - if this fails/hangs we fall back to local mode
     await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1))), 6000);
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
-      getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc};
+      getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where};
     return true;
   }catch(e){
     console.warn('Firebase backend unavailable, using local shared storage fallback:', e);
@@ -512,18 +532,23 @@ function renderSBCList(view){
     <div class="view-head"><h2>SBC-Herausforderungen</h2><p>Stelle aus deinem Verein einen Kader zusammen, der die Anforderungen erf\u00fcllt. Gib ihn ab und diese Spieler werden gegen ein garantiertes Pack eingetauscht \u2014 jede Herausforderung kann nur einmal abgeschlossen werden.</p></div>
     <div class="pack-grid" id="sbc-grid"></div>`;
   const grid = document.getElementById('sbc-grid');
+  const TIER_LABEL2 = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
   SBC_DEFS.forEach(sbc=>{
     const done = completed.has(sbc.id);
     const pack = PACKS.find(p=>p.id===sbc.reward);
     const card = document.createElement('div');
     card.className = `pack-card ${pack.tier}`;
     card.innerHTML = `
-      <div class="pack-glyph">${sbc.size}<span class="ov-badge">SPIELER</span></div>
-      <h3>${sbc.name}</h3>
-      <div class="desc" style="color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:-6px;">${sbc.tier}-Herausforderung</div>
-      <div class="desc">${sbc.desc}</div>
-      <div class="buyrow"><div class="price" style="font-size:11.5px;">Belohnung: ${pack.name}</div>
-      <button class="buy-btn" ${done?'disabled':''}>${done?'Abgeschlossen':'Bauen'}</button></div>`;
+      <div class="pack-tier-ribbon">${sbc.tier}</div>
+      <div class="pack-glyph"><div>${sbc.size}</div><div class="pv-lbl">Spieler</div></div>
+      <div class="pack-card-body">
+        <h3>${sbc.name}</h3>
+        <div class="desc">${sbc.desc}</div>
+        <div class="buyrow">
+          <div class="price-pill" style="font-size:11px;color:var(--chalk);"><div class="pdot" style="background:${pack.tier==='ultimate'?'#ffd76a':pack.tier==='premium'?'#c78bf5':'var(--turf-bright)'};box-shadow:none;"></div>${pack.name}</div>
+          <button class="buy-btn" ${done?'disabled':''}>${done?'Abgeschlossen':'Bauen'}</button>
+        </div>
+      </div>`;
     if(!done) card.querySelector('.buy-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
     grid.appendChild(card);
   });
@@ -601,6 +626,196 @@ async function submitSBC(){
   showPackOpening(pack, drawn);
 }
 
+
+// ===== TRADING =====
+let tradeSelection = new Set();
+function renderTrade(view){
+  view.innerHTML = `
+    <div class="view-head"><h2>Handel</h2><p>Biete Karten aus deinem Verein anderen Spielern gegen Coins an. Spieler, die aktuell in deinem Kader stehen, kannst du nicht anbieten \u2014 entferne sie zuerst im Kader-Editor.</p></div>
+    <div class="toolbar" style="margin-bottom:18px;">
+      <button class="action-btn" id="trade-new" style="width:auto;padding:9px 18px;">+ Neues Angebot erstellen</button>
+    </div>
+    <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Eingehende Angebote</h3>
+    <div class="leader-list" id="trade-incoming" style="margin-bottom:24px;"><p class="hint">L\u00e4dt...</p></div>
+    <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine gesendeten Angebote</h3>
+    <div class="leader-list" id="trade-outgoing"><p class="hint">L\u00e4dt...</p></div>
+  `;
+  document.getElementById('trade-new').addEventListener('click', openTradeBuilder);
+  loadTrades();
+}
+async function loadTrades(){
+  const inBox = document.getElementById('trade-incoming');
+  const outBox = document.getElementById('trade-outgoing');
+  if(!inBox || !outBox) return;
+  await fbReady;
+  if(!fb){
+    inBox.innerHTML = `<p class="hint">Handel ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`;
+    outBox.innerHTML = '';
+    return;
+  }
+  let incoming = [], outgoing = [];
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('toUserId','==',profile.userId)));
+    snap.docs.forEach(d=>incoming.push({id:d.id, ...d.data()}));
+  }catch(e){ console.warn('incoming trades read failed', e); }
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('fromUserId','==',profile.userId)));
+    snap.docs.forEach(d=>outgoing.push({id:d.id, ...d.data()}));
+  }catch(e){ console.warn('outgoing trades read failed', e); }
+  incoming = incoming.filter(t=>t.status==='pending');
+  outgoing = outgoing.filter(t=>t.status==='pending');
+
+  inBox.innerHTML = incoming.length ? '' : `<p class="hint">Keine eingehenden Angebote.</p>`;
+  incoming.forEach(t=>{
+    const row = document.createElement('div');
+    row.className = 'leader-row';
+    row.style.flexWrap = 'wrap';
+    row.innerHTML = `<span style="flex:1;">${t.fromName} bietet ${t.cards.length} Karte${t.cards.length>1?'n':''} f\u00fcr <b style="color:var(--gold);">${t.askPrice.toLocaleString('de-DE')} Coins</b></span>`;
+    const btns = document.createElement('div');
+    btns.style.display = 'flex'; btns.style.gap = '8px'; btns.style.marginTop='6px'; btns.style.width='100%';
+    const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Karten ansehen';
+    viewBtn.addEventListener('click', ()=>showTradeCardsModal(t));
+    const acceptBtn = document.createElement('button'); acceptBtn.className='action-btn'; acceptBtn.style.width='auto'; acceptBtn.style.padding='6px 12px'; acceptBtn.textContent='Annehmen';
+    acceptBtn.addEventListener('click', ()=>acceptTrade(t));
+    const declineBtn = document.createElement('button'); declineBtn.className='action-btn secondary'; declineBtn.style.width='auto'; declineBtn.style.padding='6px 12px'; declineBtn.style.background='var(--danger)'; declineBtn.textContent='Ablehnen';
+    declineBtn.addEventListener('click', ()=>declineTrade(t));
+    btns.append(viewBtn, acceptBtn, declineBtn);
+    row.appendChild(btns);
+    inBox.appendChild(row);
+  });
+
+  outBox.innerHTML = outgoing.length ? '' : `<p class="hint">Keine gesendeten Angebote.</p>`;
+  outgoing.forEach(t=>{
+    const row = document.createElement('div');
+    row.className = 'leader-row';
+    row.style.flexWrap = 'wrap';
+    row.innerHTML = `<span style="flex:1;">An <b>${t.toName}</b>: ${t.cards.length} Karte${t.cards.length>1?'n':''} f\u00fcr ${t.askPrice.toLocaleString('de-DE')} Coins</span>`;
+    const btns = document.createElement('div');
+    btns.style.display='flex'; btns.style.gap='8px'; btns.style.marginTop='6px'; btns.style.width='100%';
+    const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Karten ansehen';
+    viewBtn.addEventListener('click', ()=>showTradeCardsModal(t));
+    const withdrawBtn = document.createElement('button'); withdrawBtn.className='action-btn secondary'; withdrawBtn.style.width='auto'; withdrawBtn.style.padding='6px 12px'; withdrawBtn.textContent='Zur\u00fcckziehen';
+    withdrawBtn.addEventListener('click', ()=>withdrawTrade(t));
+    btns.append(viewBtn, withdrawBtn);
+    row.appendChild(btns);
+    outBox.appendChild(row);
+  });
+}
+function showTradeCardsModal(t){
+  openModal(`
+    <h2 style="margin-bottom:14px;">Angebotene Karten</h2>
+    <div class="reveal-strip" id="trade-cards-grid"></div>
+    <button class="modal-close" id="trade-cards-close">Schlie\u00dfen</button>`);
+  const grid = document.getElementById('trade-cards-grid');
+  t.cards.forEach(c=>{ const card = BY_ID.get(c.cardId); if(card) grid.appendChild(cardEl(card,'mini')); });
+  document.getElementById('trade-cards-close').addEventListener('click', closeModal);
+}
+function openTradeBuilder(){
+  tradeSelection = new Set();
+  const usedInSquad = new Set(Object.values(squad.slots));
+  openModal(`
+    <h2 style="margin-bottom:4px;">Neues Handelsangebot</h2>
+    <p class="hint" style="margin-top:0;">W\u00e4hle Karten aus, die du anbieten m\u00f6chtest, gib den Vereinsnamen des Empf\u00e4ngers und deinen Preis in Coins ein.</p>
+    <div class="mono" style="color:var(--muted);margin:10px 0;" id="trade-sel-count">0 Karten ausgew\u00e4hlt</div>
+    <div class="club-grid" id="trade-pick-grid" style="max-height:320px;overflow:auto;margin-bottom:16px;"></div>
+    <div class="toolbar" style="margin-bottom:14px;">
+      <input id="trade-target" placeholder="Vereinsname des Empf\u00e4ngers">
+      <input id="trade-price" type="number" min="0" placeholder="Preis in Coins">
+    </div>
+    <button class="action-btn" id="trade-submit" style="width:220px;">Angebot senden</button>
+  `);
+  const grid = document.getElementById('trade-pick-grid');
+  collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card).forEach(({uid,card})=>{
+    const inSquad = usedInSquad.has(uid);
+    const wrap = document.createElement('div');
+    wrap.className = 'club-card-wrap';
+    wrap.style.cursor = inSquad ? 'not-allowed' : 'pointer';
+    wrap.style.opacity = inSquad ? '.45' : '1';
+    const el = cardEl(card,'mini');
+    wrap.appendChild(el);
+    if(inSquad){
+      const badge = document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM KADER';
+      wrap.appendChild(badge);
+    }
+    wrap.addEventListener('click', ()=>{
+      if(inSquad){ toast('Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung. Entferne ihn dort zuerst.'); return; }
+      if(tradeSelection.has(uid)){ tradeSelection.delete(uid); el.style.outline=''; el.style.transform=''; }
+      else{ tradeSelection.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
+      document.getElementById('trade-sel-count').textContent = `${tradeSelection.size} Karte${tradeSelection.size===1?'':'n'} ausgew\u00e4hlt`;
+    });
+    grid.appendChild(wrap);
+  });
+  document.getElementById('trade-submit').addEventListener('click', submitTradeOffer);
+}
+async function submitTradeOffer(){
+  if(!tradeSelection.size){ toast('W\u00e4hle mindestens eine Karte aus.'); return; }
+  const targetRaw = document.getElementById('trade-target').value;
+  const targetId = sanitizeClubId(targetRaw || '');
+  if(!targetId){ toast('Bitte einen g\u00fcltigen Vereinsnamen eingeben.'); return; }
+  if(targetId===profile.userId){ toast('Du kannst dir selbst kein Angebot senden.'); return; }
+  const price = Math.max(0, Math.floor(Number(document.getElementById('trade-price').value)||0));
+  await fbReady;
+  if(!fb){ toast('Handel ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.'); return; }
+  const cards = [...tradeSelection].map(uid=>{
+    const entry = collection.find(c=>c.uid===uid);
+    return {uid, cardId: entry.cardId};
+  });
+  const tradeDoc = {
+    fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
+    toUserId: targetId, toName: targetRaw.trim(),
+    cards, askPrice: price, status:'pending', createdAt: Date.now()
+  };
+  try{
+    await fb.setDoc(fb.doc(fb.db,'trades', genId()), tradeDoc);
+    closeModal();
+    toast('Handelsangebot gesendet!');
+    if(currentTab==='trade') renderView('trade');
+  }catch(e){
+    console.warn('trade submit failed', e);
+    toast('Angebot konnte nicht gesendet werden.');
+  }
+}
+async function withdrawTrade(t){
+  try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(e){}
+  toast('Angebot zur\u00fcckgezogen.');
+  loadTrades();
+}
+async function declineTrade(t){
+  try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(e){}
+  toast('Angebot abgelehnt.');
+  loadTrades();
+}
+async function acceptTrade(t){
+  if(profile.coins < t.askPrice){ toast('Nicht genug Coins f\u00fcr dieses Angebot.'); return; }
+  await fbReady;
+  if(!fb){ toast('Backend nicht erreichbar.'); return; }
+  try{
+    // 1) credit the sender: remove their traded cards, add the coins
+    const senderSnap = await fb.getDoc(fb.doc(fb.db,'saves', t.fromUserId));
+    if(senderSnap.exists()){
+      const senderData = senderSnap.data();
+      const senderProfile = senderData.profile || {};
+      const senderCollection = senderData.collection || [];
+      const tradedUids = new Set(t.cards.map(c=>c.uid));
+      const newSenderCollection = senderCollection.filter(c=>!tradedUids.has(c.uid));
+      senderProfile.coins = (senderProfile.coins||0) + t.askPrice;
+      await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile, collection:newSenderCollection}, {merge:true});
+    }
+    // 2) charge myself and add the cards
+    profile.coins -= t.askPrice;
+    t.cards.forEach(c=>collection.push({uid:genId(), cardId:c.cardId}));
+    await sSet('profile', profile);
+    await sSet('collection', collection);
+    // 3) close out the trade
+    await fb.deleteDoc(fb.doc(fb.db,'trades', t.id));
+    updateCoinDisplay();
+    toast(`Handel abgeschlossen! ${t.cards.length} Karte${t.cards.length>1?'n':''} erhalten.`);
+    loadTrades();
+  }catch(e){
+    console.warn('accept trade failed', e);
+    toast('Handel konnte nicht abgeschlossen werden.');
+  }
+}
 
 const FORMATIONS = {
  '433': {label:'4-3-3', slots:[
@@ -875,7 +1090,7 @@ function cardEl(card, size=''){
 }
 
 // ===== nav & routing =====
-const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','SBC-Herausforderungen'],['play','Online spielen']];
+const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','SBC-Herausforderungen'],['trade','Handel'],['play','Online spielen']];
 function renderNav(){
   const nav = document.getElementById('nav');
   nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${label}</button>`).join('');
@@ -888,6 +1103,7 @@ function renderView(tab){
   if(tab==='club') return renderClub(view);
   if(tab==='squad') return renderSquad(view);
   if(tab==='sbc') return renderSBCList(view);
+  if(tab==='trade') return renderTrade(view);
   if(tab==='play') return renderPlay(view);
 }
 
@@ -901,15 +1117,21 @@ function renderStore(view){
     </div>
     <div class="pack-grid" id="pack-grid"></div>`;
   const grid = document.getElementById('pack-grid');
+  const TIER_LABEL = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
   PACKS.forEach(pack=>{
     const card = document.createElement('div');
     card.className = `pack-card ${pack.tier}`;
     card.innerHTML = `
-      <div class="pack-glyph">${pack.count}<span class="ov-badge">KARTEN</span></div>
-      <h3>${pack.name}</h3>
-      <div class="desc">${pack.desc}</div>
-      <div class="buyrow"><div class="price">\u25CF ${pack.cost.toLocaleString('de-DE')}</div>
-      <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button></div>`;
+      <div class="pack-tier-ribbon">${TIER_LABEL[pack.tier]}</div>
+      <div class="pack-glyph"><div>${pack.count}</div><div class="pv-lbl">Karten</div></div>
+      <div class="pack-card-body">
+        <h3>${pack.name}</h3>
+        <div class="desc">${pack.desc}</div>
+        <div class="buyrow">
+          <div class="price-pill"><div class="pdot"></div>${pack.cost.toLocaleString('de-DE')}</div>
+          <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
+        </div>
+      </div>`;
     card.querySelector('.buy-btn').addEventListener('click', ()=>buyPack(pack));
     grid.appendChild(card);
   });
@@ -1377,9 +1599,46 @@ async function loadLeaderboard(){
     squads = squads.slice(0,8);
   }
   if(!squads.length){ box.innerHTML = `<p class="hint">Noch keine Kader ver\u00f6ffentlicht. Sei der Erste im Kader-Editor!</p>`; return; }
-  box.innerHTML = squads.map((s,i)=>`
-    <div class="leader-row"><span class="rk">${i+1}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span></div>
-  `).join('');
+  box.innerHTML = '';
+  squads.forEach((s,i)=>{
+    const row = document.createElement('div');
+    row.className = 'leader-row';
+    row.style.cursor = 'pointer';
+    row.innerHTML = `<span class="rk">${i+1}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span>`;
+    row.addEventListener('click', ()=>showSquadModal(s));
+    box.appendChild(row);
+  });
+}
+function cardElLite(player){
+  const r = rarityInfo(player.ov);
+  const div = document.createElement('div');
+  div.className = `pcard mini ${r.cls}`;
+  div.style.height = '150px';
+  div.innerHTML = `
+    <div class="photo-frame" style="height:100px;">
+      <div class="avatar">${initialsOf(player.n)}</div>
+      <img class="face-photo" src="${proxyImg(player.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+      <div class="photo-tint"></div>
+    </div>
+    <div class="top">
+      <div><div class="ov">${player.ov}</div><div class="ov-underline"></div></div>
+      <div class="pos-label"><div class="pt">${player.pos}</div><div class="pu"></div></div>
+    </div>
+    <div class="card-body" style="margin-top:-8px;">
+      <div class="name">${player.n}</div>
+    </div>`;
+  return div;
+}
+function showSquadModal(s){
+  openModal(`
+    <h2 style="margin-bottom:2px;">${s.owner || 'Unbenannter Verein'}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">${s.formation || ''} \u00b7 Team-Rating ${s.rating} OVR</p>
+    <div class="reveal-strip" id="squad-view-grid"></div>
+    <button class="modal-close" id="squad-view-close">Schlie\u00dfen</button>
+  `);
+  const grid = document.getElementById('squad-view-grid');
+  (s.players||[]).forEach(p=>grid.appendChild(cardElLite(p)));
+  document.getElementById('squad-view-close').addEventListener('click', closeModal);
 }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function simGoals(lambda){
