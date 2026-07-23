@@ -326,7 +326,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   <div id="topbar">
     <div class="brand"><div class="brand-mark">FE</div><h1>FOIL<span>ELEVEN</span></h1></div>
     <div class="wallet">
-      <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Switch club</button>
+      <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Verein wechseln</button>
       <div class="coin-pill"><div class="coin-dot"></div><b class="mono" id="coin-display">0</b></div>
     </div>
   </div>
@@ -419,47 +419,47 @@ function specialsByVariant(tags){ return ALL_SPECIAL.filter(c=>tags.includes(c.v
 // ===== pack definitions =====
 const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:500,tier:'',count:5,
-    desc:'5 squad players, rated 70-76.',
+    desc:'5 Kaderspieler, Rating 70-76.',
     draw(){ const pool=poolByRange(70,76,false); return Array.from({length:5},()=>pick(pool)); }},
   {id:'gold',name:'Gold Rush',cost:2200,tier:'',count:5,
-    desc:'5 players rated 74-83. 1 guaranteed 80+.',
+    desc:'5 Spieler mit Rating 74-83. 1 garantiert mit 80+.',
     draw(){ const pool=poolByRange(74,83,false), hi=poolByRange(80,86,false);
       const out=Array.from({length:4},()=>pick(pool)); out.push(pick(hi)); return out; }},
   {id:'derby',name:'Derby Selection',cost:4500,tier:'',count:6,
-    desc:'6 players rated 76-86. 1 guaranteed 82+ (special chance included).',
+    desc:'6 Spieler mit Rating 76-86. 1 garantiert mit 82+ (inkl. Chance auf Sonderkarte).',
     draw(){ const pool=poolByRange(76,86,false), hi=poolByRange(82,90,true);
       const out=Array.from({length:5},()=>pick(pool)); out.push(pick(hi)); return out; }},
   {id:'raregold',name:'Rare Gold Vault',cost:7000,tier:'premium',count:5,
-    desc:'5 players rated 78-88. 1 guaranteed 85+.',
+    desc:'5 Spieler mit Rating 78-88. 1 garantiert mit 85+.',
     draw(){ const pool=poolByRange(78,88,true), hi=poolByRange(85,91,true);
       const out=Array.from({length:4},()=>pick(pool)); out.push(pick(hi)); return out; }},
   {id:'scout',name:'Wonderkid Scout Pack',cost:6000,tier:'premium',count:3,
-    desc:'3 players, all guaranteed breakout prospect cards (Future Star, Ones to Watch, Rising Phenom or Wonderkid).',
+    desc:'3 Spieler, alle garantiert Nachwuchs-Sonderkarten (Future Star, Ones to Watch, Rising Phenom oder Wonderkid).',
     draw(){ const pool=specialsByVariant(['fut_star','otw','rising_phenom','wonderkid']);
       return Array.from({length:3},()=>pick(pool)); }},
   {id:'goldenglove',name:'Golden Glove Pack',cost:5500,tier:'premium',count:2,
-    desc:'2 goalkeepers, both guaranteed Golden Glove special cards. The only place to find this variant.',
+    desc:'2 Torh\u00fcter, beide garantiert Golden-Glove-Sonderkarten. Die einzige Quelle f\u00fcr diese Variante.',
     draw(){ const pool=specialsByVariant(['golden_glove']); return Array.from({length:2},()=>pick(pool)); }},
   {id:'iconmoment',name:'Icon Moments Pack',cost:9500,tier:'premium',count:3,
-    desc:'3 players. 1 guaranteed special card of any kind.',
+    desc:'3 Spieler. 1 garantierte Sonderkarte beliebiger Art.',
     draw(){ const pool=poolByRange(80,90,false);
       const out=Array.from({length:2},()=>pick(pool)); out.push(pick(ALL_SPECIAL)); return out; }},
   {id:'tots',name:'Team of the Season Pack',cost:16000,tier:'premium',count:4,
-    desc:'4 players, 2 guaranteed Team of the Season cards. Only pack with guaranteed TOTS.',
+    desc:'4 Spieler, 2 garantierte Team-of-the-Season-Karten. Einziges Pack mit garantierten TOTS.',
     draw(){ const totsPool=specialsByVariant(['tots']), hi=poolByRange(85,99,true);
       return [pick(totsPool),pick(totsPool),pick(hi),pick(hi)]; }},
   {id:'sevenof88',name:'7\u00d7 88+ Pack',cost:24000,tier:'premium',count:7,
-    desc:'7 players, all guaranteed rated 88 or higher.',
+    desc:'7 Spieler, alle garantiert mit Rating 88 oder h\u00f6her.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
   {id:'hof',name:'Hall of Fame Pack',cost:42000,tier:'ultimate',count:1,
-    desc:'1 player, guaranteed Icon, Centurion, Hall of Fame or Galactico \u2014 rated 95+. The only pack with these.',
+    desc:'1 Spieler, garantiert Icon, Centurion, Hall of Fame oder Galactico \u2014 Rating 95+. Das einzige Pack mit diesen Karten.',
     draw(){ const pool=specialsByVariant(['icon','centurion','hall_of_fame','galactico']).filter(c=>c.ov>=95);
       return [pick(pool.length?pool:specialsByVariant(['icon','centurion','hall_of_fame','galactico']))]; }},
   {id:'twoof95',name:'Pick 2 of 4: 95+ Pack',cost:52000,tier:'ultimate',count:4,pickCount:2,
-    desc:'4 players, all rated 95+. Choose 2 of them to keep.',
+    desc:'4 Spieler, alle mit Rating 95+. W\u00e4hle 2 davon zum Behalten.',
     draw(){ const ultra=poolByRange(95,99,true); return Array.from({length:4},()=>pick(ultra)); }},
   {id:'blackout',name:'Blackout Pack',cost:100000,tier:'ultimate',count:1,
-    desc:'1 player, guaranteed World Cup Moment or Blackout \u2014 rated 97-99. The rarest cards in the game, found nowhere else.',
+    desc:'1 Spieler, garantiert World Cup Moment oder Blackout \u2014 Rating 97-99. Die seltensten Karten im Spiel, sonst nirgends erh\u00e4ltlich.',
     draw(){ return [pick(EXCLUSIVE_SPECIALS)]; }},
 ];
 
@@ -468,48 +468,48 @@ function avgOv(cards){ return Math.round(cards.reduce((s,c)=>s+c.ov,0)/cards.len
 function req(label, check, progress){ return {label, check, progress}; }
 const SBC_DEFS = [
   // --- entry level (3-4 players) ---
-  {id:'first_kit', name:'First Kit', reward:'bronze', size:3, tier:'Entry',
-    desc:'Any 3 players, average rating 60+.',
-    reqs:[ req('Average rating 60+', c=>avgOv(c)>=60, c=>`${avgOv(c)} / 60`) ]},
-  {id:'squad_starter', name:'Squad Starter', reward:'gold', size:4, tier:'Entry',
-    desc:'4 players, average rating 74+, nobody below 68 OVR.',
-    reqs:[ req('Average rating 74+', c=>avgOv(c)>=74, c=>`${avgOv(c)} / 74`),
-           req('No player below 68 OVR', c=>c.every(x=>x.ov>=68), c=>`${c.filter(x=>x.ov<68).length} below 68`) ]},
+  {id:'first_kit', name:'Erster Kader', reward:'bronze', size:3, tier:'Einsteiger',
+    desc:'Beliebige 3 Spieler, Durchschnittsrating 60+.',
+    reqs:[ req('Durchschnittsrating 60+', c=>avgOv(c)>=60, c=>`${avgOv(c)} / 60`) ]},
+  {id:'squad_starter', name:'Kader-Einstieg', reward:'gold', size:4, tier:'Einsteiger',
+    desc:'4 Spieler, Durchschnittsrating 74+, niemand unter 68 OVR.',
+    reqs:[ req('Durchschnittsrating 74+', c=>avgOv(c)>=74, c=>`${avgOv(c)} / 74`),
+           req('Kein Spieler unter 68 OVR', c=>c.every(x=>x.ov>=68), c=>`${c.filter(x=>x.ov<68).length} unter 68`) ]},
   // --- medium (5-7 players) ---
-  {id:'one_nation', name:'One Nation', reward:'derby', size:6, tier:'Medium',
-    desc:'All 6 players must share the same nationality.',
-    reqs:[ req('Same nationality', c=>new Set(c.map(x=>x.nat)).size===1, c=>`${new Set(c.map(x=>x.nat)).size} nations used`) ]},
-  {id:'league_royalty', name:'League Royalty', reward:'raregold', size:5, tier:'Medium',
-    desc:'All 5 players from the same league.',
-    reqs:[ req('Same league', c=>new Set(c.map(x=>x.lg)).size===1, c=>`${new Set(c.map(x=>x.lg)).size} leagues used`) ]},
-  {id:'special_selection', name:'Special Selection', reward:'iconmoment', size:7, tier:'Medium',
-    desc:'At least 3 of your 7 players must be special variant cards.',
-    reqs:[ req('3+ special cards', c=>c.filter(x=>x.variant!=='base').length>=3, c=>`${c.filter(x=>x.variant!=='base').length} / 3 specials`) ]},
-  {id:'champions_vii', name:'Champions VII', reward:'tots', size:7, tier:'Medium',
-    desc:'7 players, average rating 85+, at least 2 special variant cards.',
-    reqs:[ req('Average rating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
-           req('2+ special cards', c=>c.filter(x=>x.variant!=='base').length>=2, c=>`${c.filter(x=>x.variant!=='base').length} / 2 specials`) ]},
+  {id:'one_nation', name:'Eine Nation', reward:'derby', size:6, tier:'Mittel',
+    desc:'Alle 6 Spieler m\u00fcssen dieselbe Nationalit\u00e4t haben.',
+    reqs:[ req('Gleiche Nationalit\u00e4t', c=>new Set(c.map(x=>x.nat)).size===1, c=>`${new Set(c.map(x=>x.nat)).size} Nationen verwendet`) ]},
+  {id:'league_royalty', name:'Liga-K\u00f6nigsklasse', reward:'raregold', size:5, tier:'Mittel',
+    desc:'Alle 5 Spieler aus derselben Liga.',
+    reqs:[ req('Gleiche Liga', c=>new Set(c.map(x=>x.lg)).size===1, c=>`${new Set(c.map(x=>x.lg)).size} Ligen verwendet`) ]},
+  {id:'special_selection', name:'Sonderauswahl', reward:'iconmoment', size:7, tier:'Mittel',
+    desc:'Mindestens 3 deiner 7 Spieler m\u00fcssen Sonderkarten sein.',
+    reqs:[ req('3+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=3, c=>`${c.filter(x=>x.variant!=='base').length} / 3 Sonderkarten`) ]},
+  {id:'champions_vii', name:'Champions VII', reward:'tots', size:7, tier:'Mittel',
+    desc:'7 Spieler, Durchschnittsrating 85+, mindestens 2 Sonderkarten.',
+    reqs:[ req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
+           req('2+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=2, c=>`${c.filter(x=>x.variant!=='base').length} / 2 Sonderkarten`) ]},
   // --- advanced (full XI) ---
-  {id:'elite_xi', name:'Elite XI', reward:'sevenof88', size:11, tier:'Advanced',
-    desc:'11 players, average rating 88+, at least 3 players rated 90 or higher.',
-    reqs:[ req('Average rating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`),
-           req('3+ players rated 90+', c=>c.filter(x=>x.ov>=90).length>=3, c=>`${c.filter(x=>x.ov>=90).length} / 3`) ]},
-  {id:'world_class', name:'World Class Finale', reward:'twoof95', size:11, tier:'Advanced',
-    desc:'11 players, average rating 92+, nobody below 88 OVR, at least 2 players rated 95+.',
-    reqs:[ req('Average rating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`),
-           req('No player below 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} below 88`),
-           req('2+ players rated 95+', c=>c.filter(x=>x.ov>=95).length>=2, c=>`${c.filter(x=>x.ov>=95).length} / 2`) ]},
-  {id:'ultimate_icons', name:'Ultimate Icons', reward:'blackout', size:11, tier:'Advanced',
-    desc:'11 players, average rating 93+, at least 4 players rated 95 or higher.',
-    reqs:[ req('Average rating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
-           req('4+ players rated 95+', c=>c.filter(x=>x.ov>=95).length>=4, c=>`${c.filter(x=>x.ov>=95).length} / 4`) ]},
+  {id:'elite_xi', name:'Elite-Elf', reward:'sevenof88', size:11, tier:'Fortgeschritten',
+    desc:'11 Spieler, Durchschnittsrating 88+, mindestens 3 Spieler mit 90 oder h\u00f6her.',
+    reqs:[ req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`),
+           req('3+ Spieler mit 90+', c=>c.filter(x=>x.ov>=90).length>=3, c=>`${c.filter(x=>x.ov>=90).length} / 3`) ]},
+  {id:'world_class', name:'Weltklasse-Finale', reward:'twoof95', size:11, tier:'Fortgeschritten',
+    desc:'11 Spieler, Durchschnittsrating 92+, niemand unter 88 OVR, mindestens 2 Spieler mit 95+.',
+    reqs:[ req('Durchschnittsrating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`),
+           req('Kein Spieler unter 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} unter 88`),
+           req('2+ Spieler mit 95+', c=>c.filter(x=>x.ov>=95).length>=2, c=>`${c.filter(x=>x.ov>=95).length} / 2`) ]},
+  {id:'ultimate_icons', name:'Ultimative Icons', reward:'blackout', size:11, tier:'Fortgeschritten',
+    desc:'11 Spieler, Durchschnittsrating 93+, mindestens 4 Spieler mit 95 oder h\u00f6her.',
+    reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
+           req('4+ Spieler mit 95+', c=>c.filter(x=>x.ov>=95).length>=4, c=>`${c.filter(x=>x.ov>=95).length} / 4`) ]},
 ];
 let activeSBC = null;
 let sbcSelection = new Set();
 function renderSBCList(view){
   const completed = new Set(profile.completedSBCs||[]);
   view.innerHTML = `
-    <div class="view-head"><h2>SBC Challenges</h2><p>Build a squad from your club that meets the requirements. Submit it and those players are consumed in exchange for a guaranteed pack \u2014 each challenge can only be completed once.</p></div>
+    <div class="view-head"><h2>SBC-Herausforderungen</h2><p>Stelle aus deinem Verein einen Kader zusammen, der die Anforderungen erf\u00fcllt. Gib ihn ab und diese Spieler werden gegen ein garantiertes Pack eingetauscht \u2014 jede Herausforderung kann nur einmal abgeschlossen werden.</p></div>
     <div class="pack-grid" id="sbc-grid"></div>`;
   const grid = document.getElementById('sbc-grid');
   SBC_DEFS.forEach(sbc=>{
@@ -518,12 +518,12 @@ function renderSBCList(view){
     const card = document.createElement('div');
     card.className = `pack-card ${pack.tier}`;
     card.innerHTML = `
-      <div class="pack-glyph">${sbc.size}<span class="ov-badge">PLAYERS</span></div>
+      <div class="pack-glyph">${sbc.size}<span class="ov-badge">SPIELER</span></div>
       <h3>${sbc.name}</h3>
-      <div class="desc" style="color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:-6px;">${sbc.tier} Challenge</div>
+      <div class="desc" style="color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:-6px;">${sbc.tier}-Herausforderung</div>
       <div class="desc">${sbc.desc}</div>
-      <div class="buyrow"><div class="price" style="font-size:11.5px;">Reward: ${pack.name}</div>
-      <button class="buy-btn" ${done?'disabled':''}>${done?'Completed':'Build'}</button></div>`;
+      <div class="buyrow"><div class="price" style="font-size:11.5px;">Belohnung: ${pack.name}</div>
+      <button class="buy-btn" ${done?'disabled':''}>${done?'Abgeschlossen':'Bauen'}</button></div>`;
     if(!done) card.querySelector('.buy-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
     grid.appendChild(card);
   });
@@ -532,12 +532,12 @@ function openSBCBuilder(sbc){
   activeSBC = sbc; sbcSelection = new Set();
   const view = document.getElementById('view');
   view.innerHTML = `
-    <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Players currently in your Squad Builder lineup are marked and can't be used here \u2014 free them up first if you want to include them.</p></div>
-    <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Back to Challenges</button></div>
+    <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Spieler, die aktuell in deiner Kader-Editor-Aufstellung stehen, sind markiert und k\u00f6nnen hier nicht verwendet werden \u2014 entferne sie dort zuerst, wenn du sie einsetzen willst.</p></div>
+    <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button></div>
     <div id="sbc-reqs" style="margin-bottom:14px;"></div>
-    <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / ${sbc.size} selected</div>
+    <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / ${sbc.size} ausgew\u00e4hlt</div>
     <div class="club-grid" id="sbc-club-grid"></div>
-    <button class="action-btn" id="sbc-submit" disabled style="opacity:.4;margin-top:16px;width:220px;">Submit Squad</button>
+    <button class="action-btn" id="sbc-submit" disabled style="opacity:.4;margin-top:16px;width:220px;">Kader abgeben</button>
   `;
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   const grid = document.getElementById('sbc-club-grid');
@@ -553,15 +553,15 @@ function openSBCBuilder(sbc){
     if(inSquad){
       const badge = document.createElement('div');
       badge.className = 'sbc-inuse-badge';
-      badge.textContent = 'IN SQUAD';
+      badge.textContent = 'IM KADER';
       wrap.appendChild(badge);
     }
     wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('This player is in your active Squad Builder lineup. Remove them there first.'); return; }
+      if(inSquad){ toast('Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung. Entferne ihn dort zuerst.'); return; }
       if(sbcSelection.has(uid)){
         sbcSelection.delete(uid); el.style.outline=''; el.style.transform='';
       } else {
-        if(sbcSelection.size>=activeSBC.size){ toast(`${activeSBC.size} players already selected \u2014 deselect one first.`); return; }
+        if(sbcSelection.size>=activeSBC.size){ toast(`${activeSBC.size} Spieler bereits ausgew\u00e4hlt \u2014 w\u00e4hle zuerst einen ab.`); return; }
         sbcSelection.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)';
       }
       updateSBCState();
@@ -581,7 +581,7 @@ function updateSBCState(){
     if(!ok) allOk = false;
     return `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">${r.label}</span><span class="mono" style="color:${ok?'var(--turf-bright)':'var(--danger)'};">${full?r.progress(selectedCards):'\u2014'}</span></div>`;
   }).join('');
-  const countEl = document.getElementById('sbc-count'); if(countEl) countEl.textContent = `${sbcSelection.size} / ${activeSBC.size} selected`;
+  const countEl = document.getElementById('sbc-count'); if(countEl) countEl.textContent = `${sbcSelection.size} / ${activeSBC.size} ausgew\u00e4hlt`;
   const btn = document.getElementById('sbc-submit');
   if(btn){ btn.disabled = !allOk; btn.style.opacity = allOk ? '1' : '.4'; }
 }
@@ -597,7 +597,7 @@ async function submitSBC(){
   currentTab = 'sbc';
   renderNav();
   renderView('sbc');
-  toast(`SBC complete! Opening your ${pack.name} reward\u2026`);
+  toast(`SBC abgeschlossen! \u00d6ffne deine ${pack.name}-Belohnung\u2026`);
   showPackOpening(pack, drawn);
 }
 
@@ -717,17 +717,17 @@ function showEntryGate(prefill){
   root.innerHTML = `
     <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
       <div class="modal-box" style="max-width:380px;text-align:center;">
-        <h2 style="margin-bottom:8px;">Welcome to FOIL ELEVEN</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:16px;">Choose a club name. This becomes part of your page URL, so bookmarking or reloading this exact page reloads the same save automatically \u2014 no browser storage needed.</p>
-        <input id="gate-input" placeholder="e.g. galaxyfc92" value="${prefill||''}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
-        <button class="action-btn" id="gate-submit" style="width:100%;">Enter Club</button>
+        <h2 style="margin-bottom:8px;">Willkommen bei FOIL ELEVEN</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">W\u00e4hle einen Vereinsnamen. Er wird Teil deiner Seiten-URL, damit ein Lesezeichen oder Neuladen dieser genauen Seite automatisch denselben Spielstand l\u00e4dt \u2014 ganz ohne Browser-Speicher.</p>
+        <input id="gate-input" placeholder="z. B. galaxyfc92" value="${prefill||''}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
+        <button class="action-btn" id="gate-submit" style="width:100%;">Verein betreten</button>
         <p class="hint" id="gate-err" style="color:var(--danger);min-height:14px;"></p>
       </div>
     </div>`;
   const submit = async ()=>{
     const val = document.getElementById('gate-input').value;
     const id = sanitizeClubId(val || '');
-    if(!id){ document.getElementById('gate-err').textContent = 'Please enter a name (letters/numbers).'; return; }
+    if(!id){ document.getElementById('gate-err').textContent = 'Bitte gib einen Namen ein (Buchstaben/Zahlen).'; return; }
     clubId = id;
     try{ history.replaceState(null, '', location.pathname + '?club=' + encodeURIComponent(id)); }catch(e){}
     document.getElementById('modal-root').innerHTML = '';
@@ -875,7 +875,7 @@ function cardEl(card, size=''){
 }
 
 // ===== nav & routing =====
-const TABS = [['store','Pack Store'],['club','My Club'],['squad','Squad Builder'],['sbc','SBC Challenges'],['play','Play Online']];
+const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','SBC-Herausforderungen'],['play','Online spielen']];
 function renderNav(){
   const nav = document.getElementById('nav');
   nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${label}</button>`).join('');
@@ -894,10 +894,10 @@ function renderView(tab){
 // ===== STORE =====
 function renderStore(view){
   view.innerHTML = `
-    <div class="view-head"><h2>Pack Store</h2><p>Open packs to add players to your club. Odds are guaranteed minimums \u2014 every pack can also over-deliver.</p></div>
+    <div class="view-head"><h2>Kartenladen</h2><p>\u00d6ffne Packs, um Spieler zu deinem Verein hinzuzuf\u00fcgen. Die angegebenen Werte sind garantierte Mindestwerte \u2014 jedes Pack kann auch mehr liefern.</p></div>
     <div class="toolbar" style="margin-bottom:18px;">
-      <input id="redeem-input" placeholder="Redeem code..." style="max-width:220px;">
-      <button class="action-btn secondary" id="redeem-btn" style="width:auto;padding:9px 16px;">Redeem</button>
+      <input id="redeem-input" placeholder="Code einl\u00f6sen..." style="max-width:220px;">
+      <button class="action-btn secondary" id="redeem-btn" style="width:auto;padding:9px 16px;">Einl\u00f6sen</button>
     </div>
     <div class="pack-grid" id="pack-grid"></div>`;
   const grid = document.getElementById('pack-grid');
@@ -905,11 +905,11 @@ function renderStore(view){
     const card = document.createElement('div');
     card.className = `pack-card ${pack.tier}`;
     card.innerHTML = `
-      <div class="pack-glyph">${pack.count}<span class="ov-badge">CARDS</span></div>
+      <div class="pack-glyph">${pack.count}<span class="ov-badge">KARTEN</span></div>
       <h3>${pack.name}</h3>
       <div class="desc">${pack.desc}</div>
       <div class="buyrow"><div class="price">\u25CF ${pack.cost.toLocaleString('de-DE')}</div>
-      <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>Open</button></div>`;
+      <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button></div>`;
     card.querySelector('.buy-btn').addEventListener('click', ()=>buyPack(pack));
     grid.appendChild(card);
   });
@@ -917,15 +917,15 @@ function renderStore(view){
   document.getElementById('redeem-input').addEventListener('keydown', e=>{ if(e.key==='Enter') redeemCode(); });
 }
 const REDEEM_CODES = {
-  'UNLIMITED': ()=>{ profile.coins = 999999999; toast('Cheat activated: unlimited coins.'); },
-  'TESTCOINS': ()=>{ profile.coins += 100000; toast('+100,000 coins added.'); },
+  'UNLIMITED': ()=>{ profile.coins = 999999999; toast('Cheat aktiviert: unendlich Coins.'); },
+  'TESTCOINS': ()=>{ profile.coins += 100000; toast('+100.000 Coins hinzugef\u00fcgt.'); },
 };
 async function redeemCode(){
   const input = document.getElementById('redeem-input');
   const code = (input.value||'').trim().toUpperCase();
   if(!code) return;
   const fn = REDEEM_CODES[code];
-  if(!fn){ toast('Invalid code.'); return; }
+  if(!fn){ toast('Ung\u00fcltiger Code.'); return; }
   fn();
   await sSet('profile', profile);
   updateCoinDisplay();
@@ -934,7 +934,7 @@ async function redeemCode(){
 }
 
 async function buyPack(pack){
-  if(profile.coins < pack.cost){ toast("Not enough coins."); return; }
+  if(profile.coins < pack.cost){ toast("Nicht genug Coins."); return; }
   profile.coins -= pack.cost;
   updateCoinDisplay();
   await sSet('profile', profile);
@@ -951,16 +951,16 @@ function showPackOpening(pack, drawn){
   const ordered = drawn.slice().sort((a,b)=>a.ov-b.ov);
   openModal(`
     <h2 style="text-align:center;margin-bottom:2px;">${pack.name}</h2>
-    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">Tap the pack to begin</p>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">Tippe auf das Pack, um zu starten</p>
     <div class="pack-visual-wrap" id="pack-visual-wrap">
       <div class="pack-visual ${pack.tier}" id="pack-visual">
-        <div class="pv-count">${pack.count}</div><div class="pv-label">Players</div><div class="pv-tap">TAP TO OPEN</div>
+        <div class="pv-count">${pack.count}</div><div class="pv-label">Spieler</div><div class="pv-tap">ANTIPPEN ZUM \u00d6FFNEN</div>
       </div>
     </div>
     <div class="spotlight-stage" id="spotlight-stage"></div>
     <div class="pack-progress" id="pack-progress"></div>
     <div class="collected-tray" id="collected-tray"></div>
-    <button class="modal-close" id="modal-close-btn" style="display:none;">Continue</button>
+    <button class="modal-close" id="modal-close-btn" style="display:none;">Weiter</button>
   `);
   document.getElementById('pack-visual').addEventListener('click', function handler(){
     this.classList.add('opening');
@@ -974,7 +974,7 @@ function showPackOpening(pack, drawn){
 }
 function updatePackProgress(i, total){
   const el = document.getElementById('pack-progress');
-  if(el) el.textContent = `${Math.min(i,total)} / ${total} revealed`;
+  if(el) el.textContent = `${Math.min(i,total)} / ${total} aufgedeckt`;
 }
 function addToTray(c){
   const tray = document.getElementById('collected-tray');
@@ -987,7 +987,7 @@ function revealQueue(cards, i, pack){
   const stage = document.getElementById('spotlight-stage');
   if(!stage) return; // modal closed early
   if(i>=cards.length){
-    stage.innerHTML = `<p class="hint" style="text-align:center;width:100%;">Pack complete!</p>`;
+    stage.innerHTML = `<p class="hint" style="text-align:center;width:100%;">Pack komplett!</p>`;
     if(pack.pickCount && pack.pickCount < cards.length){
       showPickScreen(cards, pack.pickCount);
     } else {
@@ -1022,10 +1022,10 @@ function revealQueue(cards, i, pack){
 function showPickScreen(cards, pickCount){
   const container = document.createElement('div');
   container.innerHTML = `
-    <h3 style="text-align:center;margin:18px 0 4px;">Choose ${pickCount} to keep</h3>
-    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:14px;" id="pick-counter">0 / ${pickCount} selected</p>
+    <h3 style="text-align:center;margin:18px 0 4px;">${pickCount} zum Behalten ausw\u00e4hlen</h3>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:14px;" id="pick-counter">0 / ${pickCount} ausgew\u00e4hlt</p>
     <div class="reveal-strip" id="pick-grid"></div>
-    <button class="modal-close" id="pick-confirm" disabled style="opacity:.4;">Confirm</button>`;
+    <button class="modal-close" id="pick-confirm" disabled style="opacity:.4;">Best\u00e4tigen</button>`;
   document.querySelector('.modal-box').appendChild(container);
   const grid = container.querySelector('#pick-grid');
   cards.forEach((c,idx)=>{
@@ -1038,7 +1038,7 @@ function showPickScreen(cards, pickCount){
         if(selected.size>=pickCount) return;
         selected.add(idx); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)';
       }
-      container.querySelector('#pick-counter').textContent = `${selected.size} / ${pickCount} selected`;
+      container.querySelector('#pick-counter').textContent = `${selected.size} / ${pickCount} ausgew\u00e4hlt`;
       const btn = container.querySelector('#pick-confirm');
       if(selected.size===pickCount){ btn.disabled=false; btn.style.opacity='1'; }
       else { btn.disabled=true; btn.style.opacity='.4'; }
@@ -1050,7 +1050,7 @@ function showPickScreen(cards, pickCount){
     const kept = cards.filter((_,idx)=>selected.has(idx));
     await addCardsToCollection(kept);
     closeModal();
-    toast(`Added ${kept.length} player${kept.length>1?'s':''} to your club.`);
+    toast(`${kept.length} Spieler zu deinem Verein hinzugef\u00fcgt.`);
   });
 }
 function showCutscene(card, onDone){
@@ -1064,7 +1064,7 @@ function showCutscene(card, onDone){
     <div class="cs-burst"></div>
     <div class="cs-banner">${label} \u2014 ${card.ov} OVR</div>
     <div class="cs-card-wrap"></div>
-    <div class="cs-hint">Tap anywhere to continue</div>`;
+    <div class="cs-hint">Zum Fortfahren irgendwo tippen</div>`;
   overlay.querySelector('.cs-card-wrap').appendChild(cardEl(card));
   root.appendChild(overlay);
   let done=false;
@@ -1079,19 +1079,19 @@ function showCutscene(card, onDone){
 let clubFilter = {q:'', pos:'ALL', sort:'ov'};
 function renderClub(view){
   view.innerHTML = `
-    <div class="view-head"><h2>My Club</h2><p>${collection.length} players owned. Quick-sell anything you don't need for coins.</p></div>
+    <div class="view-head"><h2>Mein Verein</h2><p>${collection.length} Spieler im Besitz. Verkaufe alles, was du nicht brauchst, f\u00fcr Coins.</p></div>
     <div class="toolbar">
-      <input id="club-search" placeholder="Search player name..." value="${clubFilter.q}">
+      <input id="club-search" placeholder="Spielername suchen..." value="${clubFilter.q}">
       <select id="club-pos">
-        <option value="ALL">All positions</option>
-        <option value="GK">Goalkeepers</option>
-        <option value="DEF">Defenders</option>
-        <option value="MID">Midfielders</option>
-        <option value="FWD">Forwards</option>
+        <option value="ALL">Alle Positionen</option>
+        <option value="GK">Torh\u00fcter</option>
+        <option value="DEF">Verteidiger</option>
+        <option value="MID">Mittelfeldspieler</option>
+        <option value="FWD">St\u00fcrmer</option>
       </select>
       <select id="club-sort">
-        <option value="ov">Sort: Rating (high\u2192low)</option>
-        <option value="name">Sort: Name (A\u2192Z)</option>
+        <option value="ov">Sortierung: Rating (hoch\u2192niedrig)</option>
+        <option value="name">Sortierung: Name (A\u2192Z)</option>
       </select>
     </div>
     <div class="club-grid" id="club-grid"></div>`;
@@ -1109,13 +1109,13 @@ function drawClubGrid(){
   if(clubFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===clubFilter.pos);
   items.sort((a,b)=> clubFilter.sort==='ov' ? b.card.ov-a.card.ov : a.card.n.localeCompare(b.card.n));
   grid.innerHTML='';
-  if(!items.length){ grid.innerHTML = `<div class="empty-state" style="width:100%;"><h3>No players found</h3><p>Try a different filter, or open a pack in the Store.</p></div>`; return; }
+  if(!items.length){ grid.innerHTML = `<div class="empty-state" style="width:100%;"><h3>Keine Spieler gefunden</h3><p>Versuche einen anderen Filter oder \u00f6ffne ein Pack im Kartenladen.</p></div>`; return; }
   items.forEach(({uid,card})=>{
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap';
     wrap.appendChild(cardEl(card));
     const sellBtn = document.createElement('button');
-    sellBtn.className='sell-btn'; sellBtn.textContent='\u00d7'; sellBtn.title='Quick sell';
+    sellBtn.className='sell-btn'; sellBtn.textContent='\u00d7'; sellBtn.title='Schnellverkauf';
     sellBtn.addEventListener('click', ()=>confirmSell(uid, card));
     wrap.appendChild(sellBtn);
     grid.appendChild(wrap);
@@ -1124,13 +1124,13 @@ function drawClubGrid(){
 function confirmSell(uid, card){
   const value = sellValue(card.ov);
   openModal(`
-    <h2 style="margin-bottom:10px;">Sell ${card.n}?</h2>
-    <p style="color:var(--muted);font-size:13.5px;margin-bottom:16px;">This removes the card from your club permanently.</p>
+    <h2 style="margin-bottom:10px;">${card.n} verkaufen?</h2>
+    <p style="color:var(--muted);font-size:13.5px;margin-bottom:16px;">Dies entfernt die Karte dauerhaft aus deinem Verein.</p>
     <div style="display:flex;justify-content:center;margin-bottom:16px;">${cardEl(card,'mini').outerHTML}</div>
-    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:18px;">+${value.toLocaleString('de-DE')} coins</p>
+    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:18px;">+${value.toLocaleString('de-DE')} Coins</p>
     <div style="display:flex;gap:10px;justify-content:center;">
-      <button class="action-btn secondary" id="cancel-sell" style="width:120px;">Cancel</button>
-      <button class="action-btn" id="do-sell" style="width:120px;background:var(--danger);">Sell</button>
+      <button class="action-btn secondary" id="cancel-sell" style="width:120px;">Abbrechen</button>
+      <button class="action-btn" id="do-sell" style="width:120px;background:var(--danger);">Verkaufen</button>
     </div>`);
   document.getElementById('cancel-sell').addEventListener('click', closeModal);
   document.getElementById('do-sell').addEventListener('click', async ()=>{
@@ -1143,7 +1143,7 @@ function confirmSell(uid, card){
     await sSet('profile', profile);
     updateCoinDisplay();
     closeModal();
-    toast(`Sold ${card.n} for ${value.toLocaleString('de-DE')} coins.`);
+    toast(`${card.n} f\u00fcr ${value.toLocaleString('de-DE')} Coins verkauft.`);
     renderClub(document.getElementById('view'));
   });
 }
@@ -1205,18 +1205,18 @@ function renderSquad(view){
   const form = FORMATIONS[squad.formation];
   const {rating, filled} = squadRating();
   view.innerHTML = `
-    <div class="view-head"><h2>Squad Builder</h2><p>Tap a position on the pitch to assign a player from your club. Only players who can realistically cover that position are offered \u2014 close alternates carry a rating penalty. Fill all 11 to publish your squad for online matches.</p></div>
+    <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position realistisch abdecken k\u00f6nnen, werden angeboten \u2014 nahe Alternativen kosten einen Rating-Abzug. F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></div>
     <div class="squad-layout">
       <div class="pitch" id="pitch"></div>
       <div class="side-panel">
-        <div class="rating-hero"><div class="num">${rating||'--'}</div><div><div class="lbl">Team Rating</div><div class="lbl">${filled}/11 filled</div></div></div>
+        <div class="rating-hero"><div class="num">${rating||'--'}</div><div><div class="lbl">Team-Rating</div><div class="lbl">${filled}/11 besetzt</div></div></div>
         <div><div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Formation</div>
         <div class="formation-select" id="form-select">
           ${Object.entries(FORMATIONS).map(([k,f])=>`<div class="chip ${k===squad.formation?'active':''}" data-f="${k}">${f.label}</div>`).join('')}
         </div></div>
-        <button class="action-btn secondary" id="save-squad">Save Squad</button>
-        <button class="action-btn" id="publish-squad" ${filled<11?'disabled':''}>Publish for Online Matches</button>
-        <p class="hint">Publishing shares your formation, ratings and player names with other players so they can face your club. No personal data is shared.</p>
+        <button class="action-btn secondary" id="save-squad">Kader speichern</button>
+        <button class="action-btn" id="publish-squad" ${filled<11?'disabled':''}>F\u00fcr Online-Spiele ver\u00f6ffentlichen</button>
+        <p class="hint">Beim Ver\u00f6ffentlichen werden Formation, Rating und Spielernamen mit anderen Spielern geteilt, damit sie gegen deinen Verein antreten k\u00f6nnen. Es werden keine pers\u00f6nlichen Daten geteilt.</p>
       </div>
     </div>`;
   const pitch = document.getElementById('pitch');
@@ -1252,7 +1252,7 @@ function renderSquad(view){
     });
   });
   document.getElementById('save-squad').addEventListener('click', async ()=>{
-    await sSet('squad', squad); toast('Squad saved.');
+    await sSet('squad', squad); toast('Kader gespeichert.');
   });
   document.getElementById('publish-squad').addEventListener('click', publishSquad);
 }
@@ -1266,11 +1266,11 @@ function openPicker(slot){
   });
   const currentUid = squad.slots[slot.id];
   openModal(`
-    <h2 style="margin-bottom:4px;">Choose ${slot.label}</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Only players who can cover ${slot.label} are shown. Off-position alternates carry a rating penalty (shown as \u2212N).</p>
-    ${currentUid?`<button class="action-btn secondary" id="clear-slot" style="margin-bottom:14px;width:180px;">Remove player</button>`:''}
+    <h2 style="margin-bottom:4px;">${slot.label} ausw\u00e4hlen</h2>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${slot.label} abdecken k\u00f6nnen, werden angezeigt. Abweichende Positionen kosten einen Rating-Abzug (angezeigt als \u2212N).</p>
+    ${currentUid?`<button class="action-btn secondary" id="clear-slot" style="margin-bottom:14px;width:180px;">Spieler entfernen</button>`:''}
     <div class="picker-list" id="picker-list"></div>
-    ${!items.length?'<p class="hint">No eligible players in your club for this position yet.</p>':''}`);
+    ${!items.length?'<p class="hint">Noch keine passenden Spieler in deinem Verein f\u00fcr diese Position.</p>':''}`);
   if(currentUid){
     document.getElementById('clear-slot').addEventListener('click', async ()=>{
       delete squad.slots[slot.id];
@@ -1301,10 +1301,10 @@ function openPicker(slot){
 async function publishSquad(){
   const form = FORMATIONS[squad.formation];
   const {rating, filled} = squadRating();
-  if(filled<11){ toast('Fill all 11 positions first.'); return; }
+  if(filled<11){ toast('F\u00fclle zuerst alle 11 Positionen.'); return; }
   if(!profile.displayName){
-    const name = prompt('Choose a club name to publish under:');
-    if(!name){ toast('Publishing cancelled.'); return; }
+    const name = prompt('W\u00e4hle einen Vereinsnamen zur Ver\u00f6ffentlichung:');
+    if(!name){ toast('Ver\u00f6ffentlichung abgebrochen.'); return; }
     profile.displayName = name.slice(0,24);
     await sSet('profile', profile);
   }
@@ -1315,11 +1315,11 @@ async function publishSquad(){
   const payload = {owner:profile.displayName, userId:profile.userId, rating, formation:form.label, players, updatedAt:Date.now()};
   await fbReady;
   if(fb){
-    try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); toast('Squad published to the online backend!'); return; }
+    try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); toast('Kader online ver\u00f6ffentlicht!'); return; }
     catch(e){ console.warn('Firebase publish failed, using local fallback', e); }
   }
   await sSet('squad:'+profile.userId, payload, true);
-  toast('Squad published (local fallback)! Other players can now face your club.');
+  toast('Kader ver\u00f6ffentlicht (lokaler Modus)! Andere Spieler k\u00f6nnen jetzt gegen deinen Verein antreten.');
 }
 
 // ===== PLAY / ONLINE =====
@@ -1331,28 +1331,28 @@ let queueTimer = null;
 
 function renderPlay(view){
   view.innerHTML = `
-    <div class="view-head"><h2>Play Online</h2><p>Join the queue to find a real opponent. If nobody's around, you'll face a CPU squad instead.
-      <span class="mono" id="backend-badge" style="color:var(--muted);">\u00b7 checking backend\u2026</span></p></div>
+    <div class="view-head"><h2>Online spielen</h2><p>Reih dich in die Warteschlange ein, um einen echten Gegner zu finden. Ist niemand da, spielst du stattdessen gegen eine CPU-Elf.
+      <span class="mono" id="backend-badge" style="color:var(--muted);">\u00b7 Backend wird gepr\u00fcft\u2026</span></p></div>
     <div class="stat-row">
-      <div class="stat-box"><div class="n" id="stat-wins">${profile.wins}</div><div class="l">Wins</div></div>
-      <div class="stat-box"><div class="n" id="stat-draws">${profile.draws}</div><div class="l">Draws</div></div>
-      <div class="stat-box"><div class="n" id="stat-losses">${profile.losses}</div><div class="l">Losses</div></div>
-      <div class="stat-box"><div class="n" id="stat-rating">${squadRating().rating||'--'}</div><div class="l">Your Rating</div></div>
+      <div class="stat-box"><div class="n" id="stat-wins">${profile.wins}</div><div class="l">Siege</div></div>
+      <div class="stat-box"><div class="n" id="stat-draws">${profile.draws}</div><div class="l">Unentschieden</div></div>
+      <div class="stat-box"><div class="n" id="stat-losses">${profile.losses}</div><div class="l">Niederlagen</div></div>
+      <div class="stat-box"><div class="n" id="stat-rating">${squadRating().rating||'--'}</div><div class="l">Dein Rating</div></div>
     </div>
     <div class="play-grid">
       <div class="vs-panel" id="vs-panel">
-        <button class="action-btn" id="find-opp">Search for Opponent</button>
+        <button class="action-btn" id="find-opp">Gegner suchen</button>
         <div id="match-area"></div>
       </div>
       <div>
-        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Top Published Squads</h3>
-        <div class="leader-list" id="leader-list"><p class="hint">Loading...</p></div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Beste ver\u00f6ffentlichte Kader</h3>
+        <div class="leader-list" id="leader-list"><p class="hint">L\u00e4dt...</p></div>
       </div>
     </div>`;
   document.getElementById('find-opp').addEventListener('click', joinQueue);
   fbReady.then(()=>{
     const badge = document.getElementById('backend-badge');
-    if(badge) badge.textContent = '\u00b7 backend: ' + (fb ? 'Firebase (live)' : 'local fallback');
+    if(badge) badge.textContent = '\u00b7 Backend: ' + (fb ? 'Firebase (live)' : 'lokaler Modus');
   });
   loadLeaderboard();
 }
@@ -1376,9 +1376,9 @@ async function loadLeaderboard(){
     squads.sort((a,b)=>b.rating-a.rating);
     squads = squads.slice(0,8);
   }
-  if(!squads.length){ box.innerHTML = `<p class="hint">No squads published yet. Be the first in Squad Builder!</p>`; return; }
+  if(!squads.length){ box.innerHTML = `<p class="hint">Noch keine Kader ver\u00f6ffentlicht. Sei der Erste im Kader-Editor!</p>`; return; }
   box.innerHTML = squads.map((s,i)=>`
-    <div class="leader-row"><span class="rk">${i+1}</span><span style="flex:1;">${s.owner||'Unnamed Club'}</span><span class="mono">${s.rating} OVR</span></div>
+    <div class="leader-row"><span class="rk">${i+1}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span></div>
   `).join('');
 }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
@@ -1493,6 +1493,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs){
     }, 250);
   });
 }
+const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE', DRAW:'UNENTSCHIEDEN'};
 async function applyMatchResult(myGoals, oppGoals){
   let result, reward;
   if(myGoals>oppGoals){ result='WIN'; reward=900; profile.wins++; }
@@ -1507,8 +1508,8 @@ async function applyMatchResult(myGoals, oppGoals){
   if(lossesEl) lossesEl.textContent = profile.losses;
   const area = document.getElementById('result-area');
   if(area){
-    area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':result==='LOSS'?'var(--danger)':'var(--chalk)'};">Full Time \u2014 ${result}</div>
-      <div class="mono" style="color:var(--gold);margin-top:6px;">+${reward} coins</div>`;
+    area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':result==='LOSS'?'var(--danger)':'var(--chalk)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}</div>
+      <div class="mono" style="color:var(--gold);margin-top:6px;">+${reward} Coins</div>`;
   }
 }
 async function runLocalMatch(myRating, opp){
@@ -1517,7 +1518,7 @@ async function runLocalMatch(myRating, opp){
   const myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
   const myPlayers = getMySquadPlayers();
   const events = buildMatchEvents(myGoals, oppGoals, myPlayers, opp.players);
-  const myName = profile.displayName || 'Your Club';
+  const myName = profile.displayName || 'Dein Verein';
   const oppName = opp.owner + (opp.isBot ? ' (CPU)' : '');
   await animateTimedMatch(events, myName, oppName, Date.now(), MATCH_DURATION_MS);
   await applyMatchResult(myGoals, oppGoals);
@@ -1528,7 +1529,7 @@ function startBotMatch(rating){
   const area = document.getElementById('match-area');
   area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Your Club'}</div></div>
+      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
       <div class="vs-x">VS</div>
       <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (CPU)</div></div>
     </div>
@@ -1548,7 +1549,7 @@ async function leaveQueue(){
   await leaveQueueSilently();
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = '';
-  toast('Left the queue.');
+  toast('Warteschlange verlassen.');
 }
 async function enterSyncedMatch(matchDoc){
   const amP1 = matchDoc.p1.userId === profile.userId;
@@ -1564,7 +1565,7 @@ async function enterSyncedMatch(matchDoc){
       <div class="vs-x">VS</div>
       <div class="team-blob"><div class="r">${oppSide.rating}</div><div class="t">${oppSide.name}</div></div>
     </div>
-    <p class="hint" style="text-align:center;">Live match vs a real opponent \u2014 you're both watching the same game.</p>
+    <p class="hint" style="text-align:center;">Live-Spiel gegen einen echten Gegner \u2014 ihr seht beide dasselbe Spiel.</p>
     <div id="result-area"></div>`;
   const waitMs = matchDoc.startedAt - Date.now();
   if(waitMs>0) await new Promise(r=>setTimeout(r, waitMs));
@@ -1576,10 +1577,10 @@ async function enterSyncedMatch(matchDoc){
 }
 async function joinQueue(){
   const {rating, filled} = squadRating();
-  if(filled<11){ toast('Fill and save all 11 positions in Squad Builder first.'); return; }
+  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   await fbReady;
   if(!fb){
-    toast('Online backend unavailable \u2014 facing a CPU squad instead.');
+    toast('Online-Backend nicht erreichbar \u2014 du spielst stattdessen gegen eine CPU-Elf.');
     startBotMatch(rating);
     return;
   }
@@ -1593,15 +1594,15 @@ async function joinQueue(){
   }catch(e){
     console.warn('queue join failed', e);
     queueActive = false;
-    toast('Could not reach matchmaking \u2014 facing a CPU squad instead.');
+    toast('Matchmaking nicht erreichbar \u2014 du spielst stattdessen gegen eine CPU-Elf.');
     startBotMatch(rating);
     return;
   }
   const area = document.getElementById('match-area');
   area.innerHTML = `
     <div style="text-align:center;">
-      <div class="mono" style="color:var(--muted);margin-bottom:10px;">Searching for an opponent\u2026 <span id="queue-timer">0s</span></div>
-      <button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Cancel</button>
+      <div class="mono" style="color:var(--muted);margin-bottom:10px;">Suche nach einem Gegner\u2026 <span id="queue-timer">0s</span></div>
+      <button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
     </div>`;
   document.getElementById('queue-cancel').addEventListener('click', leaveQueue);
 
@@ -1615,7 +1616,7 @@ async function joinQueue(){
     if(Date.now()-startTime > QUEUE_TIMEOUT_MS){
       queueActive = false;
       await leaveQueueSilently();
-      toast('No opponent joined in time \u2014 facing a CPU squad instead.');
+      toast('Kein Gegner rechtzeitig gefunden \u2014 du spielst stattdessen gegen eine CPU-Elf.');
       startBotMatch(rating);
       return;
     }
