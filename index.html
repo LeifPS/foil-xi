@@ -152,17 +152,18 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.mini .name{font-size:11px;}
 .pcard.mini .stats{gap:2px 6px;}
 .pcard.mini .stat{font-size:7.5px;}
-.pcard.xs{width:66px;height:96px;border-radius:9px;}
-.pcard.xs .photo-frame{height:46px;}
-.pcard.xs .ov{font-size:13px;}
-.pcard.xs .ov-underline{display:none;}
-.pcard.xs .var-tag{display:none;}
-.pcard.xs .avatar{font-size:15px;}
-.pcard.xs .card-body{margin-top:-6px;padding:0 5px 5px;}
-.pcard.xs .name{font-size:7.5px;}
-.pcard.xs .pos-label .pt{font-size:7px;}
-.pcard.xs .pos-label .pu{display:none;}
-.pcard.xs .stats{display:none;}
+.pcard.xs{width:86px;height:152px;border-radius:10px;}
+.pcard.xs .photo-frame{height:60px;margin:2px 0 3px;}
+.pcard.xs .ov{font-size:17px;}
+.pcard.xs .ov-underline{width:14px;}
+.pcard.xs .var-tag{font-size:6px;padding:1.5px 6px;}
+.pcard.xs .avatar{font-size:20px;}
+.pcard.xs .card-body{margin-top:-8px;padding:0 6px 6px;}
+.pcard.xs .name{font-size:9.5px;}
+.pcard.xs .pos-label .pt{font-size:8.5px;}
+.pcard.xs .pos-label .pu{width:11px;}
+.pcard.xs .stats{display:grid;gap:2px 6px;padding-top:5px;}
+.pcard.xs .stat{font-size:6.8px;}
 .pcard.xs .nat-club{display:none;}
 
 /* ---- cutscene ---- */
@@ -195,12 +196,12 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 /* ---- squad builder ---- */
 .squad-layout{display:grid;grid-template-columns:1fr 300px;gap:20px;}
 @media(max-width:820px){.squad-layout{grid-template-columns:1fr;}}
-.pitch{position:relative;background:radial-gradient(ellipse at 50% 20%, #163a24, #0c1f14 70%);border:1px solid var(--line);border-radius:16px;aspect-ratio:4/5;overflow:hidden;}
+.pitch{position:relative;background:radial-gradient(ellipse at 50% 20%, #163a24, #0c1f14 70%);border:1px solid var(--line);border-radius:16px;aspect-ratio:4/5.4;overflow:hidden;}
 .pitch::before{content:"";position:absolute;inset:8%;border:1px solid rgba(255,255,255,.12);border-radius:6px;}
 .pitch::after{content:"";position:absolute;left:50%;top:8%;bottom:8%;width:1px;background:rgba(255,255,255,.12);}
 .pitch-slot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:.15s;z-index:1;}
 .pitch-slot:hover{transform:translate(-50%,-50%) translateY(-3px);z-index:2;}
-.empty-slot-inner{width:66px;height:96px;border:2px dashed var(--line);border-radius:9px;display:flex;align-items:center;
+.empty-slot-inner{width:86px;height:152px;border:2px dashed var(--line);border-radius:10px;display:flex;align-items:center;
   justify-content:center;font-family:'Anton';font-size:12.5px;color:var(--muted);background:rgba(255,255,255,.02);}
 .pitch-slot:hover .empty-slot-inner{border-color:var(--turf-bright);color:var(--chalk);}
 .oop-tag{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;font-size:9px;font-weight:700;
@@ -1155,9 +1156,23 @@ function getMySquadPlayers(){
   });
   return list;
 }
+let FALLBACK_SCORER_POOL = null;
+function fallbackScorerPool(){
+  if(FALLBACK_SCORER_POOL) return FALLBACK_SCORER_POOL;
+  const weighted = [];
+  ALL_BASE.forEach(p=>{
+    const g = posGroup(p.pos);
+    const w = g==='FWD' ? 4 : g==='MID' ? 3 : g==='DEF' ? 1 : 0.15;
+    const reps = Math.max(1, Math.round(w*4));
+    for(let i=0;i<reps;i++) weighted.push(p);
+  });
+  FALLBACK_SCORER_POOL = weighted;
+  return weighted;
+}
 function pickScorer(players){
   if(!players || !players.length){
-    const p = ALL_BASE[Math.floor(Math.random()*ALL_BASE.length)];
+    const pool = fallbackScorerPool();
+    const p = pool[Math.floor(Math.random()*pool.length)];
     return {n:p.n, img:p.img};
   }
   const weighted = [];
@@ -1211,8 +1226,10 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs){
       const elapsed = Date.now()-startedAt;
       const minute = Math.max(0, Math.min(90, Math.floor(elapsed/stepMs)));
       if(minute>lastMinute){
+        let scored = false;
         for(let m=lastMinute+1; m<=minute; m++){
           events.filter(e=>e.minute===m).forEach(e=>{
+            scored = true;
             if(e.side==='me') myTally++; else oppTally++;
             const row = document.createElement('div');
             row.innerHTML = goalRowHTML(m, e.scorer, e.side==='me'?myName:oppName, e.side);
@@ -1223,9 +1240,11 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs){
         const scoreEl = document.getElementById('live-score');
         if(scoreEl){
           scoreEl.textContent = `${myTally} \u2013 ${oppTally}`;
-          scoreEl.style.transition = 'transform .18s';
-          scoreEl.style.transform = 'scale(1.15)';
-          setTimeout(()=>{ if(scoreEl) scoreEl.style.transform = 'scale(1)'; }, 200);
+          if(scored){
+            scoreEl.style.transition = 'transform .18s';
+            scoreEl.style.transform = 'scale(1.15)';
+            setTimeout(()=>{ if(scoreEl) scoreEl.style.transform = 'scale(1)'; }, 200);
+          }
         }
         const minEl = document.getElementById('live-minute');
         if(minEl) minEl.textContent = minute + "'";
@@ -1340,6 +1359,8 @@ async function joinQueue(){
     </div>`;
   document.getElementById('queue-cancel').addEventListener('click', leaveQueue);
 
+  const seenCandidates = new Map(); // userId -> candidate data, remembered across polls even if they leave the live queue
+
   const poll = async ()=>{
     if(!queueActive) return;
     const timerEl = document.getElementById('queue-timer');
@@ -1354,8 +1375,11 @@ async function joinQueue(){
     }
     try{
       const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'queue'), fb.orderBy('joinedAt','asc'), fb.limit(20)));
-      const others = snap.docs.map(d=>d.data()).filter(q=>q.userId!==profile.userId);
-      for(const other of others){
+      snap.docs.forEach(d=>{
+        const data = d.data();
+        if(data.userId!==profile.userId) seenCandidates.set(data.userId, data);
+      });
+      for(const other of seenCandidates.values()){
         const mid = matchIdFor(profile.userId, other.userId);
         if(profile.userId < other.userId){
           try{
