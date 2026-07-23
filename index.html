@@ -1295,7 +1295,10 @@ function startBotMatch(rating){
     <div id="result-area"></div>`;
   runLocalMatch(rating, opp);
 }
-function matchIdFor(a,b){ return [a,b].sort().join('__vs__'); }
+function matchIdFor(myId, myJoined, otherId, otherJoined){
+  const a = myId+'@'+Math.floor(myJoined), b = otherId+'@'+Math.floor(otherJoined);
+  return [a,b].sort().join('__vs__').replace(/[^a-zA-Z0-9@_-]/g,'-');
+}
 async function leaveQueueSilently(){
   if(queueTimer){ clearTimeout(queueTimer); queueTimer=null; }
   try{ if(fb) await fb.deleteDoc(fb.doc(fb.db,'queue',profile.userId)); }catch(e){}
@@ -1305,8 +1308,6 @@ async function leaveQueue(){
   await leaveQueueSilently();
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = '';
-  const findBtn = document.getElementById('find-opp');
-  if(findBtn){ findBtn.disabled = false; findBtn.textContent = 'Search for Opponent'; }
   toast('Left the queue.');
 }
 async function enterSyncedMatch(matchDoc){
@@ -1329,27 +1330,20 @@ async function enterSyncedMatch(matchDoc){
   if(waitMs>0) await new Promise(r=>setTimeout(r, waitMs));
   await animateTimedMatch(events, meSide.name, oppSide.name, matchDoc.startedAt, matchDoc.durationMs);
   await applyMatchResult(myGoalsFinal, oppGoalsFinal);
-  await fbReady;
-  if(fb){
-    try{
-      const mid = matchIdFor(matchDoc.p1.userId, matchDoc.p2.userId);
-      await fb.setDoc(fb.doc(fb.db,'matches',mid), {completed:true}, {merge:true});
-    }catch(e){ console.warn('Failed to mark match completed', e); }
+  if(fb && matchDoc.mid){
+    try{ await fb.deleteDoc(fb.doc(fb.db,'matches',matchDoc.mid)); }catch(e){}
   }
 }
 async function joinQueue(){
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fill and save all 11 positions in Squad Builder first.'); return; }
   await fbReady;
-  const findBtn = document.getElementById('find-opp');
   if(!fb){
-    if(findBtn){ findBtn.disabled = false; findBtn.textContent = 'Search for Opponent'; }
     toast('Online backend unavailable \u2014 facing a CPU squad instead.');
     startBotMatch(rating);
     return;
   }
   queueActive = true;
-  if(findBtn){ findBtn.disabled = true; findBtn.textContent = 'Searching…'; }
   const myPlayers = getMySquadPlayers();
   const startTime = Date.now();
   try{
@@ -1359,7 +1353,6 @@ async function joinQueue(){
   }catch(e){
     console.warn('queue join failed', e);
     queueActive = false;
-    if(findBtn){ findBtn.disabled = false; findBtn.textContent = 'Search for Opponent'; }
     toast('Could not reach matchmaking \u2014 facing a CPU squad instead.');
     startBotMatch(rating);
     return;
@@ -1372,6 +1365,8 @@ async function joinQueue(){
     </div>`;
   document.getElementById('queue-cancel').addEventListener('click', leaveQueue);
 
+  const seenCandidates = new Map(); // userId -> candidate data, remembered across polls even if they leave the live queue
+
   const poll = async ()=>{
     if(!queueActive) return;
     const timerEl = document.getElementById('queue-timer');
@@ -1380,20 +1375,19 @@ async function joinQueue(){
     if(Date.now()-startTime > QUEUE_TIMEOUT_MS){
       queueActive = false;
       await leaveQueueSilently();
-      if(findBtn){ findBtn.disabled = false; findBtn.textContent = 'Search for Opponent'; }
       toast('No opponent joined in time \u2014 facing a CPU squad instead.');
       startBotMatch(rating);
       return;
     }
     try{
       const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'queue'), fb.orderBy('joinedAt','asc'), fb.limit(20)));
-      const activeCandidates = new Map();
+      const staleCutoff = Date.now() - 90000; // ignore queue entries older than 90s (likely abandoned)
       snap.docs.forEach(d=>{
         const data = d.data();
-        if(data.userId!==profile.userId) activeCandidates.set(data.userId, data);
+        if(data.userId!==profile.userId && data.joinedAt>staleCutoff) seenCandidates.set(data.userId, data);
       });
-      for(const other of activeCandidates.values()){
-        const mid = matchIdFor(profile.userId, other.userId);
+      for(const other of seenCandidates.values()){
+        const mid = matchIdFor(profile.userId, startTime, other.userId, other.joinedAt);
         if(profile.userId < other.userId){
           try{
             const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
@@ -1404,6 +1398,7 @@ async function joinQueue(){
               const rawEvents = buildMatchEvents(p1Goals, p2Goals, myPlayers, other.players);
               const events = rawEvents.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me' ? 'p1':'p2'}));
               const matchDoc = {
+                mid,
                 p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating},
                 p2:{userId:other.userId, name:other.name, rating:other.rating},
                 p1Goals, p2Goals, events, startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
@@ -1412,21 +1407,12 @@ async function joinQueue(){
               queueActive = false;
               await leaveQueueSilently();
               try{ await fb.deleteDoc(fb.doc(fb.db,'queue',other.userId)); }catch(_){}
-              if(findBtn){ findBtn.disabled = false; findBtn.textContent = 'Search for Opponent'; }
               enterSyncedMatch(matchDoc);
               return;
             } else {
               queueActive = false;
               await leaveQueueSilently();
-              if(findBtn){ findBtn.disabled = false; findBtn.textContent = 'Search for Opponent'; }
-              const data = existing.data();
-              const now = Date.now();
-              const expired = data.startedAt && data.durationMs && now > data.startedAt + data.durationMs;
-              if(data.completed || expired){
-                try{ await fb.deleteDoc(fb.doc(fb.db,'matches',mid)); }catch(_){ }
-                continue;
-              }
-              enterSyncedMatch(data);
+              enterSyncedMatch(existing.data());
               return;
             }
           }catch(e){ console.warn('match create/check failed', e); }
@@ -1434,16 +1420,9 @@ async function joinQueue(){
           try{
             const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
             if(existing.exists()){
-              const data = existing.data();
-              const now = Date.now();
-              const expired = data.startedAt && data.durationMs && now > data.startedAt + data.durationMs;
-              if(data.completed || expired){
-                continue;
-              }
               queueActive = false;
               await leaveQueueSilently();
-              if(findBtn){ findBtn.disabled = false; findBtn.textContent = 'Search for Opponent'; }
-              enterSyncedMatch(data);
+              enterSyncedMatch(existing.data());
               return;
             }
           }catch(e){}
