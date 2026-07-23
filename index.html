@@ -76,7 +76,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 /* ---- card component ---- */
 .pcard{
   --acc: var(--r-gold);
-  width:172px;height:264px;border-radius:14px;position:relative;padding:13px 11px 10px;display:flex;flex-direction:column;flex-shrink:0;
+  width:172px;height:272px;border-radius:14px;position:relative;padding:0;display:flex;flex-direction:column;flex-shrink:0;
   background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 2px, transparent 2px 9px),
     linear-gradient(160deg,#20261a 0%,#12150d 62%,#0c0e09 100%);
@@ -85,14 +85,12 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   overflow:hidden;isolation:isolate;
 }
 .pcard::before{
-  content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+  content:"";position:absolute;inset:0;z-index:4;pointer-events:none;
   background:linear-gradient(115deg, transparent 40%, rgba(255,255,255,.16) 48%, transparent 56%);
   background-size:220% 220%;background-position:120% 0%;
   transition:background-position .7s ease;
 }
 .pcard:hover::before{background-position:-20% 100%;}
-.pcard::after{content:"";position:absolute;left:0;right:0;bottom:0;height:38%;z-index:0;
-  background:linear-gradient(180deg, transparent, rgba(0,0,0,.35));pointer-events:none;}
 .pcard.r-elite{--acc:var(--r-elite);background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 2px, transparent 2px 9px),
     linear-gradient(160deg,#0d2b28 0%,#0d1a1e 62%,#0a1114 100%);}
@@ -110,50 +108,54 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.theme-flash{--acc:#ff7a59;} .pcard.theme-sd{--acc:#ff5fa8;} .pcard.theme-icon{--acc:#c78bf5;}
 .pcard.theme-cent{--acc:#ffd76a;}
 
-.pcard .var-tag{align-self:center;background:var(--acc);color:#0a0d12;font-family:'JetBrains Mono';font-weight:700;
-  font-size:7.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 9px;border-radius:100px;
-  margin:4px 0 2px;position:relative;z-index:1;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);}
-.pcard.mini .var-tag{font-size:6.5px;padding:1.5px 7px;margin:2px 0 1px;}
-.pcard .top{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;}
-.pcard .ov{font-family:'Anton';font-size:27px;line-height:1;color:var(--chalk);}
+.pcard .photo-frame{position:relative;z-index:0;width:100%;height:160px;flex-shrink:0;overflow:hidden;}
+.pcard .avatar{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  font-family:'Anton';font-size:44px;color:var(--chalk);letter-spacing:.02em;
+  background:radial-gradient(circle at 42% 30%, color-mix(in srgb, var(--acc) 45%, #1b2016) 0%, #0c0e09 78%);}
+.pcard .face-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 25%;background:transparent;
+  -webkit-mask-image:linear-gradient(to bottom, #000 62%, transparent 96%);mask-image:linear-gradient(to bottom, #000 62%, transparent 96%);}
+.pcard .avatar{-webkit-mask-image:linear-gradient(to bottom, #000 62%, transparent 96%);mask-image:linear-gradient(to bottom, #000 62%, transparent 96%);}
+
+.pcard .top{position:absolute;top:11px;left:12px;right:12px;z-index:2;display:flex;justify-content:space-between;align-items:flex-start;
+  filter:drop-shadow(0 2px 5px rgba(0,0,0,.7));}
+.pcard .ov{font-family:'Anton';font-size:28px;line-height:1;color:var(--chalk);}
 .pcard .ov-underline{width:22px;height:2.5px;background:var(--acc);border-radius:2px;margin-top:3px;}
 .pcard .pos-label{text-align:right;}
 .pcard .pos-label .pt{font-size:13px;font-weight:700;color:var(--chalk);font-family:'JetBrains Mono';letter-spacing:.03em;}
 .pcard .pos-label .pu{width:18px;height:2.5px;background:var(--acc);border-radius:2px;margin:3px 0 0 auto;}
 
-.pcard .photo-frame{position:relative;z-index:1;width:100%;height:112px;border-radius:10px;overflow:hidden;margin:5px 0 6px;flex-shrink:0;}
-.pcard .avatar{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;
-  font-family:'Anton';font-size:40px;color:var(--chalk);letter-spacing:.02em;
-  background:radial-gradient(circle at 38% 26%, color-mix(in srgb, var(--acc) 45%, #1b2016) 0%, #0c0e09 78%);}
-.pcard .face-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;z-index:1;background:transparent;}
-.pcard .photo-frame::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
-  background:linear-gradient(180deg, rgba(0,0,0,0) 62%, color-mix(in srgb, var(--acc) 18%, #0c0e09) 100%);}
-.pcard .photo-frame::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;border:1px solid color-mix(in srgb, var(--acc) 55%, transparent);border-radius:10px;}
+.pcard .var-tag{align-self:center;background:var(--acc);color:#0a0d12;font-family:'JetBrains Mono';font-weight:700;
+  font-size:7.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 9px;border-radius:100px;
+  position:relative;z-index:2;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);margin:0 auto;}
 
-.pcard .name{font-family:'Anton';font-size:14px;text-align:center;letter-spacing:.01em;margin-top:0;line-height:1.1;position:relative;z-index:1;}
-.pcard .nat-club{font-size:8.5px;color:var(--muted);text-align:center;margin-top:2px;position:relative;z-index:1;}
-.pcard .stats{display:grid;grid-template-columns:1fr 1fr;gap:3px 9px;margin-top:auto;padding-top:7px;border-top:1px solid rgba(255,255,255,.09);position:relative;z-index:1;}
+.pcard .card-body{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;padding:0 11px 10px;margin-top:-14px;}
+.pcard .name{font-family:'Anton';font-size:14px;text-align:center;letter-spacing:.01em;line-height:1.1;}
+.pcard .nat-club{font-size:8.5px;color:var(--muted);text-align:center;margin-top:2px;}
+.pcard .stats{display:grid;grid-template-columns:1fr 1fr;gap:3px 9px;margin-top:auto;padding-top:7px;border-top:1px solid rgba(255,255,255,.09);}
 .pcard .stat{font-size:9px;font-family:'JetBrains Mono';color:var(--chalk);}
 .pcard .stat-head{display:flex;justify-content:space-between;}
 .pcard .stat-head span:first-child{color:var(--muted);}
 .pcard .bar{height:2.5px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:2px;overflow:hidden;}
 .pcard .bar i{display:block;height:100%;background:var(--acc);border-radius:2px;}
 
-.pcard.mini{width:128px;height:198px;padding:9px 8px 7px;}
+.pcard.mini{width:128px;height:204px;}
+.pcard.mini .photo-frame{height:118px;}
 .pcard.mini .ov{font-size:20px;}
 .pcard.mini .pos-label .pt{font-size:10px;}
 .pcard.mini .pos-label .pu{width:14px;}
-.pcard.mini .photo-frame{height:80px;margin:3px 0 4px;}
-.pcard.mini .avatar{font-size:26px;}
+.pcard.mini .avatar{font-size:28px;}
+.pcard.mini .var-tag{font-size:6.5px;padding:1.5px 7px;}
+.pcard.mini .card-body{margin-top:-10px;padding:0 8px 7px;}
 .pcard.mini .name{font-size:11px;}
 .pcard.mini .stats{gap:2px 6px;}
 .pcard.mini .stat{font-size:7.5px;}
-.pcard.xs{width:66px;height:92px;padding:6px;border-radius:9px;}
+.pcard.xs{width:66px;height:96px;border-radius:9px;}
+.pcard.xs .photo-frame{height:46px;}
 .pcard.xs .ov{font-size:13px;}
 .pcard.xs .ov-underline{display:none;}
 .pcard.xs .var-tag{display:none;}
-.pcard.xs .photo-frame{height:38px;margin:2px 0 3px;border-radius:6px;}
-.pcard.xs .avatar{font-size:14px;}
+.pcard.xs .avatar{font-size:15px;}
+.pcard.xs .card-body{margin-top:-6px;padding:0 5px 5px;}
 .pcard.xs .name{font-size:7.5px;}
 .pcard.xs .pos-label .pt{font-size:7px;}
 .pcard.xs .pos-label .pu{display:none;}
@@ -254,6 +256,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   <div id="topbar">
     <div class="brand"><div class="brand-mark">FE</div><h1>FOIL<span>ELEVEN</span></h1></div>
     <div class="wallet">
+      <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Switch club</button>
       <div class="coin-pill"><div class="coin-dot"></div><b class="mono" id="coin-display">0</b></div>
     </div>
   </div>
@@ -392,38 +395,74 @@ const FORMATIONS = {
 };
 
 // ===== storage helpers =====
-let storageAvailable = true;
+let clubId = null; // Firestore doc id for this player's save, chosen via the entry gate
+const memoryStore = {}; // last-resort in-memory fallback (session only)
 let storageWarned = false;
 function warnStorageOnce(){
   if(storageWarned) return;
   storageWarned = true;
-  storageAvailable = false;
-  setTimeout(()=>toast('Speicher nicht verf\u00fcgbar \u2014 dein Fortschritt bleibt nur f\u00fcr diese Sitzung erhalten.'), 300);
+  setTimeout(()=>toast('Kein Online-Speicher erreichbar \u2014 dein Fortschritt bleibt nur f\u00fcr diese Sitzung erhalten.'), 300);
 }
 async function sGet(key, shared=false){
-  try{
-    if(!window.storage || typeof window.storage.get!=='function') return null;
-    const r = await window.storage.get(key, shared);
-    return r ? JSON.parse(r.value) : null;
+  if(!shared){
+    await fbReady;
+    if(fb && clubId){
+      try{
+        const snap = await fb.getDoc(fb.doc(fb.db,'saves',clubId));
+        if(snap.exists()){ const d = snap.data(); return (key in d) ? d[key] : null; }
+        return null;
+      }catch(e){ console.warn('Firestore private read failed, falling back', e); }
+    }
+    try{
+      if(window.storage && typeof window.storage.get==='function'){
+        const r = await window.storage.get(key, false);
+        return r ? JSON.parse(r.value) : null;
+      }
+    }catch(e){}
+    return (key in memoryStore) ? memoryStore[key] : null;
   }
-  catch(e){ return null; } // missing key throws normally - not a real failure
+  try{
+    if(window.storage && typeof window.storage.get==='function'){
+      const r = await window.storage.get(key, true);
+      return r ? JSON.parse(r.value) : null;
+    }
+  }catch(e){}
+  return null;
 }
 async function sSet(key, value, shared=false){
-  if(!storageAvailable) return null;
-  try{
-    if(!window.storage || typeof window.storage.set!=='function'){ warnStorageOnce(); return null; }
-    return await window.storage.set(key, JSON.stringify(value), shared);
+  if(!shared){
+    await fbReady;
+    if(fb && clubId){
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',clubId), {[key]:value}, {merge:true}); return true; }
+      catch(e){ console.warn('Firestore private write failed, falling back', e); }
+    }
+    try{
+      if(window.storage && typeof window.storage.set==='function'){
+        return await window.storage.set(key, JSON.stringify(value), false);
+      }
+    }catch(e){}
+    memoryStore[key] = value;
+    warnStorageOnce();
+    return null;
   }
-  catch(e){ warnStorageOnce(); return null; }
+  try{
+    if(window.storage && typeof window.storage.set==='function'){
+      return await window.storage.set(key, JSON.stringify(value), true);
+    }
+  }catch(e){}
+  return null;
 }
 async function sList(prefix, shared=false){
-  if(!storageAvailable) return [];
   try{
-    if(!window.storage || typeof window.storage.list!=='function'){ warnStorageOnce(); return []; }
-    const r = await window.storage.list(prefix, shared);
-    return r ? r.keys : [];
-  }
-  catch(e){ warnStorageOnce(); return []; }
+    if(window.storage && typeof window.storage.list==='function'){
+      const r = await window.storage.list(prefix, shared);
+      return r ? r.keys : [];
+    }
+  }catch(e){}
+  return [];
+}
+function sanitizeClubId(raw){
+  return raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60);
 }
 
 // ===== state =====
@@ -437,12 +476,42 @@ function ownedCard(uid){
   return entry ? BY_ID.get(entry.cardId) : null;
 }
 
+function showEntryGate(){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:380px;text-align:center;">
+        <h2 style="margin-bottom:8px;">Welcome to FOIL ELEVEN</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Choose a club name. Use the exact same name next time to load this save \u2014 it's your save key, saved online via Firebase, no browser storage needed.</p>
+        <input id="gate-input" placeholder="e.g. galaxyfc92" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
+        <button class="action-btn" id="gate-submit" style="width:100%;">Enter Club</button>
+        <p class="hint" id="gate-err" style="color:var(--danger);min-height:14px;"></p>
+      </div>
+    </div>`;
+  const submit = async ()=>{
+    const val = document.getElementById('gate-input').value;
+    const id = sanitizeClubId(val || '');
+    if(!id){ document.getElementById('gate-err').textContent = 'Please enter a name (letters/numbers).'; return; }
+    clubId = id;
+    document.getElementById('modal-root').innerHTML = '';
+    await init();
+  };
+  document.getElementById('gate-submit').addEventListener('click', submit);
+  document.getElementById('gate-input').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+  document.getElementById('gate-input').focus();
+}
+function switchClub(){
+  profile = null; collection = []; squad = null; clubId = null;
+  showEntryGate();
+}
+
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),
-      displayName:'', wins:0, draws:0, losses:0};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0};
     await sSet('profile', profile);
+  } else if(!profile.userId){
+    profile.userId = clubId; profile.displayName = profile.displayName || clubId;
   }
   collection = await sGet('collection');
   if(!collection){
@@ -457,6 +526,8 @@ async function init(){
   renderNav();
   renderView('store');
   updateCoinDisplay();
+  const switchBtn = document.getElementById('switch-club-btn');
+  if(switchBtn) switchBtn.onclick = switchClub;
 }
 
 function updateCoinDisplay(){ document.getElementById('coin-display').textContent = profile.coins.toLocaleString('de-DE'); }
@@ -497,21 +568,23 @@ function cardEl(card, size=''){
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+card.theme:''} ${size}`.trim();
   const varTag = hasVariant ? `<div class="var-tag">${card.variantLabel}</div>` : '';
   div.innerHTML = `
-    <div class="top">
-      <div><div class="ov">${card.ov}</div><div class="ov-underline"></div></div>
-      <div class="pos-label"><div class="pt">${mainPos(card.pos)}</div><div class="pu"></div></div>
-    </div>
-    ${varTag}
     <div class="photo-frame">
       <div class="avatar">${initialsOf(card.n)}</div>
       <img class="face-photo" src="${proxyImg(card.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">
     </div>
-    <div class="name">${card.n}</div>
-    <div class="nat-club">${card.nat} \u00b7 ${card.club}</div>
-    <div class="stats">
-      ${statBar('PAC',card.pac)}${statBar('DRI',card.dri)}
-      ${statBar('SHO',card.sho)}${statBar('DEF',card.defn)}
-      ${statBar('PAS',card.pas)}${statBar('PHY',card.phy)}
+    <div class="top">
+      <div><div class="ov">${card.ov}</div><div class="ov-underline"></div></div>
+      <div class="pos-label"><div class="pt">${mainPos(card.pos)}</div><div class="pu"></div></div>
+    </div>
+    <div class="card-body">
+      ${varTag}
+      <div class="name">${card.n}</div>
+      <div class="nat-club">${card.nat} \u00b7 ${card.club}</div>
+      <div class="stats">
+        ${statBar('PAC',card.pac)}${statBar('DRI',card.dri)}
+        ${statBar('SHO',card.sho)}${statBar('DEF',card.defn)}
+        ${statBar('PAS',card.pas)}${statBar('PHY',card.phy)}
+      </div>
     </div>`;
   return div;
 }
@@ -967,7 +1040,7 @@ async function playMatch(myRating, opp){
   if(btn){ btn.disabled = true; btn.textContent = 'Match Finished'; }
 }
 
-init();
+showEntryGate();
 
 </script>
 </body>
