@@ -112,8 +112,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard .avatar{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   font-family:'Anton';font-size:44px;color:var(--chalk);letter-spacing:.02em;
   background:radial-gradient(circle at 42% 30%, color-mix(in srgb, var(--acc) 45%, #1b2016) 0%, #0c0e09 78%);}
-.pcard .face-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 25%;background:transparent;
+.pcard .face-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 22%;background:transparent;
   -webkit-mask-image:linear-gradient(to bottom, #000 62%, transparent 96%);mask-image:linear-gradient(to bottom, #000 62%, transparent 96%);}
+.pcard .photo-tint{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(160deg, color-mix(in srgb, var(--acc) 22%, transparent) 0%, transparent 45%);
+  mix-blend-mode:overlay;}
 .pcard .avatar{-webkit-mask-image:linear-gradient(to bottom, #000 62%, transparent 96%);mask-image:linear-gradient(to bottom, #000 62%, transparent 96%);}
 
 .pcard .top{position:absolute;top:11px;left:12px;right:12px;z-index:2;display:flex;justify-content:space-between;align-items:flex-start;
@@ -359,10 +362,9 @@ const PACKS = [
   {id:'sevenof88',name:'7\u00d7 88+ Pack',cost:24000,tier:'premium',count:7,
     desc:'7 players, all guaranteed rated 88 or higher.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
-  {id:'twoof95',name:'2 of 4: 95+ Pack',cost:52000,tier:'ultimate',count:4,
-    desc:'4 players \u2014 2 guaranteed rated 95+, 2 guaranteed rated 88+.',
-    draw(){ const ultra=poolByRange(95,99,true), hi=poolByRange(88,99,true);
-      return [pick(ultra),pick(ultra),pick(hi),pick(hi)]; }},
+  {id:'twoof95',name:'Pick 2 of 4: 95+ Pack',cost:52000,tier:'ultimate',count:4,pickCount:2,
+    desc:'4 players, all rated 95+. Choose 2 of them to keep.',
+    draw(){ const ultra=poolByRange(95,99,true); return Array.from({length:4},()=>pick(ultra)); }},
 ];
 
 // ===== formations =====
@@ -476,14 +478,14 @@ function ownedCard(uid){
   return entry ? BY_ID.get(entry.cardId) : null;
 }
 
-function showEntryGate(){
+function showEntryGate(prefill){
   const root = document.getElementById('modal-root');
   root.innerHTML = `
     <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
       <div class="modal-box" style="max-width:380px;text-align:center;">
         <h2 style="margin-bottom:8px;">Welcome to FOIL ELEVEN</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:16px;">Choose a club name. Use the exact same name next time to load this save \u2014 it's your save key, saved online via Firebase, no browser storage needed.</p>
-        <input id="gate-input" placeholder="e.g. galaxyfc92" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Choose a club name. This becomes part of your page URL, so bookmarking or reloading this exact page reloads the same save automatically \u2014 no browser storage needed.</p>
+        <input id="gate-input" placeholder="e.g. galaxyfc92" value="${prefill||''}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
         <button class="action-btn" id="gate-submit" style="width:100%;">Enter Club</button>
         <p class="hint" id="gate-err" style="color:var(--danger);min-height:14px;"></p>
       </div>
@@ -493,6 +495,7 @@ function showEntryGate(){
     const id = sanitizeClubId(val || '');
     if(!id){ document.getElementById('gate-err').textContent = 'Please enter a name (letters/numbers).'; return; }
     clubId = id;
+    try{ history.replaceState(null, '', location.pathname + '?club=' + encodeURIComponent(id)); }catch(e){}
     document.getElementById('modal-root').innerHTML = '';
     await init();
   };
@@ -502,6 +505,16 @@ function showEntryGate(){
 }
 function switchClub(){
   profile = null; collection = []; squad = null; clubId = null;
+  try{ history.replaceState(null, '', location.pathname); }catch(e){}
+  showEntryGate();
+}
+function boot(){
+  let fromUrl = null;
+  try{ fromUrl = new URLSearchParams(location.search).get('club'); }catch(e){}
+  if(fromUrl){
+    const id = sanitizeClubId(fromUrl);
+    if(id){ clubId = id; init(); return; }
+  }
   showEntryGate();
 }
 
@@ -551,7 +564,7 @@ function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
 
 // ===== card rendering =====
 function proxyImg(url){
-  return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=400&h=300&fit=cover&a=attention&err=404';
+  return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
 }
 function initialsOf(name){
   const parts = name.replace(/\./g,'').trim().split(/\s+/);
@@ -571,6 +584,7 @@ function cardEl(card, size=''){
     <div class="photo-frame">
       <div class="avatar">${initialsOf(card.n)}</div>
       <img class="face-photo" src="${proxyImg(card.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+      <div class="photo-tint"></div>
     </div>
     <div class="top">
       <div><div class="ov">${card.ov}</div><div class="ov-underline"></div></div>
@@ -653,10 +667,12 @@ async function buyPack(pack){
   updateCoinDisplay();
   await sSet('profile', profile);
   const drawn = pack.draw();
-  drawn.forEach(c=>collection.push({uid:genId(), cardId:c.id}));
-  await sSet('collection', collection);
   showPackOpening(pack, drawn);
   renderStore(document.getElementById('view'));
+}
+async function addCardsToCollection(cards){
+  cards.forEach(c=>collection.push({uid:genId(), cardId:c.id}));
+  await sSet('collection', collection);
 }
 
 function showPackOpening(pack, drawn){
@@ -672,7 +688,7 @@ function showPackOpening(pack, drawn){
     this.classList.add('opening');
     setTimeout(()=>{
       this.remove();
-      revealQueue(ordered, 0);
+      revealQueue(ordered, 0, pack);
     }, 480);
   }, {once:true});
 }
@@ -681,21 +697,61 @@ function appendCard(c, strip){
   el.classList.add('reveal-card');
   strip.appendChild(el);
 }
-function revealQueue(cards, i){
+function revealQueue(cards, i, pack){
   const strip = document.getElementById('reveal-strip');
   if(!strip) return; // modal closed early
   if(i>=cards.length){
-    const btn = document.getElementById('modal-close-btn');
-    if(btn){ btn.style.display='block'; btn.addEventListener('click', closeModal); }
+    if(pack.pickCount && pack.pickCount < cards.length){
+      showPickScreen(cards, pack.pickCount);
+    } else {
+      addCardsToCollection(cards);
+      const btn = document.getElementById('modal-close-btn');
+      if(btn){ btn.style.display='block'; btn.addEventListener('click', closeModal); }
+    }
     return;
   }
   const c = cards[i];
   if(isSpecialPull(c)){
-    showCutscene(c, ()=>{ appendCard(c, strip); revealQueue(cards, i+1); });
+    showCutscene(c, ()=>{ appendCard(c, strip); revealQueue(cards, i+1, pack); });
   } else {
     appendCard(c, strip);
-    setTimeout(()=>revealQueue(cards, i+1), 220);
+    setTimeout(()=>revealQueue(cards, i+1, pack), 220);
   }
+}
+function showPickScreen(cards, pickCount){
+  const box = document.getElementById('modal-root');
+  const selected = new Set();
+  const container = document.createElement('div');
+  container.innerHTML = `
+    <h3 style="text-align:center;margin:18px 0 4px;">Choose ${pickCount} to keep</h3>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:14px;" id="pick-counter">0 / ${pickCount} selected</p>
+    <div class="reveal-strip" id="pick-grid"></div>
+    <button class="modal-close" id="pick-confirm" disabled style="opacity:.4;">Confirm</button>`;
+  document.querySelector('.modal-box').appendChild(container);
+  const grid = container.querySelector('#pick-grid');
+  cards.forEach((c,idx)=>{
+    const el = cardEl(c);
+    el.style.cursor = 'pointer';
+    el.style.transition = 'transform .15s, opacity .15s';
+    el.addEventListener('click', ()=>{
+      if(selected.has(idx)){ selected.delete(idx); el.style.outline=''; el.style.transform=''; el.style.opacity='1'; }
+      else{
+        if(selected.size>=pickCount) return;
+        selected.add(idx); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)';
+      }
+      container.querySelector('#pick-counter').textContent = `${selected.size} / ${pickCount} selected`;
+      const btn = container.querySelector('#pick-confirm');
+      if(selected.size===pickCount){ btn.disabled=false; btn.style.opacity='1'; }
+      else { btn.disabled=true; btn.style.opacity='.4'; }
+    });
+    grid.appendChild(el);
+  });
+  container.querySelector('#pick-confirm').addEventListener('click', async ()=>{
+    const kept = cards.filter((_,idx)=>selected.has(idx));
+    await addCardsToCollection(kept);
+    closeModal();
+    toast(`Added ${kept.length} player${kept.length>1?'s':''} to your club.`);
+  });
 }
 function showCutscene(card, onDone){
   const acc = cardAccent(card);
@@ -994,7 +1050,8 @@ async function findOpponent(){
   }
   if(!opp){
     const botRating = Math.max(70, Math.min(94, rating + Math.round((Math.random()*10)-5)));
-    opp = {owner:'CPU XI', rating:botRating, formation:'4-3-3', players:[]};
+    opp = {owner:'CPU XI', rating:botRating, formation:'4-3-3', players:[], isBot:true};
+    toast('No other clubs online right now \u2014 facing a CPU squad instead.');
   }
   currentOpponent = opp;
   const area = document.getElementById('match-area');
@@ -1002,7 +1059,7 @@ async function findOpponent(){
     <div class="vs-teams">
       <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Your Club'}</div></div>
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner}</div></div>
+      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner}${opp.isBot?' (CPU)':''}</div></div>
     </div>
     <button class="action-btn" id="kickoff">Kick Off</button>
     <div id="result-area"></div>`;
@@ -1013,13 +1070,90 @@ function simGoals(lambda){
   const r = lambda*0.7 + Math.random()*lambda*1.1 + Math.random()*0.6;
   return clamp(Math.round(r),0,8);
 }
+function getMySquadPlayers(){
+  const form = FORMATIONS[squad.formation];
+  const list = [];
+  form.slots.forEach(slot=>{
+    const uid = squad.slots[slot.id];
+    const card = uid ? ownedCard(uid) : null;
+    if(card) list.push({n:card.n, pos:slot.label});
+  });
+  return list;
+}
+function pickScorer(players){
+  if(!players || !players.length){
+    const p = ALL_BASE[Math.floor(Math.random()*ALL_BASE.length)];
+    return p.n;
+  }
+  const weighted = [];
+  players.forEach(p=>{
+    const g = posGroup2 ? posGroup2(p.pos) : posGroup(p.pos);
+    const w = g==='FWD' ? 4 : g==='MID' ? 3 : g==='DEF' ? 1 : 0.3;
+    const reps = Math.max(1, Math.round(w*10));
+    for(let i=0;i<reps;i++) weighted.push(p.n);
+  });
+  return weighted[Math.floor(Math.random()*weighted.length)] || players[0].n;
+}
+function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers){
+  const used = new Set();
+  function uniqueMinute(){
+    let m; let tries=0;
+    do{ m = 1+Math.floor(Math.random()*90); tries++; }while(used.has(m) && tries<200);
+    used.add(m); return m;
+  }
+  const events = [];
+  for(let i=0;i<myGoals;i++) events.push({minute:uniqueMinute(), side:'me', scorer:pickScorer(myPlayers)});
+  for(let i=0;i<oppGoals;i++) events.push({minute:uniqueMinute(), side:'opp', scorer:pickScorer(oppPlayers)});
+  events.sort((a,b)=>a.minute-b.minute);
+  return events;
+}
+function animateMatch(events, myName, oppName){
+  return new Promise(resolve=>{
+    const area = document.getElementById('match-area');
+    const live = document.createElement('div');
+    live.id = 'live-match';
+    live.innerHTML = `
+      <div class="score" id="live-score">0 \u2013 0</div>
+      <div class="mono" id="live-minute" style="text-align:center;color:var(--muted);margin-bottom:8px;">0'</div>
+      <div class="match-log" id="live-log"></div>`;
+    area.appendChild(live);
+    let minute = 0, myTally = 0, oppTally = 0;
+    const stepMs = 8500/90;
+    const logEl = document.getElementById('live-log');
+    const timer = setInterval(()=>{
+      minute++;
+      const due = events.filter(e=>e.minute===minute);
+      due.forEach(e=>{
+        if(e.side==='me') myTally++; else oppTally++;
+        const row = document.createElement('div');
+        row.textContent = `${minute}' \u26bd ${e.scorer} (${e.side==='me'?myName:oppName})`;
+        logEl.prepend(row);
+        const scoreEl = document.getElementById('live-score');
+        if(scoreEl){
+          scoreEl.textContent = `${myTally} \u2013 ${oppTally}`;
+          scoreEl.style.transition = 'transform .18s';
+          scoreEl.style.transform = 'scale(1.18)';
+          setTimeout(()=>{ if(scoreEl) scoreEl.style.transform = 'scale(1)'; }, 200);
+        }
+      });
+      const minEl = document.getElementById('live-minute');
+      if(minEl) minEl.textContent = minute + "'";
+      if(minute>=90){ clearInterval(timer); resolve(); }
+    }, stepMs);
+  });
+}
 async function playMatch(myRating, opp){
   const btn = document.getElementById('kickoff');
-  if(btn){ btn.disabled = true; btn.textContent = 'Simulating\u2026'; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Match in progress\u2026'; }
   const diff = myRating - opp.rating;
   const myExp = clamp(1.35 + diff/9, 0.3, 4.5);
   const oppExp = clamp(1.35 - diff/9, 0.3, 4.5);
   const myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
+  const myPlayers = getMySquadPlayers();
+  const events = buildMatchEvents(myGoals, oppGoals, myPlayers, opp.players);
+  const myName = profile.displayName || 'Your Club';
+  const oppName = opp.owner + (opp.isBot ? ' (CPU)' : '');
+  await animateMatch(events, myName, oppName);
   let result, reward;
   if(myGoals>oppGoals){ result='WIN'; reward=900; profile.wins++; }
   else if(myGoals<oppGoals){ result='LOSS'; reward=250; profile.losses++; }
@@ -1033,14 +1167,13 @@ async function playMatch(myRating, opp){
   if(lossesEl) lossesEl.textContent = profile.losses;
   const area = document.getElementById('result-area');
   if(area){
-    area.innerHTML = `<div class="score" style="color:${result==='WIN'?'var(--turf-bright)':result==='LOSS'?'var(--danger)':'var(--chalk)'};">${myGoals} \u2013 ${oppGoals}</div>
-      <div style="font-family:'Anton';font-size:18px;letter-spacing:.05em;">${result}</div>
+    area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':result==='LOSS'?'var(--danger)':'var(--chalk)'};">Full Time \u2014 ${result}</div>
       <div class="mono" style="color:var(--gold);margin-top:6px;">+${reward} coins</div>`;
   }
   if(btn){ btn.disabled = true; btn.textContent = 'Match Finished'; }
 }
 
-showEntryGate();
+boot();
 
 </script>
 </body>
