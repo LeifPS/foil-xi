@@ -2033,18 +2033,58 @@ function pickScorer(players){
   const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
   return {n:chosen.n, img:chosen.img};
 }
-function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers){
+function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0){
   const used = new Set();
   function uniqueMinute(){
     let m; let tries=0;
-    do{ m = 1+Math.floor(Math.random()*90); tries++; }while(used.has(m) && tries<200);
+    do{ m = 1+Math.floor(Math.random()*maxMinute); tries++; }while(used.has(m) && tries<200);
     used.add(m); return m;
   }
   const events = [];
-  for(let i=0;i<myGoals;i++) events.push({minute:uniqueMinute(), side:'me', scorer:pickScorer(myPlayers)});
-  for(let i=0;i<oppGoals;i++) events.push({minute:uniqueMinute(), side:'opp', scorer:pickScorer(oppPlayers)});
+  for(let i=0;i<myGoals;i++) events.push({minute:uniqueMinute()+minuteOffset, side:'me', scorer:pickScorer(myPlayers)});
+  for(let i=0;i<oppGoals;i++) events.push({minute:uniqueMinute()+minuteOffset, side:'opp', scorer:pickScorer(oppPlayers)});
   events.sort((a,b)=>a.minute-b.minute);
   return events;
+}
+function simulateShootout(myRating, oppRating, myPlayers, oppPlayers){
+  const diff = myRating-oppRating;
+  const myProb = clamp(0.72+diff/300, 0.55, 0.9);
+  const oppProb = clamp(0.72-diff/300, 0.55, 0.9);
+  const myKicks=[], oppKicks=[];
+  let myScore=0, oppScore=0;
+  for(let i=0;i<5;i++){
+    const mk = Math.random()<myProb; myKicks.push({scorer:pickScorer(myPlayers), made:mk}); if(mk) myScore++;
+    const ok = Math.random()<oppProb; oppKicks.push({scorer:pickScorer(oppPlayers), made:ok}); if(ok) oppScore++;
+  }
+  let sudden=0;
+  while(myScore===oppScore && sudden<10){
+    sudden++;
+    const mk = Math.random()<myProb; myKicks.push({scorer:pickScorer(myPlayers), made:mk}); if(mk) myScore++;
+    const ok = Math.random()<oppProb; oppKicks.push({scorer:pickScorer(oppPlayers), made:ok}); if(ok) oppScore++;
+  }
+  const winner = myScore===oppScore ? (Math.random()<0.5?'me':'opp') : (myScore>oppScore?'me':'opp');
+  return {myKicks, oppKicks, myScore, oppScore, winner};
+}
+function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers){
+  const diff = myRating-oppRating;
+  const myExp = clamp(1.35+diff/9, 0.3, 4.5), oppExp = clamp(1.35-diff/9, 0.3, 4.5);
+  let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
+  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0);
+  let eventsET=null, shootout=null, wentToET=false, wentToPK=false;
+  if(myGoals===oppGoals){
+    wentToET = true;
+    const myExpET = clamp(myExp*(30/90), 0.05, 2);
+    const oppExpET = clamp(oppExp*(30/90), 0.05, 2);
+    const myETGoals = simGoals(myExpET), oppETGoals = simGoals(oppExpET);
+    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90);
+    myGoals += myETGoals; oppGoals += oppETGoals;
+    if(myGoals===oppGoals){
+      wentToPK = true;
+      shootout = simulateShootout(myRating, oppRating, myPlayers, oppPlayers);
+    }
+  }
+  const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':'opp');
+  return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide};
 }
 function goalRowHTML(minute, scorer, teamName, side){
   const initials = initialsOf(scorer.n || '??');
@@ -2058,21 +2098,36 @@ function goalRowHTML(minute, scorer, teamName, side){
       <span class="gteam">${teamName}</span>
     </div>`;
 }
-function animateTimedMatch(events, myName, oppName, startedAt, durationMs){
+function pkRowHTML(round, kick, teamName, side){
+  const initials = initialsOf(kick.scorer.n || '??');
+  const icon = kick.made ? '\u2705' : '\u274c';
+  return `<div class="goal-row ${side}">
+      <span class="gm">#${round}</span>
+      <span class="gav-wrap"><span class="gav-fallback">${initials}</span></span>
+      <span class="gname">${kick.scorer.n} ${icon}</span>
+      <span class="gteam">${teamName}</span>
+    </div>`;
+}
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp){
   return new Promise(resolve=>{
     const area = document.getElementById('match-area');
     let live = document.getElementById('live-match');
-    if(!live){ live = document.createElement('div'); live.id='live-match'; area.appendChild(live); }
-    live.innerHTML = `
-      <div class="score" id="live-score">0 \u2013 0</div>
-      <div class="mono" id="live-minute" style="text-align:center;color:var(--muted);margin-bottom:8px;">0'</div>
-      <div class="match-log" id="live-log"></div>`;
-    const stepMs = durationMs/90;
+    let fresh = false;
+    if(!live){
+      live = document.createElement('div'); live.id='live-match'; area.appendChild(live);
+      live.innerHTML = `
+        <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
+        <div class="mono" id="live-minute" style="text-align:center;color:var(--muted);margin-bottom:8px;">${minuteStart}'</div>
+        <div class="match-log" id="live-log"></div>`;
+      fresh = true;
+    }
+    const totalMinutes = minuteEnd-minuteStart;
+    const stepMs = durationMs/totalMinutes;
     const logEl = document.getElementById('live-log');
-    let lastMinute = 0, myTally = 0, oppTally = 0;
+    let lastMinute = minuteStart, myTally = carryMy, oppTally = carryOpp;
     const timer = setInterval(()=>{
       const elapsed = Date.now()-startedAt;
-      const minute = Math.max(0, Math.min(90, Math.floor(elapsed/stepMs)));
+      const minute = Math.max(minuteStart, Math.min(minuteEnd, minuteStart+Math.floor(elapsed/stepMs)));
       if(minute>lastMinute){
         let scored = false;
         for(let m=lastMinute+1; m<=minute; m++){
@@ -2095,41 +2150,88 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs){
           }
         }
         const minEl = document.getElementById('live-minute');
-        if(minEl) minEl.textContent = minute + "'";
+        if(minEl) minEl.textContent = minute + "'" + (minuteEnd>90 ? ' (Verl\u00e4ngerung)' : '');
       }
-      if(elapsed>=durationMs){ clearInterval(timer); resolve(); }
+      if(elapsed>=durationMs){ clearInterval(timer); resolve({myTally, oppTally}); }
     }, 250);
   });
 }
-const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE', DRAW:'UNENTSCHIEDEN'};
-async function applyMatchResult(myGoals, oppGoals){
-  let result, reward;
-  if(myGoals>oppGoals){ result='WIN'; reward=900; profile.wins++; }
-  else if(myGoals<oppGoals){ result='LOSS'; reward=250; profile.losses++; }
-  else { result='DRAW'; reward=450; profile.draws++; }
+function animateShootout(shootout, myName, oppName){
+  return new Promise(resolve=>{
+    const live = document.getElementById('live-match');
+    const sec = document.createElement('div');
+    sec.innerHTML = `<div class="mono" style="text-align:center;margin:14px 0 4px;color:var(--muted);letter-spacing:.06em;">ELFMETERSCHIESSEN</div>
+      <div class="score" id="pk-score" style="font-size:32px;">0 \u2013 0</div>
+      <div class="match-log" id="pk-log"></div>`;
+    live.appendChild(sec);
+    const logEl = sec.querySelector('#pk-log');
+    const scoreEl = sec.querySelector('#pk-score');
+    const maxLen = Math.max(shootout.myKicks.length, shootout.oppKicks.length);
+    let i=0, myS=0, oppS=0;
+    const step = ()=>{
+      if(i>=maxLen){ resolve(); return; }
+      const mk = shootout.myKicks[i], ok = shootout.oppKicks[i];
+      if(mk){
+        if(mk.made) myS++;
+        const row = document.createElement('div'); row.innerHTML = pkRowHTML(i+1, mk, myName, 'me');
+        logEl.prepend(row.firstElementChild);
+      }
+      if(ok){
+        if(ok.made) oppS++;
+        const row = document.createElement('div'); row.innerHTML = pkRowHTML(i+1, ok, oppName, 'opp');
+        logEl.prepend(row.firstElementChild);
+      }
+      scoreEl.textContent = `${myS} \u2013 ${oppS}`;
+      i++;
+      setTimeout(step, 650);
+    };
+    step();
+  });
+}
+async function playFullMatch(md, myName, oppName){
+  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0);
+  if(md.wentToET){
+    toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
+    const durET = Math.max(2000, Math.round(md.durationMs*(30/90)));
+    const startedAtET = md.startedAt + md.durationMs;
+    const waitET = startedAtET - Date.now();
+    if(waitET>0) await new Promise(r=>setTimeout(r, waitET));
+    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally));
+  }
+  if(md.wentToPK){
+    toast('Auch nach Verl\u00e4ngerung unentschieden \u2014 Elfmeterschie\u00dfen entscheidet!');
+    await animateShootout(md.shootout, myName, oppName);
+  }
+  return {myGoals: myTally, oppGoals: oppTally};
+}
+const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
+async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK){
+  const result = winnerSide==='me' ? 'WIN' : 'LOSS';
+  const reward = result==='WIN' ? 900 : 250;
+  if(result==='WIN') profile.wins++; else profile.losses++;
   profile.coins += reward;
   await sSet('profile', profile);
   updateCoinDisplay();
-  const winsEl=document.getElementById('stat-wins'), drawsEl=document.getElementById('stat-draws'), lossesEl=document.getElementById('stat-losses');
+  const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses');
   if(winsEl) winsEl.textContent = profile.wins;
-  if(drawsEl) drawsEl.textContent = profile.draws;
   if(lossesEl) lossesEl.textContent = profile.losses;
+  let suffix = '';
+  if(wentToPK) suffix = ' (n.E.)';
+  else if(wentToET) suffix = ' (n.V.)';
   const area = document.getElementById('result-area');
   if(area){
-    area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':result==='LOSS'?'var(--danger)':'var(--chalk)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}</div>
+    area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':'var(--danger)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}${suffix}</div>
       <div class="mono" style="color:var(--gold);margin-top:6px;">+${reward} Coins</div>`;
   }
 }
 async function runLocalMatch(myRating, opp){
-  const diff = myRating - opp.rating;
-  const myExp = clamp(1.35 + diff/9, 0.3, 4.5), oppExp = clamp(1.35 - diff/9, 0.3, 4.5);
-  const myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
   const myPlayers = getMySquadPlayers();
-  const events = buildMatchEvents(myGoals, oppGoals, myPlayers, opp.players);
+  const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players);
+  md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
   const myName = profile.displayName || 'Dein Verein';
   const oppName = opp.owner + (opp.isBot ? ' (CPU)' : '');
-  await animateTimedMatch(events, myName, oppName, Date.now(), MATCH_DURATION_MS);
-  await applyMatchResult(myGoals, oppGoals);
+  const final = await playFullMatch(md, myName, oppName);
+  await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK);
 }
 function startBotMatch(rating){
   const botRating = Math.max(70, Math.min(94, rating + Math.round((Math.random()*10)-5)));
@@ -2165,7 +2267,16 @@ async function enterSyncedMatch(matchDoc){
   const oppSide = amP1 ? matchDoc.p2 : matchDoc.p1;
   const myGoalsFinal = amP1 ? matchDoc.p1Goals : matchDoc.p2Goals;
   const oppGoalsFinal = amP1 ? matchDoc.p2Goals : matchDoc.p1Goals;
-  const events = matchDoc.events.map(e=>({minute:e.minute, scorer:e.scorer, side:(e.side==='p1')===amP1 ? 'me':'opp'}));
+  const translate = e => ({minute:e.minute, scorer:e.scorer, side:(e.side==='p1')===amP1 ? 'me':'opp'});
+  const events90 = matchDoc.events90.map(translate);
+  const eventsET = matchDoc.eventsET ? matchDoc.eventsET.map(translate) : null;
+  let shootout = null;
+  if(matchDoc.shootout){
+    shootout = {
+      myKicks: amP1 ? matchDoc.shootout.p1Kicks : matchDoc.shootout.p2Kicks,
+      oppKicks: amP1 ? matchDoc.shootout.p2Kicks : matchDoc.shootout.p1Kicks,
+    };
+  }
   const area = document.getElementById('match-area');
   area.innerHTML = `
     <div class="vs-teams">
@@ -2177,8 +2288,15 @@ async function enterSyncedMatch(matchDoc){
     <div id="result-area"></div>`;
   const waitMs = matchDoc.startedAt - Date.now();
   if(waitMs>0) await new Promise(r=>setTimeout(r, waitMs));
-  await animateTimedMatch(events, meSide.name, oppSide.name, matchDoc.startedAt, matchDoc.durationMs);
-  await applyMatchResult(myGoalsFinal, oppGoalsFinal);
+  const md = {events90, eventsET, shootout, wentToET:matchDoc.wentToET, wentToPK:matchDoc.wentToPK, startedAt:matchDoc.startedAt, durationMs:matchDoc.durationMs};
+  const final = await playFullMatch(md, meSide.name, oppSide.name);
+  let winnerSide;
+  if(matchDoc.wentToPK){
+    winnerSide = (matchDoc.shootout.winner==='p1')===amP1 ? 'me' : 'opp';
+  } else {
+    winnerSide = myGoalsFinal>oppGoalsFinal ? 'me' : 'opp';
+  }
+  await applyMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK);
   if(fb && matchDoc.mid){
     try{ await fb.deleteDoc(fb.doc(fb.db,'matches',matchDoc.mid)); }catch(e){}
   }
@@ -2241,16 +2359,20 @@ async function joinQueue(){
           try{
             const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
             if(!existing.exists()){
-              const diff = rating - other.rating;
-              const p1Goals = simGoals(clamp(1.35+diff/9,0.3,4.5));
-              const p2Goals = simGoals(clamp(1.35-diff/9,0.3,4.5));
-              const rawEvents = buildMatchEvents(p1Goals, p2Goals, myPlayers, other.players);
-              const events = rawEvents.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me' ? 'p1':'p2'}));
+              const md = buildDecisiveMatch(rating, other.rating, myPlayers, other.players);
+              const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'}));
+              const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'})) : null;
+              const shootout = md.shootout ? {
+                p1Kicks: md.shootout.myKicks, p2Kicks: md.shootout.oppKicks,
+                winner: md.shootout.winner==='me' ? 'p1' : 'p2'
+              } : null;
               const matchDoc = {
                 mid,
                 p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating},
                 p2:{userId:other.userId, name:other.name, rating:other.rating},
-                p1Goals, p2Goals, events, startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
+                p1Goals: md.myGoals, p2Goals: md.oppGoals,
+                events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
+                startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
               };
               await fb.setDoc(fb.doc(fb.db,'matches',mid), matchDoc);
               queueActive = false;
