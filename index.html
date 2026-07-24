@@ -640,6 +640,42 @@ const PACKS = [
     draw(){ return [pick(GOAT_SPECIALS)]; }},
 ];
 
+function sbcReqScore(sbc, cards){
+  let s = 0;
+  for(const r of sbc.reqs) if(r.check(cards)) s++;
+  return s;
+}
+function trySolveSBC(sbc, pool, size){
+  if(pool.length < size) return null;
+  let current = pool.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, size);
+  const inCurrent = new Set(current.map(x=>x.uid));
+  let outside = pool.filter(x=>!inCurrent.has(x.uid));
+  let currentScore = sbcReqScore(sbc, current.map(x=>x.card));
+  const target = sbc.reqs.length;
+  if(currentScore>=target) return current.map(x=>x.uid);
+  for(let iter=0; iter<250 && currentScore<target; iter++){
+    if(!outside.length) break;
+    const outIdx = Math.floor(Math.random()*current.length);
+    const inIdx = Math.floor(Math.random()*outside.length);
+    const removed = current[outIdx], added = outside[inIdx];
+    const trial = current.slice();
+    trial[outIdx] = added;
+    const trialScore = sbcReqScore(sbc, trial.map(x=>x.card));
+    if(trialScore >= currentScore){
+      current = trial;
+      currentScore = trialScore;
+      outside = outside.slice();
+      outside[inIdx] = removed;
+      if(currentScore>=target) return current.map(x=>x.uid);
+    }
+  }
+  return currentScore>=target ? current.map(x=>x.uid) : null;
+}
+function sbcFeasibility(sbc, poolFree, poolWithSquad){
+  if(trySolveSBC(sbc, poolFree, sbc.size)) return 'free';
+  if(trySolveSBC(sbc, poolWithSquad, sbc.size)) return 'squad';
+  return 'none';
+}
 // ===== SBCs (Squad Building Challenges) =====
 function avgOv(cards){ return Math.round(cards.reduce((s,c)=>s+c.ov,0)/cards.length); }
 function req(label, check, progress){ return {label, check, progress}; }
@@ -743,16 +779,27 @@ const SBC_DEFS = [
 ];
 let activeSBC = null;
 let sbcSelection = new Set();
-function renderSBCList(view){
+async function renderSBCList(view){
   const completed = new Set(profile.completedSBCs||[]);
   view.innerHTML = `
     <div class="view-head"><h2>SBC-Herausforderungen</h2><p>Stelle aus deinem Verein einen Kader zusammen, der die Anforderungen erf\u00fcllt. Gib ihn ab und diese Spieler werden gegen ein garantiertes Pack eingetauscht \u2014 jede Herausforderung kann nur einmal abgeschlossen werden.</p></div>
-    <div class="pack-grid" id="sbc-grid"></div>`;
+    <div class="pack-grid" id="sbc-grid"><p class="hint">Pr\u00fcfe Erf\u00fcllbarkeit\u2026</p></div>`;
+  const squadLocked = new Set(Object.values(squad.slots));
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  const poolWithSquad = allCards;
   const grid = document.getElementById('sbc-grid');
-  const TIER_LABEL2 = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
+  grid.innerHTML = '';
+  const FEAS_INFO = {
+    free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
+    squad:{label:'Nur mit Kader-Aufl\u00f6sung', color:'var(--gold)'},
+    none:{label:'Aktuell nicht erf\u00fcllbar', color:'var(--danger)'},
+  };
   SBC_DEFS.forEach(sbc=>{
     const done = completed.has(sbc.id);
     const pack = PACKS.find(p=>p.id===sbc.reward);
+    const feas = done ? null : sbcFeasibility(sbc, poolFree, poolWithSquad);
     const card = document.createElement('div');
     card.className = `pack-card ${pack.tier}`;
     card.innerHTML = `
@@ -761,12 +808,13 @@ function renderSBCList(view){
       <div class="pack-card-body">
         <h3>${sbc.name}</h3>
         <div class="desc">${sbc.desc}</div>
+        ${!done ? `<div class="mono" style="font-size:10.5px;color:${FEAS_INFO[feas].color};">\u25CF ${FEAS_INFO[feas].label}</div>` : ''}
         <div class="buyrow">
           <div class="price-pill" style="font-size:11px;color:var(--chalk);"><div class="pdot" style="background:${pack.tier==='ultimate'?'#ffd76a':pack.tier==='premium'?'#c78bf5':'var(--turf-bright)'};box-shadow:none;"></div>${pack.name}</div>
-          <button class="buy-btn" ${done?'disabled':''}>${done?'Abgeschlossen':'Bauen'}</button>
+          <button class="buy-btn" ${done||feas==='none'?'disabled':''}>${done?'Abgeschlossen':'Bauen'}</button>
         </div>
       </div>`;
-    if(!done) card.querySelector('.buy-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
+    if(!done && feas!=='none') card.querySelector('.buy-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
     grid.appendChild(card);
   });
 }
@@ -774,10 +822,13 @@ async function openSBCBuilder(sbc){
   activeSBC = sbc; sbcSelection = new Set();
   const view = document.getElementById('view');
   view.innerHTML = `<div class="view-head"><h2>${sbc.name}</h2><p class="hint">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p></div>`;
-  const usedInSquad = await getLockedUids();
+  const squadLocked = new Set(Object.values(squad.slots));
+  const externalLocked = await getExternalLockedUids();
+  const usedInSquad = new Set([...squadLocked, ...externalLocked]);
   view.innerHTML = `
     <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Spieler, die aktuell in deiner Kader-Editor-Aufstellung stehen, im Transfermarkt gelistet sind oder in einem Handelsangebot stecken, sind markiert und k\u00f6nnen hier nicht verwendet werden.</p></div>
-    <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button></div>
+    <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button>
+      <button class="action-btn secondary" id="sbc-autofill" style="width:auto;padding:9px 16px;">Automatisch ausf\u00fcllen</button></div>
     <div id="sbc-reqs" style="margin-bottom:14px;"></div>
     <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / ${sbc.size} ausgew\u00e4hlt</div>
     <div class="club-grid" id="sbc-club-grid"></div>
@@ -785,22 +836,24 @@ async function openSBCBuilder(sbc){
   `;
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   const grid = document.getElementById('sbc-club-grid');
-  collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card).forEach(({uid,card})=>{
-    const inSquad = usedInSquad.has(uid);
+  const uidToEl = new Map();
+  collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid)).forEach(({uid,card})=>{
+    const inSquad = squadLocked.has(uid);
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
     wrap.style.cursor = inSquad ? 'not-allowed' : 'pointer';
     wrap.style.opacity = inSquad ? '.45' : '1';
     const el = cardEl(card, 'mini');
     wrap.appendChild(el);
+    uidToEl.set(uid, el);
     if(inSquad){
       const badge = document.createElement('div');
       badge.className = 'sbc-inuse-badge';
-      badge.textContent = 'NICHT VERF\u00dcGBAR';
+      badge.textContent = 'IM KADER';
       wrap.appendChild(badge);
     }
     wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Diese Karte ist gerade nicht verf\u00fcgbar (im Kader, bereits gelistet oder in einem Angebot).'); return; }
+      if(inSquad){ toast('Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung. Entferne ihn dort zuerst, oder nutze "Automatisch ausf\u00fcllen".'); return; }
       if(sbcSelection.has(uid)){
         sbcSelection.delete(uid); el.style.outline=''; el.style.transform='';
       } else {
@@ -813,6 +866,24 @@ async function openSBCBuilder(sbc){
   });
   updateSBCState();
   document.getElementById('sbc-submit').addEventListener('click', submitSBC);
+  document.getElementById('sbc-autofill').addEventListener('click', ()=>{
+    const poolFree = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid) && !squadLocked.has(x.uid));
+    const poolWithSquad = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid));
+    let result = trySolveSBC(activeSBC, poolFree, activeSBC.size);
+    let brokeSquad = false;
+    if(!result){
+      result = trySolveSBC(activeSBC, poolWithSquad, activeSBC.size);
+      brokeSquad = !!result;
+    }
+    if(!result){ toast('Mit deiner aktuellen Sammlung aktuell nicht erf\u00fcllbar.'); return; }
+    sbcSelection = new Set(result);
+    uidToEl.forEach((el,uid)=>{
+      if(sbcSelection.has(uid)){ el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
+      else { el.style.outline=''; el.style.transform=''; }
+    });
+    updateSBCState();
+    toast(brokeSquad ? 'Automatisch ausgef\u00fcllt \u2014 nutzt Spieler aus deinem aktuellen Kader!' : 'Automatisch ausgef\u00fcllt.');
+  });
 }
 function updateSBCState(){
   const selectedCards = [...sbcSelection].map(uid=>ownedCard(uid));
@@ -975,8 +1046,8 @@ function drawMarketGrid(){
     grid.appendChild(wrap);
   });
 }
-async function getLockedUids(){
-  const locked = new Set(Object.values(squad.slots));
+async function getExternalLockedUids(){
+  const locked = new Set();
   await fbReady;
   if(fb){
     try{
@@ -994,6 +1065,11 @@ async function getLockedUids(){
       });
     }catch(e){ console.warn('trade lock check failed', e); }
   }
+  return locked;
+}
+async function getLockedUids(){
+  const locked = await getExternalLockedUids();
+  Object.values(squad.slots).forEach(uid=>locked.add(uid));
   return locked;
 }
 async function openSellModal(){
