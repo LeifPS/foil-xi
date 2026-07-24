@@ -906,8 +906,30 @@ function drawMarketGrid(){
     grid.appendChild(wrap);
   });
 }
-function openSellModal(){
-  const usedInSquad = new Set(Object.values(squad.slots));
+async function getLockedUids(){
+  const locked = new Set(Object.values(squad.slots));
+  await fbReady;
+  if(fb){
+    try{
+      const marketSnap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.where('sellerUserId','==',profile.userId)));
+      marketSnap.docs.forEach(d=>locked.add(d.data().cardUid));
+    }catch(e){ console.warn('market lock check failed', e); }
+    try{
+      const tradeSnap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('fromUserId','==',profile.userId)));
+      tradeSnap.docs.forEach(d=>{
+        const t = d.data();
+        if(t.status==='pending'){
+          (t.offerCards||[]).forEach(c=>locked.add(c.uid));
+          (t.offerManagers||[]).forEach(m=>locked.add(m.uid));
+        }
+      });
+    }catch(e){ console.warn('trade lock check failed', e); }
+  }
+  return locked;
+}
+async function openSellModal(){
+  openModal(`<h2 style="margin-bottom:10px;">Karte verkaufen</h2><p class="hint" style="margin-top:0;">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p>`);
+  const usedInSquad = await getLockedUids();
   openModal(`
     <h2 style="margin-bottom:4px;">Karte verkaufen</h2>
     <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle eine Karte und lege einen Preis fest. Jeder kann sie danach im Transfermarkt kaufen.</p>
@@ -935,9 +957,9 @@ function openSellModal(){
     wrap.style.opacity = inSquad ? '.45' : '1';
     const el = cardEl(card,'mini');
     wrap.appendChild(el);
-    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='IM KADER'; wrap.appendChild(b); }
+    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERF\u00dcGBAR'; wrap.appendChild(b); }
     wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung.'); return; }
+      if(inSquad){ toast('Diese Karte ist gerade nicht verf\u00fcgbar (im Kader, bereits gelistet oder in einem Angebot).'); return; }
       document.querySelectorAll('#sell-pick-grid .club-card-wrap, #sell-pick-mgr-grid .club-card-wrap').forEach(w=>w.style.outline='');
       wrap.style.outline='3px solid var(--turf-bright)';
       selected = {uid, itemType:'player', cardId};
@@ -949,14 +971,14 @@ function openSellModal(){
   const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId), mgrId:m.mgrId})).filter(x=>x.mgr);
   if(!ownedMgrs.length){ mGrid.innerHTML = '<p class="hint">Keine Trainer im Besitz.</p>'; }
   ownedMgrs.forEach(({uid,mgr,mgrId})=>{
-    const inSquad = uid===squad.managerUid;
+    const inSquad = usedInSquad.has(uid) || uid===squad.managerUid;
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap'; wrap.style.cursor= inSquad?'not-allowed':'pointer';
     wrap.style.opacity = inSquad ? '.45' : '1';
     wrap.appendChild(cardEl(mgr,'mini'));
-    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='IM KADER'; wrap.appendChild(b); }
+    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERF\u00dcGBAR'; wrap.appendChild(b); }
     wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Dieser Trainer ist aktuell deinem Kader zugewiesen. Entferne ihn zuerst im Kader-Editor.'); return; }
+      if(inSquad){ toast('Dieser Trainer ist gerade nicht verf\u00fcgbar (zugewiesen, bereits gelistet oder in einem Angebot).'); return; }
       document.querySelectorAll('#sell-pick-grid .club-card-wrap, #sell-pick-mgr-grid .club-card-wrap').forEach(w=>w.style.outline='');
       wrap.style.outline='3px solid var(--turf-bright)';
       selected = {uid, itemType:'manager', cardId:mgrId};
@@ -1107,9 +1129,10 @@ function showTradeCardsModal(t){
   (t.offerManagers||[]).forEach(m=>{ const mgr = MGR_BY_ID.get(m.mgrId); if(mgr) grid.appendChild(cardEl(mgr,'mini')); });
   document.getElementById('trade-cards-close').addEventListener('click', closeModal);
 }
-function openTradeBuilder(){
+async function openTradeBuilder(){
   tradeOfferCards = new Set(); tradeOfferManagers = new Set();
-  const usedInSquad = new Set(Object.values(squad.slots));
+  openModal(`<h2 style="margin-bottom:10px;">Neues Handelsangebot</h2><p class="hint" style="margin-top:0;">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p>`);
+  const usedInSquad = await getLockedUids();
   openModal(`
     <h2 style="margin-bottom:4px;">Neues Handelsangebot</h2>
     <p class="hint" style="margin-top:0;">W\u00e4hle, was du anbietest, was du daf\u00fcr willst, und wer es bekommen soll.</p>
@@ -1164,11 +1187,11 @@ function openTradeBuilder(){
     const el = cardEl(card,'mini');
     wrap.appendChild(el);
     if(inSquad){
-      const badge = document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM KADER';
+      const badge = document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='NICHT VERF\u00dcGBAR';
       wrap.appendChild(badge);
     }
     wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung. Entferne ihn dort zuerst.'); return; }
+      if(inSquad){ toast('Diese Karte ist gerade nicht verf\u00fcgbar (im Kader, bereits gelistet oder in einem Angebot).'); return; }
       if(tradeOfferCards.has(uid)){ tradeOfferCards.delete(uid); el.style.outline=''; el.style.transform=''; }
       else{ tradeOfferCards.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
       document.getElementById('trade-sel-count').textContent = `${tradeOfferCards.size} Karte${tradeOfferCards.size===1?'':'n'} ausgew\u00e4hlt`;
@@ -1179,16 +1202,16 @@ function openTradeBuilder(){
   const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr);
   if(!ownedMgrs.length){ mgrGrid.innerHTML = `<p class="hint">Noch keine Trainer im Besitz.</p>`; }
   ownedMgrs.forEach(({uid,mgr})=>{
-    const inSquad = uid===squad.managerUid;
+    const inSquad = usedInSquad.has(uid) || uid===squad.managerUid;
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
     wrap.style.cursor = inSquad ? 'not-allowed' : 'pointer';
     wrap.style.opacity = inSquad ? '.45' : '1';
     const el = cardEl(mgr,'mini');
     wrap.appendChild(el);
-    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='IM KADER'; wrap.appendChild(b); }
+    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERF\u00dcGBAR'; wrap.appendChild(b); }
     wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Dieser Trainer ist aktuell deinem Kader zugewiesen. Entferne ihn zuerst im Kader-Editor.'); return; }
+      if(inSquad){ toast('Dieser Trainer ist gerade nicht verf\u00fcgbar (zugewiesen, bereits gelistet oder in einem Angebot).'); return; }
       if(tradeOfferManagers.has(uid)){ tradeOfferManagers.delete(uid); el.style.outline=''; el.style.transform=''; }
       else{ tradeOfferManagers.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
     });
