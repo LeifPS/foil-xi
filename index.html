@@ -652,6 +652,14 @@ const SBC_DEFS = [
     desc:'4 Spieler, Durchschnittsrating 74+, niemand unter 68 OVR.',
     reqs:[ req('Durchschnittsrating 74+', c=>avgOv(c)>=74, c=>`${avgOv(c)} / 74`),
            req('Kein Spieler unter 68 OVR', c=>c.every(x=>x.ov>=68), c=>`${c.filter(x=>x.ov<68).length} unter 68`) ]},
+  {id:'goalkeeper_gala', name:'Torh\u00fcter-Gala', reward:'gold', size:3, tier:'Einsteiger',
+    desc:'Ungew\u00f6hnlich: alle 3 Karten m\u00fcssen Torh\u00fcter sein, Durchschnittsrating 72+.',
+    reqs:[ req('Alle 3 sind Torh\u00fcter', c=>c.every(x=>posGroup(x.pos)==='GK'), c=>`${c.filter(x=>posGroup(x.pos)==='GK').length} / 3 Torh\u00fcter`),
+           req('Durchschnittsrating 72+', c=>avgOv(c)>=72, c=>`${avgOv(c)} / 72`) ]},
+  {id:'strike_duo', name:'Sturm-Duo', reward:'derby', size:2, tier:'Einsteiger',
+    desc:'2 St\u00fcrmer, Durchschnittsrating 76+.',
+    reqs:[ req('Beide sind St\u00fcrmer', c=>c.every(x=>posGroup(x.pos)==='FWD'), c=>`${c.filter(x=>posGroup(x.pos)==='FWD').length} / 2 St\u00fcrmer`),
+           req('Durchschnittsrating 76+', c=>avgOv(c)>=76, c=>`${avgOv(c)} / 76`) ]},
   // --- medium (5-7 players) ---
   {id:'one_nation', name:'Eine Nation', reward:'derby', size:6, tier:'Mittel',
     desc:'Alle 6 Spieler m\u00fcssen dieselbe Nationalit\u00e4t haben.',
@@ -666,6 +674,38 @@ const SBC_DEFS = [
     desc:'7 Spieler, Durchschnittsrating 85+, mindestens 2 Sonderkarten.',
     reqs:[ req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
            req('2+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=2, c=>`${c.filter(x=>x.variant!=='base').length} / 2 Sonderkarten`) ]},
+  {id:'sturmreihe', name:'Sturmreihe', reward:'raregold', size:5, tier:'Mittel',
+    desc:'5 St\u00fcrmer, Durchschnittsrating 82+.',
+    reqs:[ req('Alle 5 sind St\u00fcrmer', c=>c.every(x=>posGroup(x.pos)==='FWD'), c=>`${c.filter(x=>posGroup(x.pos)==='FWD').length} / 5 St\u00fcrmer`),
+           req('Durchschnittsrating 82+', c=>avgOv(c)>=82, c=>`${avgOv(c)} / 82`) ]},
+  {id:'eiserne_abwehr', name:'Eiserne Abwehr', reward:'raregold', size:5, tier:'Mittel',
+    desc:'5 Verteidiger, Durchschnittsrating 82+.',
+    reqs:[ req('Alle 5 sind Verteidiger', c=>c.every(x=>posGroup(x.pos)==='DEF'), c=>`${c.filter(x=>posGroup(x.pos)==='DEF').length} / 5 Verteidiger`),
+           req('Durchschnittsrating 82+', c=>avgOv(c)>=82, c=>`${avgOv(c)} / 82`) ]},
+  {id:'mittelfeldmotor', name:'Mittelfeldmotor', reward:'raregold', size:5, tier:'Mittel',
+    desc:'5 Mittelfeldspieler, Durchschnittsrating 82+.',
+    reqs:[ req('Alle 5 sind Mittelfeldspieler', c=>c.every(x=>posGroup(x.pos)==='MID'), c=>`${c.filter(x=>posGroup(x.pos)==='MID').length} / 5 Mittelfeldspieler`),
+           req('Durchschnittsrating 82+', c=>avgOv(c)>=82, c=>`${avgOv(c)} / 82`) ]},
+  {id:'weltenbummler', name:'Weltenbummler', reward:'scout', size:6, tier:'Mittel',
+    desc:'6 Spieler aus mindestens 5 verschiedenen Nationen, Durchschnittsrating 78+.',
+    reqs:[ req('5+ verschiedene Nationen', c=>new Set(c.map(x=>x.nat)).size>=5, c=>`${new Set(c.map(x=>x.nat)).size} / 5 Nationen`),
+           req('Durchschnittsrating 78+', c=>avgOv(c)>=78, c=>`${avgOv(c)} / 78`) ]},
+  {id:'liga_mix', name:'Liga-Mix', reward:'scout', size:6, tier:'Mittel',
+    desc:'6 Spieler aus mindestens 4 verschiedenen Ligen, Durchschnittsrating 78+.',
+    reqs:[ req('4+ verschiedene Ligen', c=>new Set(c.map(x=>x.lg)).size>=4, c=>`${new Set(c.map(x=>x.lg)).size} / 4 Ligen`),
+           req('Durchschnittsrating 78+', c=>avgOv(c)>=78, c=>`${avgOv(c)} / 78`) ]},
+  {id:'perlen_im_kader', name:'Perlen im Kader', reward:'goldenglove', size:5, tier:'Mittel',
+    desc:'5 Spieler mit gro\u00dfem Entwicklungspotenzial (Potenzial mindestens 5 Punkte \u00fcber Rating), Durchschnittsrating 75+.',
+    reqs:[ req('Alle mit Potenzial-Sprung 5+', c=>c.every(x=>(x.pot-x.ov)>=5), c=>`${c.filter(x=>(x.pot-x.ov)>=5).length} / 5 mit gro\u00dfem Potenzial`),
+           req('Durchschnittsrating 75+', c=>avgOv(c)>=75, c=>`${avgOv(c)} / 75`) ]},
+  {id:'premier_power', name:'Premier-League-Power', reward:'tots', size:6, tier:'Mittel',
+    desc:'6 Spieler aus der Premier League, Durchschnittsrating 83+.',
+    reqs:[ req('Alle aus der Premier League', c=>c.every(x=>x.lg==='Premier League'), c=>`${c.filter(x=>x.lg==='Premier League').length} / 6`),
+           req('Durchschnittsrating 83+', c=>avgOv(c)>=83, c=>`${avgOv(c)} / 83`) ]},
+  {id:'la_liga_gala', name:'La-Liga-Gala', reward:'tots', size:6, tier:'Mittel',
+    desc:'6 Spieler aus La Liga, Durchschnittsrating 83+.',
+    reqs:[ req('Alle aus La Liga', c=>c.every(x=>x.lg==='La Liga'), c=>`${c.filter(x=>x.lg==='La Liga').length} / 6`),
+           req('Durchschnittsrating 83+', c=>avgOv(c)>=83, c=>`${avgOv(c)} / 83`) ]},
   // --- advanced (full XI) ---
   {id:'elite_xi', name:'Elite-Elf', reward:'sevenof88', size:11, tier:'Fortgeschritten',
     desc:'11 Spieler, Durchschnittsrating 88+, mindestens 3 Spieler mit 90 oder h\u00f6her.',
@@ -680,6 +720,21 @@ const SBC_DEFS = [
     desc:'11 Spieler, Durchschnittsrating 93+, mindestens 4 Spieler mit 95 oder h\u00f6her.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('4+ Spieler mit 95+', c=>c.filter(x=>x.ov>=95).length>=4, c=>`${c.filter(x=>x.ov>=95).length} / 4`) ]},
+  {id:'angriffs_ikonen', name:'Angriffs-Ikonen', reward:'sevenof88', size:11, tier:'Fortgeschritten',
+    desc:'11 Spieler, Durchschnittsrating 88+, mindestens 5 Angriffs-Varianten (z.\u00a0B. Future Star, Golden Boot, Showdown, Galactico).',
+    reqs:[ req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`),
+           req('5+ Angriffs-Varianten', c=>c.filter(x=>PATTERN_FAMILY[x.theme]==='attack').length>=5, c=>`${c.filter(x=>PATTERN_FAMILY[x.theme]==='attack').length} / 5`) ]},
+  {id:'weltreise_elf', name:'Weltreise-Elf', reward:'tots', size:11, tier:'Fortgeschritten',
+    desc:'11 Spieler aus mindestens 8 verschiedenen Nationen, Durchschnittsrating 85+.',
+    reqs:[ req('8+ verschiedene Nationen', c=>new Set(c.map(x=>x.nat)).size>=8, c=>`${new Set(c.map(x=>x.nat)).size} / 8 Nationen`),
+           req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`) ]},
+  {id:'liga_dynastie', name:'Ein-Liga-Dynastie', reward:'twoof95', size:11, tier:'Fortgeschritten',
+    desc:'Alle 11 Spieler aus derselben Liga, Durchschnittsrating 88+.',
+    reqs:[ req('Gleiche Liga', c=>new Set(c.map(x=>x.lg)).size===1, c=>`${new Set(c.map(x=>x.lg)).size} Ligen verwendet`),
+           req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`) ]},
+  {id:'legenden_elf', name:'Legenden-Elf', reward:'hof', size:11, tier:'Fortgeschritten',
+    desc:'Alle 11 Spieler m\u00fcssen Top-Varianten sein (Icon, Centurion, Hall of Fame, Galactico, Golden Glove, World Cup Moment, Blackout oder GOAT).',
+    reqs:[ req('Alle 11 sind Top-Varianten', c=>c.every(x=>['icon','cent','hof','gal','gg','wc','blk','goat'].includes(x.theme)), c=>`${c.filter(x=>['icon','cent','hof','gal','gg','wc','blk','goat'].includes(x.theme)).length} / 11`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
     reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
@@ -715,11 +770,13 @@ function renderSBCList(view){
     grid.appendChild(card);
   });
 }
-function openSBCBuilder(sbc){
+async function openSBCBuilder(sbc){
   activeSBC = sbc; sbcSelection = new Set();
   const view = document.getElementById('view');
+  view.innerHTML = `<div class="view-head"><h2>${sbc.name}</h2><p class="hint">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p></div>`;
+  const usedInSquad = await getLockedUids();
   view.innerHTML = `
-    <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Spieler, die aktuell in deiner Kader-Editor-Aufstellung stehen, sind markiert und k\u00f6nnen hier nicht verwendet werden \u2014 entferne sie dort zuerst, wenn du sie einsetzen willst.</p></div>
+    <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Spieler, die aktuell in deiner Kader-Editor-Aufstellung stehen, im Transfermarkt gelistet sind oder in einem Handelsangebot stecken, sind markiert und k\u00f6nnen hier nicht verwendet werden.</p></div>
     <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button></div>
     <div id="sbc-reqs" style="margin-bottom:14px;"></div>
     <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / ${sbc.size} ausgew\u00e4hlt</div>
@@ -728,7 +785,6 @@ function openSBCBuilder(sbc){
   `;
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   const grid = document.getElementById('sbc-club-grid');
-  const usedInSquad = new Set(Object.values(squad.slots));
   collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card).forEach(({uid,card})=>{
     const inSquad = usedInSquad.has(uid);
     const wrap = document.createElement('div');
@@ -740,11 +796,11 @@ function openSBCBuilder(sbc){
     if(inSquad){
       const badge = document.createElement('div');
       badge.className = 'sbc-inuse-badge';
-      badge.textContent = 'IM KADER';
+      badge.textContent = 'NICHT VERF\u00dcGBAR';
       wrap.appendChild(badge);
     }
     wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung. Entferne ihn dort zuerst.'); return; }
+      if(inSquad){ toast('Diese Karte ist gerade nicht verf\u00fcgbar (im Kader, bereits gelistet oder in einem Angebot).'); return; }
       if(sbcSelection.has(uid)){
         sbcSelection.delete(uid); el.style.outline=''; el.style.transform='';
       } else {
