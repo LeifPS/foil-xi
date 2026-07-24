@@ -44,7 +44,6 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .coin-pill{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);padding:7px 14px;border-radius:100px;}
 .coin-dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);}
 .coin-pill b{font-family:'JetBrains Mono';font-size:14px;}
-.rec-pill{font-size:11px;color:var(--muted);font-family:'JetBrains Mono';}
 
 /* ---- nav ---- */
 #nav{display:flex;gap:2px;padding:0 20px;background:var(--void);border-bottom:1px solid var(--line);overflow-x:auto;}
@@ -59,6 +58,16 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 
 /* ---- pack grid ---- */
 .pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;}
+.daily-banner{background:linear-gradient(155deg,#171d12,#10130c 70%);border:1px solid var(--gold-dim);border-radius:14px;
+  padding:16px 18px;margin-bottom:20px;}
+.daily-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.daily-head h3{font-size:15px;letter-spacing:.01em;}
+.daily-dots{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.daily-dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono';font-weight:700;font-size:12px;color:var(--muted);
+  background:var(--panel2);border:2px solid var(--line);}
+.daily-dot.done{background:var(--turf);border-color:var(--turf-bright);color:#eafff2;}
+.daily-dot.active{border-color:var(--gold);color:var(--gold);box-shadow:0 0 10px -2px var(--gold);animation:iconGlow 2.2s ease-in-out infinite;}
 .pack-card{
   background:linear-gradient(165deg,#141912,#0f120c 60%);border:1px solid var(--line);border-radius:16px;
   padding:0;display:flex;flex-direction:column;position:relative;overflow:hidden;
@@ -84,6 +93,9 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pack-card.ultimate .pack-glyph{background:repeating-conic-gradient(from 0deg at 50% 0%, rgba(255,215,106,.09) 0deg 4deg, transparent 4deg 13deg), linear-gradient(180deg,#241a0c,#150f1d 85%);}
 .pack-glyph .pv-lbl{font-family:'JetBrains Mono';font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:1px;}
 .pack-card-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;flex:1;}
+.odds-link{background:none;border:none;color:var(--teal);font-size:11px;text-decoration:underline;
+  cursor:pointer;padding:0;text-align:left;width:fit-content;margin-top:-4px;}
+.odds-link:hover{color:var(--gold);}
 .pack-card h3{font-size:15.5px;letter-spacing:.01em;}
 .pack-card .desc{font-size:11.8px;color:var(--muted);line-height:1.5;min-height:34px;}
 .pack-card .buyrow{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);}
@@ -293,6 +305,9 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .rating-hero .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
 .formation-select{display:flex;gap:6px;flex-wrap:wrap;}
 .chip{padding:7px 11px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);font-size:12px;color:var(--muted);}
+.preset-chip{cursor:pointer;display:flex;align-items:center;gap:6px;}
+.preset-del{color:var(--danger);font-weight:700;padding:0 2px;}
+.preset-del:hover{color:#ff8b85;}
 .chip.active{border-color:var(--turf-bright);color:var(--chalk);}
 .action-btn{background:var(--turf);color:#eafff2;padding:11px;border-radius:9px;font-weight:700;font-size:13px;text-align:center;}
 .action-btn.secondary{background:var(--panel2);color:var(--chalk);border:1px solid var(--line);}
@@ -452,7 +467,7 @@ ALL_SPECIAL.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variant
 EXCLUSIVE_SPECIALS.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
 const POS_DE = {
   GK:'TW', CB:'IV', LB:'LV', RB:'RV', LWB:'LAV', RWB:'RAV', CDM:'DM', CM:'ZM', CAM:'ZOM',
-  LM:'LM', RM:'RM', LW:'LA', RW:'RA', ST:'ST', CF:'MS',
+  LM:'LM', RM:'RM', LW:'LF', RW:'RF', ST:'ST', CF:'MS',
 };
 function posDE(label){ return POS_DE[label] || label; }
 const STAT_DE = {PAC:'TEM', SHO:'SCH', PAS:'PAS', DRI:'DRI', DEF:'DEF', PHY:'PHY'};
@@ -531,6 +546,10 @@ const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:500,tier:'',count:5,
     desc:'5 Kaderspieler, Rating 70-76.',
     draw(){ const pool=poolByRange(70,76,false); return Array.from({length:5},()=>pick(pool)); }},
+  {id:'talentpick',name:'Pick 1 of 3: Talent Pack',cost:3500,tier:'',count:3,pickCount:1,
+    desc:'3 Nachwuchs-Sonderkarten (Zukunftsstern, Spieler im Blick, Aufstrebendes Talent oder Wunderkind). W\u00e4hle 1 davon zum Behalten.',
+    draw(){ const pool=specialsByVariant(['fut_star','otw','rising_phenom','wonderkid']);
+      return Array.from({length:3},()=>pick(pool)); }},
   {id:'gold',name:'Gold Rush',cost:2200,tier:'',count:5,
     desc:'5 Spieler mit Rating 74-83. 1 garantiert mit 80+.',
     draw(){ const pool=poolByRange(74,83,false), hi=poolByRange(80,86,false);
@@ -565,6 +584,15 @@ const PACKS = [
     desc:'1 Spieler, garantiert Ikone, Zenturio, Ruhmeshalle oder Gal\u00e1ctico \u2014 Rating 95+. Das einzige Pack mit diesen Karten.',
     draw(){ const pool=specialsByVariant(['icon','centurion','hall_of_fame','galactico']).filter(c=>c.ov>=95);
       return [pick(pool.length?pool:specialsByVariant(['icon','centurion','hall_of_fame','galactico']))]; }},
+  {id:'championspick',name:'Pick 3 of 6: Champions Select',cost:20000,tier:'ultimate',count:6,pickCount:3,
+    desc:'6 Spieler, Rating 82-90 (inkl. Chance auf Sonderkarten). W\u00e4hle 3 davon zum Behalten.',
+    draw(){ const pool=poolByRange(82,90,true); return Array.from({length:6},()=>pick(pool)); }},
+  {id:'mystery',name:'Mystery Elite Pack',cost:30000,tier:'ultimate',count:3,
+    desc:'3 Spieler, Rating 75-99 \u2014 h\u00f6chste Schwankungsbreite aller Packs. Alles von Gold Rare bis Blackout ist m\u00f6glich.',
+    draw(){ const pool=poolByRange(75,99,true); return Array.from({length:3},()=>pick(pool)); }},
+  {id:'doubletrainer',name:'Double Trainer Pack',cost:14000,tier:'premium',count:2,
+    desc:'2 Trainer garantiert, zuf\u00e4llig aus allen Vereinen.',
+    draw(){ return [pick(MANAGERS), pick(MANAGERS)]; }},
   {id:'twoof95',name:'Pick 2 of 4: 95+ Pack',cost:52000,tier:'ultimate',count:4,pickCount:2,
     desc:'4 Spieler, alle mit Rating 95+. W\u00e4hle 2 davon zum Behalten.',
     draw(){ const ultra=poolByRange(95,99,true); return Array.from({length:4},()=>pick(ultra)); }},
@@ -739,9 +767,23 @@ function describeWant(want){
   if(want.kind==='manager') return `1 Trainerkarte (mind. Stufe ${want.minTier})`;
   return '';
 }
+let tradeSubTab = 'market';
 function renderTrade(view){
   view.innerHTML = `
-    <div class="view-head"><h2>Handel</h2><p>Biete Karten, Trainer und/oder Coins aus deinem Verein anderen Spielern an \u2014 im Tausch gegen Coins, bestimmte Karten (z.\u00a0B. Mindest-Rating) oder Trainerkarten. Spieler, die aktuell in deinem Kader stehen, kannst du nicht anbieten.</p></div>
+    <div class="view-head"><h2>Handel</h2><p>Verkaufe Karten \u00f6ffentlich \u00fcber den Transfermarkt, oder mache einem bestimmten Verein ein direktes Angebot \u2014 auch Karte-gegen-Karte oder Trainer-gegen-Trainer.</p></div>
+    <div id="trade-subnav" style="display:flex;gap:2px;padding:0;background:none;border:none;margin-bottom:18px;">
+      <button class="nav-btn ${tradeSubTab==='market'?'active':''}" id="subtab-market" style="padding:9px 14px;">Transfermarkt</button>
+      <button class="nav-btn ${tradeSubTab==='direct'?'active':''}" id="subtab-direct" style="padding:9px 14px;">Direkt-Angebote</button>
+    </div>
+    <div id="trade-content"></div>
+  `;
+  document.getElementById('subtab-market').addEventListener('click', ()=>{ tradeSubTab='market'; renderTrade(view); });
+  document.getElementById('subtab-direct').addEventListener('click', ()=>{ tradeSubTab='direct'; renderTrade(view); });
+  if(tradeSubTab==='market') renderMarketSection(document.getElementById('trade-content'));
+  else renderDirectOffersSection(document.getElementById('trade-content'));
+}
+function renderDirectOffersSection(el){
+  el.innerHTML = `
     <div class="toolbar" style="margin-bottom:18px;">
       <button class="action-btn" id="trade-new" style="width:auto;padding:9px 18px;">+ Neues Angebot erstellen</button>
     </div>
@@ -752,6 +794,221 @@ function renderTrade(view){
   `;
   document.getElementById('trade-new').addEventListener('click', openTradeBuilder);
   loadTrades();
+}
+let marketFilter = {q:'', pos:'ALL', sort:'newest'};
+function renderMarketSection(el){
+  el.innerHTML = `
+    <div class="toolbar" style="margin-bottom:14px;">
+      <button class="action-btn" id="market-sell" style="width:auto;padding:9px 18px;">+ Karte verkaufen</button>
+    </div>
+    <div class="toolbar" style="margin-bottom:16px;">
+      <input id="market-search" placeholder="Spielername suchen..." value="${marketFilter.q}">
+      <select id="market-pos">
+        <option value="ALL">Alle Positionen</option>
+        <option value="GK">Torh\u00fcter</option>
+        <option value="DEF">Verteidiger</option>
+        <option value="MID">Mittelfeld</option>
+        <option value="FWD">Sturm</option>
+        <option value="MGR">Trainer</option>
+      </select>
+      <select id="market-sort">
+        <option value="newest">Neueste zuerst</option>
+        <option value="price_asc">Preis aufsteigend</option>
+        <option value="price_desc">Preis absteigend</option>
+        <option value="rating_desc">Rating absteigend</option>
+      </select>
+    </div>
+    <div class="club-grid" id="market-grid"><p class="hint">L\u00e4dt...</p></div>
+  `;
+  document.getElementById('market-pos').value = marketFilter.pos;
+  document.getElementById('market-sort').value = marketFilter.sort;
+  document.getElementById('market-sell').addEventListener('click', openSellModal);
+  document.getElementById('market-search').addEventListener('input', e=>{ marketFilter.q=e.target.value; drawMarketGrid(); });
+  document.getElementById('market-pos').addEventListener('change', e=>{ marketFilter.pos=e.target.value; drawMarketGrid(); });
+  document.getElementById('market-sort').addEventListener('change', e=>{ marketFilter.sort=e.target.value; drawMarketGrid(); });
+  loadMarketListings();
+}
+let marketListingsCache = [];
+async function loadMarketListings(){
+  await fbReady;
+  const grid = document.getElementById('market-grid');
+  if(!grid) return;
+  if(!fb){ grid.innerHTML = `<p class="hint">Transfermarkt ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`; return; }
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.orderBy('createdAt','desc'), fb.limit(60)));
+    marketListingsCache = snap.docs.map(d=>({id:d.id, ...d.data()}));
+  }catch(e){ console.warn('market read failed', e); marketListingsCache = []; }
+  drawMarketGrid();
+}
+function drawMarketGrid(){
+  const grid = document.getElementById('market-grid');
+  if(!grid) return;
+  let items = marketListingsCache.map(l=>{
+    const card = l.itemType==='manager' ? MGR_BY_ID.get(l.cardId) : BY_ID.get(l.cardId);
+    return {listing:l, card};
+  }).filter(x=>x.card);
+  if(marketFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(marketFilter.q.toLowerCase()));
+  if(marketFilter.pos==='MGR') items = items.filter(x=>x.listing.itemType==='manager');
+  else if(marketFilter.pos!=='ALL') items = items.filter(x=>x.listing.itemType!=='manager' && posGroup(x.card.pos)===marketFilter.pos);
+  if(marketFilter.sort==='price_asc') items.sort((a,b)=>a.listing.price-b.listing.price);
+  else if(marketFilter.sort==='price_desc') items.sort((a,b)=>b.listing.price-a.listing.price);
+  else if(marketFilter.sort==='rating_desc') items.sort((a,b)=>b.card.ov-a.card.ov);
+  else items.sort((a,b)=>b.listing.createdAt-a.listing.createdAt);
+  grid.innerHTML = '';
+  if(!items.length){ grid.innerHTML = `<div class="empty-state" style="width:100%;"><h3>Keine Angebote</h3><p>Versuche einen anderen Filter oder verkaufe selbst eine Karte.</p></div>`; return; }
+  items.forEach(({listing,card})=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'club-card-wrap';
+    wrap.appendChild(cardEl(card,'mini'));
+    const priceTag = document.createElement('div');
+    priceTag.className = 'price-pill';
+    priceTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;';
+    priceTag.innerHTML = `<div class="pdot"></div>${listing.price.toLocaleString('de-DE')}`;
+    wrap.appendChild(priceTag);
+    if(listing.sellerUserId===profile.userId){
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className='sell-btn'; cancelBtn.textContent='\u00d7'; cancelBtn.title='Angebot zur\u00fcckziehen';
+      cancelBtn.addEventListener('click', ()=>withdrawMarketListing(listing));
+      wrap.appendChild(cancelBtn);
+    } else {
+      wrap.style.cursor='pointer';
+      wrap.title = 'Klicken zum Kaufen';
+      wrap.addEventListener('click', ()=>confirmBuyListing(listing, card));
+    }
+    grid.appendChild(wrap);
+  });
+}
+function openSellModal(){
+  const usedInSquad = new Set(Object.values(squad.slots));
+  openModal(`
+    <h2 style="margin-bottom:4px;">Karte verkaufen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle eine Karte und lege einen Preis fest. Jeder kann sie danach im Transfermarkt kaufen.</p>
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Spieler</div>
+    <div class="club-grid" id="sell-pick-grid" style="max-height:240px;overflow:auto;margin-bottom:12px;"></div>
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
+    <div class="club-grid" id="sell-pick-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
+    <div class="toolbar" style="margin-bottom:14px;">
+      <input id="sell-price" type="number" min="1" placeholder="Preis in Coins">
+    </div>
+    <div class="mono" id="sell-selected-info" style="color:var(--muted);margin-bottom:12px;">Keine Karte ausgew\u00e4hlt</div>
+    <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:220px;">Zum Markt hinzuf\u00fcgen</button>`);
+  let selected = null; // {uid, cardId or mgrId, itemType}
+  const updateSel = (label)=>{
+    document.getElementById('sell-selected-info').textContent = selected ? `Ausgew\u00e4hlt: ${label}` : 'Keine Karte ausgew\u00e4hlt';
+    const btn = document.getElementById('sell-submit');
+    btn.disabled = !selected; btn.style.opacity = selected ? '1':'.4';
+  };
+  const pGrid = document.getElementById('sell-pick-grid');
+  collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId), cardId:c.cardId})).filter(x=>x.card).forEach(({uid,card,cardId})=>{
+    const inSquad = usedInSquad.has(uid);
+    const wrap = document.createElement('div');
+    wrap.className = 'club-card-wrap';
+    wrap.style.cursor = inSquad ? 'not-allowed' : 'pointer';
+    wrap.style.opacity = inSquad ? '.45' : '1';
+    const el = cardEl(card,'mini');
+    wrap.appendChild(el);
+    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='IM KADER'; wrap.appendChild(b); }
+    wrap.addEventListener('click', ()=>{
+      if(inSquad){ toast('Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung.'); return; }
+      document.querySelectorAll('#sell-pick-grid .club-card-wrap, #sell-pick-mgr-grid .club-card-wrap').forEach(w=>w.style.outline='');
+      wrap.style.outline='3px solid var(--turf-bright)';
+      selected = {uid, itemType:'player', cardId};
+      updateSel(card.n);
+    });
+    pGrid.appendChild(wrap);
+  });
+  const mGrid = document.getElementById('sell-pick-mgr-grid');
+  const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId), mgrId:m.mgrId})).filter(x=>x.mgr);
+  if(!ownedMgrs.length){ mGrid.innerHTML = '<p class="hint">Keine Trainer im Besitz.</p>'; }
+  ownedMgrs.forEach(({uid,mgr,mgrId})=>{
+    const inSquad = uid===squad.managerUid;
+    const wrap = document.createElement('div');
+    wrap.className='club-card-wrap'; wrap.style.cursor= inSquad?'not-allowed':'pointer';
+    wrap.style.opacity = inSquad ? '.45' : '1';
+    wrap.appendChild(cardEl(mgr,'mini'));
+    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='IM KADER'; wrap.appendChild(b); }
+    wrap.addEventListener('click', ()=>{
+      if(inSquad){ toast('Dieser Trainer ist aktuell deinem Kader zugewiesen. Entferne ihn zuerst im Kader-Editor.'); return; }
+      document.querySelectorAll('#sell-pick-grid .club-card-wrap, #sell-pick-mgr-grid .club-card-wrap').forEach(w=>w.style.outline='');
+      wrap.style.outline='3px solid var(--turf-bright)';
+      selected = {uid, itemType:'manager', cardId:mgrId};
+      updateSel(mgr.n);
+    });
+    mGrid.appendChild(wrap);
+  });
+  document.getElementById('sell-price').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('sell-submit').click(); });
+  document.getElementById('sell-submit').addEventListener('click', async ()=>{
+    const price = Math.max(1, Math.floor(Number(document.getElementById('sell-price').value)||0));
+    if(!price){ toast('Bitte einen Preis angeben.'); return; }
+    await fbReady;
+    if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); return; }
+    try{
+      await fb.setDoc(fb.doc(fb.db,'market', genId()), {
+        sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
+        itemType: selected.itemType, cardUid: selected.uid, cardId: selected.cardId,
+        price, createdAt: Date.now()
+      });
+      closeModal();
+      toast('Zum Transfermarkt hinzugef\u00fcgt!');
+      if(currentTab==='trade') renderTrade(document.getElementById('view'));
+    }catch(e){ console.warn('market list failed', e); toast('Angebot konnte nicht erstellt werden.'); }
+  });
+}
+async function withdrawMarketListing(listing){
+  try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(e){}
+  toast('Angebot zur\u00fcckgezogen.');
+  loadMarketListings();
+}
+function confirmBuyListing(listing, card){
+  openModal(`
+    <h2 style="margin-bottom:10px;">${card.n} kaufen?</h2>
+    <div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(card,'mini').outerHTML}</div>
+    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:18px;">${listing.price.toLocaleString('de-DE')} Coins</p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button class="action-btn secondary" id="cancel-buy" style="width:120px;">Abbrechen</button>
+      <button class="action-btn" id="do-buy" style="width:120px;">Kaufen</button>
+    </div>`);
+  document.getElementById('cancel-buy').addEventListener('click', closeModal);
+  document.getElementById('do-buy').addEventListener('click', ()=>buyMarketListing(listing));
+}
+async function buyMarketListing(listing){
+  if(profile.coins < listing.price){ toast('Nicht genug Coins.'); return; }
+  await fbReady;
+  if(!fb){ toast('Backend nicht erreichbar.'); return; }
+  try{
+    const sellerSnap = await fb.getDoc(fb.doc(fb.db,'saves', listing.sellerUserId));
+    if(!sellerSnap.exists()){ toast('Verk\u00e4ufer-Daten nicht gefunden.'); await withdrawMarketListing(listing); return; }
+    const sellerData = sellerSnap.data();
+    let sellerProfile = sellerData.profile || {coins:0};
+    let sellerCollection = sellerData.collection || [];
+    let sellerManagerCollection = sellerData.managerCollection || [];
+    if(listing.itemType==='manager'){
+      const stillThere = sellerManagerCollection.some(m=>m.uid===listing.cardUid);
+      if(!stillThere){ toast('Diese Karte ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); return; }
+      sellerManagerCollection = sellerManagerCollection.filter(m=>m.uid!==listing.cardUid);
+      managerCollection.push({uid:genId(), mgrId:listing.cardId});
+      await sSet('managerCollection', managerCollection);
+    } else {
+      const stillThere = sellerCollection.some(c=>c.uid===listing.cardUid);
+      if(!stillThere){ toast('Diese Karte ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); return; }
+      sellerCollection = sellerCollection.filter(c=>c.uid!==listing.cardUid);
+      collection.push({uid:genId(), cardId:listing.cardId});
+      await sSet('collection', collection);
+    }
+    sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
+    await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile, collection:sellerCollection, managerCollection:sellerManagerCollection}, {merge:true});
+
+    profile.coins -= listing.price;
+    await sSet('profile', profile);
+    updateCoinDisplay();
+    await fb.deleteDoc(fb.doc(fb.db,'market', listing.id));
+    closeModal();
+    toast('Kauf erfolgreich!');
+    loadMarketListings();
+  }catch(e){
+    console.warn('buy market listing failed', e);
+    toast('Kauf fehlgeschlagen.');
+  }
 }
 async function loadTrades(){
   const inBox = document.getElementById('trade-incoming');
@@ -894,12 +1151,16 @@ function openTradeBuilder(){
   const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr);
   if(!ownedMgrs.length){ mgrGrid.innerHTML = `<p class="hint">Noch keine Trainer im Besitz.</p>`; }
   ownedMgrs.forEach(({uid,mgr})=>{
+    const inSquad = uid===squad.managerUid;
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
-    wrap.style.cursor = 'pointer';
+    wrap.style.cursor = inSquad ? 'not-allowed' : 'pointer';
+    wrap.style.opacity = inSquad ? '.45' : '1';
     const el = cardEl(mgr,'mini');
     wrap.appendChild(el);
+    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='IM KADER'; wrap.appendChild(b); }
     wrap.addEventListener('click', ()=>{
+      if(inSquad){ toast('Dieser Trainer ist aktuell deinem Kader zugewiesen. Entferne ihn zuerst im Kader-Editor.'); return; }
       if(tradeOfferManagers.has(uid)){ tradeOfferManagers.delete(uid); el.style.outline=''; el.style.transform=''; }
       else{ tradeOfferManagers.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
     });
@@ -912,6 +1173,10 @@ function openTradeBuilder(){
     document.getElementById('trade-want-manager').style.display = kindSelect.value==='manager' ? 'flex':'none';
   });
   document.getElementById('trade-submit').addEventListener('click', submitTradeOffer);
+  ['trade-coins','trade-target','want-coins-amount','want-cards-count','want-cards-minovr'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('trade-submit').click(); });
+  });
 }
 async function submitTradeOffer(){
   if(!tradeOfferCards.size && !tradeOfferManagers.size){ toast('W\u00e4hle mindestens eine Karte oder einen Trainer zum Anbieten aus.'); return; }
@@ -1041,7 +1306,11 @@ function openAcceptCardsModal(t, want){
     <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="accept-sel-count">0 / ${want.count} ausgew\u00e4hlt</div>
     <div class="club-grid" id="accept-cards-grid" style="max-height:320px;overflow:auto;margin-bottom:16px;"></div>
     ${!eligible.length?'<p class="hint">Du besitzt keine passenden Karten daf\u00fcr.</p>':''}
-    <button class="action-btn" id="accept-cards-confirm" disabled style="opacity:.4;width:220px;">Best\u00e4tigen</button>`);
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="accept-cards-cancel" style="width:120px;">Abbrechen</button>
+      <button class="action-btn" id="accept-cards-confirm" disabled style="opacity:.4;flex:1;">Best\u00e4tigen</button>
+    </div>`);
+  document.getElementById('accept-cards-cancel').addEventListener('click', closeModal);
   const grid = document.getElementById('accept-cards-grid');
   eligible.forEach(({uid,card})=>{
     const wrap = document.createElement('div');
@@ -1068,12 +1337,14 @@ function openAcceptCardsModal(t, want){
 function openAcceptManagerModal(t, want){
   const minRank = MGR_TIER_ORDER[want.minTier] ?? 0;
   const eligible = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)}))
-    .filter(x=>x.mgr && (MGR_TIER_ORDER[x.mgr.tier]??0) >= minRank);
+    .filter(x=>x.mgr && (MGR_TIER_ORDER[x.mgr.tier]??0) >= minRank && x.uid!==squad.managerUid);
   openModal(`
     <h2 style="margin-bottom:4px;">Trainer ausw\u00e4hlen</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle einen Trainer der Stufe ${want.minTier} oder h\u00f6her zum Abgeben.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle einen Trainer der Stufe ${want.minTier} oder h\u00f6her zum Abgeben. Dein aktuell zugewiesener Trainer wird nicht angezeigt.</p>
     <div class="picker-list" id="accept-mgr-list"></div>
-    ${!eligible.length?'<p class="hint">Du besitzt keinen passenden Trainer daf\u00fcr.</p>':''}`);
+    ${!eligible.length?'<p class="hint">Du besitzt keinen passenden Trainer daf\u00fcr.</p>':''}
+    <button class="action-btn secondary" id="accept-mgr-cancel" style="margin-top:14px;width:120px;">Abbrechen</button>`);
+  document.getElementById('accept-mgr-cancel').addEventListener('click', closeModal);
   const list = document.getElementById('accept-mgr-list');
   eligible.forEach(({uid,mgr})=>{
     const wrap = document.createElement('div');
@@ -1190,6 +1461,7 @@ function sanitizeClubId(raw){
 let profile = null; // {coins,userId,displayName,wins,draws,losses}
 let collection = []; // [{uid,cardId}]
 let managerCollection = []; // [{uid,mgrId}]
+let squadPresets = []; // [{id,name,formation,slots,managerUid}]
 let squad = null; // {formation, slots:{slotId:uid}}
 let currentTab = 'store';
 
@@ -1241,11 +1513,13 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[]};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
     if(!profile.completedSBCs) profile.completedSBCs = [];
+    if(profile.dailyStreak===undefined) profile.dailyStreak = 0;
+    if(profile.lastClaimDate===undefined) profile.lastClaimDate = null;
   }
   collection = await sGet('collection');
   if(!collection){
@@ -1260,6 +1534,8 @@ async function init(){
   squad = await sGet('squad');
   if(!squad){ squad = {formation:'433', slots:{}, managerUid:null}; await sSet('squad', squad); }
   else if(squad.managerUid===undefined){ squad.managerUid = null; }
+  squadPresets = await sGet('squadPresets');
+  if(!squadPresets) squadPresets = [];
   renderNav();
   renderView('store');
   updateCoinDisplay();
@@ -1285,6 +1561,21 @@ function openModal(innerHTML){
   document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.target.id==='modal-overlay') closeModal(); });
 }
 function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+function askTextModal(title, placeholder, callback, maxLen=30){
+  openModal(`
+    <h2 style="margin-bottom:10px;">${title}</h2>
+    <input id="ask-text-input" placeholder="${placeholder}" maxlength="${maxLen}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:14px;">
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="ask-text-cancel" style="width:110px;">Abbrechen</button>
+      <button class="action-btn" id="ask-text-submit" style="flex:1;">Best\u00e4tigen</button>
+    </div>`);
+  const input = document.getElementById('ask-text-input');
+  input.focus();
+  const submit = ()=>{ const val = input.value.trim(); closeModal(); callback(val || null); };
+  document.getElementById('ask-text-submit').addEventListener('click', submit);
+  document.getElementById('ask-text-cancel').addEventListener('click', ()=>{ closeModal(); callback(null); });
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+}
 
 // ===== card rendering =====
 const VARIANT_ICON = {
@@ -1399,14 +1690,154 @@ function renderView(tab){
 }
 
 // ===== STORE =====
+// ===== DAILY LOGIN REWARDS (7-day cycle) =====
+const DAILY_REWARDS = [
+  {day:1, count:3, coins:300, desc:'3 Spieler, Rating 72-80.',
+    draw(){ const pool=poolByRange(72,80,false); return Array.from({length:3},()=>pick(pool)); }},
+  {day:2, count:3, coins:400, desc:'3 Spieler, Rating 74-81.',
+    draw(){ const pool=poolByRange(74,81,false); return Array.from({length:3},()=>pick(pool)); }},
+  {day:3, count:4, coins:500, desc:'4 Spieler, Rating 74-82.',
+    draw(){ const pool=poolByRange(74,82,false); return Array.from({length:4},()=>pick(pool)); }},
+  {day:4, count:4, coins:600, desc:'4 Spieler, Rating 75-83, 1 garantiert 80+.',
+    draw(){ const pool=poolByRange(75,83,false), hi=poolByRange(80,86,false);
+      const out=Array.from({length:3},()=>pick(pool)); out.push(pick(hi)); return out; }},
+  {day:5, count:4, coins:700, desc:'4 Spieler, Rating 76-84, 1 garantiert 81+.',
+    draw(){ const pool=poolByRange(76,84,false), hi=poolByRange(81,87,false);
+      const out=Array.from({length:3},()=>pick(pool)); out.push(pick(hi)); return out; }},
+  {day:6, count:5, coins:850, desc:'5 Spieler, Rating 76-85, 1 garantiert 82+.',
+    draw(){ const pool=poolByRange(76,85,false), hi=poolByRange(82,88,false);
+      const out=Array.from({length:4},()=>pick(pool)); out.push(pick(hi)); return out; }},
+  {day:7, count:5, coins:1200, tier:'premium', desc:'Streak-Bonus! 5 Spieler, Rating 78-88, 1 garantiert 85+.',
+    draw(){ const pool=poolByRange(78,88,false), hi=poolByRange(85,91,true);
+      const out=Array.from({length:4},()=>pick(pool)); out.push(pick(hi)); return out; }},
+];
+function computeStreakDay(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().slice(0,10);
+  if(!profile.lastClaimDate) return {day:1, canClaim:true, todayStr};
+  if(profile.lastClaimDate===todayStr) return {day: profile.dailyStreak||1, canClaim:false, todayStr};
+  const last = new Date(profile.lastClaimDate); last.setHours(0,0,0,0);
+  const diffDays = Math.round((today-last)/86400000);
+  if(diffDays===1){
+    const nextDay = (profile.dailyStreak % 7) + 1;
+    return {day:nextDay, canClaim:true, todayStr};
+  }
+  return {day:1, canClaim:true, todayStr};
+}
+async function claimDailyReward(){
+  const {day, canClaim, todayStr} = computeStreakDay();
+  if(!canClaim){ toast('Heute schon abgeholt \u2014 komm morgen wieder!'); return; }
+  const reward = DAILY_REWARDS[day-1];
+  profile.dailyStreak = day;
+  profile.lastClaimDate = todayStr;
+  profile.coins += reward.coins;
+  await sSet('profile', profile);
+  updateCoinDisplay();
+  renderStore(document.getElementById('view'));
+  const drawn = reward.draw();
+  toast(`Tag ${day} abgeholt: +${reward.coins.toLocaleString('de-DE')} Coins!`);
+  showPackOpening({name:`Tag ${day} \u2013 T\u00e4gliches Pack`, tier: reward.tier||'', count: reward.count}, drawn);
+}
+function renderDailyBanner(){
+  const {day, canClaim} = computeStreakDay();
+  const completedUpTo = canClaim ? day-1 : day;
+  return `
+    <div class="daily-banner">
+      <div class="daily-head"><h3>T\u00e4gliche Belohnung</h3><span class="mono" style="color:var(--muted);">Tag ${day} / 7</span></div>
+      <div class="daily-dots">
+        ${[1,2,3,4,5,6,7].map(i=>`<div class="daily-dot ${i<=completedUpTo?'done':''} ${i===day&&canClaim?'active':''}">${i}</div>`).join('')}
+      </div>
+      <button class="action-btn" id="daily-claim" ${canClaim?'':'disabled'} style="${canClaim?'':'opacity:.45;'}">${canClaim?`Tag ${day} abholen`:'Schon abgeholt \u2014 komm morgen wieder'}</button>
+    </div>`;
+}
+// ===== pack odds (Monte Carlo simulation using the real draw() logic) =====
+const TIER_ORDER_ODDS = ['gold','goldrare','elite','icon','ultimate'];
+const TIER_LABEL_ODDS = {gold:'Gold (70\u201379)', goldrare:'Gold Rare (80\u201384)', elite:'Elite (85\u201389)', icon:'Icon (90\u201394)', ultimate:'Ultimate (95+)'};
+const TIER_COLOR_ODDS = {gold:'#c9a24a', goldrare:'#e8c468', elite:'#5fe1c9', icon:'#c78bf5', ultimate:'#ffd76a'};
+function tierKeyForOv(ov){
+  if(ov>=95) return 'ultimate';
+  if(ov>=90) return 'icon';
+  if(ov>=85) return 'elite';
+  if(ov>=80) return 'goldrare';
+  return 'gold';
+}
+function simulatePackOdds(pack, iterations=3000){
+  const tierCounts = {gold:0, goldrare:0, elite:0, icon:0, ultimate:0};
+  let totalCards=0, atLeastElite=0, atLeastIcon=0, atLeastUltimate=0, atLeastSpecial=0, atLeastManager=0;
+  for(let i=0;i<iterations;i++){
+    const drawn = pack.draw();
+    let hasElite=false, hasIcon=false, hasUltimate=false, hasSpecial=false, hasManager=false;
+    drawn.forEach(c=>{
+      if(c.isManager){ hasManager=true; return; }
+      totalCards++;
+      const key = tierKeyForOv(c.ov);
+      tierCounts[key]++;
+      if(key==='elite'||key==='icon'||key==='ultimate') hasElite=true;
+      if(key==='icon'||key==='ultimate') hasIcon=true;
+      if(key==='ultimate') hasUltimate=true;
+      if(c.variant && c.variant!=='base') hasSpecial=true;
+    });
+    if(hasElite) atLeastElite++;
+    if(hasIcon) atLeastIcon++;
+    if(hasUltimate) atLeastUltimate++;
+    if(hasSpecial) atLeastSpecial++;
+    if(hasManager) atLeastManager++;
+  }
+  const tierPct = {};
+  TIER_ORDER_ODDS.forEach(k=>{ tierPct[k] = totalCards ? (tierCounts[k]/totalCards*100) : 0; });
+  return {
+    tierPct,
+    atLeastElitePct: atLeastElite/iterations*100,
+    atLeastIconPct: atLeastIcon/iterations*100,
+    atLeastUltimatePct: atLeastUltimate/iterations*100,
+    atLeastSpecialPct: atLeastSpecial/iterations*100,
+    atLeastManagerPct: atLeastManager/iterations*100,
+    iterations
+  };
+}
+function showPackOdds(pack){
+  openModal(`
+    <h2 style="margin-bottom:2px;">${pack.name}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Chancen basierend auf einer Simulation von 3.000 Pack-\u00d6ffnungen mit den echten Ziehungsregeln dieses Packs.</p>
+    <div id="odds-body"><p class="hint">Berechne\u2026</p></div>
+    <button class="modal-close" id="odds-close">Schlie\u00dfen</button>`);
+  document.getElementById('odds-close').addEventListener('click', closeModal);
+  setTimeout(()=>{
+    const odds = simulatePackOdds(pack, 3000);
+    const body = document.getElementById('odds-body');
+    if(!body) return;
+    const tierRows = TIER_ORDER_ODDS.filter(k=>odds.tierPct[k]>0).map(k=>`
+      <div class="stat" style="margin-bottom:8px;">
+        <div class="stat-head"><span>${TIER_LABEL_ODDS[k]}</span><span>${odds.tierPct[k].toFixed(1)}%</span></div>
+        <div class="bar" style="height:6px;"><i style="width:${odds.tierPct[k]}%;background:${TIER_COLOR_ODDS[k]};"></i></div>
+      </div>`).join('');
+    const atLeastRows = [
+      ['Mindestens 1x Elite+ (85+) pro \u00d6ffnung', odds.atLeastElitePct],
+      ['Mindestens 1x Icon+ (90+) pro \u00d6ffnung', odds.atLeastIconPct],
+      ['Mindestens 1x Ultimate (95+) pro \u00d6ffnung', odds.atLeastUltimatePct],
+      ['Mindestens 1x Sonderkarte (Variante) pro \u00d6ffnung', odds.atLeastSpecialPct],
+    ].filter(([,v])=>v>0.05).map(([label,v])=>`
+      <div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">${label}</span><span class="mono" style="color:var(--gold);">${v.toFixed(1)}%</span></div>`).join('');
+    const mgrRow = odds.atLeastManagerPct>0 ? `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">Trainerkarte enthalten</span><span class="mono" style="color:var(--gold);">${odds.atLeastManagerPct.toFixed(1)}%</span></div>` : '';
+    body.innerHTML = `
+      <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Seltenheits-Verteilung pro Karte</div>
+      ${tierRows || '<p class="hint">Keine Spielerkarten in diesem Pack.</p>'}
+      <div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Chancen pro Pack-\u00d6ffnung</div>
+      ${atLeastRows}${mgrRow}
+      <p class="hint" style="margin-top:12px;">Garantien aus der Paketbeschreibung (z.\u00a0B. "1 garantiert 85+") erscheinen hier entsprechend nahe 100\u00a0%.</p>`;
+  }, 30);
+}
 function renderStore(view){
   view.innerHTML = `
     <div class="view-head"><h2>Kartenladen</h2><p>\u00d6ffne Packs, um Spieler zu deinem Verein hinzuzuf\u00fcgen. Die angegebenen Werte sind garantierte Mindestwerte \u2014 jedes Pack kann auch mehr liefern.</p></div>
+    ${renderDailyBanner()}
     <div class="toolbar" style="margin-bottom:18px;">
       <input id="redeem-input" placeholder="Code einl\u00f6sen..." style="max-width:220px;">
       <button class="action-btn secondary" id="redeem-btn" style="width:auto;padding:9px 16px;">Einl\u00f6sen</button>
     </div>
     <div class="pack-grid" id="pack-grid"></div>`;
+  const claimBtn = document.getElementById('daily-claim');
+  if(claimBtn && !claimBtn.disabled) claimBtn.addEventListener('click', claimDailyReward);
   const grid = document.getElementById('pack-grid');
   const TIER_LABEL = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
   PACKS.forEach(pack=>{
@@ -1418,12 +1849,14 @@ function renderStore(view){
       <div class="pack-card-body">
         <h3>${pack.name}</h3>
         <div class="desc">${pack.desc}</div>
+        <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
         <div class="buyrow">
           <div class="price-pill"><div class="pdot"></div>${pack.cost.toLocaleString('de-DE')}</div>
           <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
         </div>
       </div>`;
     card.querySelector('.buy-btn').addEventListener('click', ()=>buyPack(pack));
+    card.querySelector('.odds-link').addEventListener('click', ()=>showPackOdds(pack));
     grid.appendChild(card);
   });
   document.getElementById('redeem-btn').addEventListener('click', redeemCode);
@@ -1540,35 +1973,57 @@ function revealQueue(cards, i, pack){
 function showPickScreen(cards, pickCount){
   const container = document.createElement('div');
   container.innerHTML = `
-    <h3 style="text-align:center;margin:18px 0 4px;">${pickCount} zum Behalten ausw\u00e4hlen</h3>
-    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:14px;" id="pick-counter">0 / ${pickCount} ausgew\u00e4hlt</p>
+    <div style="text-align:center;margin:18px 0 6px;">
+      <div class="var-tag" style="display:inline-block;position:static;font-size:11px;padding:4px 14px;">AUSWAHL</div>
+    </div>
+    <h3 style="text-align:center;margin:0 0 6px;">W\u00e4hle ${pickCount} zum Behalten</h3>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:6px;" id="pick-counter">0 / ${pickCount} ausgew\u00e4hlt</p>
+    <div style="max-width:220px;margin:0 auto 16px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;">
+      <div id="pick-progress" style="height:100%;width:0%;background:var(--turf-bright);transition:width .2s;"></div>
+    </div>
     <div class="reveal-strip" id="pick-grid"></div>
     <button class="modal-close" id="pick-confirm" disabled style="opacity:.4;">Best\u00e4tigen</button>`;
   document.querySelector('.modal-box').appendChild(container);
   const grid = container.querySelector('#pick-grid');
+  const wraps = [];
   cards.forEach((c,idx)=>{
+    const wrap = document.createElement('div');
+    wrap.style.position = 'relative';
+    wrap.style.cursor = 'pointer';
+    wrap.style.transition = 'transform .15s, opacity .15s';
     const el = cardEl(c);
-    el.style.cursor = 'pointer';
-    el.style.transition = 'transform .15s, opacity .15s';
-    el.addEventListener('click', ()=>{
-      if(selected.has(idx)){ selected.delete(idx); el.style.outline=''; el.style.transform=''; el.style.opacity='1'; }
-      else{
+    wrap.appendChild(el);
+    const check = document.createElement('div');
+    check.textContent = '\u2713';
+    check.style.cssText = 'position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;background:var(--turf-bright);color:#eafff2;display:none;align-items:center;justify-content:center;font-weight:700;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.4);z-index:5;';
+    wrap.appendChild(check);
+    wrap.addEventListener('click', ()=>{
+      if(selected.has(idx)){
+        selected.delete(idx); wrap.style.transform=''; check.style.display='none';
+      } else {
         if(selected.size>=pickCount) return;
-        selected.add(idx); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)';
+        selected.add(idx); wrap.style.transform='translateY(-4px)'; check.style.display='flex';
       }
-      container.querySelector('#pick-counter').textContent = `${selected.size} / ${pickCount} ausgew\u00e4hlt`;
-      const btn = container.querySelector('#pick-confirm');
-      if(selected.size===pickCount){ btn.disabled=false; btn.style.opacity='1'; }
-      else { btn.disabled=true; btn.style.opacity='.4'; }
+      updateSelectionUI();
     });
-    grid.appendChild(el);
+    wraps.push(wrap);
+    grid.appendChild(wrap);
   });
   const selected = new Set();
+  function updateSelectionUI(){
+    container.querySelector('#pick-counter').textContent = `${selected.size} / ${pickCount} ausgew\u00e4hlt`;
+    container.querySelector('#pick-progress').style.width = `${(selected.size/pickCount)*100}%`;
+    const atLimit = selected.size>=pickCount;
+    wraps.forEach((w,idx)=>{ w.style.opacity = (atLimit && !selected.has(idx)) ? '.4' : '1'; });
+    const btn = container.querySelector('#pick-confirm');
+    if(selected.size===pickCount){ btn.disabled=false; btn.style.opacity='1'; }
+    else { btn.disabled=true; btn.style.opacity='.4'; }
+  }
   container.querySelector('#pick-confirm').addEventListener('click', async ()=>{
     const kept = cards.filter((_,idx)=>selected.has(idx));
     await addCardsToCollection(kept);
     closeModal();
-    toast(`${kept.length} Spieler zu deinem Verein hinzugef\u00fcgt.`);
+    toast(`${kept.length} Karte${kept.length>1?'n':''} zu deinem Verein hinzugef\u00fcgt.`);
   });
 }
 function showCutscene(card, onDone){
@@ -1612,13 +2067,62 @@ function renderClub(view){
         <option value="name">Sortierung: Name (A\u2192Z)</option>
       </select>
     </div>
-    <div class="club-grid" id="club-grid"></div>`;
+    <div class="club-grid" id="club-grid"></div>
+    ${managerCollection.length ? `
+      <h3 style="font-size:15px;margin:26px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine Trainer</h3>
+      <div class="club-grid" id="mgr-club-grid"></div>` : ''}`;
   document.getElementById('club-pos').value = clubFilter.pos;
   document.getElementById('club-sort').value = clubFilter.sort;
   document.getElementById('club-search').addEventListener('input', e=>{ clubFilter.q=e.target.value; drawClubGrid(); });
   document.getElementById('club-pos').addEventListener('change', e=>{ clubFilter.pos=e.target.value; drawClubGrid(); });
   document.getElementById('club-sort').addEventListener('change', e=>{ clubFilter.sort=e.target.value; drawClubGrid(); });
   drawClubGrid();
+  if(managerCollection.length) drawManagerClubGrid();
+}
+function drawManagerClubGrid(){
+  const grid = document.getElementById('mgr-club-grid');
+  if(!grid) return;
+  const items = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr)
+    .sort((a,b)=> MGR_TIER_ORDER[b.mgr.tier]-MGR_TIER_ORDER[a.mgr.tier]);
+  grid.innerHTML = '';
+  items.forEach(({uid,mgr})=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'club-card-wrap';
+    wrap.appendChild(cardEl(mgr));
+    if(uid===squad.managerUid){
+      const badge = document.createElement('div'); badge.className='sbc-inuse-badge'; badge.style.background='var(--turf-bright)'; badge.style.color='#eafff2'; badge.textContent='ZUGEWIESEN';
+      wrap.appendChild(badge);
+    } else {
+      const sellBtn = document.createElement('button');
+      sellBtn.className='sell-btn'; sellBtn.textContent='\u00d7'; sellBtn.title='Schnellverkauf';
+      sellBtn.addEventListener('click', ()=>confirmSellManager(uid, mgr));
+      wrap.appendChild(sellBtn);
+    }
+    grid.appendChild(wrap);
+  });
+}
+function confirmSellManager(uid, mgr){
+  const value = sellValue(mgr.ov);
+  openModal(`
+    <h2 style="margin-bottom:10px;">${mgr.n} verkaufen?</h2>
+    <p style="color:var(--muted);font-size:13.5px;margin-bottom:16px;">Dies entfernt die Trainerkarte dauerhaft aus deinem Verein.</p>
+    <div style="display:flex;justify-content:center;margin-bottom:16px;">${cardEl(mgr,'mini').outerHTML}</div>
+    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:18px;">+${value.toLocaleString('de-DE')} Coins</p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button class="action-btn secondary" id="cancel-sell-mgr" style="width:120px;">Abbrechen</button>
+      <button class="action-btn" id="do-sell-mgr" style="width:120px;background:var(--danger);">Verkaufen</button>
+    </div>`);
+  document.getElementById('cancel-sell-mgr').addEventListener('click', closeModal);
+  document.getElementById('do-sell-mgr').addEventListener('click', async ()=>{
+    managerCollection = managerCollection.filter(m=>m.uid!==uid);
+    profile.coins += value;
+    await sSet('managerCollection', managerCollection);
+    await sSet('profile', profile);
+    updateCoinDisplay();
+    closeModal();
+    toast(`${mgr.n} f\u00fcr ${value.toLocaleString('de-DE')} Coins verkauft.`);
+    renderClub(document.getElementById('view'));
+  });
 }
 function drawClubGrid(){
   const grid = document.getElementById('club-grid');
@@ -1691,7 +2195,6 @@ function compatPenalty(slotLabel, playerMainPos){
   if(!table) return null;
   return (playerMainPos in table) ? table[playerMainPos] : null;
 }
-function canPlaySlot(slotLabel, playerMainPos){ return compatPenalty(slotLabel, playerMainPos) !== null; }
 
 function getAssignedManager(){
   if(!squad.managerUid) return null;
@@ -1716,12 +2219,12 @@ function squadRating(){
   if(filled===0) return {rating:0, filled:0};
   const base = effSum/filled;
   const bonus = (exactCount/11)*2;
-  let rating = base+bonus;
+  let rating = Math.min(99, Math.round(base+bonus));
   const mgr = getAssignedManager();
   if(mgr){
     rating = mgr.boostType==='percent' ? rating*(1+mgr.boostValue/100) : rating+mgr.boostValue;
   }
-  return {rating: Math.min(99, Math.round(rating)), filled};
+  return {rating: Math.round(rating), filled};
 }
 function posGroup2(label){
   if(label==='GK') return 'GK';
@@ -1747,11 +2250,30 @@ function renderSquad(view){
           <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
           <div id="mgr-slot" style="cursor:pointer;"></div>
         </div>
+        <div>
+          <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Gespeicherte Kader</div>
+          <div class="formation-select" id="preset-list" style="margin-bottom:8px;">
+            ${squadPresets.map(p=>`<div class="chip preset-chip" data-id="${p.id}">${p.name} <span style="color:var(--muted);">(${(FORMATIONS[p.formation]||{}).label||p.formation})</span><span class="preset-del" data-id="${p.id}">\u00d7</span></div>`).join('') || '<p class="hint" style="margin:0;">Noch keine gespeichert.</p>'}
+          </div>
+          <button class="action-btn secondary" id="save-preset" style="margin-bottom:10px;">Als neuen Kader speichern</button>
+        </div>
         <button class="action-btn secondary" id="save-squad">Kader speichern</button>
+        <button class="action-btn secondary" id="clear-squad" style="background:none;border:1px solid var(--danger);color:var(--danger);">Kader leeren</button>
         <button class="action-btn" id="publish-squad" ${filled<11?'disabled':''}>F\u00fcr Online-Spiele ver\u00f6ffentlichen</button>
         <p class="hint">Beim Ver\u00f6ffentlichen werden Formation, Rating und Spielernamen mit anderen Spielern geteilt, damit sie gegen deinen Verein antreten k\u00f6nnen. Es werden keine pers\u00f6nlichen Daten geteilt.</p>
       </div>
     </div>`;
+  document.querySelectorAll('.preset-chip').forEach(chip=>{
+    chip.addEventListener('click', (e)=>{
+      if(e.target.classList.contains('preset-del')){
+        e.stopPropagation();
+        deleteSquadPreset(chip.dataset.id);
+        return;
+      }
+      loadSquadPreset(chip.dataset.id);
+    });
+  });
+  document.getElementById('save-preset').addEventListener('click', saveSquadAsPreset);
   const mgrSlot = document.getElementById('mgr-slot');
   if(mgr){
     const mgrCard = cardEl(mgr, 'mini');
@@ -1788,12 +2310,31 @@ function renderSquad(view){
   document.getElementById('form-select').querySelectorAll('.chip').forEach(chip=>{
     chip.addEventListener('click', async ()=>{
       squad.formation = chip.dataset.f;
+      const validIds = new Set(FORMATIONS[chip.dataset.f].slots.map(s=>s.id));
+      Object.keys(squad.slots).forEach(k=>{ if(!validIds.has(k)) delete squad.slots[k]; });
       await sSet('squad', squad);
       renderSquad(view);
     });
   });
   document.getElementById('save-squad').addEventListener('click', async ()=>{
     await sSet('squad', squad); toast('Kader gespeichert.');
+  });
+  document.getElementById('clear-squad').addEventListener('click', ()=>{
+    openModal(`
+      <h2 style="margin-bottom:10px;">Kader leeren?</h2>
+      <p style="color:var(--muted);font-size:13.5px;margin-bottom:16px;">Alle 11 Positionen und der Trainer werden entfernt. Deine Karten bleiben in deinem Verein erhalten.</p>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button class="action-btn secondary" id="cancel-clear" style="width:120px;">Abbrechen</button>
+        <button class="action-btn" id="do-clear" style="width:120px;background:var(--danger);">Leeren</button>
+      </div>`);
+    document.getElementById('cancel-clear').addEventListener('click', closeModal);
+    document.getElementById('do-clear').addEventListener('click', async ()=>{
+      squad.slots = {}; squad.managerUid = null;
+      await sSet('squad', squad);
+      closeModal();
+      toast('Kader geleert.');
+      renderSquad(document.getElementById('view'));
+    });
   });
   document.getElementById('publish-squad').addEventListener('click', publishSquad);
 }
@@ -1869,28 +2410,61 @@ function openManagerPicker(){
     list.appendChild(wrap);
   });
 }
-async function publishSquad(){
+function saveSquadAsPreset(){
+  askTextModal('Name f\u00fcr diesen Kader', 'z.\u00a0B. Startelf Bundesliga', async (name)=>{
+    if(!name) return;
+    squadPresets.push({
+      id: genId(), name: name.slice(0,30),
+      formation: squad.formation, slots: {...squad.slots}, managerUid: squad.managerUid
+    });
+    await sSet('squadPresets', squadPresets);
+    toast('Kader gespeichert.');
+    renderSquad(document.getElementById('view'));
+  });
+}
+async function loadSquadPreset(id){
+  const preset = squadPresets.find(p=>p.id===id);
+  if(!preset) return;
+  squad.formation = preset.formation;
+  squad.slots = {...preset.slots};
+  squad.managerUid = preset.managerUid || null;
+  await sSet('squad', squad);
+  toast(`Kader "${preset.name}" geladen.`);
+  renderSquad(document.getElementById('view'));
+}
+async function deleteSquadPreset(id){
+  squadPresets = squadPresets.filter(p=>p.id!==id);
+  await sSet('squadPresets', squadPresets);
+  renderSquad(document.getElementById('view'));
+}
+function publishSquad(){
   const form = FORMATIONS[squad.formation];
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle zuerst alle 11 Positionen.'); return; }
+  const doPublish = async ()=>{
+    const players = form.slots.map(slot=>{
+      const card = ownedCard(squad.slots[slot.id]);
+      return {n:card.n, pos:slot.label, ov:card.ov, img:card.img};
+    });
+    const payload = {owner:profile.displayName, userId:profile.userId, rating, formation:form.label, players, updatedAt:Date.now()};
+    await fbReady;
+    if(fb){
+      try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); toast('Kader online ver\u00f6ffentlicht!'); return; }
+      catch(e){ console.warn('Firebase publish failed, using local fallback', e); }
+    }
+    await sSet('squad:'+profile.userId, payload, true);
+    toast('Kader ver\u00f6ffentlicht (lokaler Modus)! Andere Spieler k\u00f6nnen jetzt gegen deinen Verein antreten.');
+  };
   if(!profile.displayName){
-    const name = prompt('W\u00e4hle einen Vereinsnamen zur Ver\u00f6ffentlichung:');
-    if(!name){ toast('Ver\u00f6ffentlichung abgebrochen.'); return; }
-    profile.displayName = name.slice(0,24);
-    await sSet('profile', profile);
+    askTextModal('W\u00e4hle einen Vereinsnamen zur Ver\u00f6ffentlichung', 'Vereinsname', async (name)=>{
+      if(!name){ toast('Ver\u00f6ffentlichung abgebrochen.'); return; }
+      profile.displayName = name.slice(0,24);
+      await sSet('profile', profile);
+      await doPublish();
+    }, 24);
+    return;
   }
-  const players = form.slots.map(slot=>{
-    const card = ownedCard(squad.slots[slot.id]);
-    return {n:card.n, pos:slot.label, ov:card.ov, img:card.img};
-  });
-  const payload = {owner:profile.displayName, userId:profile.userId, rating, formation:form.label, players, updatedAt:Date.now()};
-  await fbReady;
-  if(fb){
-    try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); toast('Kader online ver\u00f6ffentlicht!'); return; }
-    catch(e){ console.warn('Firebase publish failed, using local fallback', e); }
-  }
-  await sSet('squad:'+profile.userId, payload, true);
-  toast('Kader ver\u00f6ffentlicht (lokaler Modus)! Andere Spieler k\u00f6nnen jetzt gegen deinen Verein antreten.');
+  doPublish();
 }
 
 // ===== PLAY / ONLINE =====
@@ -1906,8 +2480,8 @@ function renderPlay(view){
       <span class="mono" id="backend-badge" style="color:var(--muted);">\u00b7 Backend wird gepr\u00fcft\u2026</span></p></div>
     <div class="stat-row">
       <div class="stat-box"><div class="n" id="stat-wins">${profile.wins}</div><div class="l">Siege</div></div>
-      <div class="stat-box"><div class="n" id="stat-draws">${profile.draws}</div><div class="l">Unentschieden</div></div>
       <div class="stat-box"><div class="n" id="stat-losses">${profile.losses}</div><div class="l">Niederlagen</div></div>
+      <div class="stat-box"><div class="n" id="stat-winrate">${(profile.wins+profile.losses)?Math.round(profile.wins/(profile.wins+profile.losses)*100):0}%</div><div class="l">Siegquote</div></div>
       <div class="stat-box"><div class="n" id="stat-rating">${squadRating().rating||'--'}</div><div class="l">Dein Rating</div></div>
     </div>
     <div class="play-grid">
@@ -2112,31 +2686,31 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
   return new Promise(resolve=>{
     const area = document.getElementById('match-area');
     let live = document.getElementById('live-match');
-    let fresh = false;
-    if(!live){
+    if(!live && area){
       live = document.createElement('div'); live.id='live-match'; area.appendChild(live);
       live.innerHTML = `
         <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
         <div class="mono" id="live-minute" style="text-align:center;color:var(--muted);margin-bottom:8px;">${minuteStart}'</div>
         <div class="match-log" id="live-log"></div>`;
-      fresh = true;
     }
     const totalMinutes = minuteEnd-minuteStart;
     const stepMs = durationMs/totalMinutes;
-    const logEl = document.getElementById('live-log');
     let lastMinute = minuteStart, myTally = carryMy, oppTally = carryOpp;
     const timer = setInterval(()=>{
       const elapsed = Date.now()-startedAt;
       const minute = Math.max(minuteStart, Math.min(minuteEnd, minuteStart+Math.floor(elapsed/stepMs)));
       if(minute>lastMinute){
         let scored = false;
+        const logEl = document.getElementById('live-log');
         for(let m=lastMinute+1; m<=minute; m++){
           events.filter(e=>e.minute===m).forEach(e=>{
             scored = true;
             if(e.side==='me') myTally++; else oppTally++;
-            const row = document.createElement('div');
-            row.innerHTML = goalRowHTML(m, e.scorer, e.side==='me'?myName:oppName, e.side);
-            logEl.prepend(row.firstElementChild);
+            if(logEl){
+              const row = document.createElement('div');
+              row.innerHTML = goalRowHTML(m, e.scorer, e.side==='me'?myName:oppName, e.side);
+              logEl.prepend(row.firstElementChild);
+            }
           });
         }
         lastMinute = minute;
@@ -2159,29 +2733,30 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
 function animateShootout(shootout, myName, oppName){
   return new Promise(resolve=>{
     const live = document.getElementById('live-match');
-    const sec = document.createElement('div');
-    sec.innerHTML = `<div class="mono" style="text-align:center;margin:14px 0 4px;color:var(--muted);letter-spacing:.06em;">ELFMETERSCHIESSEN</div>
-      <div class="score" id="pk-score" style="font-size:32px;">0 \u2013 0</div>
-      <div class="match-log" id="pk-log"></div>`;
-    live.appendChild(sec);
-    const logEl = sec.querySelector('#pk-log');
-    const scoreEl = sec.querySelector('#pk-score');
+    if(live){
+      const sec = document.createElement('div');
+      sec.id = 'pk-section';
+      sec.innerHTML = `<div class="mono" style="text-align:center;margin:14px 0 4px;color:var(--muted);letter-spacing:.06em;">ELFMETERSCHIESSEN</div>
+        <div class="score" id="pk-score" style="font-size:32px;">0 \u2013 0</div>
+        <div class="match-log" id="pk-log"></div>`;
+      live.appendChild(sec);
+    }
     const maxLen = Math.max(shootout.myKicks.length, shootout.oppKicks.length);
     let i=0, myS=0, oppS=0;
     const step = ()=>{
       if(i>=maxLen){ resolve(); return; }
       const mk = shootout.myKicks[i], ok = shootout.oppKicks[i];
+      const logEl = document.getElementById('pk-log');
       if(mk){
         if(mk.made) myS++;
-        const row = document.createElement('div'); row.innerHTML = pkRowHTML(i+1, mk, myName, 'me');
-        logEl.prepend(row.firstElementChild);
+        if(logEl){ const row = document.createElement('div'); row.innerHTML = pkRowHTML(i+1, mk, myName, 'me'); logEl.prepend(row.firstElementChild); }
       }
       if(ok){
         if(ok.made) oppS++;
-        const row = document.createElement('div'); row.innerHTML = pkRowHTML(i+1, ok, oppName, 'opp');
-        logEl.prepend(row.firstElementChild);
+        if(logEl){ const row = document.createElement('div'); row.innerHTML = pkRowHTML(i+1, ok, oppName, 'opp'); logEl.prepend(row.firstElementChild); }
       }
-      scoreEl.textContent = `${myS} \u2013 ${oppS}`;
+      const scoreEl = document.getElementById('pk-score');
+      if(scoreEl) scoreEl.textContent = `${myS} \u2013 ${oppS}`;
       i++;
       setTimeout(step, 650);
     };
@@ -2212,9 +2787,10 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   profile.coins += reward;
   await sSet('profile', profile);
   updateCoinDisplay();
-  const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses');
+  const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses'), winrateEl=document.getElementById('stat-winrate');
   if(winsEl) winsEl.textContent = profile.wins;
   if(lossesEl) lossesEl.textContent = profile.losses;
+  if(winrateEl) winrateEl.textContent = `${(profile.wins+profile.losses)?Math.round(profile.wins/(profile.wins+profile.losses)*100):0}%`;
   let suffix = '';
   if(wentToPK) suffix = ' (n.E.)';
   else if(wentToET) suffix = ' (n.V.)';
@@ -2237,7 +2813,7 @@ function startBotMatch(rating){
   const botRating = Math.max(70, Math.min(94, rating + Math.round((Math.random()*10)-5)));
   const opp = {owner:'CPU XI', rating:botRating, players:[], isBot:true};
   const area = document.getElementById('match-area');
-  area.innerHTML = `
+  if(area) area.innerHTML = `
     <div class="vs-teams">
       <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
       <div class="vs-x">VS</div>
@@ -2278,7 +2854,7 @@ async function enterSyncedMatch(matchDoc){
     };
   }
   const area = document.getElementById('match-area');
-  area.innerHTML = `
+  if(area) area.innerHTML = `
     <div class="vs-teams">
       <div class="team-blob"><div class="r">${meSide.rating}</div><div class="t">${meSide.name}</div></div>
       <div class="vs-x">VS</div>
@@ -2325,12 +2901,15 @@ async function joinQueue(){
     return;
   }
   const area = document.getElementById('match-area');
-  area.innerHTML = `
-    <div style="text-align:center;">
-      <div class="mono" style="color:var(--muted);margin-bottom:10px;">Suche nach einem Gegner\u2026 <span id="queue-timer">0s</span></div>
-      <button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
-    </div>`;
-  document.getElementById('queue-cancel').addEventListener('click', leaveQueue);
+  if(area){
+    area.innerHTML = `
+      <div style="text-align:center;">
+        <div class="mono" style="color:var(--muted);margin-bottom:10px;">Suche nach einem Gegner\u2026 <span id="queue-timer">0s</span></div>
+        <button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
+      </div>`;
+    const cancelBtn = document.getElementById('queue-cancel');
+    if(cancelBtn) cancelBtn.addEventListener('click', leaveQueue);
+  }
 
   const seenCandidates = new Map(); // userId -> candidate data, remembered across polls even if they leave the live queue
 
