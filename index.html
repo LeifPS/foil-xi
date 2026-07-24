@@ -2954,6 +2954,22 @@ async function joinQueue(){
       return;
     }
     try{
+      // 1) Check my OWN queue entry first: someone may have already matched with me and tagged it,
+      //    even if I never personally saw them in a scan (fixes a race where the other side finds
+      //    me and creates the match before my own first poll ever ran).
+      try{
+        const mySnap = await fb.getDoc(fb.doc(fb.db,'queue',profile.userId));
+        if(mySnap.exists() && mySnap.data().matchedId){
+          const matchSnap = await fb.getDoc(fb.doc(fb.db,'matches',mySnap.data().matchedId));
+          if(matchSnap.exists()){
+            queueActive = false;
+            await leaveQueueSilently();
+            enterSyncedMatch(matchSnap.data());
+            return;
+          }
+        }
+      }catch(e){ console.warn('own-queue match check failed', e); }
+
       const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'queue'), fb.orderBy('joinedAt','asc'), fb.limit(20)));
       const staleCutoff = Date.now() - 90000; // ignore queue entries older than 90s (likely abandoned)
       snap.docs.forEach(d=>{
@@ -2961,50 +2977,41 @@ async function joinQueue(){
         if(data.userId!==profile.userId && data.joinedAt>staleCutoff) seenCandidates.set(data.userId, data);
       });
       for(const other of seenCandidates.values()){
+        if(!(profile.userId < other.userId)) continue; // only the lower-id side ever creates the match
         const mid = matchIdFor(profile.userId, startTime, other.userId, other.joinedAt);
-        if(profile.userId < other.userId){
-          try{
-            const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
-            if(!existing.exists()){
-              const md = buildDecisiveMatch(rating, other.rating, myPlayers, other.players);
-              const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'}));
-              const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'})) : null;
-              const shootout = md.shootout ? {
-                p1Kicks: md.shootout.myKicks, p2Kicks: md.shootout.oppKicks,
-                winner: md.shootout.winner==='me' ? 'p1' : 'p2'
-              } : null;
-              const matchDoc = {
-                mid,
-                p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating},
-                p2:{userId:other.userId, name:other.name, rating:other.rating},
-                p1Goals: md.myGoals, p2Goals: md.oppGoals,
-                events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
-                startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
-              };
-              await fb.setDoc(fb.doc(fb.db,'matches',mid), matchDoc);
-              queueActive = false;
-              await leaveQueueSilently();
-              try{ await fb.deleteDoc(fb.doc(fb.db,'queue',other.userId)); }catch(_){}
-              enterSyncedMatch(matchDoc);
-              return;
-            } else {
-              queueActive = false;
-              await leaveQueueSilently();
-              enterSyncedMatch(existing.data());
-              return;
-            }
-          }catch(e){ console.warn('match create/check failed', e); }
-        } else {
-          try{
-            const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
-            if(existing.exists()){
-              queueActive = false;
-              await leaveQueueSilently();
-              enterSyncedMatch(existing.data());
-              return;
-            }
-          }catch(e){}
-        }
+        try{
+          const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
+          if(!existing.exists()){
+            const md = buildDecisiveMatch(rating, other.rating, myPlayers, other.players);
+            const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'}));
+            const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'})) : null;
+            const shootout = md.shootout ? {
+              p1Kicks: md.shootout.myKicks, p2Kicks: md.shootout.oppKicks,
+              winner: md.shootout.winner==='me' ? 'p1' : 'p2'
+            } : null;
+            const matchDoc = {
+              mid,
+              p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating},
+              p2:{userId:other.userId, name:other.name, rating:other.rating},
+              p1Goals: md.myGoals, p2Goals: md.oppGoals,
+              events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
+              startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
+            };
+            await fb.setDoc(fb.doc(fb.db,'matches',mid), matchDoc);
+            // tag the opponent's OWN queue doc instead of deleting it, so they find the match
+            // even if they never personally saw me in a scan (fixes the "one side never finds it" bug)
+            try{ await fb.setDoc(fb.doc(fb.db,'queue',other.userId), {matchedId: mid}, {merge:true}); }catch(_){}
+            queueActive = false;
+            await leaveQueueSilently();
+            enterSyncedMatch(matchDoc);
+            return;
+          } else {
+            queueActive = false;
+            await leaveQueueSilently();
+            enterSyncedMatch(existing.data());
+            return;
+          }
+        }catch(e){ console.warn('match create/check failed', e); }
       }
     }catch(e){ console.warn('queue poll failed', e); }
     if(queueActive) queueTimer = setTimeout(poll, QUEUE_POLL_MS);
