@@ -543,41 +543,41 @@ function specialsByVariant(tags){ return ALL_SPECIAL.filter(c=>tags.includes(c.v
 
 // ===== pack definitions =====
 const PACKS = [
-  {id:'bronze',name:'Bronze Boots',cost:500,tier:'',count:5,
+  {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
     desc:'5 Kaderspieler, Rating 70-76.',
     draw(){ const pool=poolByRange(70,76,false); return Array.from({length:5},()=>pick(pool)); }},
-  {id:'talentpick',name:'Pick 1 of 3: Talent Pack',cost:3500,tier:'',count:3,pickCount:1,
+  {id:'talentpick',name:'Pick 1 of 3: Talent Pack',cost:1900,tier:'',count:3,pickCount:1,
     desc:'3 Nachwuchs-Sonderkarten (Zukunftsstern, Spieler im Blick, Aufstrebendes Talent oder Wunderkind). W\u00e4hle 1 davon zum Behalten.',
     draw(){ const pool=specialsByVariant(['fut_star','otw','rising_phenom','wonderkid']);
       return Array.from({length:3},()=>pick(pool)); }},
-  {id:'gold',name:'Gold Rush',cost:2200,tier:'',count:5,
+  {id:'gold',name:'Gold Rush',cost:2000,tier:'',count:5,
     desc:'5 Spieler mit Rating 74-83. 1 garantiert mit 80+.',
     draw(){ const pool=poolByRange(74,83,false), hi=poolByRange(80,86,false);
       const out=Array.from({length:4},()=>pick(pool)); out.push(pick(hi)); return out; }},
-  {id:'derby',name:'Derby Selection',cost:4500,tier:'',count:6,
+  {id:'derby',name:'Derby Selection',cost:3500,tier:'',count:6,
     desc:'6 Spieler mit Rating 76-86. 1 garantiert mit 82+ (inkl. Chance auf Sonderkarte).',
     draw(){ const pool=poolByRange(76,86,false), hi=poolByRange(82,90,true);
       const out=Array.from({length:5},()=>pick(pool)); out.push(pick(hi)); return out; }},
-  {id:'raregold',name:'Rare Gold Vault',cost:7000,tier:'premium',count:5,
+  {id:'raregold',name:'Rare Gold Vault',cost:7500,tier:'premium',count:5,
     desc:'5 Spieler mit Rating 78-88. 1 garantiert mit 85+.',
     draw(){ const pool=poolByRange(78,88,true), hi=poolByRange(85,91,true);
       const out=Array.from({length:4},()=>pick(pool)); out.push(pick(hi)); return out; }},
-  {id:'scout',name:'Wonderkid Scout Pack',cost:6000,tier:'premium',count:3,
+  {id:'scout',name:'Wonderkid Scout Pack',cost:7250,tier:'premium',count:3,
     desc:'3 Spieler, alle garantiert Nachwuchs-Sonderkarten (Zukunftsstern, Spieler im Blick, Aufstrebendes Talent oder Wunderkind).',
     draw(){ const pool=specialsByVariant(['fut_star','otw','rising_phenom','wonderkid']);
       return Array.from({length:3},()=>pick(pool)); }},
-  {id:'goldenglove',name:'Golden Glove Pack',cost:5500,tier:'premium',count:2,
+  {id:'goldenglove',name:'Golden Glove Pack',cost:5250,tier:'premium',count:2,
     desc:'2 Torh\u00fcter, beide garantiert Goldener-Handschuh-Sonderkarten. Die einzige Quelle f\u00fcr diese Variante.',
     draw(){ const pool=specialsByVariant(['golden_glove']); return Array.from({length:2},()=>pick(pool)); }},
-  {id:'iconmoment',name:'Icon Moments Pack',cost:9500,tier:'premium',count:3,
+  {id:'iconmoment',name:'Icon Moments Pack',cost:5000,tier:'premium',count:3,
     desc:'3 Spieler. 1 garantierte Sonderkarte beliebiger Art.',
     draw(){ const pool=poolByRange(80,90,false);
       const out=Array.from({length:2},()=>pick(pool)); out.push(pick(ALL_SPECIAL)); return out; }},
-  {id:'tots',name:'Team of the Season Pack',cost:16000,tier:'premium',count:4,
+  {id:'tots',name:'Team of the Season Pack',cost:13500,tier:'premium',count:4,
     desc:'4 Spieler, 2 garantierte Team-der-Saison-Karten. Einziges Pack mit garantierten Team-der-Saison-Karten.',
     draw(){ const totsPool=specialsByVariant(['tots']), hi=poolByRange(85,99,true);
       return [pick(totsPool),pick(totsPool),pick(hi),pick(hi)]; }},
-  {id:'sevenof88',name:'7\u00d7 88+ Pack',cost:24000,tier:'premium',count:7,
+  {id:'sevenof88',name:'7\u00d7 88+ Pack',cost:22000,tier:'premium',count:7,
     desc:'7 Spieler, alle garantiert mit Rating 88 oder h\u00f6her.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
   {id:'hof',name:'Hall of Fame Pack',cost:42000,tier:'ultimate',count:1,
@@ -590,7 +590,7 @@ const PACKS = [
   {id:'mystery',name:'Mystery Elite Pack',cost:30000,tier:'ultimate',count:3,
     desc:'3 Spieler, Rating 75-99 \u2014 h\u00f6chste Schwankungsbreite aller Packs. Alles von Gold Rare bis Blackout ist m\u00f6glich.',
     draw(){ const pool=poolByRange(75,99,true); return Array.from({length:3},()=>pick(pool)); }},
-  {id:'doubletrainer',name:'Double Trainer Pack',cost:14000,tier:'premium',count:2,
+  {id:'doubletrainer',name:'Double Trainer Pack',cost:7000,tier:'premium',count:2,
     desc:'2 Trainer garantiert, zuf\u00e4llig aus allen Vereinen.',
     draw(){ return [pick(MANAGERS), pick(MANAGERS)]; }},
   {id:'twoof95',name:'Pick 2 of 4: 95+ Pack',cost:52000,tier:'ultimate',count:4,pickCount:2,
@@ -599,7 +599,7 @@ const PACKS = [
   {id:'blackout',name:'Blackout Pack',cost:100000,tier:'ultimate',count:1,
     desc:'1 Spieler, garantiert WM-Moment oder Blackout \u2014 Rating 97-99. Die seltensten Karten im Spiel, sonst nirgends erh\u00e4ltlich.',
     draw(){ return [pick(EXCLUSIVE_SPECIALS)]; }},
-  {id:'trainer',name:'Trainer Pack',cost:8000,tier:'premium',count:1,
+  {id:'trainer',name:'Trainer Pack',cost:3500,tier:'premium',count:1,
     desc:'1 Trainer, zuf\u00e4llig aus allen Vereinen. Die Seltenheit richtet sich nach der St\u00e4rke des Vereins \u2014 Trainer geben deinem Kader einen Rating-Bonus.',
     draw(){ return [pick(MANAGERS)]; }},
 ];
@@ -2805,19 +2805,47 @@ async function runLocalMatch(myRating, opp){
   const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players);
   md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
   const myName = profile.displayName || 'Dein Verein';
-  const oppName = opp.owner + (opp.isBot ? ' (CPU)' : '');
+  const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
   const final = await playFullMatch(md, myName, oppName);
   await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK);
 }
+let CLUB_INDEX = null;
+function buildClubIndex(){
+  if(CLUB_INDEX) return CLUB_INDEX;
+  const groups = new Map();
+  ALL_BASE.forEach(p=>{
+    if(!p.club || p.club==='Free Agent') return;
+    if(!groups.has(p.club)) groups.set(p.club, []);
+    groups.get(p.club).push(p);
+  });
+  const clubs = [];
+  groups.forEach((players, club)=>{
+    if(players.length<11) return;
+    const sorted = players.slice().sort((a,b)=>b.ov-a.ov);
+    const xi = sorted.slice(0,11);
+    const avgOv = Math.round(xi.reduce((s,p)=>s+p.ov,0)/xi.length);
+    clubs.push({club, avgOv, xi});
+  });
+  CLUB_INDEX = clubs;
+  return clubs;
+}
+function pickRealisticOpponent(targetRating){
+  const clubs = buildClubIndex();
+  if(!clubs.length) return {owner:'CPU XI', rating:targetRating, players:[], isBot:true};
+  const sorted = clubs.slice().sort((a,b)=>Math.abs(a.avgOv-targetRating)-Math.abs(b.avgOv-targetRating));
+  const pool = sorted.slice(0, Math.min(8, sorted.length));
+  const chosen = pool[Math.floor(Math.random()*pool.length)];
+  const players = chosen.xi.map(p=>({n:p.n, pos:mainPos(p.pos), ov:p.ov, img:p.img}));
+  return {owner:chosen.club, rating:chosen.avgOv, players, isBot:true};
+}
 function startBotMatch(rating){
-  const botRating = Math.max(70, Math.min(94, rating + Math.round((Math.random()*10)-5)));
-  const opp = {owner:'CPU XI', rating:botRating, players:[], isBot:true};
+  const opp = pickRealisticOpponent(rating);
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
       <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (CPU)</div></div>
+      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (Simulation)</div></div>
     </div>
     <div id="result-area"></div>`;
   runLocalMatch(rating, opp);
