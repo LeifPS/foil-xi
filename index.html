@@ -2510,6 +2510,7 @@ const MATCH_DURATION_MS = 45000; // ~45s for a full 90' match
 const QUEUE_TIMEOUT_MS = 25000;
 const QUEUE_POLL_MS = 2000;
 let queueActive = false;
+let autorollEnabled = false;
 let queueTimer = null;
 
 function renderPlay(view){
@@ -2524,7 +2525,13 @@ function renderPlay(view){
     </div>
     <div class="play-grid">
       <div class="vs-panel" id="vs-panel">
-        <button class="action-btn" id="find-opp">Gegner suchen</button>
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">
+          <button class="action-btn" id="find-opp" style="flex:1;">Gegner suchen</button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap;cursor:pointer;">
+            <input type="checkbox" id="autoroll-toggle" ${autorollEnabled?'checked':''} style="cursor:pointer;">
+            Autoroll
+          </label>
+        </div>
         <div id="match-area"></div>
       </div>
       <div>
@@ -2533,6 +2540,11 @@ function renderPlay(view){
       </div>
     </div>`;
   document.getElementById('find-opp').addEventListener('click', joinQueue);
+  document.getElementById('autoroll-toggle').addEventListener('change', e=>{
+    autorollEnabled = e.target.checked;
+    if(autorollEnabled && !queueActive){ joinQueue(); }
+    else if(!autorollEnabled) toast('Autoroll gestoppt.');
+  });
   fbReady.then(()=>{
     const badge = document.getElementById('backend-badge');
     if(badge) badge.textContent = '\u00b7 Backend: ' + (fb ? 'Firebase (live)' : 'lokaler Modus');
@@ -2837,6 +2849,16 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
     area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':'var(--danger)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}${suffix}</div>
       <div class="mono" style="color:var(--gold);margin-top:6px;">+${reward} Coins</div>`;
   }
+  if(autorollEnabled){
+    if(area){
+      const note = document.createElement('div');
+      note.className = 'hint';
+      note.style.marginTop = '8px';
+      note.textContent = 'Autoroll: n\u00e4chstes Spiel startet in 4s\u2026';
+      area.appendChild(note);
+    }
+    setTimeout(()=>{ if(autorollEnabled && !queueActive) joinQueue(); }, 4000);
+  }
 }
 async function runLocalMatch(myRating, opp){
   const myPlayers = getMySquadPlayers();
@@ -2898,10 +2920,13 @@ async function leaveQueueSilently(){
 }
 async function leaveQueue(){
   queueActive = false;
+  autorollEnabled = false;
+  const toggle = document.getElementById('autoroll-toggle');
+  if(toggle) toggle.checked = false;
   await leaveQueueSilently();
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = '';
-  toast('Warteschlange verlassen.');
+  toast('Warteschlange verlassen. Autoroll gestoppt.');
 }
 async function enterSyncedMatch(matchDoc){
   const amP1 = matchDoc.p1.userId === profile.userId;
@@ -2944,6 +2969,7 @@ async function enterSyncedMatch(matchDoc){
   }
 }
 async function joinQueue(){
+  if(queueActive) return; // already searching, avoid double-queuing (e.g. from autoroll + manual click)
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   await fbReady;
