@@ -1260,6 +1260,117 @@ function renderSellManual(allEligible, usedInSquad){
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
 }
+// ===== price formula engine for bulk market listing =====
+// supports: {ovr} {pot} {pos} {nat} {club} {lg} {variant} + - * / ( ) , = != > < >= <=
+// and functions: max(...) min(...) if(cond,then,else) abs(x) round(x) floor(x) ceil(x)
+function substituteFormula(formula, card){
+  return formula.replace(/\{(\w+)\}/g, (m, name)=>{
+    switch(name.toLowerCase()){
+      case 'ovr': case 'ov': return String(card.ov);
+      case 'pot': return String(card.pot||card.ov);
+      case 'pos': return JSON.stringify(posDE(mainPos(card.pos)));
+      case 'nat': return JSON.stringify(natDE(card.nat||''));
+      case 'club': return JSON.stringify(card.club||'');
+      case 'lg': return JSON.stringify(card.lg||'');
+      case 'variant': return JSON.stringify(card.variantLabel||'Basis');
+      default: return '0';
+    }
+  });
+}
+function tokenizeFormula(str){
+  const tokens = [];
+  let i=0;
+  while(i<str.length){
+    const ch = str[i];
+    if(/\s/.test(ch)){ i++; continue; }
+    if(ch==='"'){ let j=i+1, s=''; while(j<str.length && str[j]!=='"'){ s+=str[j]; j++; } tokens.push({type:'string', value:s}); i=j+1; continue; }
+    if(/[0-9.]/.test(ch)){ let j=i, s=''; while(j<str.length && /[0-9.]/.test(str[j])){ s+=str[j]; j++; } tokens.push({type:'number', value:parseFloat(s)}); i=j; continue; }
+    if(/[a-zA-Z_]/.test(ch)){ let j=i, s=''; while(j<str.length && /[a-zA-Z_0-9]/.test(str[j])){ s+=str[j]; j++; } tokens.push({type:'ident', value:s}); i=j; continue; }
+    if(ch==='>'||ch==='<'||ch==='='||ch==='!'){ let op=ch, j=i+1; if(str[j]==='='){ op+='='; j++; } tokens.push({type:'op', value:op}); i=j; continue; }
+    if('+-*/(),'.includes(ch)){ tokens.push({type:'op', value:ch}); i++; continue; }
+    throw new Error(`Unerwartetes Zeichen: "${ch}"`);
+  }
+  return tokens;
+}
+function parseFormulaTokens(tokens){
+  let pos = 0;
+  const peek = ()=>tokens[pos];
+  const next = ()=>tokens[pos++];
+  const expect = (val)=>{ if(!peek() || peek().value!==val) throw new Error(`Erwartet: "${val}"`); pos++; };
+  function parseExpr(){ return parseComparison(); }
+  function parseComparison(){
+    let left = parseAdditive();
+    const t = peek();
+    if(t && t.type==='op' && ['=','!=','>','<','>=','<='].includes(t.value)){
+      const op = next().value; const right = parseAdditive();
+      if(op==='=') return left===right;
+      if(op==='!=') return left!==right;
+      if(op==='>') return left>right;
+      if(op==='<') return left<right;
+      if(op==='>=') return left>=right;
+      if(op==='<=') return left<=right;
+    }
+    return left;
+  }
+  function parseAdditive(){
+    let left = parseTerm();
+    while(peek() && peek().type==='op' && (peek().value==='+'||peek().value==='-')){
+      const op = next().value; const right = parseTerm();
+      left = op==='+' ? left+right : left-right;
+    }
+    return left;
+  }
+  function parseTerm(){
+    let left = parseFactor();
+    while(peek() && peek().type==='op' && (peek().value==='*'||peek().value==='/')){
+      const op = next().value; const right = parseFactor();
+      left = op==='*' ? left*right : left/right;
+    }
+    return left;
+  }
+  function parseFactor(){
+    const t = peek();
+    if(!t) throw new Error('Unerwartetes Ende der Formel.');
+    if(t.type==='number'){ next(); return t.value; }
+    if(t.type==='string'){ next(); return t.value; }
+    if(t.type==='op' && t.value==='-'){ next(); return -parseFactor(); }
+    if(t.type==='op' && t.value==='('){ next(); const v=parseExpr(); expect(')'); return v; }
+    if(t.type==='ident'){
+      const name = next().value.toLowerCase();
+      if(peek() && peek().value==='('){
+        next();
+        const args = [];
+        if(peek() && peek().value!==')'){
+          args.push(parseExpr());
+          while(peek() && peek().value===','){ next(); args.push(parseExpr()); }
+        }
+        expect(')');
+        return callFormulaFunc(name, args);
+      }
+      throw new Error(`Unbekannter Bezeichner: "${name}"`);
+    }
+    throw new Error('Unerwartetes Zeichen in der Formel.');
+  }
+  function callFormulaFunc(name, args){
+    if(name==='max') return Math.max(...args);
+    if(name==='min') return Math.min(...args);
+    if(name==='abs') return Math.abs(args[0]);
+    if(name==='round') return Math.round(args[0]);
+    if(name==='floor') return Math.floor(args[0]);
+    if(name==='ceil') return Math.ceil(args[0]);
+    if(name==='if') return args[0] ? args[1] : (args.length>2 ? args[2] : 0);
+    throw new Error(`Unbekannte Funktion: "${name}"`);
+  }
+  const result = parseExpr();
+  if(pos<tokens.length) throw new Error('Unerwartete Zeichen am Ende der Formel.');
+  return result;
+}
+function evalPriceFormula(formula, card){
+  const substituted = substituteFormula(formula, card);
+  const result = parseFormulaTokens(tokenizeFormula(substituted));
+  if(typeof result !== 'number' || !isFinite(result)) throw new Error('Die Formel ergibt keine g\u00fcltige Zahl.');
+  return Math.max(1, Math.round(result));
+}
 function renderSellFilter(allEligible){
   const body = document.getElementById('sell-modal-body');
   const posOptions = Object.keys(POS_DE).map(p=>`<option value="${p}">${posDE(p)} (${p})</option>`).join('');
@@ -1272,17 +1383,52 @@ function renderSellFilter(allEligible){
         ${posOptions}
       </select>
     </div>
-    <div class="toolbar" style="margin-bottom:14px;">
+    <div style="display:flex;gap:2px;margin-bottom:10px;">
+      <button class="nav-btn active" id="price-mode-flat" style="padding:7px 12px;flex:1;">Fester Preis</button>
+      <button class="nav-btn" id="price-mode-formula" style="padding:7px 12px;flex:1;">Formel</button>
+    </div>
+    <div class="toolbar" style="margin-bottom:6px;" id="price-flat-row">
       <input id="filter-price" type="number" min="1" placeholder="Preis pro Karte in Coins">
     </div>
+    <div id="price-formula-row" style="display:none;margin-bottom:6px;">
+      <input id="filter-formula" placeholder="z.\u00a0B. 1000 + max(0, {ovr} - 88) * 500" style="width:100%;margin-bottom:6px;">
+      <p class="hint" style="margin:0 0 10px;">Variablen: <code>{ovr}</code> <code>{pot}</code> <code>{pos}</code> <code>{nat}</code> <code>{club}</code> <code>{lg}</code> <code>{variant}</code> \u2014
+        Funktionen: <code>max(a,b,...)</code> <code>min(a,b,...)</code> <code>if(bedingung, dann, sonst)</code> <code>abs()</code> <code>round()</code> <code>floor()</code> <code>ceil()</code> \u2014
+        Vergleiche: <code>= != &gt; &lt; &gt;= &lt;=</code>.<br>Beispiel: <code>1000 + max(0,{ovr}-88)*500</code> oder <code>if({pos}="TW", 300, 100 + {ovr}*10)</code></p>
+      <div class="mono" id="formula-error" style="color:var(--danger);margin-bottom:8px;"></div>
+    </div>
     <div class="mono" id="filter-preview" style="color:var(--muted);margin-bottom:14px;">Lege Filter fest, um passende Karten zu sehen.</div>
-    <div class="club-grid" id="filter-preview-grid" style="max-height:220px;overflow:auto;margin-bottom:16px;"></div>
+    <div class="club-grid" id="filter-preview-grid" style="max-height:260px;overflow:auto;margin-bottom:16px;"></div>
     <button class="action-btn" id="filter-submit" disabled style="opacity:.4;width:260px;">Alle auflisten</button>
     <p class="hint" style="margin-top:10px;">Es werden nur Spielerkarten erfasst (keine Trainer), die nicht im Kader stehen und nicht bereits gelistet/im Handel sind. Maximal 40 Karten pro Aktion.</p>`;
   const minInput = document.getElementById('filter-min-ov');
   const maxInput = document.getElementById('filter-max-ov');
   const posSelect = document.getElementById('filter-pos');
+  const formulaInput = document.getElementById('filter-formula');
+  const priceInput = document.getElementById('filter-price');
+  let priceMode = 'flat';
   let matches = [];
+  document.getElementById('price-mode-flat').addEventListener('click', ()=>{
+    priceMode = 'flat';
+    document.getElementById('price-mode-flat').classList.add('active');
+    document.getElementById('price-mode-formula').classList.remove('active');
+    document.getElementById('price-flat-row').style.display = 'flex';
+    document.getElementById('price-formula-row').style.display = 'none';
+    updatePreview();
+  });
+  document.getElementById('price-mode-formula').addEventListener('click', ()=>{
+    priceMode = 'formula';
+    document.getElementById('price-mode-formula').classList.add('active');
+    document.getElementById('price-mode-flat').classList.remove('active');
+    document.getElementById('price-flat-row').style.display = 'none';
+    document.getElementById('price-formula-row').style.display = 'block';
+    updatePreview();
+  });
+  function priceFor(card){
+    if(priceMode==='flat') return Math.max(1, Math.floor(Number(priceInput.value)||0)) || null;
+    if(!formulaInput.value.trim()) return null;
+    return evalPriceFormula(formulaInput.value.trim(), card);
+  }
   const updatePreview = ()=>{
     const min = Math.max(1, Math.floor(Number(minInput.value)||1));
     const max = Math.min(105, Math.floor(Number(maxInput.value)||105));
@@ -1295,26 +1441,56 @@ function renderSellFilter(allEligible){
     });
     const grid = document.getElementById('filter-preview-grid');
     const previewEl = document.getElementById('filter-preview');
+    const errEl = document.getElementById('formula-error');
     const capped = matches.slice(0,40);
-    previewEl.textContent = matches.length ? `${matches.length} passende Karte${matches.length===1?'':'n'} gefunden${matches.length>40?' (zeige/liste nur die ersten 40)':''}.` : 'Keine passenden Karten gefunden.';
     grid.innerHTML = '';
-    capped.forEach(({card})=>grid.appendChild(cardEl(card,'xs')));
+    errEl.textContent = '';
+    let ok = true;
+    if(priceMode==='formula' && formulaInput.value.trim()){
+      try{
+        capped.forEach(({card})=>{
+          const price = evalPriceFormula(formulaInput.value.trim(), card);
+          const wrap = document.createElement('div');
+          wrap.style.position = 'relative';
+          wrap.appendChild(cardEl(card,'xs'));
+          const tag = document.createElement('div');
+          tag.className = 'mono';
+          tag.style.cssText = 'text-align:center;font-size:10px;color:var(--gold);margin-top:2px;';
+          tag.textContent = price.toLocaleString('de-DE');
+          wrap.appendChild(tag);
+          grid.appendChild(wrap);
+        });
+      }catch(err){
+        ok = false;
+        errEl.textContent = 'Formelfehler: ' + err.message;
+      }
+    } else {
+      capped.forEach(({card})=>grid.appendChild(cardEl(card,'xs')));
+    }
+    previewEl.textContent = matches.length ? `${matches.length} passende Karte${matches.length===1?'':'n'} gefunden${matches.length>40?' (zeige/liste nur die ersten 40)':''}.` : 'Keine passenden Karten gefunden.';
+    const hasPriceInput = priceMode==='flat' ? !!Math.max(0, Math.floor(Number(priceInput.value)||0)) : !!formulaInput.value.trim();
     const btn = document.getElementById('filter-submit');
-    btn.disabled = !capped.length; btn.style.opacity = capped.length ? '1' : '.4';
+    const enabled = capped.length && ok && hasPriceInput;
+    btn.disabled = !enabled; btn.style.opacity = enabled ? '1' : '.4';
   };
-  [minInput, maxInput, posSelect].forEach(el=>el.addEventListener('input', updatePreview));
+  [minInput, maxInput, posSelect, formulaInput, priceInput].forEach(el=>el.addEventListener('input', updatePreview));
   posSelect.addEventListener('change', updatePreview);
   document.getElementById('filter-submit').addEventListener('click', async (e)=>{
-    const price = Math.max(1, Math.floor(Number(document.getElementById('filter-price').value)||0));
-    if(!price){ toast('Bitte einen Preis angeben.'); return; }
     if(!matches.length){ toast('Keine passenden Karten gefunden.'); return; }
+    const toList = matches.slice(0,40);
+    let prices;
+    try{
+      prices = toList.map(({card})=>({card, price: priceMode==='flat' ? Math.max(1, Math.floor(Number(priceInput.value)||0)) : evalPriceFormula(formulaInput.value.trim(), card)}));
+    }catch(err){ toast('Formelfehler: ' + err.message); return; }
+    if(priceMode==='flat' && !prices[0].price){ toast('Bitte einen Preis angeben.'); return; }
     e.target.disabled = true;
     await fbReady;
     if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); e.target.disabled=false; return; }
     const squadValues = new Set(Object.values(squad.slots));
-    const toList = matches.slice(0,40);
     let created = 0, skipped = 0;
-    for(const {uid,card,cardId} of toList){
+    for(let i=0;i<toList.length;i++){
+      const {uid,cardId} = toList[i];
+      const price = prices[i].price;
       if(squadValues.has(uid)){ skipped++; continue; }
       try{
         await fb.setDoc(fb.doc(fb.db,'market', genId()), {
@@ -1326,7 +1502,7 @@ function renderSellFilter(allEligible){
       }catch(err){ console.warn('bulk filter list failed for item', err); skipped++; }
     }
     closeModal();
-    toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen.` : `${created} Karte(n) f\u00fcr je ${price.toLocaleString('de-DE')} Coins gelistet!`);
+    toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen.` : `${created} Karte(n) gelistet!`);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
   updatePreview();
