@@ -3554,40 +3554,45 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   const result = winnerSide==='me' ? 'WIN' : 'LOSS';
   const reward = result==='WIN' ? 900 : 250;
   await fbReady;
+
+  // compute the new history/scorer state locally first
+  let newHistory = profile.matchHistory ? profile.matchHistory.slice() : [];
+  let newScorerStats = profile.scorerStats ? {...profile.scorerStats} : {};
+  let suffix = '';
+  if(wentToPK) suffix = ' (n.E.)';
+  else if(wentToET) suffix = ' (n.V.)';
+  if(oppName){
+    newHistory.push({opponent: oppName, myGoals, oppGoals, result, suffix, timestamp: Date.now()});
+    if(newHistory.length>20) newHistory = newHistory.slice(-20);
+    (myScorers||[]).forEach(name=>{ newScorerStats[name] = (newScorerStats[name]||0)+1; });
+  }
+
+  // write everything in ONE network round-trip so an early tab-close can't lose part of it
   if(fb && clubId && fb.updateDoc && fb.increment){
     try{
       const payload = { 'profile.coins': fb.increment(reward) };
       payload[result==='WIN' ? 'profile.wins' : 'profile.losses'] = fb.increment(1);
+      if(oppName){ payload['profile.matchHistory'] = newHistory; payload['profile.scorerStats'] = newScorerStats; }
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
       profile.coins += reward;
       if(result==='WIN') profile.wins++; else profile.losses++;
+      if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
     }catch(e){
       console.warn('atomic match-result update failed, falling back', e);
       if(result==='WIN') profile.wins++; else profile.losses++;
       profile.coins += reward;
+      if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
       await sSet('profile', profile);
     }
   } else {
     if(result==='WIN') profile.wins++; else profile.losses++;
     profile.coins += reward;
+    if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
     await sSet('profile', profile);
   }
   updateCoinDisplay();
   playSfx('whistle');
   playSfx(result==='WIN' ? 'win' : 'lose');
-  let suffix = '';
-  if(wentToPK) suffix = ' (n.E.)';
-  else if(wentToET) suffix = ' (n.V.)';
-  // record match history (capped at last 20) and top-scorer stats
-  if(oppName){
-    if(!profile.matchHistory) profile.matchHistory = [];
-    profile.matchHistory.push({opponent: oppName, myGoals, oppGoals, result, suffix, timestamp: Date.now()});
-    if(profile.matchHistory.length>20) profile.matchHistory = profile.matchHistory.slice(-20);
-    if(!profile.scorerStats) profile.scorerStats = {};
-    (myScorers||[]).forEach(name=>{ profile.scorerStats[name] = (profile.scorerStats[name]||0)+1; });
-    await sSet('matchHistory', profile.matchHistory);
-    await sSet('scorerStats', profile.scorerStats);
-  }
   const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses'), winrateEl=document.getElementById('stat-winrate');
   if(winsEl) winsEl.textContent = profile.wins;
   if(lossesEl) lossesEl.textContent = profile.losses;
