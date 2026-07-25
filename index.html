@@ -407,6 +407,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     <div class="brand"><div class="brand-mark">FE</div><h1>FOIL<span>ELEVEN</span></h1></div>
     <div class="wallet">
       <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Verein wechseln</button>
+      <button id="sound-toggle" title="Sound an/aus" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">\u{1F50A}</button>
       <div class="coin-pill"><div class="coin-dot"></div><b class="mono" id="coin-display">0</b></div>
     </div>
   </div>
@@ -534,7 +535,8 @@ async function initFirebase(){
     // connectivity probe - if this fails/hangs we fall back to local mode
     await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1))), 6000);
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
-      getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where};
+      getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
+      updateDoc:fsMod.updateDoc, increment:fsMod.increment};
     return true;
   }catch(e){
     console.warn('Firebase backend unavailable, using local shared storage fallback:', e);
@@ -929,7 +931,7 @@ async function openSBCBuilder(sbc){
     });
   }
   updateSBCState();
-  document.getElementById('sbc-submit').addEventListener('click', submitSBC);
+  document.getElementById('sbc-submit').addEventListener('click', (e)=>{ e.target.disabled=true; submitSBC(); });
   document.getElementById('sbc-autofill').addEventListener('click', ()=>{
     const poolFree = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid) && !squadLocked.has(x.uid));
     const poolWithSquad = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid));
@@ -969,7 +971,24 @@ function updateSBCState(){
   if(btn){ btn.disabled = !allOk; btn.style.opacity = allOk ? '1' : '.4'; }
 }
 async function submitSBC(){
+  const completed = new Set(profile.completedSBCs||[]);
+  if(completed.has(activeSBC.id)){ toast('Diese Herausforderung wurde bereits abgeschlossen.'); return; }
   const uids = [...sbcSelection];
+  if(uids.length!==activeSBC.size || uids.some(uid=>!collection.some(c=>c.uid===uid))){
+    toast('Deine Auswahl ist nicht mehr g\u00fcltig \u2014 bitte erneut ausw\u00e4hlen.');
+    openSBCBuilder(activeSBC); return;
+  }
+  const selectedCards = uids.map(uid=>ownedCard(uid));
+  if(!activeSBC.reqs.every(r=>r.check(selectedCards))){
+    toast('Die Anforderungen sind nicht mehr erf\u00fcllt \u2014 bitte Auswahl pr\u00fcfen.');
+    openSBCBuilder(activeSBC); return;
+  }
+  if(activeSBC.managerReq){
+    if(!sbcManagerSelection || !managerCollection.some(m=>m.uid===sbcManagerSelection)){
+      toast('Der ausgew\u00e4hlte Trainer ist nicht mehr verf\u00fcgbar \u2014 bitte erneut ausw\u00e4hlen.');
+      openSBCBuilder(activeSBC); return;
+    }
+  }
   collection = collection.filter(c=>!uids.includes(c.uid));
   if(activeSBC.managerReq && sbcManagerSelection){
     managerCollection = managerCollection.filter(m=>m.uid!==sbcManagerSelection);
@@ -1109,7 +1128,7 @@ function drawMarketGrid(){
     if(listing.sellerUserId===profile.userId){
       const cancelBtn = document.createElement('button');
       cancelBtn.className='sell-btn'; cancelBtn.textContent='\u00d7'; cancelBtn.title='Angebot zur\u00fcckziehen';
-      cancelBtn.addEventListener('click', ()=>withdrawMarketListing(listing));
+      cancelBtn.addEventListener('click', ()=>{ cancelBtn.disabled=true; withdrawMarketListing(listing); });
       wrap.appendChild(cancelBtn);
     } else {
       wrap.style.cursor='pointer';
@@ -1205,11 +1224,17 @@ async function openSellModal(){
     mGrid.appendChild(wrap);
   });
   document.getElementById('sell-price').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('sell-submit').click(); });
-  document.getElementById('sell-submit').addEventListener('click', async ()=>{
+  document.getElementById('sell-submit').addEventListener('click', async (e)=>{
     const price = Math.max(1, Math.floor(Number(document.getElementById('sell-price').value)||0));
     if(!price){ toast('Bitte einen Preis angeben.'); return; }
+    if(!selected){ toast('Bitte eine Karte ausw\u00e4hlen.'); return; }
+    // final safety re-check: make sure the selection hasn't gone stale (e.g. just assigned to squad)
+    if(selected.itemType==='manager' ? selected.uid===squad.managerUid : Object.values(squad.slots).includes(selected.uid)){
+      toast('Diese Karte ist jetzt deinem Kader zugewiesen. Bitte eine andere ausw\u00e4hlen.'); return;
+    }
+    e.target.disabled = true;
     await fbReady;
-    if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); return; }
+    if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); e.target.disabled=false; return; }
     try{
       await fb.setDoc(fb.doc(fb.db,'market', genId()), {
         sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
@@ -1223,8 +1248,13 @@ async function openSellModal(){
   });
 }
 async function withdrawMarketListing(listing){
-  try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(e){}
-  toast('Angebot zur\u00fcckgezogen.');
+  try{
+    await fb.deleteDoc(fb.doc(fb.db,'market', listing.id));
+    toast('Angebot zur\u00fcckgezogen.');
+  }catch(e){
+    console.warn('withdraw market listing failed', e);
+    toast('Zur\u00fccknehmen fehlgeschlagen \u2014 bitte erneut versuchen.');
+  }
   loadMarketListings();
 }
 function confirmBuyListing(listing, card){
@@ -1237,45 +1267,52 @@ function confirmBuyListing(listing, card){
       <button class="action-btn" id="do-buy" style="width:120px;">Kaufen</button>
     </div>`);
   document.getElementById('cancel-buy').addEventListener('click', closeModal);
-  document.getElementById('do-buy').addEventListener('click', ()=>buyMarketListing(listing));
+  document.getElementById('do-buy').addEventListener('click', (e)=>{
+    e.target.disabled = true; e.target.textContent = 'Kaufe\u2026';
+    buyMarketListing(listing);
+  });
 }
 async function buyMarketListing(listing){
-  if(profile.coins < listing.price){ toast('Nicht genug Coins.'); return; }
+  if(listing.sellerUserId===profile.userId){ toast('Du kannst dein eigenes Angebot nicht kaufen.'); closeModal(); return; }
+  if(profile.coins < listing.price){ toast('Nicht genug Coins.'); closeModal(); return; }
   await fbReady;
-  if(!fb){ toast('Backend nicht erreichbar.'); return; }
+  if(!fb){ toast('Backend nicht erreichbar.'); closeModal(); return; }
   try{
+    // re-fetch the listing itself fresh - it may have already been bought or withdrawn by someone else
+    const freshListingSnap = await fb.getDoc(fb.doc(fb.db,'market', listing.id));
+    if(!freshListingSnap.exists()){
+      toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.');
+      closeModal(); loadMarketListings(); return;
+    }
     const sellerSnap = await fb.getDoc(fb.doc(fb.db,'saves', listing.sellerUserId));
-    if(!sellerSnap.exists()){ toast('Verk\u00e4ufer-Daten nicht gefunden.'); await withdrawMarketListing(listing); return; }
+    if(!sellerSnap.exists()){ toast('Verk\u00e4ufer-Daten nicht gefunden.'); await withdrawMarketListing(listing); closeModal(); return; }
     const sellerData = sellerSnap.data();
     let sellerProfile = sellerData.profile || {coins:0};
     let sellerCollection = sellerData.collection || [];
     let sellerManagerCollection = sellerData.managerCollection || [];
-    if(listing.itemType==='manager'){
-      const stillThere = sellerManagerCollection.some(m=>m.uid===listing.cardUid);
-      if(!stillThere){ toast('Diese Karte ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); return; }
-      sellerManagerCollection = sellerManagerCollection.filter(m=>m.uid!==listing.cardUid);
-      managerCollection.push({uid:genId(), mgrId:listing.cardId});
-      await sSet('managerCollection', managerCollection);
-    } else {
-      const stillThere = sellerCollection.some(c=>c.uid===listing.cardUid);
-      if(!stillThere){ toast('Diese Karte ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); return; }
-      sellerCollection = sellerCollection.filter(c=>c.uid!==listing.cardUid);
-      collection.push({uid:genId(), cardId:listing.cardId});
-      await sSet('collection', collection);
-    }
+    const isManager = listing.itemType==='manager';
+    const stillThere = isManager
+      ? sellerManagerCollection.some(m=>m.uid===listing.cardUid)
+      : sellerCollection.some(c=>c.uid===listing.cardUid);
+    if(!stillThere){ toast('Diese Karte ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
+    if(isManager) sellerManagerCollection = sellerManagerCollection.filter(m=>m.uid!==listing.cardUid);
+    else sellerCollection = sellerCollection.filter(c=>c.uid!==listing.cardUid);
     sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
+    // write the seller-side update FIRST; only commit my own changes if this actually succeeds,
+    // so a network failure here can't leave me with a free card or a payment that vanished
     await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile, collection:sellerCollection, managerCollection:sellerManagerCollection}, {merge:true});
+    try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
 
-    profile.coins -= listing.price;
-    await sSet('profile', profile);
-    updateCoinDisplay();
-    await fb.deleteDoc(fb.doc(fb.db,'market', listing.id));
+    if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
+    else { collection.push({uid:genId(), cardId:listing.cardId}); await sSet('collection', collection); }
+    await atomicCoinChange(-listing.price);
     closeModal();
     toast('Kauf erfolgreich!');
     loadMarketListings();
   }catch(e){
     console.warn('buy market listing failed', e);
-    toast('Kauf fehlgeschlagen.');
+    toast('Kauf fehlgeschlagen \u2014 bitte erneut versuchen.');
+    closeModal();
   }
 }
 async function loadTrades(){
@@ -1311,9 +1348,10 @@ async function loadTrades(){
     const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Ansehen';
     viewBtn.addEventListener('click', ()=>showTradeCardsModal(t));
     const acceptBtn = document.createElement('button'); acceptBtn.className='action-btn'; acceptBtn.style.width='auto'; acceptBtn.style.padding='6px 12px'; acceptBtn.textContent='Annehmen';
-    acceptBtn.addEventListener('click', ()=>acceptTrade(t));
+    acceptBtn.addEventListener('click', ()=>{ acceptBtn.disabled=true; declineBtnRef.disabled=true; acceptTrade(t); });
     const declineBtn = document.createElement('button'); declineBtn.className='action-btn secondary'; declineBtn.style.width='auto'; declineBtn.style.padding='6px 12px'; declineBtn.style.background='var(--danger)'; declineBtn.textContent='Ablehnen';
-    declineBtn.addEventListener('click', ()=>declineTrade(t));
+    const declineBtnRef = declineBtn;
+    declineBtn.addEventListener('click', ()=>{ acceptBtn.disabled=true; declineBtn.disabled=true; declineTrade(t); });
     btns.append(viewBtn, acceptBtn, declineBtn);
     row.appendChild(btns);
     inBox.appendChild(row);
@@ -1330,7 +1368,7 @@ async function loadTrades(){
     const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Ansehen';
     viewBtn.addEventListener('click', ()=>showTradeCardsModal(t));
     const withdrawBtn = document.createElement('button'); withdrawBtn.className='action-btn secondary'; withdrawBtn.style.width='auto'; withdrawBtn.style.padding='6px 12px'; withdrawBtn.textContent='Zur\u00fcckziehen';
-    withdrawBtn.addEventListener('click', ()=>withdrawTrade(t));
+    withdrawBtn.addEventListener('click', ()=>{ withdrawBtn.disabled=true; withdrawTrade(t); });
     btns.append(viewBtn, withdrawBtn);
     row.appendChild(btns);
     outBox.appendChild(row);
@@ -1441,7 +1479,7 @@ async function openTradeBuilder(){
     document.getElementById('trade-want-cards').style.display = kindSelect.value==='cards' ? 'flex':'none';
     document.getElementById('trade-want-manager').style.display = kindSelect.value==='manager' ? 'flex':'none';
   });
-  document.getElementById('trade-submit').addEventListener('click', submitTradeOffer);
+  document.getElementById('trade-submit').addEventListener('click', (e)=>{ e.target.disabled=true; submitTradeOffer().finally(()=>{ if(e.target) e.target.disabled=false; }); });
   ['trade-coins','trade-target','want-coins-amount','want-cards-count','want-cards-minovr'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('trade-submit').click(); });
@@ -1455,6 +1493,10 @@ async function submitTradeOffer(){
   if(targetId===profile.userId){ toast('Du kannst dir selbst kein Angebot senden.'); return; }
   const offerCoins = Math.max(0, Math.floor(Number(document.getElementById('trade-coins').value)||0));
   if(offerCoins > profile.coins){ toast('Du bietest mehr Coins an, als du besitzt.'); return; }
+  // final safety re-check: none of the offered items should now be squad-assigned
+  const squadValues = new Set(Object.values(squad.slots));
+  if([...tradeOfferCards].some(uid=>squadValues.has(uid))){ toast('Eine ausgew\u00e4hlte Karte ist jetzt deinem Kader zugewiesen. Bitte Auswahl pr\u00fcfen.'); return; }
+  if([...tradeOfferManagers].some(uid=>uid===squad.managerUid)){ toast('Der ausgew\u00e4hlte Trainer ist jetzt deinem Kader zugewiesen. Bitte Auswahl pr\u00fcfen.'); return; }
   const kind = document.getElementById('trade-want-kind').value;
   let want;
   if(kind==='coins'){
@@ -1473,12 +1515,13 @@ async function submitTradeOffer(){
   if(!fb){ toast('Handel ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.'); return; }
   const offerCards = [...tradeOfferCards].map(uid=>{
     const entry = collection.find(c=>c.uid===uid);
-    return {uid, cardId: entry.cardId};
-  });
+    return entry ? {uid, cardId: entry.cardId} : null;
+  }).filter(Boolean);
   const offerManagers = [...tradeOfferManagers].map(uid=>{
     const entry = managerCollection.find(m=>m.uid===uid);
-    return {uid, mgrId: entry.mgrId};
-  });
+    return entry ? {uid, mgrId: entry.mgrId} : null;
+  }).filter(Boolean);
+  if(!offerCards.length && !offerManagers.length){ toast('Deine Auswahl ist nicht mehr g\u00fcltig. Bitte erneut ausw\u00e4hlen.'); return; }
   const tradeDoc = {
     fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
     toUserId: targetId, toName: targetRaw.trim(),
@@ -1495,13 +1538,23 @@ async function submitTradeOffer(){
   }
 }
 async function withdrawTrade(t){
-  try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(e){}
-  toast('Angebot zur\u00fcckgezogen.');
+  try{
+    await fb.deleteDoc(fb.doc(fb.db,'trades', t.id));
+    toast('Angebot zur\u00fcckgezogen.');
+  }catch(e){
+    console.warn('withdraw trade failed', e);
+    toast('Zur\u00fccknehmen fehlgeschlagen \u2014 bitte erneut versuchen.');
+  }
   loadTrades();
 }
 async function declineTrade(t){
-  try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(e){}
-  toast('Angebot abgelehnt.');
+  try{
+    await fb.deleteDoc(fb.doc(fb.db,'trades', t.id));
+    toast('Angebot abgelehnt.');
+  }catch(e){
+    console.warn('decline trade failed', e);
+    toast('Ablehnen fehlgeschlagen \u2014 bitte erneut versuchen.');
+  }
   loadTrades();
 }
 async function finalizeTradeAccept(t, payment){
@@ -1509,8 +1562,13 @@ async function finalizeTradeAccept(t, payment){
   await fbReady;
   if(!fb){ toast('Backend nicht erreichbar.'); return; }
   try{
+    // re-check the trade itself is still pending (sender may have withdrawn it since we opened this dialog)
+    const tradeSnap = await fb.getDoc(fb.doc(fb.db,'trades', t.id));
+    if(!tradeSnap.exists() || tradeSnap.data().status!=='pending'){
+      toast('Dieses Angebot ist nicht mehr g\u00fcltig.'); closeModal(); loadTrades(); return;
+    }
     const senderSnap = await fb.getDoc(fb.doc(fb.db,'saves', t.fromUserId));
-    if(!senderSnap.exists()){ toast('Absender-Daten nicht gefunden \u2014 Angebot eventuell veraltet.'); return; }
+    if(!senderSnap.exists()){ toast('Absender-Daten nicht gefunden \u2014 Angebot eventuell veraltet.'); closeModal(); return; }
     const senderData = senderSnap.data();
     let senderProfile = senderData.profile || {coins:0};
     let senderCollection = senderData.collection || [];
@@ -1518,6 +1576,23 @@ async function finalizeTradeAccept(t, payment){
 
     const offerCardUids = new Set((t.offerCards||[]).map(c=>c.uid));
     const offerMgrUids = new Set((t.offerManagers||[]).map(m=>m.uid));
+    // verify the sender still actually owns every offered card/manager - if any are gone
+    // (already traded, sold, or used elsewhere), refuse rather than silently granting them for free
+    const missingCards = [...offerCardUids].filter(uid=>!senderCollection.some(c=>c.uid===uid));
+    const missingMgrs = [...offerMgrUids].filter(uid=>!senderManagerCollection.some(m=>m.uid===uid));
+    if(missingCards.length || missingMgrs.length){
+      toast('Der Absender besitzt nicht mehr alle angebotenen Karten \u2014 Angebot wurde ung\u00fcltig.');
+      try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(_){}
+      closeModal(); loadTrades(); return;
+    }
+    // verify my own payment cards are still actually mine (defensive; should normally always hold)
+    const myMissingCards = payment.cardUids.filter(uid=>!collection.some(c=>c.uid===uid));
+    const myMissingMgr = payment.managerUid && !managerCollection.some(m=>m.uid===payment.managerUid);
+    if(myMissingCards.length || myMissingMgr){
+      toast('Eine deiner ausgew\u00e4hlten Karten ist nicht mehr verf\u00fcgbar. Bitte erneut ausw\u00e4hlen.');
+      closeModal(); return;
+    }
+
     senderCollection = senderCollection.filter(c=>!offerCardUids.has(c.uid));
     senderManagerCollection = senderManagerCollection.filter(m=>!offerMgrUids.has(m.uid));
     senderProfile.coins = (senderProfile.coins||0) - (t.offerCoins||0) + (payment.coins||0);
@@ -1530,25 +1605,25 @@ async function finalizeTradeAccept(t, payment){
       const entry = managerCollection.find(m=>m.uid===payment.managerUid);
       if(entry) senderManagerCollection.push({uid:genId(), mgrId:entry.mgrId});
     }
+    // write the sender-side update FIRST, then delete the trade doc, then commit my own local changes -
+    // if either remote write fails, I haven't touched my own cards/coins yet
     await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile, collection:senderCollection, managerCollection:senderManagerCollection}, {merge:true});
+    try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(_){}
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
     if(payment.managerUid) managerCollection = managerCollection.filter(m=>m.uid!==payment.managerUid);
     (t.offerCards||[]).forEach(c=>collection.push({uid:genId(), cardId:c.cardId}));
     (t.offerManagers||[]).forEach(m=>managerCollection.push({uid:genId(), mgrId:m.mgrId}));
-    profile.coins += (t.offerCoins||0) - (payment.coins||0);
-    await sSet('profile', profile);
     await sSet('collection', collection);
     await sSet('managerCollection', managerCollection);
+    await atomicCoinChange((t.offerCoins||0) - (payment.coins||0));
 
-    await fb.deleteDoc(fb.doc(fb.db,'trades', t.id));
-    updateCoinDisplay();
     toast('Handel abgeschlossen!');
     closeModal();
     loadTrades();
   }catch(e){
     console.warn('accept trade failed', e);
-    toast('Handel konnte nicht abgeschlossen werden.');
+    toast('Handel konnte nicht abgeschlossen werden \u2014 bitte erneut versuchen.');
   }
 }
 async function acceptTrade(t){
@@ -1599,7 +1674,8 @@ function openAcceptCardsModal(t, want){
     });
     grid.appendChild(wrap);
   });
-  document.getElementById('accept-cards-confirm').addEventListener('click', ()=>{
+  document.getElementById('accept-cards-confirm').addEventListener('click', (e)=>{
+    e.target.disabled = true;
     finalizeTradeAccept(t, {coins:0, cardUids:[...picked], managerUid:null});
   });
 }
@@ -1615,11 +1691,14 @@ function openAcceptManagerModal(t, want){
     <button class="action-btn secondary" id="accept-mgr-cancel" style="margin-top:14px;width:120px;">Abbrechen</button>`);
   document.getElementById('accept-mgr-cancel').addEventListener('click', closeModal);
   const list = document.getElementById('accept-mgr-list');
+  let clicked = false;
   eligible.forEach(({uid,mgr})=>{
     const wrap = document.createElement('div');
     wrap.style.cursor = 'pointer';
     wrap.appendChild(cardEl(mgr,'mini'));
     wrap.addEventListener('click', ()=>{
+      if(clicked) return;
+      clicked = true;
       finalizeTradeAccept(t, {coins:0, cardUids:[], managerUid:uid});
     });
     list.appendChild(wrap);
@@ -1689,6 +1768,24 @@ async function sGet(key, shared=false){
     }
   }catch(e){}
   return null;
+}
+async function atomicCoinChange(delta, extraSets={}){
+  await fbReady;
+  if(fb && clubId && fb.updateDoc && fb.increment){
+    try{
+      const payload = { 'profile.coins': fb.increment(delta) };
+      Object.entries(extraSets).forEach(([k,v])=>{ payload[`profile.${k}`] = v; });
+      await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
+      profile.coins += delta;
+      Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
+      updateCoinDisplay();
+      return;
+    }catch(e){ console.warn('atomic coin update failed, falling back to full profile write', e); }
+  }
+  profile.coins += delta;
+  Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
+  await sSet('profile', profile);
+  updateCoinDisplay();
 }
 async function sSet(key, value, shared=false){
   if(!shared){
@@ -1782,14 +1879,19 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, soundOn:true};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
     if(!profile.completedSBCs) profile.completedSBCs = [];
     if(profile.dailyStreak===undefined) profile.dailyStreak = 0;
     if(profile.lastClaimDate===undefined) profile.lastClaimDate = null;
+    if(!profile.friends) profile.friends = [];
+    if(!profile.matchHistory) profile.matchHistory = [];
+    if(!profile.scorerStats) profile.scorerStats = {};
+    if(profile.soundOn===undefined) profile.soundOn = true;
   }
+  soundEnabled = profile.soundOn;
   collection = await sGet('collection');
   if(!collection){
     // starter club so the pitch isn't empty
@@ -1810,6 +1912,18 @@ async function init(){
   updateCoinDisplay();
   const switchBtn = document.getElementById('switch-club-btn');
   if(switchBtn) switchBtn.onclick = switchClub;
+  const soundBtn = document.getElementById('sound-toggle');
+  if(soundBtn){
+    soundBtn.textContent = soundEnabled ? '\u{1F50A}' : '\u{1F507}';
+    soundBtn.addEventListener('click', async ()=>{
+      soundEnabled = !soundEnabled;
+      profile.soundOn = soundEnabled;
+      soundBtn.textContent = soundEnabled ? '\u{1F50A}' : '\u{1F507}';
+      await sSet('profile', profile);
+      if(soundEnabled) playSfx('click');
+    });
+  }
+  initGlobalSfxListeners();
 }
 
 function updateCoinDisplay(){ document.getElementById('coin-display').textContent = profile.coins.toLocaleString('de-DE'); }
@@ -2012,11 +2126,8 @@ async function claimDailyReward(){
   const {day, canClaim, todayStr} = computeStreakDay();
   if(!canClaim){ toast('Heute schon abgeholt \u2014 komm morgen wieder!'); return; }
   const reward = DAILY_REWARDS[day-1];
-  profile.dailyStreak = day;
-  profile.lastClaimDate = todayStr;
-  profile.coins += reward.coins;
-  await sSet('profile', profile);
-  updateCoinDisplay();
+  await atomicCoinChange(reward.coins, {dailyStreak: day, lastClaimDate: todayStr});
+  playSfx('coin');
   renderStore(document.getElementById('view'));
   const drawn = reward.draw();
   toast(`Tag ${day} abgeholt: +${reward.coins.toLocaleString('de-DE')} Coins!`);
@@ -2121,7 +2232,7 @@ function renderStore(view){
     </div>
     <div class="pack-grid" id="pack-grid"></div>`;
   const claimBtn = document.getElementById('daily-claim');
-  if(claimBtn && !claimBtn.disabled) claimBtn.addEventListener('click', claimDailyReward);
+  if(claimBtn && !claimBtn.disabled) claimBtn.addEventListener('click', (e)=>{ e.target.disabled=true; claimDailyReward(); });
   const grid = document.getElementById('pack-grid');
   const TIER_LABEL = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
   PACKS.filter(pack=>!pack.hidden).forEach(pack=>{
@@ -2139,7 +2250,7 @@ function renderStore(view){
           <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
         </div>
       </div>`;
-    card.querySelector('.buy-btn').addEventListener('click', ()=>buyPack(pack));
+    card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
     card.querySelector('.odds-link').addEventListener('click', ()=>showPackOdds(pack));
     grid.appendChild(card);
   });
@@ -2147,28 +2258,25 @@ function renderStore(view){
   document.getElementById('redeem-input').addEventListener('keydown', e=>{ if(e.key==='Enter') redeemCode(); });
 }
 const REDEEM_CODES = {
-  'UNLIMITED': ()=>{ profile.coins = 999999999; toast('Cheat aktiviert: unendlich Coins.'); },
-  'TESTCOINS': ()=>{ profile.coins += 100000; toast('+100.000 Coins hinzugef\u00fcgt.'); },
-  'GOLDBOOST': ()=>{ profile.coins += 20000; toast('+20.000 Coins hinzugef\u00fcgt.'); },
+  'UNLIMITED': async ()=>{ await atomicCoinChange(999999999 - profile.coins); toast('Cheat aktiviert: unendlich Coins.'); },
+  'TESTCOINS': async ()=>{ await atomicCoinChange(100000); toast('+100.000 Coins hinzugef\u00fcgt.'); },
+  'GOLDBOOST': async ()=>{ await atomicCoinChange(20000); toast('+20.000 Coins hinzugef\u00fcgt.'); },
 };
 async function redeemCode(){
   const input = document.getElementById('redeem-input');
   const code = (input.value||'').trim().toUpperCase();
   if(!code) return;
   const fn = REDEEM_CODES[code];
-  if(!fn){ toast('Ung\u00fcltiger Code.'); return; }
-  fn();
-  await sSet('profile', profile);
-  updateCoinDisplay();
+  if(!fn){ toast('Ung\u00fcltiger Code.'); playSfx('error'); return; }
+  await fn();
+  playSfx('coin');
   input.value = '';
   renderStore(document.getElementById('view'));
 }
 
 async function buyPack(pack){
   if(profile.coins < pack.cost){ toast("Nicht genug Coins."); return; }
-  profile.coins -= pack.cost;
-  updateCoinDisplay();
-  await sSet('profile', profile);
+  await atomicCoinChange(-pack.cost);
   const drawn = pack.draw();
   showPackOpening(pack, drawn);
   renderStore(document.getElementById('view'));
@@ -2200,6 +2308,7 @@ function showPackOpening(pack, drawn){
   `);
   document.getElementById('pack-visual').addEventListener('click', function handler(){
     this.classList.add('opening');
+    playSfx('packOpen');
     const sub = document.getElementById('pack-sub'); if(sub) sub.textContent = '';
     setTimeout(()=>{
       const wrap = document.getElementById('pack-visual-wrap');
@@ -2246,6 +2355,7 @@ function revealQueue(cards, i, pack){
     big.classList.add('spotlight-card');
     stage.appendChild(big);
     updatePackProgress(i+1, cards.length);
+    playSfx('cardReveal', c.ov>=90?1:0);
     setTimeout(()=>{
       big.classList.add('leaving');
       setTimeout(()=>{
@@ -2325,6 +2435,7 @@ function showCutscene(card, onDone){
     <div class="cs-hint">Zum Fortfahren irgendwo tippen</div>`;
   overlay.querySelector('.cs-card-wrap').appendChild(cardEl(card));
   root.appendChild(overlay);
+  playSfx('cardReveal', card.ov>=95?2:(card.ov>=90?1:0));
   let done=false;
   overlay.addEventListener('click', ()=>{
     if(done) return; done=true;
@@ -2398,12 +2509,13 @@ function confirmSellManager(uid, mgr){
       <button class="action-btn" id="do-sell-mgr" style="width:120px;background:var(--danger);">Verkaufen</button>
     </div>`);
   document.getElementById('cancel-sell-mgr').addEventListener('click', closeModal);
-  document.getElementById('do-sell-mgr').addEventListener('click', async ()=>{
+  document.getElementById('do-sell-mgr').addEventListener('click', async (e)=>{
+    if(!managerCollection.some(m=>m.uid===uid)){ toast('Dieser Trainer wurde bereits verkauft.'); closeModal(); return; }
+    e.target.disabled = true;
     managerCollection = managerCollection.filter(m=>m.uid!==uid);
-    profile.coins += value;
     await sSet('managerCollection', managerCollection);
-    await sSet('profile', profile);
-    updateCoinDisplay();
+    await atomicCoinChange(value);
+    playSfx('coin');
     closeModal();
     toast(`${mgr.n} f\u00fcr ${value.toLocaleString('de-DE')} Coins verkauft.`);
     renderClub(document.getElementById('view'));
@@ -2440,15 +2552,16 @@ function confirmSell(uid, card){
       <button class="action-btn" id="do-sell" style="width:120px;background:var(--danger);">Verkaufen</button>
     </div>`);
   document.getElementById('cancel-sell').addEventListener('click', closeModal);
-  document.getElementById('do-sell').addEventListener('click', async ()=>{
+  document.getElementById('do-sell').addEventListener('click', async (e)=>{
+    if(!collection.some(c=>c.uid===uid)){ toast('Diese Karte wurde bereits verkauft.'); closeModal(); return; }
+    e.target.disabled = true;
     collection = collection.filter(c=>c.uid!==uid);
     // clear from squad if assigned
     Object.keys(squad.slots).forEach(s=>{ if(squad.slots[s]===uid) delete squad.slots[s]; });
-    profile.coins += value;
     await sSet('collection', collection);
     await sSet('squad', squad);
-    await sSet('profile', profile);
-    updateCoinDisplay();
+    await atomicCoinChange(value);
+    playSfx('coin');
     closeModal();
     toast(`${card.n} f\u00fcr ${value.toLocaleString('de-DE')} Coins verkauft.`);
     renderClub(document.getElementById('view'));
@@ -2756,11 +2869,228 @@ function publishSquad(){
 const MATCH_DURATION_MS = 45000; // ~45s for a full 90' match
 const QUEUE_TIMEOUT_MS = 25000;
 const QUEUE_POLL_MS = 2000;
+// ===== SOUND EFFECTS (synthesized via Web Audio API, no external audio files) =====
+let audioCtx = null;
+let soundEnabled = true;
+function ensureAudioCtx(){
+  if(!audioCtx){
+    try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  return audioCtx;
+}
+function tone(ctx, freq, startAt, dur, {type='sine', gain=0.18, glideTo=null, decay=true}={}){
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, startAt);
+  if(glideTo) osc.frequency.exponentialRampToValueAtTime(glideTo, startAt+dur);
+  g.gain.setValueAtTime(gain, startAt);
+  if(decay) g.gain.exponentialRampToValueAtTime(0.001, startAt+dur);
+  else g.gain.setValueAtTime(gain, startAt+dur);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(startAt); osc.stop(startAt+dur+0.02);
+}
+function noiseBurst(ctx, startAt, dur, gain=0.12){
+  const bufferSize = Math.floor(ctx.sampleRate*dur);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
+  const src = ctx.createBufferSource(); src.buffer = buffer;
+  const filt = ctx.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value=1200;
+  const g = ctx.createGain(); g.gain.setValueAtTime(gain, startAt); g.gain.exponentialRampToValueAtTime(0.001, startAt+dur);
+  src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+  src.start(startAt); src.stop(startAt+dur);
+}
+const SFX = {
+  click(ctx,t){ tone(ctx, 720, t, 0.05, {type:'triangle', gain:0.09}); },
+  navSwitch(ctx,t){ tone(ctx, 480, t, 0.07, {type:'sine', gain:0.1}); tone(ctx, 640, t+0.03, 0.07, {type:'sine', gain:0.08}); },
+  error(ctx,t){ tone(ctx, 160, t, 0.18, {type:'sawtooth', gain:0.12}); },
+  coin(ctx,t){ tone(ctx, 1040, t, 0.09, {type:'square', gain:0.1}); tone(ctx, 1400, t+0.06, 0.12, {type:'square', gain:0.09}); },
+  whistle(ctx,t){ tone(ctx, 1800, t, 0.35, {type:'square', gain:0.1, glideTo:1600}); },
+  packOpen(ctx,t){ noiseBurst(ctx, t, 0.5, 0.1); tone(ctx, 300, t, 0.5, {type:'sine', gain:0.07, glideTo:900}); },
+  cardReveal(ctx,t,rarity=0){
+    const base = 520 + rarity*90;
+    tone(ctx, base, t, 0.16, {type:'sine', gain:0.12});
+    tone(ctx, base*1.5, t+0.05, 0.2, {type:'sine', gain:0.1});
+    if(rarity>=2) tone(ctx, base*2, t+0.1, 0.25, {type:'sine', gain:0.08});
+  },
+  goalFor(ctx,t){
+    noiseBurst(ctx, t, 0.6, 0.09);
+    [523,659,784,1047].forEach((f,i)=>tone(ctx, f, t+i*0.09, 0.22, {type:'triangle', gain:0.13}));
+  },
+  goalAgainst(ctx,t){ tone(ctx, 220, t, 0.4, {type:'sawtooth', gain:0.1, glideTo:110}); },
+  win(ctx,t){
+    [523,659,784,1047,1319].forEach((f,i)=>tone(ctx, f, t+i*0.11, 0.3, {type:'triangle', gain:0.13}));
+    noiseBurst(ctx, t, 0.8, 0.07);
+  },
+  lose(ctx,t){ [392,349,311,262].forEach((f,i)=>tone(ctx, f, t+i*0.14, 0.3, {type:'sine', gain:0.11})); },
+  notification(ctx,t){ tone(ctx, 880, t, 0.1, {type:'sine', gain:0.1}); tone(ctx, 1100, t+0.09, 0.12, {type:'sine', gain:0.09}); },
+  penaltyMade(ctx,t){ tone(ctx, 700, t, 0.1, {type:'triangle', gain:0.12}); tone(ctx, 1000, t+0.06, 0.14, {type:'triangle', gain:0.1}); },
+  penaltyMiss(ctx,t){ tone(ctx, 300, t, 0.22, {type:'sawtooth', gain:0.1, glideTo:150}); },
+};
+function playSfx(name, ...args){
+  if(!soundEnabled) return;
+  const ctx = ensureAudioCtx();
+  if(!ctx || !SFX[name]) return;
+  try{ SFX[name](ctx, ctx.currentTime, ...args); }catch(e){}
+}
+function initGlobalSfxListeners(){
+  document.addEventListener('click', (e)=>{
+    const navBtn = e.target.closest('.nav-btn');
+    if(navBtn){ playSfx('navSwitch'); return; }
+    const btn = e.target.closest('button');
+    if(btn && !btn.disabled) playSfx('click');
+  }, true);
+}
 let queueActive = false;
 let autorollEnabled = false;
 let queueTimer = null;
 
+// ===== FRIENDS & DUELS =====
+async function addFriend(rawName){
+  const userId = sanitizeClubId(rawName||'');
+  if(!userId){ toast('Bitte einen g\u00fcltigen Vereinsnamen eingeben.'); return; }
+  if(userId===profile.userId){ toast('Du kannst dich nicht selbst hinzuf\u00fcgen.'); return; }
+  if(profile.friends.some(f=>f.userId===userId)){ toast('Ist bereits in deiner Freundesliste.'); return; }
+  profile.friends.push({userId, name: rawName.trim()});
+  await sSet('profile', profile);
+  toast(`${rawName.trim()} hinzugef\u00fcgt.`);
+  renderPlay(document.getElementById('view'));
+}
+async function removeFriend(userId){
+  profile.friends = profile.friends.filter(f=>f.userId!==userId);
+  await sSet('profile', profile);
+  renderPlay(document.getElementById('view'));
+}
+let pendingDuelId = null, pendingDuelTimer = null;
+async function challengeFriend(friend){
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  await fbReady;
+  if(!fb){ toast('Duelle ben\u00f6tigen das Online-Backend (Firebase). Gerade nicht erreichbar.'); return; }
+  const myPlayers = getMySquadPlayers();
+  const duelId = genId();
+  const duel = {
+    id: duelId, fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
+    fromRating: rating, fromPlayers: myPlayers,
+    toUserId: friend.userId, toName: friend.name,
+    status:'pending', createdAt: Date.now()
+  };
+  try{ await fb.setDoc(fb.doc(fb.db,'duels',duelId), duel); }
+  catch(e){ console.warn('challenge send failed', e); toast('Herausforderung konnte nicht gesendet werden.'); return; }
+  pendingDuelId = duelId;
+  const area = document.getElementById('match-area');
+  if(area) area.innerHTML = `<div style="text-align:center;"><div class="mono" style="color:var(--muted);margin-bottom:10px;">Warte auf Antwort von ${friend.name}\u2026 <span id="duel-timer">0s</span></div><button class="action-btn secondary" id="duel-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button></div>`;
+  const cancelBtn = document.getElementById('duel-cancel');
+  if(cancelBtn) cancelBtn.addEventListener('click', async ()=>{
+    clearTimeout(pendingDuelTimer); pendingDuelId=null;
+    try{ await fb.deleteDoc(fb.doc(fb.db,'duels',duelId)); }catch(_){}
+    const a = document.getElementById('match-area'); if(a) a.innerHTML='';
+    toast('Herausforderung zur\u00fcckgezogen.');
+  });
+  const startTime = Date.now();
+  const poll = async ()=>{
+    if(pendingDuelId!==duelId) return;
+    const timerEl = document.getElementById('duel-timer');
+    if(timerEl) timerEl.textContent = Math.round((Date.now()-startTime)/1000)+'s';
+    if(Date.now()-startTime > 60000){
+      pendingDuelId = null;
+      try{ await fb.deleteDoc(fb.doc(fb.db,'duels',duelId)); }catch(_){}
+      toast(`${friend.name} hat nicht rechtzeitig geantwortet.`);
+      const a = document.getElementById('match-area'); if(a) a.innerHTML='';
+      return;
+    }
+    try{
+      const snap = await fb.getDoc(fb.doc(fb.db,'duels',duelId));
+      if(snap.exists()){
+        const d = snap.data();
+        if(d.status==='accepted' && d.matchId){
+          pendingDuelId = null;
+          const matchSnap = await fb.getDoc(fb.doc(fb.db,'matches',d.matchId));
+          if(matchSnap.exists()) enterSyncedMatch(matchSnap.data());
+          return;
+        } else if(d.status==='declined'){
+          pendingDuelId = null;
+          toast(`${friend.name} hat die Herausforderung abgelehnt.`);
+          const a = document.getElementById('match-area'); if(a) a.innerHTML='';
+          return;
+        }
+      } else {
+        pendingDuelId = null;
+        const a = document.getElementById('match-area'); if(a) a.innerHTML='';
+        return;
+      }
+    }catch(e){ console.warn('duel poll failed', e); }
+    pendingDuelTimer = setTimeout(poll, 2000);
+  };
+  poll();
+}
+async function loadIncomingDuels(){
+  const box = document.getElementById('duel-incoming');
+  if(!box) return;
+  await fbReady;
+  if(!fb){ box.innerHTML = ''; return; }
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'duels'), fb.where('toUserId','==',profile.userId)));
+    const incoming = snap.docs.map(d=>({id:d.id, ...d.data()})).filter(d=>d.status==='pending');
+    if(!box) return;
+    if(!incoming.length){ box.innerHTML = `<p class="hint">Keine eingehenden Herausforderungen.</p>`; return; }
+    box.innerHTML = '';
+    incoming.forEach(duel=>{
+      const row = document.createElement('div');
+      row.className = 'leader-row';
+      row.style.flexWrap = 'wrap';
+      row.innerHTML = `<span style="flex:1;"><b>${duel.fromName}</b> fordert dich heraus (Rating ${duel.fromRating})</span>`;
+      const btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;gap:8px;margin-top:6px;width:100%;';
+      const acceptBtn = document.createElement('button'); acceptBtn.className='action-btn'; acceptBtn.style.cssText='width:auto;padding:6px 12px;'; acceptBtn.textContent='Annehmen';
+      const declineBtn = document.createElement('button'); declineBtn.className='action-btn secondary'; declineBtn.style.cssText='width:auto;padding:6px 12px;background:var(--danger);'; declineBtn.textContent='Ablehnen';
+      acceptBtn.addEventListener('click', async ()=>{
+        acceptBtn.disabled=true; declineBtn.disabled=true;
+        const {rating, filled} = squadRating();
+        if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); acceptBtn.disabled=false; declineBtn.disabled=false; return; }
+        const myPlayers = getMySquadPlayers();
+        const md = buildDecisiveMatch(rating, duel.fromRating, myPlayers, duel.fromPlayers);
+        const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p2':'p1'}));
+        const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p2':'p1'})) : null;
+        const shootout = md.shootout ? {
+          p1Kicks: md.shootout.oppKicks, p2Kicks: md.shootout.myKicks,
+          p1Prob: md.shootout.oppProb, p2Prob: md.shootout.myProb,
+          winner: md.shootout.winner==='me' ? 'p2' : 'p1'
+        } : null;
+        const matchId = genId();
+        const matchDoc = {
+          mid: matchId,
+          p1:{userId:duel.fromUserId, name:duel.fromName, rating:duel.fromRating},
+          p2:{userId:profile.userId, name:profile.displayName||profile.userId, rating},
+          p1Goals: md.oppGoals, p2Goals: md.myGoals,
+          events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
+          p1Profile: md.oppProfile, p2Profile: md.myProfile,
+          startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
+        };
+        try{
+          await fb.setDoc(fb.doc(fb.db,'matches',matchId), matchDoc);
+          await fb.setDoc(fb.doc(fb.db,'duels',duel.id), {status:'accepted', matchId}, {merge:true});
+          enterSyncedMatch(matchDoc);
+        }catch(e){ console.warn('accept duel failed', e); toast('Herausforderung konnte nicht angenommen werden.'); acceptBtn.disabled=false; declineBtn.disabled=false; }
+      });
+      declineBtn.addEventListener('click', async ()=>{
+        acceptBtn.disabled=true; declineBtn.disabled=true;
+        try{ await fb.setDoc(fb.doc(fb.db,'duels',duel.id), {status:'declined'}, {merge:true}); }catch(_){}
+        toast('Herausforderung abgelehnt.');
+        loadIncomingDuels();
+      });
+      btns.append(acceptBtn, declineBtn);
+      row.appendChild(btns);
+      box.appendChild(row);
+    });
+  }catch(e){ console.warn('load incoming duels failed', e); box.innerHTML = `<p class="hint">Konnte Herausforderungen nicht laden.</p>`; }
+}
+
 function renderPlay(view){
+  const history = (profile.matchHistory||[]).slice().reverse().slice(0,10);
+  const scorers = Object.entries(profile.scorerStats||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);
   view.innerHTML = `
     <div class="view-head"><h2>Online spielen</h2><p>Reih dich in die Warteschlange ein, um einen echten Gegner zu finden. Ist niemand da, spielst du stattdessen gegen eine CPU-Elf.
       <span class="mono" id="backend-badge" style="color:var(--muted);">\u00b7 Backend wird gepr\u00fcft\u2026</span></p></div>
@@ -2775,6 +3105,7 @@ function renderPlay(view){
         <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">
           <button class="action-btn" id="find-opp" style="flex:1;">Gegner suchen</button>
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap;cursor:pointer;">
+
             <input type="checkbox" id="autoroll-toggle" ${autorollEnabled?'checked':''} style="cursor:pointer;">
             Autoroll
           </label>
@@ -2785,6 +3116,34 @@ function renderPlay(view){
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Beste ver\u00f6ffentlichte Kader</h3>
         <div class="leader-list" id="leader-list"><p class="hint">L\u00e4dt...</p></div>
       </div>
+    </div>
+    <div class="play-grid" style="margin-top:22px;">
+      <div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Freunde</h3>
+        <div class="toolbar" style="margin-bottom:10px;">
+          <input id="friend-input" placeholder="Vereinsname des Freundes...">
+          <button class="action-btn secondary" id="friend-add" style="width:auto;padding:9px 16px;">Hinzuf\u00fcgen</button>
+        </div>
+        <div class="leader-list" id="friend-list" style="margin-bottom:20px;">
+          ${(profile.friends||[]).length ? '' : '<p class="hint">Noch keine Freunde hinzugef\u00fcgt.</p>'}
+        </div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Eingehende Herausforderungen</h3>
+        <div class="leader-list" id="duel-incoming"><p class="hint">L\u00e4dt...</p></div>
+      </div>
+      <div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Letzte Spiele</h3>
+        <div class="leader-list" id="match-history" style="margin-bottom:20px;">
+          ${history.length ? history.map(h=>`
+            <div class="leader-row"><span style="flex:1;">${h.result==='WIN'?'\u2705':'\u274c'} vs. ${h.opponent} \u2014 ${h.myGoals}:${h.oppGoals}${h.suffix||''}</span><span class="mono" style="color:var(--muted);">${new Date(h.timestamp).toLocaleDateString('de-DE')}</span></div>
+          `).join('') : '<p class="hint">Noch keine Spiele gespielt.</p>'}
+        </div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Top-Torsch\u00fctzen</h3>
+        <div class="leader-list" id="top-scorers">
+          ${scorers.length ? scorers.map(([name,goals],i)=>`
+            <div class="leader-row"><span style="flex:1;">#${i+1} ${name}</span><span class="mono" style="color:var(--gold);">${goals} Tore</span></div>
+          `).join('') : '<p class="hint">Noch keine Tore erzielt.</p>'}
+        </div>
+      </div>
     </div>`;
   document.getElementById('find-opp').addEventListener('click', joinQueue);
   document.getElementById('autoroll-toggle').addEventListener('change', e=>{
@@ -2792,11 +3151,32 @@ function renderPlay(view){
     if(autorollEnabled && !queueActive){ joinQueue(); }
     else if(!autorollEnabled) toast('Autoroll gestoppt.');
   });
+  document.getElementById('friend-add').addEventListener('click', ()=>{
+    const input = document.getElementById('friend-input');
+    if(input.value.trim()) addFriend(input.value);
+  });
+  document.getElementById('friend-input').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('friend-add').click(); });
+  const friendListEl = document.getElementById('friend-list');
+  (profile.friends||[]).forEach(friend=>{
+    const row = document.createElement('div');
+    row.className = 'leader-row';
+    row.innerHTML = `<span style="flex:1;">${friend.name}</span>`;
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:6px;';
+    const challengeBtn = document.createElement('button'); challengeBtn.className='action-btn'; challengeBtn.style.cssText='width:auto;padding:5px 10px;font-size:11px;'; challengeBtn.textContent='Herausfordern';
+    challengeBtn.addEventListener('click', ()=>{ challengeBtn.disabled=true; challengeFriend(friend); setTimeout(()=>{ if(challengeBtn) challengeBtn.disabled=false; }, 2000); });
+    const removeBtn = document.createElement('button'); removeBtn.className='action-btn secondary'; removeBtn.style.cssText='width:auto;padding:5px 10px;font-size:11px;'; removeBtn.textContent='\u00d7';
+    removeBtn.addEventListener('click', ()=>removeFriend(friend.userId));
+    btns.append(challengeBtn, removeBtn);
+    row.appendChild(btns);
+    friendListEl.appendChild(row);
+  });
   fbReady.then(()=>{
     const badge = document.getElementById('backend-badge');
     if(badge) badge.textContent = '\u00b7 Backend: ' + (fb ? 'Firebase (live)' : 'lokaler Modus');
   });
   loadLeaderboard();
+  loadIncomingDuels();
 }
 async function loadLeaderboard(){
   const box = document.getElementById('leader-list');
@@ -2871,7 +3251,7 @@ function getMySquadPlayers(){
   form.slots.forEach(slot=>{
     const uid = squad.slots[slot.id];
     const card = uid ? ownedCard(uid) : null;
-    if(card) list.push({n:card.n, pos:slot.label, img:card.img});
+    if(card) list.push({n:card.n, pos:slot.label, ov:card.ov, img:card.img});
   });
   return list;
 }
@@ -2897,8 +3277,12 @@ function pickScorer(players){
   const weighted = [];
   players.forEach(p=>{
     const g = posGroup2(p.pos);
-    const w = g==='FWD' ? 4 : g==='MID' ? 3 : g==='DEF' ? 1 : 0.3;
-    const reps = Math.max(1, Math.round(w*10));
+    const posW = g==='FWD' ? 4.4 : g==='MID' ? 2.4 : g==='DEF' ? 0.55 : 0.04;
+    const ov = p.ov || 75;
+    // rating matters within a position too: an elite forward should noticeably outscore a mediocre one
+    const ratingFactor = Math.pow(1.05, ov-72);
+    const w = posW * ratingFactor;
+    const reps = Math.max(1, Math.round(w*3));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
   const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
@@ -2951,15 +3335,40 @@ function pkWinProbability(myScore, oppScore, myKicksTaken, oppKicksTaken, myProb
   }
   return wins/iterations;
 }
-function computeWinProb(myTally, oppTally, minute, totalHorizon, myRating, oppRating){
-  const goalDiff = myTally-oppTally;
-  const timeRemainingFrac = Math.max(0, 1 - minute/totalHorizon);
-  const ratingEdge = (myRating-oppRating)/12;
-  const goalWeight = 1.1 + (1-timeRemainingFrac)*2.2;
-  const ratingWeight = 0.9*timeRemainingFrac + 0.15;
-  const logit = goalDiff*goalWeight + ratingEdge*ratingWeight;
-  const prob = 1/(1+Math.exp(-logit));
-  return Math.max(0.02, Math.min(0.98, prob));
+function computeTeamProfile(players, fallbackOv){
+  if(!players || !players.length) return {attack: fallbackOv||75, defense: fallbackOv||75};
+  const wA = {FWD:3, MID:1.6, DEF:0.5, GK:0.1};
+  const wD = {GK:2.5, DEF:2, MID:1, FWD:0.3};
+  let attackSum=0, attackWeight=0, defenseSum=0, defenseWeight=0, topAttacker=0;
+  players.forEach(p=>{
+    const g = posGroup2(p.pos);
+    const ov = p.ov || fallbackOv || 75;
+    attackSum += ov*wA[g]; attackWeight += wA[g];
+    defenseSum += ov*wD[g]; defenseWeight += wD[g];
+    if((g==='FWD'||g==='MID') && ov>topAttacker) topAttacker = ov;
+  });
+  const attackAvg = attackWeight ? attackSum/attackWeight : (fallbackOv||75);
+  const defenseAvg = defenseWeight ? defenseSum/defenseWeight : (fallbackOv||75);
+  // a genuine standout attacker pulls the team's attacking threat up beyond the pure average (star power)
+  const attack = topAttacker ? attackAvg*0.72 + topAttacker*0.28 : attackAvg;
+  return {attack: Math.round(attack), defense: Math.round(defenseAvg)};
+}
+function computeLambda(attack, oppDefense){
+  const diff = attack - oppDefense;
+  return clamp(1.3 + diff/11, 0.22, 4.9);
+}
+function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, iterations=400){
+  const scaledMyLambda = computeLambda(myProfile.attack, oppProfile.defense) * (minutesLeft/90);
+  const scaledOppLambda = computeLambda(oppProfile.attack, myProfile.defense) * (minutesLeft/90);
+  const tiebreakEdge = clamp(0.5 + ((myProfile.attack+myProfile.defense)-(oppProfile.attack+oppProfile.defense))/500, 0.35, 0.65);
+  let wins = 0;
+  for(let i=0;i<iterations;i++){
+    const ms = myTally + simGoals(scaledMyLambda);
+    const os = oppTally + simGoals(scaledOppLambda);
+    if(ms>os) wins++;
+    else if(ms===os){ if(Math.random()<tiebreakEdge) wins++; }
+  }
+  return clamp(wins/iterations, 0.02, 0.98);
 }
 function winProbRowHTML(pct){
   const p = Math.round(pct*100);
@@ -2977,8 +3386,10 @@ function updateWinProbEl(pct){
   if(txt) txt.textContent = p+'%';
 }
 function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers){
-  const diff = myRating-oppRating;
-  const myExp = clamp(1.35+diff/9, 0.3, 4.5), oppExp = clamp(1.35-diff/9, 0.3, 4.5);
+  const myProfile = computeTeamProfile(myPlayers, myRating);
+  const oppProfile = computeTeamProfile(oppPlayers, oppRating);
+  const myExp = computeLambda(myProfile.attack, oppProfile.defense);
+  const oppExp = computeLambda(oppProfile.attack, myProfile.defense);
   let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
   const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0);
   let eventsET=null, shootout=null, wentToET=false, wentToPK=false;
@@ -2995,7 +3406,7 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers){
     }
   }
   const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':'opp');
-  return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide};
+  return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide, myProfile, oppProfile};
 }
 function goalRowHTML(minute, scorer, teamName, side){
   const initials = initialsOf(scorer.n || '??');
@@ -3019,7 +3430,7 @@ function pkRowHTML(round, kick, teamName, side){
       <span class="gteam">${teamName}</span>
     </div>`;
 }
-function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myRating, oppRating, totalHorizon){
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon){
   return new Promise(resolve=>{
     const area = document.getElementById('match-area');
     let live = document.getElementById('live-match');
@@ -3028,8 +3439,9 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
       live.innerHTML = `
         <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
         <div class="mono" id="live-minute" style="text-align:center;color:var(--muted);margin-bottom:8px;">${minuteStart}'</div>
-        ${winProbRowHTML(computeWinProb(carryMy, carryOpp, minuteStart, totalHorizon, myRating, oppRating))}
+        ${winProbRowHTML(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, myProfile, oppProfile))}
         <div class="match-log" id="live-log"></div>`;
+      playSfx('whistle');
     }
     const totalMinutes = minuteEnd-minuteStart;
     const stepMs = durationMs/totalMinutes;
@@ -3044,6 +3456,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
           events.filter(e=>e.minute===m).forEach(e=>{
             scored = true;
             if(e.side==='me') myTally++; else oppTally++;
+            playSfx(e.side==='me' ? 'goalFor' : 'goalAgainst');
             if(logEl){
               const row = document.createElement('div');
               row.innerHTML = goalRowHTML(m, e.scorer, e.side==='me'?myName:oppName, e.side);
@@ -3063,7 +3476,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         }
         const minEl = document.getElementById('live-minute');
         if(minEl) minEl.textContent = minute + "'" + (minuteEnd>90 ? ' (Verl\u00e4ngerung)' : '');
-        updateWinProbEl(computeWinProb(myTally, oppTally, minute, totalHorizon, myRating, oppRating));
+        updateWinProbEl(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, myProfile, oppProfile));
       }
       if(elapsed>=durationMs){ clearInterval(timer); resolve({myTally, oppTally}); }
     }, 250);
@@ -3089,10 +3502,12 @@ function animateShootout(shootout, myName, oppName){
       const logEl = document.getElementById('pk-log');
       if(mk){
         if(mk.made) myS++;
+        playSfx(mk.made ? 'penaltyMade' : 'penaltyMiss');
         if(logEl){ const row = document.createElement('div'); row.innerHTML = pkRowHTML(i+1, mk, myName, 'me'); logEl.prepend(row.firstElementChild); }
       }
       if(ok){
         if(ok.made) oppS++;
+        playSfx(ok.made ? 'penaltyMade' : 'penaltyMiss');
         if(logEl){ const row = document.createElement('div'); row.innerHTML = pkRowHTML(i+1, ok, oppName, 'opp'); logEl.prepend(row.firstElementChild); }
       }
       const scoreEl = document.getElementById('pk-score');
@@ -3104,38 +3519,69 @@ function animateShootout(shootout, myName, oppName){
     step();
   });
 }
-async function playFullMatch(md, myName, oppName, myRating, oppRating){
+async function playFullMatch(md, myName, oppName){
   const totalHorizon = md.wentToET ? 120 : 90;
-  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, myRating, oppRating, totalHorizon);
+  const myScorers = [];
+  md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon);
   if(md.wentToET){
     toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
+    md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
     const durET = Math.max(2000, Math.round(md.durationMs*(30/90)));
     const startedAtET = md.startedAt + md.durationMs;
     const waitET = startedAtET - Date.now();
     if(waitET>0) await new Promise(r=>setTimeout(r, waitET));
-    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, myRating, oppRating, totalHorizon));
+    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon));
   }
   if(md.wentToPK){
     toast('Auch nach Verl\u00e4ngerung unentschieden \u2014 Elfmeterschie\u00dfen entscheidet!');
     await animateShootout(md.shootout, myName, oppName);
   }
-  return {myGoals: myTally, oppGoals: oppTally};
+  return {myGoals: myTally, oppGoals: oppTally, myScorers};
 }
 const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
-async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK){
+async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers){
   const result = winnerSide==='me' ? 'WIN' : 'LOSS';
   const reward = result==='WIN' ? 900 : 250;
-  if(result==='WIN') profile.wins++; else profile.losses++;
-  profile.coins += reward;
-  await sSet('profile', profile);
+  await fbReady;
+  if(fb && clubId && fb.updateDoc && fb.increment){
+    try{
+      const payload = { 'profile.coins': fb.increment(reward) };
+      payload[result==='WIN' ? 'profile.wins' : 'profile.losses'] = fb.increment(1);
+      await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
+      profile.coins += reward;
+      if(result==='WIN') profile.wins++; else profile.losses++;
+    }catch(e){
+      console.warn('atomic match-result update failed, falling back', e);
+      if(result==='WIN') profile.wins++; else profile.losses++;
+      profile.coins += reward;
+      await sSet('profile', profile);
+    }
+  } else {
+    if(result==='WIN') profile.wins++; else profile.losses++;
+    profile.coins += reward;
+    await sSet('profile', profile);
+  }
   updateCoinDisplay();
+  playSfx('whistle');
+  playSfx(result==='WIN' ? 'win' : 'lose');
+  let suffix = '';
+  if(wentToPK) suffix = ' (n.E.)';
+  else if(wentToET) suffix = ' (n.V.)';
+  // record match history (capped at last 20) and top-scorer stats
+  if(oppName){
+    if(!profile.matchHistory) profile.matchHistory = [];
+    profile.matchHistory.push({opponent: oppName, myGoals, oppGoals, result, suffix, timestamp: Date.now()});
+    if(profile.matchHistory.length>20) profile.matchHistory = profile.matchHistory.slice(-20);
+    if(!profile.scorerStats) profile.scorerStats = {};
+    (myScorers||[]).forEach(name=>{ profile.scorerStats[name] = (profile.scorerStats[name]||0)+1; });
+    await sSet('matchHistory', profile.matchHistory);
+    await sSet('scorerStats', profile.scorerStats);
+  }
   const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses'), winrateEl=document.getElementById('stat-winrate');
   if(winsEl) winsEl.textContent = profile.wins;
   if(lossesEl) lossesEl.textContent = profile.losses;
   if(winrateEl) winrateEl.textContent = `${(profile.wins+profile.losses)?Math.round(profile.wins/(profile.wins+profile.losses)*100):0}%`;
-  let suffix = '';
-  if(wentToPK) suffix = ' (n.E.)';
-  else if(wentToET) suffix = ' (n.V.)';
   const area = document.getElementById('result-area');
   if(area){
     area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':'var(--danger)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}${suffix}</div>
@@ -3158,8 +3604,8 @@ async function runLocalMatch(myRating, opp){
   md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
   const myName = profile.displayName || 'Dein Verein';
   const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
-  const final = await playFullMatch(md, myName, oppName, myRating, opp.rating);
-  await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK);
+  const final = await playFullMatch(md, myName, oppName);
+  await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, final.myScorers);
 }
 let CLUB_INDEX = null;
 function buildClubIndex(){
@@ -3249,15 +3695,18 @@ async function enterSyncedMatch(matchDoc){
     <div id="result-area"></div>`;
   const waitMs = matchDoc.startedAt - Date.now();
   if(waitMs>0) await new Promise(r=>setTimeout(r, waitMs));
-  const md = {events90, eventsET, shootout, wentToET:matchDoc.wentToET, wentToPK:matchDoc.wentToPK, startedAt:matchDoc.startedAt, durationMs:matchDoc.durationMs};
-  const final = await playFullMatch(md, meSide.name, oppSide.name, meSide.rating, oppSide.rating);
+  const myProfile = amP1 ? matchDoc.p1Profile : matchDoc.p2Profile;
+  const oppProfile = amP1 ? matchDoc.p2Profile : matchDoc.p1Profile;
+  const md = {events90, eventsET, shootout, wentToET:matchDoc.wentToET, wentToPK:matchDoc.wentToPK, startedAt:matchDoc.startedAt, durationMs:matchDoc.durationMs,
+    myProfile: myProfile || {attack:meSide.rating, defense:meSide.rating}, oppProfile: oppProfile || {attack:oppSide.rating, defense:oppSide.rating}};
+  const final = await playFullMatch(md, meSide.name, oppSide.name);
   let winnerSide;
   if(matchDoc.wentToPK){
     winnerSide = (matchDoc.shootout.winner==='p1')===amP1 ? 'me' : 'opp';
   } else {
     winnerSide = myGoalsFinal>oppGoalsFinal ? 'me' : 'opp';
   }
-  await applyMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK);
+  await applyMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers);
   if(fb && matchDoc.mid){
     try{ await fb.deleteDoc(fb.doc(fb.db,'matches',matchDoc.mid)); }catch(e){}
   }
@@ -3354,6 +3803,7 @@ async function joinQueue(){
               p2:{userId:other.userId, name:other.name, rating:other.rating},
               p1Goals: md.myGoals, p2Goals: md.oppGoals,
               events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
+              p1Profile: md.myProfile, p2Profile: md.oppProfile,
               startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
             };
             await fb.setDoc(fb.doc(fb.db,'matches',mid), matchDoc);
