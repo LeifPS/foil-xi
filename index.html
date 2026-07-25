@@ -3323,7 +3323,7 @@ function simulateShootout(myRating, oppRating, myPlayers, oppPlayers){
 function pkWinProbability(myScore, oppScore, myKicksTaken, oppKicksTaken, myProb, oppProb, totalPlanned=5){
   const myRemainingPlanned = Math.max(0, totalPlanned-myKicksTaken);
   const oppRemainingPlanned = Math.max(0, totalPlanned-oppKicksTaken);
-  const iterations = 700;
+  const iterations = 900;
   let wins = 0;
   for(let i=0;i<iterations;i++){
     let ms=myScore, os=oppScore;
@@ -3333,7 +3333,7 @@ function pkWinProbability(myScore, oppScore, myKicksTaken, oppKicksTaken, myProb
     while(ms===os && rounds<12){ if(Math.random()<myProb) ms++; if(Math.random()<oppProb) os++; rounds++; }
     if(ms>os) wins++; else if(ms===os) wins+=0.5;
   }
-  return wins/iterations;
+  return clamp(wins/iterations, 0.01, 0.99);
 }
 function computeTeamProfile(players, fallbackOv){
   if(!players || !players.length) return {attack: fallbackOv||75, defense: fallbackOv||75};
@@ -3357,7 +3357,7 @@ function computeLambda(attack, oppDefense){
   const diff = attack - oppDefense;
   return clamp(1.3 + diff/11, 0.22, 4.9);
 }
-function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, iterations=400){
+function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, iterations=900){
   const scaledMyLambda = computeLambda(myProfile.attack, oppProfile.defense) * (minutesLeft/90);
   const scaledOppLambda = computeLambda(oppProfile.attack, myProfile.defense) * (minutesLeft/90);
   const tiebreakEdge = clamp(0.5 + ((myProfile.attack+myProfile.defense)-(oppProfile.attack+oppProfile.defense))/500, 0.35, 0.65);
@@ -3368,7 +3368,16 @@ function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile
     if(ms>os) wins++;
     else if(ms===os){ if(Math.random()<tiebreakEdge) wins++; }
   }
-  return clamp(wins/iterations, 0.02, 0.98);
+  return clamp(wins/iterations, 0.01, 0.99);
+}
+// smooths the displayed win probability across the last couple of updates so it doesn't jitter
+// from run-to-run Monte Carlo sampling noise, while still tracking real swings (goals, time) quickly
+let winProbSmoothState = null;
+function resetWinProbSmoothing(){ winProbSmoothState = null; }
+function smoothWinProb(raw){
+  if(winProbSmoothState===null){ winProbSmoothState = raw; return raw; }
+  winProbSmoothState = winProbSmoothState*0.4 + raw*0.6;
+  return clamp(winProbSmoothState, 0.01, 0.99);
 }
 function winProbRowHTML(pct){
   const p = Math.round(pct*100);
@@ -3439,7 +3448,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
       live.innerHTML = `
         <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
         <div class="mono" id="live-minute" style="text-align:center;color:var(--muted);margin-bottom:8px;">${minuteStart}'</div>
-        ${winProbRowHTML(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, myProfile, oppProfile))}
+        ${winProbRowHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, myProfile, oppProfile)))}
         <div class="match-log" id="live-log"></div>`;
       playSfx('whistle');
     }
@@ -3476,7 +3485,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         }
         const minEl = document.getElementById('live-minute');
         if(minEl) minEl.textContent = minute + "'" + (minuteEnd>90 ? ' (Verl\u00e4ngerung)' : '');
-        updateWinProbEl(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, myProfile, oppProfile));
+        updateWinProbEl(smoothWinProb(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, myProfile, oppProfile)));
       }
       if(elapsed>=durationMs){ clearInterval(timer); resolve({myTally, oppTally}); }
     }, 250);
@@ -3490,7 +3499,7 @@ function animateShootout(shootout, myName, oppName){
       sec.id = 'pk-section';
       sec.innerHTML = `<div class="mono" style="text-align:center;margin:14px 0 4px;color:var(--muted);letter-spacing:.06em;">ELFMETERSCHIESSEN</div>
         <div class="score" id="pk-score" style="font-size:32px;">0 \u2013 0</div>
-        ${winProbRowHTML(pkWinProbability(0,0,0,0,shootout.myProb,shootout.oppProb))}
+        ${winProbRowHTML(smoothWinProb(pkWinProbability(0,0,0,0,shootout.myProb,shootout.oppProb)))}
         <div class="match-log" id="pk-log"></div>`;
       live.appendChild(sec);
     }
@@ -3512,7 +3521,7 @@ function animateShootout(shootout, myName, oppName){
       }
       const scoreEl = document.getElementById('pk-score');
       if(scoreEl) scoreEl.textContent = `${myS} \u2013 ${oppS}`;
-      updateWinProbEl(pkWinProbability(myS, oppS, i+1, i+1, shootout.myProb, shootout.oppProb));
+      updateWinProbEl(smoothWinProb(pkWinProbability(myS, oppS, i+1, i+1, shootout.myProb, shootout.oppProb)));
       i++;
       setTimeout(step, 650);
     };
@@ -3520,6 +3529,7 @@ function animateShootout(shootout, myName, oppName){
   });
 }
 async function playFullMatch(md, myName, oppName){
+  resetWinProbSmoothing();
   const totalHorizon = md.wentToET ? 120 : 90;
   const myScorers = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
