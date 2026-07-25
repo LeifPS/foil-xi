@@ -2294,6 +2294,7 @@ async function init(){
     if(!profile.matchHistory) profile.matchHistory = [];
     if(!profile.scorerStats) profile.scorerStats = {};
     if(profile.soundOn===undefined) profile.soundOn = true;
+    if(profile.tournament===undefined) profile.tournament = null;
   }
   soundEnabled = profile.soundOn;
   collection = await sGet('collection');
@@ -3352,6 +3353,7 @@ function initGlobalSfxListeners(){
 let queueActive = false;
 let autorollEnabled = false;
 let queueTimer = null;
+let inMatch = false; // true for the entire duration of an actual match (not just searching), prevents any overlap
 
 // ===== FRIENDS & DUELS =====
 async function addFriend(rawName){
@@ -3371,10 +3373,12 @@ async function removeFriend(userId){
 }
 let pendingDuelId = null, pendingDuelTimer = null;
 async function challengeFriend(friend){
+  if(queueActive || inMatch || pendingDuelId) return;
+  pendingDuelId = 'pending'; // temporary sentinel set synchronously to block a second near-simultaneous call
   const {rating, filled} = squadRating();
-  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  if(filled<11){ pendingDuelId=null; toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   await fbReady;
-  if(!fb){ toast('Duelle ben\u00f6tigen das Online-Backend (Firebase). Gerade nicht erreichbar.'); return; }
+  if(!fb){ pendingDuelId=null; toast('Duelle ben\u00f6tigen das Online-Backend (Firebase). Gerade nicht erreichbar.'); return; }
   const myPlayers = getMySquadPlayers();
   const duelId = genId();
   const duel = {
@@ -3384,7 +3388,7 @@ async function challengeFriend(friend){
     status:'pending', createdAt: Date.now()
   };
   try{ await fb.setDoc(fb.doc(fb.db,'duels',duelId), duel); }
-  catch(e){ console.warn('challenge send failed', e); toast('Herausforderung konnte nicht gesendet werden.'); return; }
+  catch(e){ console.warn('challenge send failed', e); pendingDuelId=null; toast('Herausforderung konnte nicht gesendet werden.'); return; }
   pendingDuelId = duelId;
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = `<div style="text-align:center;"><div class="mono" style="color:var(--muted);margin-bottom:10px;">Warte auf Antwort von ${friend.name}\u2026 <span id="duel-timer">0s</span></div><button class="action-btn secondary" id="duel-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button></div>`;
@@ -3453,6 +3457,7 @@ async function loadIncomingDuels(){
       const acceptBtn = document.createElement('button'); acceptBtn.className='action-btn'; acceptBtn.style.cssText='width:auto;padding:6px 12px;'; acceptBtn.textContent='Annehmen';
       const declineBtn = document.createElement('button'); declineBtn.className='action-btn secondary'; declineBtn.style.cssText='width:auto;padding:6px 12px;background:var(--danger);'; declineBtn.textContent='Ablehnen';
       acceptBtn.addEventListener('click', async ()=>{
+        if(queueActive || inMatch){ toast('Du bist gerade in einem Match oder auf der Suche \u2014 bitte zuerst abschlie\u00dfen.'); return; }
         acceptBtn.disabled=true; declineBtn.disabled=true;
         const {rating, filled} = squadRating();
         if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); acceptBtn.disabled=false; declineBtn.disabled=false; return; }
@@ -3494,6 +3499,121 @@ async function loadIncomingDuels(){
   }catch(e){ console.warn('load incoming duels failed', e); box.innerHTML = `<p class="hint">Konnte Herausforderungen nicht laden.</p>`; }
 }
 
+// ===== TOURNAMENT / CUP MODE =====
+const TOURNAMENT_ROUNDS = [
+  {name:'Viertelfinale', offset:-3, coins:1500},
+  {name:'Halbfinale', offset:3, coins:3000},
+  {name:'Finale', offset:9, coins:8000, packId:'raregold'},
+];
+const TOURNAMENT_CHAMPION_BONUS = {coins:15000, packId:'iconmoment'};
+async function startTournament(){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
+  const {filled} = squadRating();
+  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  profile.tournament = {round: 1};
+  await sSet('profile', profile);
+  renderTournamentPanel();
+}
+function renderTournamentPanel(){
+  const box = document.getElementById('tournament-content');
+  if(!box) return;
+  const t = profile.tournament;
+  if(!t){
+    box.innerHTML = `
+      <p class="hint" style="margin-top:0;">3 Runden gegen st\u00e4rker werdende Gegner \u2014 Viertelfinale, Halbfinale, Finale. Verlierst du, ist das Turnier vorbei; jede gewonnene Runde bringt eine Bonus-Belohnung, der Pokalsieg eine gro\u00dfe.</p>
+      <button class="action-btn" id="tournament-start" style="width:220px;">Turnier starten</button>`;
+    document.getElementById('tournament-start').addEventListener('click', startTournament);
+    return;
+  }
+  const round = TOURNAMENT_ROUNDS[t.round-1];
+  box.innerHTML = `
+    <div class="formation-select" style="margin-bottom:14px;">
+      ${TOURNAMENT_ROUNDS.map((r,i)=>`<div class="chip ${i+1<t.round?'active':''}" style="${i+1===t.round?'border-color:var(--gold);color:var(--gold);':''}">${r.name}</div>`).join('')}
+    </div>
+    <p class="hint" style="margin-top:0;">Aktuelle Runde: <b style="color:var(--chalk);">${round.name}</b>. Belohnung bei Sieg: ${round.coins.toLocaleString('de-DE')} Coins${round.packId?' + '+PACKS.find(p=>p.id===round.packId).name:''}.</p>
+    <button class="action-btn" id="tournament-play" style="width:220px;">Spiel starten</button>
+    <p class="hint" style="margin-top:10px;">Das Spiel l\u00e4uft oben im Hauptbereich ab.</p>`;
+  document.getElementById('tournament-play').addEventListener('click', playTournamentRound);
+}
+async function playTournamentRound(){
+  if(inMatch || queueActive || pendingDuelId) return;
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const t = profile.tournament;
+  if(!t) return;
+  const round = TOURNAMENT_ROUNDS[t.round-1];
+  const opp = pickRealisticOpponent(rating + round.offset);
+  const area = document.getElementById('match-area');
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      <div class="vs-x">VS</div>
+      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (${round.name})</div></div>
+    </div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      await atomicCoinChange(round.coins);
+      let drawnPack = null;
+      if(round.packId){ const pack = PACKS.find(p=>p.id===round.packId); drawnPack = {pack, drawn: pack.draw()}; }
+      if(t.round>=TOURNAMENT_ROUNDS.length){
+        // won the whole cup
+        await atomicCoinChange(TOURNAMENT_CHAMPION_BONUS.coins);
+        profile.tournament = null;
+        await sSet('profile', profile);
+        toast(`\ud83c\udfc6 Pokalsieger! +${(round.coins+TOURNAMENT_CHAMPION_BONUS.coins).toLocaleString('de-DE')} Coins insgesamt!`);
+        if(drawnPack) showPackOpening(drawnPack.pack, drawnPack.drawn);
+        else { const bp = PACKS.find(p=>p.id===TOURNAMENT_CHAMPION_BONUS.packId); showPackOpening(bp, bp.draw()); }
+      } else {
+        profile.tournament = {round: t.round+1};
+        await sSet('profile', profile);
+        toast(`${round.name} gewonnen! Weiter geht's.`);
+        if(drawnPack) showPackOpening(drawnPack.pack, drawnPack.drawn);
+      }
+    } else {
+      profile.tournament = null;
+      await sSet('profile', profile);
+      toast(`Ausgeschieden im ${round.name}. Versuch's noch mal!`);
+    }
+    renderTournamentPanel();
+  }});
+}
+// ===== leaderboard direct challenge (with optional reward-free friendly mode) =====
+function challengeLeaderboardSquad(squadData){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
+  const {filled} = squadRating();
+  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  openModal(`
+    <h2 style="margin-bottom:10px;">${squadData.owner||'Unbenannter Verein'} herausfordern?</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:18px;">Rating ${squadData.rating} OVR \u2014 dies ist eine lokale Simulation gegen den ver\u00f6ffentlichten Kader, keine Live-Verbindung.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="action-btn" id="challenge-normal">Herausfordern (mit Belohnung)</button>
+      <button class="action-btn secondary" id="challenge-friendly">Freundschaftsspiel (ohne Belohnung)</button>
+      <button class="action-btn secondary" id="challenge-cancel" style="background:none;">Abbrechen</button>
+    </div>`);
+  document.getElementById('challenge-cancel').addEventListener('click', closeModal);
+  const start = (friendly)=>{
+    closeModal();
+    currentTab = 'play'; renderNav(); renderView('play');
+    setTimeout(()=>runLeaderboardChallenge(squadData, friendly), 50);
+  };
+  document.getElementById('challenge-normal').addEventListener('click', ()=>start(false));
+  document.getElementById('challenge-friendly').addEventListener('click', ()=>start(true));
+}
+async function runLeaderboardChallenge(squadData, friendly){
+  const {rating} = squadRating();
+  const opp = {owner: squadData.owner||'Unbenannter Verein', rating: squadData.rating, players: squadData.players||[], isBot:false};
+  const area = document.getElementById('match-area');
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      <div class="vs-x">VS</div>
+      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner}${friendly?' (Freundschaftsspiel)':''}</div></div>
+    </div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly});
+}
+
 function renderPlay(view){
   const history = (profile.matchHistory||[]).slice().reverse().slice(0,10);
   const scorers = Object.entries(profile.scorerStats||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);
@@ -3526,6 +3646,10 @@ function renderPlay(view){
         <div class="leader-list" id="networth-list"><p class="hint">L\u00e4dt...</p></div>
       </div>
     </div>
+    <div class="vs-panel" id="tournament-panel" style="margin-top:22px;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Turnier-Modus</h3>
+      <div id="tournament-content"></div>
+    </div>
     <div class="play-grid" style="margin-top:22px;">
       <div>
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Freunde</h3>
@@ -3555,9 +3679,27 @@ function renderPlay(view){
       </div>
     </div>`;
   document.getElementById('find-opp').addEventListener('click', joinQueue);
+  if(inMatch){
+    const findBtn = document.getElementById('find-opp');
+    if(findBtn){ findBtn.disabled = true; findBtn.style.opacity = '.5'; }
+    const ma = document.getElementById('match-area');
+    if(ma) ma.innerHTML = `<p class="hint" style="text-align:center;">Ein Match l\u00e4uft gerade im Hintergrund weiter \u2014 das Ergebnis wird automatisch gespeichert.</p>`;
+  } else if(queueActive){
+    const findBtn = document.getElementById('find-opp');
+    if(findBtn){ findBtn.disabled = true; findBtn.style.opacity = '.5'; }
+    const ma = document.getElementById('match-area');
+    if(ma) ma.innerHTML = `<div style="text-align:center;"><div class="mono" style="color:var(--muted);margin-bottom:10px;">Suche l\u00e4uft im Hintergrund weiter\u2026</div><button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button></div>`;
+    const cancelBtn = document.getElementById('queue-cancel');
+    if(cancelBtn) cancelBtn.addEventListener('click', leaveQueue);
+  } else if(pendingDuelId){
+    const findBtn = document.getElementById('find-opp');
+    if(findBtn){ findBtn.disabled = true; findBtn.style.opacity = '.5'; }
+    const ma = document.getElementById('match-area');
+    if(ma) ma.innerHTML = `<p class="hint" style="text-align:center;">Du wartest gerade auf die Antwort einer Herausforderung.</p>`;
+  }
   document.getElementById('autoroll-toggle').addEventListener('change', e=>{
     autorollEnabled = e.target.checked;
-    if(autorollEnabled && !queueActive){ joinQueue(); }
+    if(autorollEnabled && !queueActive && !inMatch){ joinQueue(); }
     else if(!autorollEnabled) toast('Autoroll gestoppt.');
   });
   document.getElementById('friend-add').addEventListener('click', ()=>{
@@ -3588,6 +3730,7 @@ function renderPlay(view){
   loadIncomingDuels();
   loadNetWorthLeaderboard();
   loadSalesHistory().then(async ()=>{ await updateMyNetWorthEntry(); loadNetWorthLeaderboard(); });
+  renderTournamentPanel();
 }
 async function loadLeaderboard(){
   const box = document.getElementById('leader-list');
@@ -3614,9 +3757,17 @@ async function loadLeaderboard(){
   squads.forEach((s,i)=>{
     const row = document.createElement('div');
     row.className = 'leader-row';
-    row.style.cursor = 'pointer';
-    row.innerHTML = `<span class="rk">${i+1}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span>`;
-    row.addEventListener('click', ()=>showSquadModal(s));
+    row.style.flexWrap = 'wrap';
+    const info = document.createElement('span');
+    info.style.cssText = 'flex:1;cursor:pointer;display:flex;gap:8px;align-items:center;';
+    info.innerHTML = `<span class="rk">${i+1}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span>`;
+    info.addEventListener('click', ()=>showSquadModal(s));
+    const challengeBtn = document.createElement('button');
+    challengeBtn.className = 'action-btn secondary';
+    challengeBtn.style.cssText = 'width:auto;padding:5px 10px;font-size:11px;';
+    challengeBtn.textContent = 'Herausfordern';
+    challengeBtn.addEventListener('click', (e)=>{ e.stopPropagation(); challengeLeaderboardSquad(s); });
+    row.append(info, challengeBtn);
     box.appendChild(row);
   });
 }
@@ -3645,11 +3796,15 @@ function showSquadModal(s){
     <h2 style="margin-bottom:2px;">${s.owner || 'Unbenannter Verein'}</h2>
     <p class="hint" style="margin-top:0;margin-bottom:16px;">${s.formation || ''} \u00b7 Team-Rating ${s.rating} OVR</p>
     <div class="reveal-strip" id="squad-view-grid"></div>
-    <button class="modal-close" id="squad-view-close">Schlie\u00dfen</button>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="modal-close" id="squad-view-close" style="flex:1;margin:0;">Schlie\u00dfen</button>
+      <button class="action-btn" id="squad-view-challenge" style="flex:1;">Herausfordern</button>
+    </div>
   `);
   const grid = document.getElementById('squad-view-grid');
   (s.players||[]).forEach(p=>grid.appendChild(cardElLite(p)));
   document.getElementById('squad-view-close').addEventListener('click', closeModal);
+  document.getElementById('squad-view-challenge').addEventListener('click', ()=>{ closeModal(); challengeLeaderboardSquad(s); });
 }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function simGoals(lambda){
@@ -3961,17 +4116,29 @@ async function playFullMatch(md, myName, oppName){
   return {myGoals: myTally, oppGoals: oppTally, myScorers};
 }
 const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
-async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers){
+async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers, friendly=false){
   const result = winnerSide==='me' ? 'WIN' : 'LOSS';
-  const reward = result==='WIN' ? 900 : 250;
+  const reward = friendly ? 0 : (result==='WIN' ? 900 : 250);
+  let suffix = '';
+  if(wentToPK) suffix = ' (n.E.)';
+  else if(wentToET) suffix = ' (n.V.)';
+
+  if(friendly){
+    playSfx('whistle');
+    playSfx(result==='WIN' ? 'win' : 'lose');
+    const area = document.getElementById('result-area');
+    if(area){
+      area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':'var(--danger)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}${suffix}</div>
+        <div class="mono" style="color:var(--muted);margin-top:6px;">Freundschaftsspiel \u2014 keine Belohnung, keine Statistik</div>`;
+    }
+    return {result, winnerSide};
+  }
+
   await fbReady;
 
   // compute the new history/scorer state locally first
   let newHistory = profile.matchHistory ? profile.matchHistory.slice() : [];
   let newScorerStats = profile.scorerStats ? {...profile.scorerStats} : {};
-  let suffix = '';
-  if(wentToPK) suffix = ' (n.E.)';
-  else if(wentToET) suffix = ' (n.V.)';
   if(oppName){
     newHistory.push({opponent: oppName, myGoals, oppGoals, result, suffix, timestamp: Date.now()});
     if(newHistory.length>20) newHistory = newHistory.slice(-20);
@@ -4021,17 +4188,25 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
       note.textContent = 'Autoroll: n\u00e4chstes Spiel startet in 4s\u2026';
       area.appendChild(note);
     }
-    setTimeout(()=>{ if(autorollEnabled && !queueActive) joinQueue(); }, 4000);
+    setTimeout(()=>{ if(autorollEnabled && !queueActive && !inMatch) joinQueue(); }, 4000);
   }
+  return {result, winnerSide};
 }
-async function runLocalMatch(myRating, opp){
-  const myPlayers = getMySquadPlayers();
-  const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players);
-  md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
-  const myName = profile.displayName || 'Dein Verein';
-  const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
-  const final = await playFullMatch(md, myName, oppName);
-  await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, final.myScorers);
+async function runLocalMatch(myRating, opp, opts={}){
+  if(inMatch) return;
+  inMatch = true;
+  try{
+    const myPlayers = getMySquadPlayers();
+    const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players);
+    md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+    const myName = profile.displayName || 'Dein Verein';
+    const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
+    const final = await playFullMatch(md, myName, oppName);
+    const outcome = await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, final.myScorers, opts.friendly);
+    if(opts.onComplete) opts.onComplete(outcome);
+  } finally {
+    inMatch = false;
+  }
 }
 let CLUB_INDEX = null;
 function buildClubIndex(){
@@ -4063,6 +4238,7 @@ function pickRealisticOpponent(targetRating){
   return {owner:chosen.club, rating:chosen.avgOv, players, isBot:true};
 }
 function startBotMatch(rating){
+  if(inMatch) return;
   const opp = pickRealisticOpponent(rating);
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = `
@@ -4092,7 +4268,13 @@ async function leaveQueue(){
   if(area) area.innerHTML = '';
   toast('Warteschlange verlassen. Autoroll gestoppt.');
 }
+let lastEnteredMatchId = null;
 async function enterSyncedMatch(matchDoc){
+  if(inMatch) return;
+  if(matchDoc.mid && matchDoc.mid===lastEnteredMatchId) return; // already entered this exact match once
+  inMatch = true;
+  lastEnteredMatchId = matchDoc.mid || null;
+  try{
   const amP1 = matchDoc.p1.userId === profile.userId;
   const meSide = amP1 ? matchDoc.p1 : matchDoc.p2;
   const oppSide = amP1 ? matchDoc.p2 : matchDoc.p1;
@@ -4136,18 +4318,22 @@ async function enterSyncedMatch(matchDoc){
   if(fb && matchDoc.mid){
     try{ await fb.deleteDoc(fb.doc(fb.db,'matches',matchDoc.mid)); }catch(e){}
   }
+  } finally {
+    inMatch = false;
+  }
 }
 async function joinQueue(){
-  if(queueActive) return; // already searching, avoid double-queuing (e.g. from autoroll + manual click)
+  if(queueActive || inMatch || pendingDuelId) return; // already searching, already in a match, or awaiting a challenge reply
+  queueActive = true;
   const {rating, filled} = squadRating();
-  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  if(filled<11){ queueActive=false; toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   await fbReady;
   if(!fb){
+    queueActive = false;
     toast('Online-Backend nicht erreichbar \u2014 du spielst stattdessen gegen eine CPU-Elf.');
     startBotMatch(rating);
     return;
   }
-  queueActive = true;
   const myPlayers = getMySquadPlayers();
   const startTime = Date.now();
   try{
@@ -4161,6 +4347,7 @@ async function joinQueue(){
     startBotMatch(rating);
     return;
   }
+  if(!queueActive) return; // was cancelled while the write above was in flight
   const area = document.getElementById('match-area');
   if(area){
     area.innerHTML = `
@@ -4192,8 +4379,10 @@ async function joinQueue(){
       //    me and creates the match before my own first poll ever ran).
       try{
         const mySnap = await fb.getDoc(fb.doc(fb.db,'queue',profile.userId));
+        if(!queueActive) return; // cancelled while that request was in flight
         if(mySnap.exists() && mySnap.data().matchedId){
           const matchSnap = await fb.getDoc(fb.doc(fb.db,'matches',mySnap.data().matchedId));
+          if(!queueActive) return;
           if(matchSnap.exists()){
             queueActive = false;
             await leaveQueueSilently();
@@ -4202,18 +4391,22 @@ async function joinQueue(){
           }
         }
       }catch(e){ console.warn('own-queue match check failed', e); }
+      if(!queueActive) return;
 
       const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'queue'), fb.orderBy('joinedAt','asc'), fb.limit(20)));
+      if(!queueActive) return;
       const staleCutoff = Date.now() - 90000; // ignore queue entries older than 90s (likely abandoned)
       snap.docs.forEach(d=>{
         const data = d.data();
         if(data.userId!==profile.userId && data.joinedAt>staleCutoff) seenCandidates.set(data.userId, data);
       });
       for(const other of seenCandidates.values()){
+        if(!queueActive) return;
         if(!(profile.userId < other.userId)) continue; // only the lower-id side ever creates the match
         const mid = matchIdFor(profile.userId, startTime, other.userId, other.joinedAt);
         try{
           const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
+          if(!queueActive) return;
           if(!existing.exists()){
             const md = buildDecisiveMatch(rating, other.rating, myPlayers, other.players);
             const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'}));
@@ -4232,6 +4425,7 @@ async function joinQueue(){
               p1Profile: md.myProfile, p2Profile: md.oppProfile,
               startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
             };
+            if(!queueActive) return; // cancelled right before we'd have created the match - back out cleanly
             await fb.setDoc(fb.doc(fb.db,'matches',mid), matchDoc);
             // tag the opponent's OWN queue doc instead of deleting it, so they find the match
             // even if they never personally saw me in a scan (fixes the "one side never finds it" bug)
