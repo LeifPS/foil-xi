@@ -1164,43 +1164,54 @@ async function getLockedUids(){
   Object.values(squad.slots).forEach(uid=>locked.add(uid));
   return locked;
 }
+let sellModalMode = 'manual';
 async function openSellModal(){
-  openModal(`<h2 style="margin-bottom:10px;">Karte verkaufen</h2><p class="hint" style="margin-top:0;">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p>`);
+  openModal(`<h2 style="margin-bottom:10px;">Karte(n) verkaufen</h2><p class="hint" style="margin-top:0;">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p>`);
   const usedInSquad = await getLockedUids();
+  const allEligible = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId), cardId:c.cardId})).filter(x=>x.card && !usedInSquad.has(x.uid));
   openModal(`
-    <h2 style="margin-bottom:4px;">Karte verkaufen</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle eine Karte und lege einen Preis fest. Jeder kann sie danach im Transfermarkt kaufen.</p>
+    <h2 style="margin-bottom:4px;">Karte(n) verkaufen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">W\u00e4hle Karten manuell aus, oder liste alle Karten mit bestimmten Eigenschaften auf einmal (z.\u00a0B. Rating 90-92, LW).</p>
+    <div style="display:flex;gap:2px;margin-bottom:16px;">
+      <button class="nav-btn ${sellModalMode==='manual'?'active':''}" id="sell-tab-manual" style="padding:8px 14px;flex:1;">Manuell ausw\u00e4hlen</button>
+      <button class="nav-btn ${sellModalMode==='filter'?'active':''}" id="sell-tab-filter" style="padding:8px 14px;flex:1;">Nach Eigenschaften</button>
+    </div>
+    <div id="sell-modal-body"></div>
+  `);
+  document.getElementById('sell-tab-manual').addEventListener('click', ()=>{ sellModalMode='manual'; openSellModal(); });
+  document.getElementById('sell-tab-filter').addEventListener('click', ()=>{ sellModalMode='filter'; openSellModal(); });
+  if(sellModalMode==='manual') renderSellManual(allEligible, usedInSquad);
+  else renderSellFilter(allEligible);
+}
+function renderSellManual(allEligible, usedInSquad){
+  const body = document.getElementById('sell-modal-body');
+  body.innerHTML = `
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Spieler</div>
     <div class="club-grid" id="sell-pick-grid" style="max-height:240px;overflow:auto;margin-bottom:12px;"></div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
     <div class="club-grid" id="sell-pick-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
     <div class="toolbar" style="margin-bottom:14px;">
-      <input id="sell-price" type="number" min="1" placeholder="Preis in Coins">
+      <input id="sell-price" type="number" min="1" placeholder="Preis pro Karte in Coins">
     </div>
-    <div class="mono" id="sell-selected-info" style="color:var(--muted);margin-bottom:12px;">Keine Karte ausgew\u00e4hlt</div>
-    <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:220px;">Zum Markt hinzuf\u00fcgen</button>`);
-  let selected = null; // {uid, cardId or mgrId, itemType}
-  const updateSel = (label)=>{
-    document.getElementById('sell-selected-info').textContent = selected ? `Ausgew\u00e4hlt: ${label}` : 'Keine Karte ausgew\u00e4hlt';
+    <div class="mono" id="sell-selected-info" style="color:var(--muted);margin-bottom:12px;">0 Karten ausgew\u00e4hlt</div>
+    <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:260px;">Zum Markt hinzuf\u00fcgen</button>`;
+  const selected = new Map(); // uid -> {uid, itemType, cardId}
+  const updateSel = ()=>{
+    document.getElementById('sell-selected-info').textContent = `${selected.size} Karte${selected.size===1?'':'n'} ausgew\u00e4hlt`;
     const btn = document.getElementById('sell-submit');
-    btn.disabled = !selected; btn.style.opacity = selected ? '1':'.4';
+    btn.disabled = !selected.size; btn.style.opacity = selected.size ? '1':'.4';
   };
   const pGrid = document.getElementById('sell-pick-grid');
-  collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId), cardId:c.cardId})).filter(x=>x.card).forEach(({uid,card,cardId})=>{
-    const inSquad = usedInSquad.has(uid);
+  allEligible.forEach(({uid,card,cardId})=>{
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
-    wrap.style.cursor = inSquad ? 'not-allowed' : 'pointer';
-    wrap.style.opacity = inSquad ? '.45' : '1';
+    wrap.style.cursor = 'pointer';
     const el = cardEl(card,'mini');
     wrap.appendChild(el);
-    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERF\u00dcGBAR'; wrap.appendChild(b); }
     wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Diese Karte ist gerade nicht verf\u00fcgbar (im Kader, bereits gelistet oder in einem Angebot).'); return; }
-      document.querySelectorAll('#sell-pick-grid .club-card-wrap, #sell-pick-mgr-grid .club-card-wrap').forEach(w=>w.style.outline='');
-      wrap.style.outline='3px solid var(--turf-bright)';
-      selected = {uid, itemType:'player', cardId};
-      updateSel(card.n);
+      if(selected.has(uid)){ selected.delete(uid); wrap.style.outline=''; }
+      else{ selected.set(uid, {uid, itemType:'player', cardId}); wrap.style.outline='3px solid var(--turf-bright)'; }
+      updateSel();
     });
     pGrid.appendChild(wrap);
   });
@@ -1216,10 +1227,9 @@ async function openSellModal(){
     if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERF\u00dcGBAR'; wrap.appendChild(b); }
     wrap.addEventListener('click', ()=>{
       if(inSquad){ toast('Dieser Trainer ist gerade nicht verf\u00fcgbar (zugewiesen, bereits gelistet oder in einem Angebot).'); return; }
-      document.querySelectorAll('#sell-pick-grid .club-card-wrap, #sell-pick-mgr-grid .club-card-wrap').forEach(w=>w.style.outline='');
-      wrap.style.outline='3px solid var(--turf-bright)';
-      selected = {uid, itemType:'manager', cardId:mgrId};
-      updateSel(mgr.n);
+      if(selected.has(uid)){ selected.delete(uid); wrap.style.outline=''; }
+      else{ selected.set(uid, {uid, itemType:'manager', cardId:mgrId}); wrap.style.outline='3px solid var(--turf-bright)'; }
+      updateSel();
     });
     mGrid.appendChild(wrap);
   });
@@ -1227,25 +1237,99 @@ async function openSellModal(){
   document.getElementById('sell-submit').addEventListener('click', async (e)=>{
     const price = Math.max(1, Math.floor(Number(document.getElementById('sell-price').value)||0));
     if(!price){ toast('Bitte einen Preis angeben.'); return; }
-    if(!selected){ toast('Bitte eine Karte ausw\u00e4hlen.'); return; }
-    // final safety re-check: make sure the selection hasn't gone stale (e.g. just assigned to squad)
-    if(selected.itemType==='manager' ? selected.uid===squad.managerUid : Object.values(squad.slots).includes(selected.uid)){
-      toast('Diese Karte ist jetzt deinem Kader zugewiesen. Bitte eine andere ausw\u00e4hlen.'); return;
-    }
+    if(!selected.size){ toast('Bitte mindestens eine Karte ausw\u00e4hlen.'); return; }
     e.target.disabled = true;
     await fbReady;
     if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); e.target.disabled=false; return; }
-    try{
-      await fb.setDoc(fb.doc(fb.db,'market', genId()), {
-        sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
-        itemType: selected.itemType, cardUid: selected.uid, cardId: selected.cardId,
-        price, createdAt: Date.now()
-      });
-      closeModal();
-      toast('Zum Transfermarkt hinzugef\u00fcgt!');
-      if(currentTab==='trade') renderTrade(document.getElementById('view'));
-    }catch(e){ console.warn('market list failed', e); toast('Angebot konnte nicht erstellt werden.'); }
+    const squadValues = new Set(Object.values(squad.slots));
+    let created = 0, skipped = 0;
+    for(const item of selected.values()){
+      const stillLocked = item.itemType==='manager' ? item.uid===squad.managerUid : squadValues.has(item.uid);
+      if(stillLocked){ skipped++; continue; }
+      try{
+        await fb.setDoc(fb.doc(fb.db,'market', genId()), {
+          sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
+          itemType: item.itemType, cardUid: item.uid, cardId: item.cardId,
+          price, createdAt: Date.now()
+        });
+        created++;
+      }catch(err){ console.warn('bulk market list failed for item', err); skipped++; }
+    }
+    closeModal();
+    toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen (nicht mehr verf\u00fcgbar).` : `${created} Karte(n) zum Transfermarkt hinzugef\u00fcgt!`);
+    if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
+}
+function renderSellFilter(allEligible){
+  const body = document.getElementById('sell-modal-body');
+  const posOptions = Object.keys(POS_DE).map(p=>`<option value="${p}">${posDE(p)} (${p})</option>`).join('');
+  body.innerHTML = `
+    <div class="toolbar" style="margin-bottom:10px;">
+      <input id="filter-min-ov" type="number" min="1" max="105" placeholder="Min. Rating" style="max-width:120px;">
+      <input id="filter-max-ov" type="number" min="1" max="105" placeholder="Max. Rating" style="max-width:120px;">
+      <select id="filter-pos">
+        <option value="ANY">Beliebige Position</option>
+        ${posOptions}
+      </select>
+    </div>
+    <div class="toolbar" style="margin-bottom:14px;">
+      <input id="filter-price" type="number" min="1" placeholder="Preis pro Karte in Coins">
+    </div>
+    <div class="mono" id="filter-preview" style="color:var(--muted);margin-bottom:14px;">Lege Filter fest, um passende Karten zu sehen.</div>
+    <div class="club-grid" id="filter-preview-grid" style="max-height:220px;overflow:auto;margin-bottom:16px;"></div>
+    <button class="action-btn" id="filter-submit" disabled style="opacity:.4;width:260px;">Alle auflisten</button>
+    <p class="hint" style="margin-top:10px;">Es werden nur Spielerkarten erfasst (keine Trainer), die nicht im Kader stehen und nicht bereits gelistet/im Handel sind. Maximal 40 Karten pro Aktion.</p>`;
+  const minInput = document.getElementById('filter-min-ov');
+  const maxInput = document.getElementById('filter-max-ov');
+  const posSelect = document.getElementById('filter-pos');
+  let matches = [];
+  const updatePreview = ()=>{
+    const min = Math.max(1, Math.floor(Number(minInput.value)||1));
+    const max = Math.min(105, Math.floor(Number(maxInput.value)||105));
+    const pos = posSelect.value;
+    matches = allEligible.filter(x=>{
+      if(x.card.isManager) return false;
+      if(x.card.ov<min || x.card.ov>max) return false;
+      if(pos!=='ANY' && mainPos(x.card.pos)!==pos) return false;
+      return true;
+    });
+    const grid = document.getElementById('filter-preview-grid');
+    const previewEl = document.getElementById('filter-preview');
+    const capped = matches.slice(0,40);
+    previewEl.textContent = matches.length ? `${matches.length} passende Karte${matches.length===1?'':'n'} gefunden${matches.length>40?' (zeige/liste nur die ersten 40)':''}.` : 'Keine passenden Karten gefunden.';
+    grid.innerHTML = '';
+    capped.forEach(({card})=>grid.appendChild(cardEl(card,'xs')));
+    const btn = document.getElementById('filter-submit');
+    btn.disabled = !capped.length; btn.style.opacity = capped.length ? '1' : '.4';
+  };
+  [minInput, maxInput, posSelect].forEach(el=>el.addEventListener('input', updatePreview));
+  posSelect.addEventListener('change', updatePreview);
+  document.getElementById('filter-submit').addEventListener('click', async (e)=>{
+    const price = Math.max(1, Math.floor(Number(document.getElementById('filter-price').value)||0));
+    if(!price){ toast('Bitte einen Preis angeben.'); return; }
+    if(!matches.length){ toast('Keine passenden Karten gefunden.'); return; }
+    e.target.disabled = true;
+    await fbReady;
+    if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); e.target.disabled=false; return; }
+    const squadValues = new Set(Object.values(squad.slots));
+    const toList = matches.slice(0,40);
+    let created = 0, skipped = 0;
+    for(const {uid,card,cardId} of toList){
+      if(squadValues.has(uid)){ skipped++; continue; }
+      try{
+        await fb.setDoc(fb.doc(fb.db,'market', genId()), {
+          sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
+          itemType:'player', cardUid: uid, cardId,
+          price, createdAt: Date.now()
+        });
+        created++;
+      }catch(err){ console.warn('bulk filter list failed for item', err); skipped++; }
+    }
+    closeModal();
+    toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen.` : `${created} Karte(n) f\u00fcr je ${price.toLocaleString('de-DE')} Coins gelistet!`);
+    if(currentTab==='trade') renderTrade(document.getElementById('view'));
+  });
+  updatePreview();
 }
 async function withdrawMarketListing(listing){
   try{
@@ -2158,12 +2242,22 @@ function tierKeyForOv(ov){
 }
 function simulatePackOdds(pack, iterations=3000){
   const tierCounts = {gold:0, goldrare:0, elite:0, icon:0, ultimate:0};
-  let totalCards=0, atLeastElite=0, atLeastIcon=0, atLeastUltimate=0, atLeastSpecial=0, atLeastManager=0;
+  const mgrBoostCounts = {};
+  const cardCounts = new Map(); // id -> {card, count}
+  let totalCards=0, totalManagers=0, atLeastElite=0, atLeastIcon=0, atLeastUltimate=0, atLeastSpecial=0, atLeastManager=0;
   for(let i=0;i<iterations;i++){
     const drawn = pack.draw();
     let hasElite=false, hasIcon=false, hasUltimate=false, hasSpecial=false, hasManager=false;
     drawn.forEach(c=>{
-      if(c.isManager){ hasManager=true; return; }
+      const entry = cardCounts.get(c.id);
+      if(entry) entry.count++; else cardCounts.set(c.id, {card:c, count:1});
+      if(c.isManager){
+        hasManager=true; totalManagers++;
+        const meister = c.variant==='meistertrainer' ? ' Meistertrainer' : '';
+        const label = c.boostType==='percent' ? `+${c.boostValue}% (${c.tier}${meister})` : `+${c.boostValue} Punkte (${c.tier}${meister})`;
+        mgrBoostCounts[label] = (mgrBoostCounts[label]||0)+1;
+        return;
+      }
       totalCards++;
       const key = tierKeyForOv(c.ov);
       tierCounts[key]++;
@@ -2178,10 +2272,17 @@ function simulatePackOdds(pack, iterations=3000){
     if(hasSpecial) atLeastSpecial++;
     if(hasManager) atLeastManager++;
   }
+  const totalPicks = totalCards + totalManagers;
+  const cardPct = Array.from(cardCounts.values())
+    .map(({card,count})=>({card, pct: totalPicks ? count/totalPicks*100 : 0}))
+    .sort((a,b)=>b.pct-a.pct);
   const tierPct = {};
   TIER_ORDER_ODDS.forEach(k=>{ tierPct[k] = totalCards ? (tierCounts[k]/totalCards*100) : 0; });
+  const mgrBoostPct = Object.entries(mgrBoostCounts)
+    .map(([label,count])=>[label, totalManagers ? count/totalManagers*100 : 0])
+    .sort((a,b)=>b[1]-a[1]);
   return {
-    tierPct,
+    tierPct, mgrBoostPct, cardPct,
     atLeastElitePct: atLeastElite/iterations*100,
     atLeastIconPct: atLeastIcon/iterations*100,
     atLeastUltimatePct: atLeastUltimate/iterations*100,
@@ -2214,12 +2315,43 @@ function showPackOdds(pack){
     ].filter(([,v])=>v>0.05).map(([label,v])=>`
       <div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">${label}</span><span class="mono" style="color:var(--gold);">${v.toFixed(1)}%</span></div>`).join('');
     const mgrRow = odds.atLeastManagerPct>0 ? `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">Trainerkarte enthalten</span><span class="mono" style="color:var(--gold);">${odds.atLeastManagerPct.toFixed(1)}%</span></div>` : '';
+    const mgrBoostRows = (odds.mgrBoostPct||[]).map(([label,pct])=>`
+      <div class="stat" style="margin-bottom:8px;">
+        <div class="stat-head"><span>${label}</span><span>${pct.toFixed(1)}%</span></div>
+        <div class="bar" style="height:6px;"><i style="width:${pct}%;background:var(--gold);"></i></div>
+      </div>`).join('');
     body.innerHTML = `
       <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Seltenheits-Verteilung pro Karte</div>
       ${tierRows || '<p class="hint">Keine Spielerkarten in diesem Pack.</p>'}
+      ${mgrBoostRows ? `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer-Bonus-Verteilung</div>${mgrBoostRows}` : ''}
       <div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Chancen pro Pack-\u00d6ffnung</div>
       ${atLeastRows}${mgrRow}
-      <p class="hint" style="margin-top:12px;">Garantien aus der Paketbeschreibung (z.\u00a0B. "1 garantiert 85+") erscheinen hier entsprechend nahe 100\u00a0%.</p>`;
+      <p class="hint" style="margin-top:12px;">Garantien aus der Paketbeschreibung (z.\u00a0B. "1 garantiert 85+") erscheinen hier entsprechend nahe 100\u00a0%.</p>
+      <div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Chance auf jede einzelne Karte</div>
+      <div id="odds-card-grid" class="club-grid" style="max-height:340px;overflow:auto;"></div>`;
+    const CARD_ODDS_LIMIT = 60;
+    const cardGrid = document.getElementById('odds-card-grid');
+    if(cardGrid){
+      const shown = odds.cardPct.slice(0, CARD_ODDS_LIMIT);
+      shown.forEach(({card,pct})=>{
+        const wrap = document.createElement('div');
+        wrap.className = 'club-card-wrap';
+        wrap.appendChild(cardEl(card,'mini'));
+        const tag = document.createElement('div');
+        tag.className = 'price-pill';
+        tag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;';
+        tag.innerHTML = `<div class="pdot"></div>${pct<0.1?'<0.1':pct.toFixed(1)}%`;
+        wrap.appendChild(tag);
+        cardGrid.appendChild(wrap);
+      });
+      if(odds.cardPct.length>CARD_ODDS_LIMIT){
+        const more = document.createElement('p');
+        more.className = 'hint';
+        more.style.cssText = 'width:100%;margin-top:8px;';
+        more.textContent = `+ ${odds.cardPct.length-CARD_ODDS_LIMIT} weitere Karten mit jeweils unter ${shown[shown.length-1].pct.toFixed(1)}% Chance (Pool zu gro\u00df, um alle anzuzeigen).`;
+        cardGrid.appendChild(more);
+      }
+    }
   }, 30);
 }
 function renderStore(view){
