@@ -3558,11 +3558,18 @@ const TOURNAMENT_ROUNDS = [
 function buildEliteOpponentXI(minOv, maxOv){
   const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS)
     .filter(c=>c.ov>=minOv && c.ov<=maxOv && !c.isManager);
-  const xi = Array.from({length:11}, ()=>pick(pool));
+  const slots = FORMATIONS['433'].slots; // 1 GK, 4 DEF, 3 MID, 3 FWD - a real, balanced shape
+  const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
+  pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
+  const xi = slots.map(slot=>{
+    const group = posGroup2(slot.label);
+    const candidates = byGroup[group].length ? byGroup[group] : pool; // fall back to the whole pool if a group is too sparse
+    return pick(candidates);
+  });
   const avgOv = Math.round(xi.reduce((s,p)=>s+p.ov,0)/11);
   const NAMES = ['Weltauswahl','All-Stars XI','Legenden-Elf','Superstar United','Elite FC'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
-  const players = xi.map(p=>({n:p.n, pos:mainPos(p.pos), ov:p.ov, img:p.img}));
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:p.ov, img:p.img}));
   return {owner, rating:avgOv, players, isBot:true};
 }
 async function startTournament(){
@@ -3869,10 +3876,15 @@ function simGoals(lambda){
 function getMySquadPlayers(){
   const form = FORMATIONS[squad.formation];
   const list = [];
+  const mgr = getAssignedManager();
   form.slots.forEach(slot=>{
     const uid = squad.slots[slot.id];
     const card = uid ? ownedCard(uid) : null;
-    if(card) list.push({n:card.n, pos:slot.label, ov:card.ov, img:card.img});
+    if(card){
+      let ov = card.ov;
+      if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img});
+    }
   });
   return list;
 }
