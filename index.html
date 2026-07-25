@@ -655,6 +655,47 @@ function rapBadge(card, opts={}){
   el.textContent = `RAP ${computeRAP(card).toLocaleString('de-DE')}`;
   return el;
 }
+// ===== club net worth leaderboard =====
+// Firestore can't sort by a derived value server-side, so each club denormalizes its own
+// net worth (coins + RAP of every owned card) into a dedicated 'networth' doc whenever
+// the collection is examined (Club tab) or the player checks the leaderboard (Play tab).
+function computeMyNetWorth(){
+  let total = profile.coins || 0;
+  collection.forEach(c=>{ const card = BY_ID.get(c.cardId); if(card) total += computeRAP(card); });
+  managerCollection.forEach(m=>{ const mgr = MGR_BY_ID.get(m.mgrId); if(mgr) total += computeRAP(mgr); });
+  return Math.round(total);
+}
+async function updateMyNetWorthEntry(){
+  await fbReady;
+  if(!fb || !clubId) return;
+  try{
+    await fb.setDoc(fb.doc(fb.db,'networth', clubId), {
+      userId: profile.userId, name: profile.displayName||profile.userId,
+      netWorth: computeMyNetWorth(), updatedAt: Date.now()
+    });
+  }catch(e){ console.warn('net worth update failed', e); }
+}
+async function loadNetWorthLeaderboard(){
+  const box = document.getElementById('networth-list');
+  if(!box) return;
+  await fbReady;
+  if(!fb){ box.innerHTML = `<p class="hint">Ben\u00f6tigt das Online-Backend.</p>`; return; }
+  let entries = [];
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(8)));
+    entries = snap.docs.map(d=>d.data());
+  }catch(e){ console.warn('net worth leaderboard read failed', e); }
+  if(!box) return;
+  if(!entries.length){ box.innerHTML = `<p class="hint">Noch keine Daten \u2014 besuche "Mein Verein", um teilzunehmen.</p>`; return; }
+  box.innerHTML = '';
+  entries.forEach((e,i)=>{
+    const row = document.createElement('div');
+    row.className = 'leader-row';
+    const mine = e.userId===profile.userId;
+    row.innerHTML = `<span class="rk">${i+1}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">${(e.netWorth||0).toLocaleString('de-DE')}</span>`;
+    box.appendChild(row);
+  });
+}
 function genId(){ return 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 function specialsByVariant(tags){ return ALL_SPECIAL.filter(c=>tags.includes(c.variant)); }
@@ -2887,6 +2928,7 @@ function renderClub(view){
   if(managerCollection.length) drawManagerClubGrid();
   loadSalesHistory().then(()=>{
     if(currentTab==='club'){ drawClubGrid(); if(managerCollection.length) drawManagerClubGrid(); }
+    updateMyNetWorthEntry();
   });
 }
 function drawManagerClubGrid(){
@@ -3478,7 +3520,10 @@ function renderPlay(view){
       </div>
       <div>
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Beste ver\u00f6ffentlichte Kader</h3>
-        <div class="leader-list" id="leader-list"><p class="hint">L\u00e4dt...</p></div>
+        <div class="leader-list" id="leader-list" style="margin-bottom:22px;"><p class="hint">L\u00e4dt...</p></div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Vereinswert-Bestenliste</h3>
+        <p class="hint" style="margin-top:0;margin-bottom:10px;">Coins + gesch\u00e4tzter RAP-Wert aller Karten und Trainer.</p>
+        <div class="leader-list" id="networth-list"><p class="hint">L\u00e4dt...</p></div>
       </div>
     </div>
     <div class="play-grid" style="margin-top:22px;">
@@ -3541,6 +3586,8 @@ function renderPlay(view){
   });
   loadLeaderboard();
   loadIncomingDuels();
+  loadNetWorthLeaderboard();
+  loadSalesHistory().then(async ()=>{ await updateMyNetWorthEntry(); loadNetWorthLeaderboard(); });
 }
 async function loadLeaderboard(){
   const box = document.getElementById('leader-list');
