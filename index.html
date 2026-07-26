@@ -1902,7 +1902,6 @@ async function buyMarketListing(listing){
     const sellerSnap = await fb.getDoc(fb.doc(fb.db,'saves', listing.sellerUserId));
     if(!sellerSnap.exists()){ toast('Verk\u00e4ufer-Daten nicht gefunden.'); await withdrawMarketListing(listing); closeModal(); return; }
     const sellerData = sellerSnap.data();
-    let sellerProfile = sellerData.profile || {coins:0};
     let sellerCollection = sellerData.collection || [];
     let sellerManagerCollection = sellerData.managerCollection || [];
     const isManager = listing.itemType==='manager';
@@ -1912,10 +1911,17 @@ async function buyMarketListing(listing){
     if(!stillThere){ toast('Diese Karte ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
     if(isManager) sellerManagerCollection = sellerManagerCollection.filter(m=>m.uid!==listing.cardUid);
     else sellerCollection = sellerCollection.filter(c=>c.uid!==listing.cardUid);
-    sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
-    // write the seller-side update FIRST; only commit my own changes if this actually succeeds,
-    // so a network failure here can't leave me with a free card or a payment that vanished
-    await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile, collection:sellerCollection, managerCollection:sellerManagerCollection}, {merge:true});
+    // pay the seller via an ATOMIC increment (not a snapshot-based overwrite) - this guarantees the
+    // payment lands correctly even if the seller is doing something else concurrently (e.g. another
+    // sale, opening a pack) that would otherwise risk clobbering/losing this credit
+    if(fb.updateDoc && fb.increment){
+      await fb.updateDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {'profile.coins': fb.increment(listing.price)});
+    } else {
+      let sellerProfile = sellerData.profile || {coins:0};
+      sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
+      await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile}, {merge:true});
+    }
+    await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {collection:sellerCollection, managerCollection:sellerManagerCollection}, {merge:true});
     try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
 
     if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
@@ -2219,7 +2225,7 @@ async function finalizeTradeAccept(t, payment){
 
     senderCollection = senderCollection.filter(c=>!offerCardUids.has(c.uid));
     senderManagerCollection = senderManagerCollection.filter(m=>!offerMgrUids.has(m.uid));
-    senderProfile.coins = (senderProfile.coins||0) - (t.offerCoins||0) + (payment.coins||0);
+    const senderCoinDelta = (payment.coins||0) - (t.offerCoins||0);
 
     payment.cardUids.forEach(uid=>{
       const entry = collection.find(c=>c.uid===uid);
@@ -2229,9 +2235,16 @@ async function finalizeTradeAccept(t, payment){
       const entry = managerCollection.find(m=>m.uid===payment.managerUid);
       if(entry) senderManagerCollection.push({uid:genId(), mgrId:entry.mgrId});
     }
-    // write the sender-side update FIRST, then delete the trade doc, then commit my own local changes -
-    // if either remote write fails, I haven't touched my own cards/coins yet
-    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile, collection:senderCollection, managerCollection:senderManagerCollection}, {merge:true});
+    // pay/charge the sender via an ATOMIC increment (not a snapshot-based overwrite) - guarantees the
+    // coin change lands correctly even if the sender is doing something else concurrently (another
+    // trade, a market sale, opening a pack) that would otherwise risk clobbering/losing this change
+    if(fb.updateDoc && fb.increment && senderCoinDelta!==0){
+      await fb.updateDoc(fb.doc(fb.db,'saves', t.fromUserId), {'profile.coins': fb.increment(senderCoinDelta)});
+    } else if(senderCoinDelta!==0){
+      senderProfile.coins = (senderProfile.coins||0) + senderCoinDelta;
+      await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile}, {merge:true});
+    }
+    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {collection:senderCollection, managerCollection:senderManagerCollection}, {merge:true});
     try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(_){}
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
