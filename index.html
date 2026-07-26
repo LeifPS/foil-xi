@@ -4277,6 +4277,16 @@ function simGoals(lambda){
   const r = lambda*0.7 + Math.random()*lambda*1.1 + Math.random()*0.6;
   return clamp(Math.round(r),0,8);
 }
+// used ONLY for the live win-probability remaining-time estimate, where lambda genuinely
+// approaches 0 as time runs out. A real Poisson process (mean = lambda exactly, no additive
+// floor) gives smooth, correct behavior at every lambda - no cliffs, no phantom goals at 0.
+function poissonGoals(lambda){
+  if(lambda<=0) return 0;
+  const L = Math.exp(-lambda);
+  let k=0, p=1;
+  do{ k++; p *= Math.random(); }while(p>L && k<12);
+  return k-1;
+}
 function getMySquadPlayers(){
   const form = FORMATIONS[squad.formation];
   const list = [];
@@ -4394,14 +4404,18 @@ function computeLambda(attack, oppDefense){
   const diff = attack - oppDefense;
   return clamp(1.3 + diff/11, 0.22, 4.9);
 }
-function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, iterations=900){
-  const scaledMyLambda = computeLambda(myProfile.attack, oppProfile.defense) * (minutesLeft/90);
-  const scaledOppLambda = computeLambda(oppProfile.attack, myProfile.defense) * (minutesLeft/90);
+function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, iterations=1500){
+  // calibrated to match simGoals' true expected output (1.25*lambda + 0.3 per full 90 min),
+  // so the live estimate's average scoring rate matches how the actual scripted match plays out
+  const myFullMean = 1.25*computeLambda(myProfile.attack, oppProfile.defense) + 0.3;
+  const oppFullMean = 1.25*computeLambda(oppProfile.attack, myProfile.defense) + 0.3;
+  const scaledMyMean = myFullMean * (minutesLeft/90);
+  const scaledOppMean = oppFullMean * (minutesLeft/90);
   const tiebreakEdge = clamp(0.5 + ((myProfile.attack+myProfile.defense)-(oppProfile.attack+oppProfile.defense))/500, 0.35, 0.65);
   let wins = 0;
   for(let i=0;i<iterations;i++){
-    const ms = myTally + simGoals(scaledMyLambda);
-    const os = oppTally + simGoals(scaledOppLambda);
+    const ms = myTally + poissonGoals(scaledMyMean);
+    const os = oppTally + poissonGoals(scaledOppMean);
     if(ms>os) wins++;
     else if(ms===os){ if(Math.random()<tiebreakEdge) wins++; }
   }
