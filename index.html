@@ -884,23 +884,31 @@ const PACKS = [
       return [first, second, third];
     }},
   {id:'ogpack',name:'OG Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
-    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten \u2014 mit steigendem Rating wird es dramatisch seltener, aber selbst eine 104er-Legende ist (sehr selten) m\u00f6glich. Winzige Chance auf Pel\u00e9 (111 OVR). Etwas wahrscheinlicher, aber immer noch selten: Diego Maradona oder Zinedine Zidane (je 108 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
+    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Winzige Chance auf Pel\u00e9 (111 OVR). Etwas wahrscheinlicher, aber immer noch selten: Diego Maradona oder Zinedine Zidane (je 108 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
     draw(){
-      if(!ogPackWeightedPool){
-        const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS).filter(c=>c.ov>=80 && !c.isManager);
-        ogPackWeightedPool = [];
-        pool.forEach(c=>{
-          const reps = Math.max(1, Math.round(3000/Math.pow(1.16, c.ov-80))); // steep decay: common at 80, vanishingly rare near 105
-          for(let i=0;i<reps;i++) ogPackWeightedPool.push(c);
-        });
+      if(!ogPackTierPools){
+        const all = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, WM_SPECIALS).filter(c=>!c.isManager);
+        ogPackTierPools = {
+          common: all.filter(c=>c.ov>=80 && c.ov<90),
+          good: all.filter(c=>c.ov>=90 && c.ov<95),
+          rare: all.filter(c=>c.ov>=95 && c.ov<100),
+          legendary: GOAT_SPECIALS.slice(), // 100-105, the rarest tier - guaranteed a real floor chance below
+        };
       }
+      // per-slot budgets, combined per tier; legendary tier's budget is spread evenly across its
+      // handful of members so EVERY single one individually clears ~0.5%+ chance per 5-card pack
+      const P = {ferguson:0.0012, pele:0.003, maradona:0.015, zidane:0.015, legendary:0.012, rare:0.06, good:0.18};
       return Array.from({length:5}, ()=>{
         const r = Math.random();
-        if(r<0.0002) return OG_MANAGER;
-        if(r<0.0007) return OG_PELE;
-        if(r<0.0037) return OG_MARADONA;
-        if(r<0.0067) return OG_ZIDANE;
-        return ogPackWeightedPool[Math.floor(Math.random()*ogPackWeightedPool.length)];
+        let acc = 0;
+        if(r<(acc+=P.ferguson)) return OG_MANAGER;
+        if(r<(acc+=P.pele)) return OG_PELE;
+        if(r<(acc+=P.maradona)) return OG_MARADONA;
+        if(r<(acc+=P.zidane)) return OG_ZIDANE;
+        if(r<(acc+=P.legendary)) return pick(ogPackTierPools.legendary);
+        if(r<(acc+=P.rare)) return pick(ogPackTierPools.rare);
+        if(r<(acc+=P.good)) return pick(ogPackTierPools.good);
+        return pick(ogPackTierPools.common);
       });
     }},
 ];
@@ -1056,7 +1064,7 @@ const SBC_DEFS = [
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
 ];
 let activeSBC = null;
-let ogPackWeightedPool = null;
+let ogPackTierPools = null;
 let sbcSelection = new Set();
 async function renderSBCList(view){
   const completed = new Set(profile.completedSBCs||[]);
@@ -4297,7 +4305,8 @@ async function playOReiChallenge(){
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   if(!oreiRequirementsMet()){ toast('Du erf\u00fcllst die Voraussetzungen noch nicht.'); return; }
-  const opp = buildFixedRatingOpponent(110);
+  const oreiTarget = 111 + Math.floor(Math.random()*4); // random 111-114 each attempt
+  const opp = buildFixedRatingOpponent(oreiTarget);
   const area = document.getElementById('orei-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
@@ -4360,7 +4369,7 @@ function renderOReiPanel(){
     ${reqRow('Siege gesamt', wins>=OREI_ENTRY.wins, wins, OREI_ENTRY.wins)}
     ${reqRow('Kader-Rating', rating>=OREI_ENTRY.rating, rating, OREI_ENTRY.rating)}
     ${reqRow('Vereinswert', netWorth>=OREI_ENTRY.netWorth, netWorth.toLocaleString('de-DE'), OREI_ENTRY.netWorth.toLocaleString('de-DE'))}
-    <p class="hint" style="margin:12px 0;">3 Siege in Folge gegen ein exaktes 110er-Fantasieteam n\u00f6tig \u2014 eine Niederlage setzt die Serie zur\u00fcck auf 0. Beim 1. Sieg: <b style="color:var(--gold);">30.000 Coins</b> (nur einmalig). Beim 2. Sieg in Folge: <b style="color:var(--gold);">1 Blackout Pack</b> (nur einmalig). Bei 3 in Folge: das <b style="color:#c98a3e;">OG Pack</b> wird dauerhaft im Kartenladen freigeschaltet (30.000 Coins, winzige Chance auf Pel\u00e9, Maradona, Zidane oder Sir Alex Ferguson).</p>
+    <p class="hint" style="margin:12px 0;">3 Siege in Folge gegen ein Fantasieteam mit Rating 111-114 (zuf\u00e4llig pro Versuch) n\u00f6tig \u2014 eine Niederlage setzt die Serie zur\u00fcck auf 0. Beim 1. Sieg: <b style="color:var(--gold);">30.000 Coins</b> (nur einmalig). Beim 2. Sieg in Folge: <b style="color:var(--gold);">1 Blackout Pack</b> (nur einmalig). Bei 3 in Folge: das <b style="color:#c98a3e;">OG Pack</b> wird dauerhaft im Kartenladen freigeschaltet (30.000 Coins, winzige Chance auf Pel\u00e9, Maradona, Zidane oder Sir Alex Ferguson).</p>
     <div class="formation-select" style="margin-bottom:14px;">
       ${[0,1,2].map(i=>`<div class="chip ${i<streak?'active':''}" style="${i===streak?'border-color:#c98a3e;color:#c98a3e;':''}">${i+1}</div>`).join('')}
     </div>
