@@ -2454,7 +2454,7 @@ let storageWarned = false;
 function warnStorageOnce(){
   if(storageWarned) return;
   storageWarned = true;
-  setTimeout(()=>toast('Kein Online-Speicher erreichbar \u2014 dein Fortschritt bleibt nur f\u00fcr diese Sitzung erhalten.'), 300);
+  window.location.href = 'foil-eleven-down.html';
 }
 async function sGet(key, shared=false){
   if(!shared){
@@ -4152,7 +4152,7 @@ function renderTournamentPanel(){
   document.getElementById('tournament-play').addEventListener('click', playTournamentRound);
 }
 async function playTournamentRound(){
-  if(inMatch || queueActive || pendingDuelId) return;
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const t = profile.tournament;
@@ -4486,20 +4486,17 @@ function challengeLeaderboardSquad(squadData){
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   openModal(`
     <h2 style="margin-bottom:10px;">${squadData.owner||'Unbenannter Verein'} herausfordern?</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:18px;">Rating ${squadData.rating} OVR \u2014 dies ist eine lokale Simulation gegen den ver\u00f6ffentlichten Kader, keine Live-Verbindung.</p>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <button class="action-btn" id="challenge-normal">Herausfordern (mit Belohnung)</button>
-      <button class="action-btn secondary" id="challenge-friendly">Freundschaftsspiel (ohne Belohnung)</button>
-      <button class="action-btn secondary" id="challenge-cancel" style="background:none;">Abbrechen</button>
+    <p class="hint" style="margin-top:0;margin-bottom:18px;">Rating ${squadData.rating} OVR \u2014 dies ist eine lokale Simulation gegen den ver\u00f6ffentlichten Kader, keine Live-Verbindung. Freundschaftsspiel: keine Belohnung, keine Statistik-Auswirkung.</p>
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="challenge-cancel" style="flex:1;">Abbrechen</button>
+      <button class="action-btn" id="challenge-friendly" style="flex:1;">Herausfordern</button>
     </div>`);
   document.getElementById('challenge-cancel').addEventListener('click', closeModal);
-  const start = (friendly)=>{
+  document.getElementById('challenge-friendly').addEventListener('click', ()=>{
     closeModal();
     currentTab = 'play'; renderNav(); renderView('play');
-    setTimeout(()=>runLeaderboardChallenge(squadData, friendly), 50);
-  };
-  document.getElementById('challenge-normal').addEventListener('click', ()=>start(false));
-  document.getElementById('challenge-friendly').addEventListener('click', ()=>start(true));
+    setTimeout(()=>runLeaderboardChallenge(squadData, true), 50);
+  });
 }
 async function runLeaderboardChallenge(squadData, friendly){
   const {rating} = squadRating();
@@ -5123,7 +5120,7 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   return {result, winnerSide};
 }
 async function runLocalMatch(myRating, opp, opts={}){
-  if(inMatch) return;
+  if(inMatch){ toast('Es l\u00e4uft bereits ein anderes Match \u2014 bitte kurz warten und erneut versuchen.'); return; }
   inMatch = true;
   try{
     const myPlayers = getMySquadPlayers();
