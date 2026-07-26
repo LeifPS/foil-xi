@@ -613,6 +613,17 @@ const FIREBASE_CONFIG = {
 };
 const FB_VERSION = '10.13.2';
 let fb = null; // set to {db, collection, doc, setDoc, getDoc, getDocs, query, orderBy, limit} when available
+// ===== read cache: dedupes Firestore reads within a short TTL window (rapid tab-switching, repeated
+// calls to things like getExternalLockedUids) without ever serving genuinely stale data for long =====
+const _readCache = new Map(); // key -> {ts, data}
+async function cachedRead(key, ttlMs, fetchFn){
+  const hit = _readCache.get(key);
+  if(hit && (Date.now()-hit.ts)<ttlMs) return hit.data;
+  const data = await fetchFn();
+  _readCache.set(key, {ts:Date.now(), data});
+  return data;
+}
+function invalidateReadCache(key){ _readCache.delete(key); }
 function withTimeout(promise, ms){
   return Promise.race([promise, new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), ms))]);
 }
@@ -622,8 +633,9 @@ async function initFirebase(){
     const fsMod = await withTimeout(import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore-lite.js`), 6000);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
     const db = fsMod.getFirestore(app);
-    // connectivity probe - if this fails/hangs we fall back to local mode
-    await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1))), 6000);
+    // connectivity probe - if this fails/hangs we fall back to local mode. limit(0) means the
+    // query returns zero documents, so this costs 0 Firestore reads while still validating the connection.
+    await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(0))), 6000);
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
       getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
       updateDoc:fsMod.updateDoc, increment:fsMod.increment};
@@ -776,8 +788,10 @@ async function loadNetWorthLeaderboard(){
   if(!fb){ box.innerHTML = `<p class="hint">Ben\u00f6tigt das Online-Backend.</p>`; return; }
   let entries = [];
   try{
-    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(8)));
-    entries = snap.docs.map(d=>d.data());
+    entries = await cachedRead('networth-board', 45000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(8)));
+      return snap.docs.map(d=>d.data());
+    });
   }catch(e){ console.warn('net worth leaderboard read failed', e); }
   if(!box) return;
   if(!entries.length){ box.innerHTML = `<p class="hint">Noch keine Daten \u2014 besuche "Mein Verein", um teilzunehmen.</p>`; return; }
@@ -1419,8 +1433,10 @@ async function loadMarketListings(){
   if(!grid) return;
   if(!fb){ grid.innerHTML = `<p class="hint">Transfermarkt ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`; return; }
   try{
-    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.orderBy('createdAt','desc'), fb.limit(500)));
-    marketListingsCache = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    marketListingsCache = await cachedRead('market-listings', 15000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.orderBy('createdAt','desc'), fb.limit(200)));
+      return snap.docs.map(d=>({id:d.id, ...d.data()}));
+    });
   }catch(e){ console.warn('market read failed', e); marketListingsCache = []; }
   drawMarketGrid();
   loadSalesHistory().then(()=>drawMarketGrid());
@@ -1481,9 +1497,10 @@ function drawMarketGrid(){
   });
 }
 async function getExternalLockedUids(){
-  const locked = new Set();
   await fbReady;
-  if(fb){
+  if(!fb) return new Set();
+  return cachedRead('external-locks:'+profile.userId, 8000, async ()=>{
+    const locked = new Set();
     try{
       const marketSnap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.where('sellerUserId','==',profile.userId)));
       marketSnap.docs.forEach(d=>locked.add(d.data().cardUid));
@@ -1498,8 +1515,8 @@ async function getExternalLockedUids(){
         }
       });
     }catch(e){ console.warn('trade lock check failed', e); }
-  }
-  return locked;
+    return locked;
+  });
 }
 async function getLockedUids(){
   const locked = await getExternalLockedUids();
@@ -1630,6 +1647,8 @@ function renderSellManual(allEligible, usedInSquad){
     }
     closeModal();
     toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen (nicht mehr verf\u00fcgbar).` : `${created} Karte(n) zum Transfermarkt hinzugef\u00fcgt!`);
+    invalidateReadCache('market-listings');
+    invalidateReadCache('external-locks:'+profile.userId);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
 }
@@ -1750,8 +1769,8 @@ function renderSellFilter(allEligible, usedInSquad){
   const posOptions = Object.keys(POS_DE).map(p=>`<option value="${p}">${posDE(p)} (${p})</option>`).join('');
   body.innerHTML = `
     <div class="toolbar" style="margin-bottom:10px;">
-      <input id="filter-min-ov" type="number" min="1" max="105" placeholder="Min. Rating" style="max-width:120px;">
-      <input id="filter-max-ov" type="number" min="1" max="105" placeholder="Max. Rating" style="max-width:120px;">
+      <input id="filter-min-ov" type="number" min="1" max="115" placeholder="Min. Rating" style="max-width:120px;">
+      <input id="filter-max-ov" type="number" min="1" max="115" placeholder="Max. Rating" style="max-width:120px;">
       <select id="filter-pos">
         <option value="ANY">Beliebige Position</option>
         ${posOptions}
@@ -1885,6 +1904,8 @@ function renderSellFilter(allEligible, usedInSquad){
     }
     closeModal();
     toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen.` : `${created} Karte(n) gelistet!`);
+    invalidateReadCache('market-listings');
+    invalidateReadCache('external-locks:'+profile.userId);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
   updatePreview();
@@ -1897,6 +1918,8 @@ async function withdrawMarketListing(listing){
     console.warn('withdraw market listing failed', e);
     toast('Zur\u00fccknehmen fehlgeschlagen \u2014 bitte erneut versuchen.');
   }
+  invalidateReadCache('market-listings');
+  invalidateReadCache('external-locks:'+profile.userId);
   loadMarketListings();
 }
 function confirmBuyListing(listing, card){
@@ -1944,6 +1967,7 @@ function openManageListingModal(listing, card){
         if(!fresh.exists()){ toast('Dieses Angebot existiert nicht mehr.'); loadMarketListings(); return; }
         await fb.setDoc(fb.doc(fb.db,'market', listing.id), {...fresh.data(), price:newPrice});
         toast('Preis aktualisiert.');
+        invalidateReadCache('market-listings');
         loadMarketListings();
       }catch(e){ console.warn('price change failed', e); toast('Preis\u00e4nderung fehlgeschlagen.'); }
     });
@@ -1959,6 +1983,7 @@ async function buyMarketListing(listing){
     const freshListingSnap = await fb.getDoc(fb.doc(fb.db,'market', listing.id));
     if(!freshListingSnap.exists()){
       toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.');
+      invalidateReadCache('market-listings');
       closeModal(); loadMarketListings(); return;
     }
     const sellerSnap = await fb.getDoc(fb.doc(fb.db,'saves', listing.sellerUserId));
@@ -1992,6 +2017,7 @@ async function buyMarketListing(listing){
     recordSale(listing.cardId, listing.price);
     closeModal();
     toast('Kauf erfolgreich!');
+    invalidateReadCache('market-listings');
     loadMarketListings();
   }catch(e){
     console.warn('buy market listing failed', e);
@@ -2011,12 +2037,16 @@ async function loadTrades(){
   }
   let incoming = [], outgoing = [];
   try{
-    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('toUserId','==',profile.userId)));
-    snap.docs.forEach(d=>incoming.push({id:d.id, ...d.data()}));
+    incoming = await cachedRead('trades-incoming:'+profile.userId, 10000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('toUserId','==',profile.userId), fb.limit(30)));
+      return snap.docs.map(d=>({id:d.id, ...d.data()}));
+    });
   }catch(e){ console.warn('incoming trades read failed', e); }
   try{
-    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('fromUserId','==',profile.userId)));
-    snap.docs.forEach(d=>outgoing.push({id:d.id, ...d.data()}));
+    outgoing = await cachedRead('trades-outgoing:'+profile.userId, 10000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('fromUserId','==',profile.userId), fb.limit(30)));
+      return snap.docs.map(d=>({id:d.id, ...d.data()}));
+    });
   }catch(e){ console.warn('outgoing trades read failed', e); }
   incoming = incoming.filter(t=>t.status==='pending');
   outgoing = outgoing.filter(t=>t.status==='pending');
@@ -2104,7 +2134,7 @@ async function openTradeBuilder(){
     </div>
     <div class="toolbar" id="trade-want-cards" style="margin-bottom:14px;display:none;">
       <input id="want-cards-count" type="number" min="1" value="1" placeholder="Anzahl Karten" style="max-width:110px;">
-      <input id="want-cards-minovr" type="number" min="1" max="99" value="80" placeholder="Mindest-Rating" style="max-width:130px;">
+      <input id="want-cards-minovr" type="number" min="1" max="115" value="80" placeholder="Mindest-Rating" style="max-width:130px;">
       <select id="want-cards-pos">
         <option value="ANY">Beliebige Position</option>
         <option value="GK">Torh\u00fcter</option>
@@ -2223,6 +2253,8 @@ async function submitTradeOffer(){
     await fb.setDoc(fb.doc(fb.db,'trades', genId()), tradeDoc);
     closeModal();
     toast('Handelsangebot gesendet!');
+    invalidateReadCache('external-locks:'+profile.userId);
+    invalidateReadCache('trades-outgoing:'+profile.userId);
     if(currentTab==='trade') renderView('trade');
   }catch(e){
     console.warn('trade submit failed', e);
@@ -2233,6 +2265,8 @@ async function withdrawTrade(t){
   try{
     await fb.deleteDoc(fb.doc(fb.db,'trades', t.id));
     toast('Angebot zur\u00fcckgezogen.');
+    invalidateReadCache('external-locks:'+profile.userId);
+    invalidateReadCache('trades-outgoing:'+profile.userId);
   }catch(e){
     console.warn('withdraw trade failed', e);
     toast('Zur\u00fccknehmen fehlgeschlagen \u2014 bitte erneut versuchen.');
@@ -2322,6 +2356,8 @@ async function finalizeTradeAccept(t, payment){
     }
 
     toast('Handel abgeschlossen!');
+    invalidateReadCache('external-locks:'+profile.userId);
+    invalidateReadCache('trades-incoming:'+profile.userId);
     closeModal();
     loadTrades();
   }catch(e){
@@ -3614,10 +3650,20 @@ async function loadSquadPreset(id){
   const preset = squadPresets.find(p=>p.id===id);
   if(!preset) return;
   squad.formation = preset.formation;
-  squad.slots = {...preset.slots};
-  squad.managerUid = preset.managerUid || null;
+  const validSlots = {};
+  const usedNames = new Set();
+  let dropped = 0;
+  Object.entries(preset.slots||{}).forEach(([slotId,uid])=>{
+    const card = ownedCard(uid);
+    if(!card){ dropped++; return; } // card was sold/traded away since this preset was saved
+    if(usedNames.has(card.n)){ dropped++; return; } // enforce: no duplicate player names in a squad
+    usedNames.add(card.n);
+    validSlots[slotId] = uid;
+  });
+  squad.slots = validSlots;
+  squad.managerUid = (preset.managerUid && managerCollection.some(m=>m.uid===preset.managerUid)) ? preset.managerUid : null;
   await sSet('squad', squad);
-  toast(`Kader "${preset.name}" geladen.`);
+  toast(dropped ? `Kader "${preset.name}" geladen \u2014 ${dropped} Spieler nicht mehr verf\u00fcgbar oder doppelt, Positionen leer gelassen.` : `Kader "${preset.name}" geladen.`);
   renderSquad(document.getElementById('view'));
 }
 async function deleteSquadPreset(id){
@@ -3637,7 +3683,7 @@ function publishSquad(){
     const payload = {owner:profile.displayName, userId:profile.userId, rating, formation:form.label, players, updatedAt:Date.now()};
     await fbReady;
     if(fb){
-      try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); toast('Kader online ver\u00f6ffentlicht!'); return; }
+      try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); invalidateReadCache('squad-leaderboard'); toast('Kader online ver\u00f6ffentlicht!'); return; }
       catch(e){ console.warn('Firebase publish failed, using local fallback', e); }
     }
     await sSet('squad:'+profile.userId, payload, true);
@@ -3658,7 +3704,7 @@ function publishSquad(){
 // ===== PLAY / ONLINE =====
 const MATCH_DURATION_MS = 45000; // ~45s for a full 90' match
 const QUEUE_TIMEOUT_MS = 25000;
-const QUEUE_POLL_MS = 2000;
+const QUEUE_POLL_MS = 3500;
 // ===== SOUND EFFECTS (synthesized via Web Audio API, no external audio files) =====
 let audioCtx = null;
 let soundEnabled = true;
@@ -3813,7 +3859,9 @@ function hostTournamentPrompt(){
       });
       closeModal();
       toast('Turnier erstellt! Warte auf weitere Teilnehmer oder starte es direkt.');
-      loadOpenTournaments();
+      invalidateReadCache('open-tournaments');
+      invalidateReadCache('open-tournaments');
+    loadOpenTournaments();
     }catch(err){
       console.warn('host tournament failed', err);
       await atomicCoinChange(prize);
@@ -3837,6 +3885,7 @@ async function joinHostedTournament(id){
     t.participants.push({userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()});
     await fb.setDoc(fb.doc(fb.db,'tournaments', id), t);
     toast('Angemeldet!');
+    invalidateReadCache('open-tournaments');
     loadOpenTournaments();
   }catch(e){ console.warn('join tournament failed', e); toast('Beitritt fehlgeschlagen.'); }
 }
@@ -3861,7 +3910,9 @@ async function startHostedTournament(id){
     const {rounds, winnerUserId, winnerName} = simulateHostedBracket(participants);
     await fb.setDoc(fb.doc(fb.db,'tournaments', id), {...t, participants, status:'completed', rounds, winnerUserId, winnerName, prizeClaimed:false});
     toast(`Turnier abgeschlossen! Sieger: ${winnerName}`);
+    invalidateReadCache('open-tournaments');
     loadOpenTournaments();
+    invalidateReadCache('my-tournament-results:'+profile.userId);
     loadMyTournamentResults();
   }catch(e){ console.warn('start tournament failed', e); toast('Turnier konnte nicht gestartet werden.'); }
 }
@@ -3877,6 +3928,7 @@ async function claimTournamentPrize(id){
     playSfx('coin');
     await fb.setDoc(fb.doc(fb.db,'tournaments', id), {...t, prizeClaimed:true});
     toast(`\ud83c\udfc6 Preisgeld abgeholt: +${t.prizeCoins.toLocaleString('de-DE')} Coins!`);
+    invalidateReadCache('my-tournament-results:'+profile.userId);
     loadMyTournamentResults();
   }catch(e){ console.warn('claim prize failed', e); toast('Preisgeld konnte nicht abgeholt werden.'); }
 }
@@ -3898,8 +3950,10 @@ async function loadOpenTournaments(){
   await fbReady;
   if(!fb){ box.innerHTML = '<p class="hint">Ben\u00f6tigt das Online-Backend.</p>'; return; }
   try{
-    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','==','registering'), fb.limit(20)));
-    const list = snap.docs.map(d=>d.data());
+    const list = await cachedRead('open-tournaments', 20000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','==','registering'), fb.limit(20)));
+      return snap.docs.map(d=>d.data());
+    });
     if(!box) return;
     if(!list.length){ box.innerHTML = '<p class="hint">Momentan keine offenen Turniere \u2014 veranstalte selbst eins!</p>'; return; }
     box.innerHTML = '';
@@ -3937,8 +3991,10 @@ async function loadMyTournamentResults(){
   await fbReady;
   if(!fb){ box.innerHTML = ''; return; }
   try{
-    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','==','completed'), fb.limit(30)));
-    const mine = snap.docs.map(d=>d.data()).filter(t=>t.participants.some(p=>p.userId===profile.userId));
+    const mine = await cachedRead('my-tournament-results:'+profile.userId, 60000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','==','completed'), fb.limit(15)));
+      return snap.docs.map(d=>d.data()).filter(t=>t.participants.some(p=>p.userId===profile.userId));
+    });
     if(!box) return;
     if(!mine.length){ box.innerHTML = '<p class="hint">Noch keine abgeschlossenen Turniere.</p>'; return; }
     mine.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -4025,7 +4081,7 @@ async function challengeFriend(friend){
         return;
       }
     }catch(e){ console.warn('duel poll failed', e); }
-    pendingDuelTimer = setTimeout(poll, 2000);
+    pendingDuelTimer = setTimeout(poll, 3500);
   };
   poll();
 }
@@ -4035,8 +4091,10 @@ async function loadIncomingDuels(){
   await fbReady;
   if(!fb){ box.innerHTML = ''; return; }
   try{
-    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'duels'), fb.where('toUserId','==',profile.userId)));
-    const incoming = snap.docs.map(d=>({id:d.id, ...d.data()})).filter(d=>d.status==='pending');
+    const incoming = await cachedRead('incoming-duels:'+profile.userId, 12000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'duels'), fb.where('toUserId','==',profile.userId), fb.limit(20)));
+      return snap.docs.map(d=>({id:d.id, ...d.data()})).filter(d=>d.status==='pending');
+    });
     if(!box) return;
     if(!incoming.length){ box.innerHTML = `<p class="hint">Keine eingehenden Herausforderungen.</p>`; return; }
     box.innerHTML = '';
@@ -4076,6 +4134,7 @@ async function loadIncomingDuels(){
         try{
           await fb.setDoc(fb.doc(fb.db,'matches',matchId), matchDoc);
           await fb.setDoc(fb.doc(fb.db,'duels',duel.id), {status:'accepted', matchId}, {merge:true});
+          invalidateReadCache('incoming-duels:'+profile.userId);
           enterSyncedMatch(matchDoc);
         }catch(e){ console.warn('accept duel failed', e); toast('Herausforderung konnte nicht angenommen werden.'); acceptBtn.disabled=false; declineBtn.disabled=false; }
       });
@@ -4083,6 +4142,7 @@ async function loadIncomingDuels(){
         acceptBtn.disabled=true; declineBtn.disabled=true;
         try{ await fb.setDoc(fb.doc(fb.db,'duels',duel.id), {status:'declined'}, {merge:true}); }catch(_){}
         toast('Herausforderung abgelehnt.');
+        invalidateReadCache('incoming-duels:'+profile.userId);
         loadIncomingDuels();
       });
       btns.append(acceptBtn, declineBtn);
@@ -4635,7 +4695,6 @@ function renderPlay(view){
   });
   loadLeaderboard();
   loadIncomingDuels();
-  loadNetWorthLeaderboard();
   loadSalesHistory().then(async ()=>{ await updateMyNetWorthEntry(); loadNetWorthLeaderboard(); });
   loadOpenTournaments();
   loadMyTournamentResults();
@@ -4647,8 +4706,10 @@ async function loadLeaderboard(){
   let squads = [];
   if(fb){
     try{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'squads'), fb.orderBy('rating','desc'), fb.limit(8)));
-      snap.docs.forEach(d=>squads.push(d.data()));
+      squads = await cachedRead('squad-leaderboard', 45000, async ()=>{
+        const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'squads'), fb.orderBy('rating','desc'), fb.limit(8)));
+        return snap.docs.map(d=>d.data());
+      });
     }catch(e){ console.warn('Firebase leaderboard read failed', e); }
   }
   if(!fb || !squads.length){
@@ -5288,6 +5349,7 @@ async function joinQueue(){
 
   const seenCandidates = new Map(); // userId -> candidate data, remembered across polls even if they leave the live queue
 
+  const attemptedCandidates = new Set(); // only ever try match-creation once per candidate, not every tick
   const poll = async ()=>{
     if(!queueActive) return;
     const timerEl = document.getElementById('queue-timer');
@@ -5303,7 +5365,9 @@ async function joinQueue(){
     try{
       // 1) Check my OWN queue entry first: someone may have already matched with me and tagged it,
       //    even if I never personally saw them in a scan (fixes a race where the other side finds
-      //    me and creates the match before my own first poll ever ran).
+      //    me and creates the match before my own first poll ever ran). This single cheap read is
+      //    the PRIMARY discovery mechanism - the candidate scan below is only a fallback for the
+      //    lower-id side, and only needs to touch each candidate once (see attemptedCandidates).
       try{
         const mySnap = await fb.getDoc(fb.doc(fb.db,'queue',profile.userId));
         if(!queueActive) return; // cancelled while that request was in flight
@@ -5320,7 +5384,7 @@ async function joinQueue(){
       }catch(e){ console.warn('own-queue match check failed', e); }
       if(!queueActive) return;
 
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'queue'), fb.orderBy('joinedAt','asc'), fb.limit(20)));
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'queue'), fb.orderBy('joinedAt','asc'), fb.limit(10)));
       if(!queueActive) return;
       const staleCutoff = Date.now() - 90000; // ignore queue entries older than 90s (likely abandoned)
       snap.docs.forEach(d=>{
@@ -5330,6 +5394,8 @@ async function joinQueue(){
       for(const other of seenCandidates.values()){
         if(!queueActive) return;
         if(!(profile.userId < other.userId)) continue; // only the lower-id side ever creates the match
+        if(attemptedCandidates.has(other.userId)) continue; // already tried this one - don't re-read every tick
+        attemptedCandidates.add(other.userId);
         const mid = matchIdFor(profile.userId, startTime, other.userId, other.joinedAt);
         try{
           const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
