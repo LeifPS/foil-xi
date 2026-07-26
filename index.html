@@ -722,8 +722,7 @@ function computeRAP(card){
 function rapBadge(card, opts={}){
   const el = document.createElement('div');
   el.className = 'mono rap-badge';
-  el.style.cssText = `position:absolute;top:4px;left:4px;background:rgba(6,8,12,.78);border:1px solid var(--gold-dim);border-radius:6px;
-    padding:2px 6px;font-size:9.5px;color:var(--gold);z-index:3;pointer-events:none;${opts.style||''}`;
+  el.style.cssText = `text-align:center;font-size:9.5px;color:var(--gold);margin-top:3px;white-space:nowrap;${opts.style||''}`;
   el.textContent = `RAP ${computeRAP(card).toLocaleString('de-DE')}`;
   return el;
 }
@@ -1404,6 +1403,11 @@ function drawMarketGrid(){
     wrap.className = 'club-card-wrap';
     wrap.appendChild(cardEl(card,'mini'));
     wrap.appendChild(rapBadge(card));
+    const sellerTag = document.createElement('div');
+    sellerTag.className = 'mono';
+    sellerTag.style.cssText = 'text-align:center;font-size:9.5px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    sellerTag.textContent = listing.sellerUserId===profile.userId ? 'von dir' : `von ${listing.sellerName||'Unbekannt'}`;
+    wrap.appendChild(sellerTag);
     const priceTag = document.createElement('div');
     priceTag.className = 'price-pill';
     priceTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;';
@@ -3636,6 +3640,216 @@ async function removeFriend(userId){
   renderPlay(document.getElementById('view'));
 }
 let pendingDuelId = null, pendingDuelTimer = null;
+// ===== HOSTED TOURNAMENTS: set a prize, invite others to register, bots fill empty slots =====
+const HOSTED_TOURNAMENT_SLOTS = 8;
+function simulateHostedBracket(participants){
+  const shuffled = participants.slice();
+  for(let i=shuffled.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]; }
+  let round = shuffled;
+  const rounds = [];
+  while(round.length>1){
+    const matches = [];
+    const nextRound = [];
+    for(let i=0;i<round.length;i+=2){
+      const a=round[i], b=round[i+1];
+      const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
+      const winnerIsA = md.winnerSide==='me';
+      matches.push({
+        aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
+        aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
+        winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId
+      });
+      nextRound.push(winnerIsA ? a : b);
+    }
+    rounds.push(matches);
+    round = nextRound;
+  }
+  return {rounds, winnerUserId:round[0].userId, winnerName:round[0].name};
+}
+function hostTournamentPrompt(){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  openModal(`
+    <h2 style="margin-bottom:10px;">Turnier veranstalten</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">Lege ein Preisgeld fest \u2014 es wird sofort von deinem Konto abgezogen und beim Turnierende an den Sieger ausgezahlt. Bis zu ${HOSTED_TOURNAMENT_SLOTS} Teilnehmer; freie Pl\u00e4tze werden beim Start automatisch mit echten CPU-Vereinen aufgef\u00fcllt.</p>
+    <input id="prize-input" type="number" min="100" placeholder="Preisgeld in Coins" style="width:100%;margin-bottom:14px;">
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="prize-cancel" style="flex:1;">Abbrechen</button>
+      <button class="action-btn" id="prize-confirm" style="flex:1;">Turnier erstellen</button>
+    </div>`);
+  document.getElementById('prize-cancel').addEventListener('click', closeModal);
+  document.getElementById('prize-confirm').addEventListener('click', async (e)=>{
+    const prize = Math.max(100, Math.floor(Number(document.getElementById('prize-input').value)||0));
+    if(!prize){ toast('Bitte ein Preisgeld angeben.'); return; }
+    if(profile.coins<prize){ toast('Nicht genug Coins f\u00fcr dieses Preisgeld.'); return; }
+    e.target.disabled = true;
+    await fbReady;
+    if(!fb){ toast('Turniere ben\u00f6tigen das Online-Backend.'); e.target.disabled=false; return; }
+    await atomicCoinChange(-prize);
+    const id = genId();
+    const myPlayers = getMySquadPlayers();
+    try{
+      await fb.setDoc(fb.doc(fb.db,'tournaments', id), {
+        id, hostUserId:profile.userId, hostName:profile.displayName||profile.userId,
+        prizeCoins:prize, maxSlots:HOSTED_TOURNAMENT_SLOTS,
+        participants:[{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:myPlayers}],
+        status:'registering', createdAt:Date.now()
+      });
+      closeModal();
+      toast('Turnier erstellt! Warte auf weitere Teilnehmer oder starte es direkt.');
+      loadOpenTournaments();
+    }catch(err){
+      console.warn('host tournament failed', err);
+      await atomicCoinChange(prize);
+      toast('Turnier konnte nicht erstellt werden \u2014 Preisgeld erstattet.');
+    }
+  });
+}
+async function joinHostedTournament(id){
+  if(inMatch || queueActive || pendingDuelId) return;
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  await fbReady;
+  if(!fb) return;
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'tournaments', id));
+    if(!snap.exists()){ toast('Turnier existiert nicht mehr.'); loadOpenTournaments(); return; }
+    const t = snap.data();
+    if(t.status!=='registering'){ toast('Dieses Turnier l\u00e4uft bereits oder ist beendet.'); loadOpenTournaments(); return; }
+    if(t.participants.length>=t.maxSlots){ toast('Turnier ist bereits voll.'); loadOpenTournaments(); return; }
+    if(t.participants.some(p=>p.userId===profile.userId)){ toast('Du bist bereits angemeldet.'); return; }
+    t.participants.push({userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()});
+    await fb.setDoc(fb.doc(fb.db,'tournaments', id), t);
+    toast('Angemeldet!');
+    loadOpenTournaments();
+  }catch(e){ console.warn('join tournament failed', e); toast('Beitritt fehlgeschlagen.'); }
+}
+async function startHostedTournament(id){
+  await fbReady;
+  if(!fb) return;
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'tournaments', id));
+    if(!snap.exists()) return;
+    const t = snap.data();
+    if(t.hostUserId!==profile.userId){ toast('Nur der Veranstalter kann das Turnier starten.'); return; }
+    if(t.status!=='registering'){ toast('Turnier l\u00e4uft bereits.'); return; }
+    const participants = t.participants.slice();
+    const botsNeeded = t.maxSlots - participants.length;
+    if(botsNeeded>0){
+      const avgRating = Math.round(participants.reduce((s,p)=>s+p.rating,0)/participants.length);
+      for(let i=0;i<botsNeeded;i++){
+        const bot = pickRealisticOpponent(avgRating + Math.round(Math.random()*10-5));
+        participants.push({userId:'bot_'+genId(), name:bot.owner+' (CPU)', rating:bot.rating, players:bot.players, isBot:true});
+      }
+    }
+    const {rounds, winnerUserId, winnerName} = simulateHostedBracket(participants);
+    await fb.setDoc(fb.doc(fb.db,'tournaments', id), {...t, participants, status:'completed', rounds, winnerUserId, winnerName, prizeClaimed:false});
+    toast(`Turnier abgeschlossen! Sieger: ${winnerName}`);
+    loadOpenTournaments();
+    loadMyTournamentResults();
+  }catch(e){ console.warn('start tournament failed', e); toast('Turnier konnte nicht gestartet werden.'); }
+}
+async function claimTournamentPrize(id){
+  await fbReady;
+  if(!fb) return;
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'tournaments', id));
+    if(!snap.exists()) return;
+    const t = snap.data();
+    if(t.winnerUserId!==profile.userId || t.prizeClaimed) return;
+    await atomicCoinChange(t.prizeCoins);
+    playSfx('coin');
+    await fb.setDoc(fb.doc(fb.db,'tournaments', id), {...t, prizeClaimed:true});
+    toast(`\ud83c\udfc6 Preisgeld abgeholt: +${t.prizeCoins.toLocaleString('de-DE')} Coins!`);
+    loadMyTournamentResults();
+  }catch(e){ console.warn('claim prize failed', e); toast('Preisgeld konnte nicht abgeholt werden.'); }
+}
+function showBracketModal(t){
+  const roundNames = t.rounds.length===3 ? ['Viertelfinale','Halbfinale','Finale'] : t.rounds.map((_,i)=>'Runde '+(i+1));
+  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:16px;">Preisgeld: ${t.prizeCoins.toLocaleString('de-DE')} Coins \u2014 Sieger: <b style="color:var(--gold);">${t.winnerName}</b></p>`;
+  t.rounds.forEach((matches,i)=>{
+    html += `<div class="lbl" style="margin:14px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${roundNames[i]||('Runde '+(i+1))}</div>`;
+    matches.forEach(m=>{
+      html += `<div class="leader-row"><span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${m.aName} (${m.aRating})</span><span class="mono">${m.aGoals}:${m.bGoals}${m.wentToPK?' n.E.':''}</span><span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${m.bName} (${m.bRating})</span></div>`;
+    });
+  });
+  openModal(html + `<button class="modal-close" id="bracket-close" style="margin-top:16px;">Schlie\u00dfen</button>`);
+  document.getElementById('bracket-close').addEventListener('click', closeModal);
+}
+async function loadOpenTournaments(){
+  const box = document.getElementById('open-tournaments-list');
+  if(!box) return;
+  await fbReady;
+  if(!fb){ box.innerHTML = '<p class="hint">Ben\u00f6tigt das Online-Backend.</p>'; return; }
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','==','registering'), fb.limit(20)));
+    const list = snap.docs.map(d=>d.data());
+    if(!box) return;
+    if(!list.length){ box.innerHTML = '<p class="hint">Momentan keine offenen Turniere \u2014 veranstalte selbst eins!</p>'; return; }
+    box.innerHTML = '';
+    list.forEach(t=>{
+      const row = document.createElement('div');
+      row.className = 'leader-row';
+      row.style.flexWrap = 'wrap';
+      const joined = t.participants.some(p=>p.userId===profile.userId);
+      const info = document.createElement('span');
+      info.style.flex = '1';
+      info.innerHTML = `<b>${t.hostName}</b>s Turnier \u2014 <span class="mono" style="color:var(--gold);">${t.prizeCoins.toLocaleString('de-DE')} Coins</span> \u2014 ${t.participants.length}/${t.maxSlots} Teilnehmer`;
+      const btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;gap:8px;margin-top:6px;width:100%;';
+      if(!joined && t.participants.length<t.maxSlots){
+        const joinBtn = document.createElement('button'); joinBtn.className='action-btn'; joinBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; joinBtn.textContent='Beitreten';
+        joinBtn.addEventListener('click', ()=>{ joinBtn.disabled=true; joinHostedTournament(t.id); });
+        btns.appendChild(joinBtn);
+      } else if(joined){
+        const tag = document.createElement('span'); tag.className='mono'; tag.style.cssText='color:var(--turf-bright);align-self:center;'; tag.textContent='\u2713 Angemeldet';
+        btns.appendChild(tag);
+      }
+      if(t.hostUserId===profile.userId){
+        const startBtn = document.createElement('button'); startBtn.className='action-btn secondary'; startBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; startBtn.textContent='Turnier starten';
+        startBtn.addEventListener('click', ()=>{ startBtn.disabled=true; startHostedTournament(t.id); });
+        btns.appendChild(startBtn);
+      }
+      row.append(info, btns);
+      box.appendChild(row);
+    });
+  }catch(e){ console.warn('load open tournaments failed', e); box.innerHTML = '<p class="hint">Konnte Turniere nicht laden.</p>'; }
+}
+async function loadMyTournamentResults(){
+  const box = document.getElementById('my-tournament-results');
+  if(!box) return;
+  await fbReady;
+  if(!fb){ box.innerHTML = ''; return; }
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','==','completed'), fb.limit(30)));
+    const mine = snap.docs.map(d=>d.data()).filter(t=>t.participants.some(p=>p.userId===profile.userId));
+    if(!box) return;
+    if(!mine.length){ box.innerHTML = '<p class="hint">Noch keine abgeschlossenen Turniere.</p>'; return; }
+    mine.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    box.innerHTML = '';
+    mine.slice(0,10).forEach(t=>{
+      const won = t.winnerUserId===profile.userId;
+      const row = document.createElement('div');
+      row.className = 'leader-row';
+      row.style.flexWrap = 'wrap';
+      const info = document.createElement('span');
+      info.style.cssText = 'flex:1;cursor:pointer;';
+      info.innerHTML = `${t.hostName}s Turnier \u2014 Sieger: <b style="${won?'color:var(--gold);':''}">${t.winnerName}</b>${won?' \ud83c\udfc6':''}`;
+      info.addEventListener('click', ()=>showBracketModal(t));
+      row.appendChild(info);
+      if(won && !t.prizeClaimed){
+        const claimBtn = document.createElement('button');
+        claimBtn.className='action-btn'; claimBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;';
+        claimBtn.textContent = `Preis abholen (${t.prizeCoins.toLocaleString('de-DE')})`;
+        claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id); });
+        row.appendChild(claimBtn);
+      }
+      box.appendChild(row);
+    });
+  }catch(e){ console.warn('load my tournament results failed', e); }
+}
+
 async function challengeFriend(friend){
   if(queueActive || inMatch || pendingDuelId) return;
   pendingDuelId = 'pending'; // temporary sentinel set synchronously to block a second near-simultaneous call
@@ -4119,6 +4333,16 @@ function renderPlay(view){
     </div>
     <div class="play-grid" style="margin-top:22px;">
       <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <h3 style="font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0;">Offene Turniere</h3>
+          <button class="action-btn secondary" id="host-tournament-btn" style="width:auto;padding:7px 14px;font-size:12px;">Turnier veranstalten</button>
+        </div>
+        <p class="hint" style="margin-top:0;margin-bottom:10px;">Lege ein Preisgeld fest, andere melden sich an, freie Pl\u00e4tze werden mit CPU-Vereinen aufgef\u00fcllt.</p>
+        <div class="leader-list" id="open-tournaments-list" style="margin-bottom:20px;"><p class="hint">L\u00e4dt...</p></div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine Turnier-Ergebnisse</h3>
+        <div class="leader-list" id="my-tournament-results"><p class="hint">L\u00e4dt...</p></div>
+      </div>
+      <div>
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Freunde</h3>
         <div class="toolbar" style="margin-bottom:10px;">
           <input id="friend-input" placeholder="Vereinsname des Freundes...">
@@ -4130,6 +4354,8 @@ function renderPlay(view){
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Eingehende Herausforderungen</h3>
         <div class="leader-list" id="duel-incoming"><p class="hint">L\u00e4dt...</p></div>
       </div>
+    </div>
+    <div class="play-grid" style="margin-top:22px;">
       <div>
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Letzte Spiele</h3>
         <div class="leader-list" id="match-history" style="margin-bottom:20px;">
@@ -4145,6 +4371,7 @@ function renderPlay(view){
         </div>
       </div>
     </div>`;
+  document.getElementById('host-tournament-btn').addEventListener('click', hostTournamentPrompt);
   document.getElementById('find-opp').addEventListener('click', joinQueue);
   if(inMatch){
     const findBtn = document.getElementById('find-opp');
@@ -4197,6 +4424,8 @@ function renderPlay(view){
   loadIncomingDuels();
   loadNetWorthLeaderboard();
   loadSalesHistory().then(async ()=>{ await updateMyNetWorthEntry(); loadNetWorthLeaderboard(); });
+  loadOpenTournaments();
+  loadMyTournamentResults();
 }
 async function loadLeaderboard(){
   const box = document.getElementById('leader-list');
