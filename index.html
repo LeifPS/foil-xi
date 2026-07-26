@@ -884,16 +884,23 @@ const PACKS = [
       return [first, second, third];
     }},
   {id:'ogpack',name:'OG Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
-    desc:'5 Karten mit Rating 80+. Winzige Chance auf Pel\u00e9 (111 OVR). Etwas wahrscheinlicher, aber immer noch selten: Diego Maradona oder Zinedine Zidane (je 108 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
+    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten \u2014 mit steigendem Rating wird es dramatisch seltener, aber selbst eine 104er-Legende ist (sehr selten) m\u00f6glich. Winzige Chance auf Pel\u00e9 (111 OVR). Etwas wahrscheinlicher, aber immer noch selten: Diego Maradona oder Zinedine Zidane (je 108 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
     draw(){
-      const basePool = ALL_BASE.concat(ALL_SPECIAL).filter(c=>c.ov>=80);
+      if(!ogPackWeightedPool){
+        const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS).filter(c=>c.ov>=80 && !c.isManager);
+        ogPackWeightedPool = [];
+        pool.forEach(c=>{
+          const reps = Math.max(1, Math.round(3000/Math.pow(1.16, c.ov-80))); // steep decay: common at 80, vanishingly rare near 105
+          for(let i=0;i<reps;i++) ogPackWeightedPool.push(c);
+        });
+      }
       return Array.from({length:5}, ()=>{
         const r = Math.random();
         if(r<0.0002) return OG_MANAGER;
         if(r<0.0007) return OG_PELE;
         if(r<0.0037) return OG_MARADONA;
         if(r<0.0067) return OG_ZIDANE;
-        return pick(basePool);
+        return ogPackWeightedPool[Math.floor(Math.random()*ogPackWeightedPool.length)];
       });
     }},
 ];
@@ -1049,6 +1056,7 @@ const SBC_DEFS = [
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
 ];
 let activeSBC = null;
+let ogPackWeightedPool = null;
 let sbcSelection = new Set();
 async function renderSBCList(view){
   const completed = new Set(profile.completedSBCs||[]);
@@ -2413,6 +2421,12 @@ const FORMATIONS = {
    {id:'cb1',label:'CB',x:26,y:78},{id:'cb2',label:'CB',x:50,y:82},{id:'cb3',label:'CB',x:74,y:78},
    {id:'lwb',label:'LWB',x:8,y:52},{id:'cm1',label:'CM',x:34,y:52},{id:'cm2',label:'CM',x:50,y:44},{id:'cm3',label:'CM',x:66,y:52},{id:'rwb',label:'RWB',x:92,y:52},
    {id:'st1',label:'ST',x:38,y:15},{id:'st2',label:'ST',x:62,y:15}
+ ]},
+ '343':{label:'3-4-3', slots:[
+   {id:'gk',label:'GK',x:50,y:92},
+   {id:'cb1',label:'CB',x:26,y:80},{id:'cb2',label:'CB',x:50,y:84},{id:'cb3',label:'CB',x:74,y:80},
+   {id:'lm',label:'LM',x:14,y:52},{id:'cm1',label:'CM',x:38,y:54},{id:'cm2',label:'CM',x:62,y:54},{id:'rm',label:'RM',x:86,y:52},
+   {id:'lw',label:'LW',x:18,y:16},{id:'st',label:'ST',x:50,y:11},{id:'rw',label:'RW',x:82,y:16}
  ]}
 };
 
@@ -2575,6 +2589,8 @@ async function init(){
     if(profile.tournament===undefined) profile.tournament = null;
     if(profile.oreiStreak===undefined) profile.oreiStreak = 0;
     if(profile.ogPackUnlocked===undefined) profile.ogPackUnlocked = false;
+    if(profile.oreiFirstWinClaimed===undefined) profile.oreiFirstWinClaimed = false;
+    if(profile.oreiSecondWinClaimed===undefined) profile.oreiSecondWinClaimed = false;
     if(profile.winStreak===undefined) profile.winStreak = 0;
   }
   soundEnabled = profile.soundOn;
@@ -4281,7 +4297,7 @@ async function playOReiChallenge(){
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   if(!oreiRequirementsMet()){ toast('Du erf\u00fcllst die Voraussetzungen noch nicht.'); return; }
-  const opp = buildFixedRatingOpponent(115);
+  const opp = buildFixedRatingOpponent(110);
   const area = document.getElementById('orei-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
@@ -4294,15 +4310,30 @@ async function playOReiChallenge(){
   await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
     if(outcome.result==='WIN'){
       const streak = (profile.oreiStreak||0)+1;
+      profile.oreiStreak = streak>=3 ? 0 : streak;
+      let extra = '';
+      if(streak===1 && !profile.oreiFirstWinClaimed){
+        profile.oreiFirstWinClaimed = true;
+        await atomicCoinChange(30000);
+        extra = ' +30.000 Coins (einmalige Belohnung)!';
+      }
+      if(streak===2 && !profile.oreiSecondWinClaimed){
+        profile.oreiSecondWinClaimed = true;
+        const blackoutPack = PACKS.find(p=>p.id==='blackout');
+        extra = ' Einmalige Belohnung: ein Blackout Pack!';
+        await sSet('profile', profile);
+        toast(`Sieg ${streak}/3!${extra}`);
+        showPackOpening(blackoutPack, blackoutPack.draw());
+        renderOReiPanel();
+        return;
+      }
       if(streak>=3){
-        profile.oreiStreak = 0;
         profile.ogPackUnlocked = true;
         await sSet('profile', profile);
         toast('\ud83d\udc51 O Rei! Drei Siege in Folge \u2014 das OG Pack ist jetzt im Kartenladen freigeschaltet!');
       } else {
-        profile.oreiStreak = streak;
         await sSet('profile', profile);
-        toast(`Sieg ${streak}/3! Noch ${3-streak} bis zum OG Pack \u2014 eine Niederlage setzt zur\u00fcck.`);
+        toast(`Sieg ${streak}/3!${extra}${extra?'':' Noch '+(3-streak)+' bis zum OG Pack \u2014 eine Niederlage setzt zur\u00fcck.'}`);
       }
     } else {
       profile.oreiStreak = 0;
@@ -4329,7 +4360,7 @@ function renderOReiPanel(){
     ${reqRow('Siege gesamt', wins>=OREI_ENTRY.wins, wins, OREI_ENTRY.wins)}
     ${reqRow('Kader-Rating', rating>=OREI_ENTRY.rating, rating, OREI_ENTRY.rating)}
     ${reqRow('Vereinswert', netWorth>=OREI_ENTRY.netWorth, netWorth.toLocaleString('de-DE'), OREI_ENTRY.netWorth.toLocaleString('de-DE'))}
-    <p class="hint" style="margin:12px 0;">3 Siege in Folge gegen ein exaktes 115er-Fantasieteam n\u00f6tig \u2014 eine Niederlage setzt die Serie zur\u00fcck auf 0. Belohnung: das <b style="color:#c98a3e;">OG Pack</b> wird dauerhaft freigeschaltet (30.000 Coins, winzige Chance auf Pel\u00e9, Maradona, Zidane oder Sir Alex Ferguson).</p>
+    <p class="hint" style="margin:12px 0;">3 Siege in Folge gegen ein exaktes 110er-Fantasieteam n\u00f6tig \u2014 eine Niederlage setzt die Serie zur\u00fcck auf 0. Beim 1. Sieg: <b style="color:var(--gold);">30.000 Coins</b> (nur einmalig). Beim 2. Sieg in Folge: <b style="color:var(--gold);">1 Blackout Pack</b> (nur einmalig). Bei 3 in Folge: das <b style="color:#c98a3e;">OG Pack</b> wird dauerhaft im Kartenladen freigeschaltet (30.000 Coins, winzige Chance auf Pel\u00e9, Maradona, Zidane oder Sir Alex Ferguson).</p>
     <div class="formation-select" style="margin-bottom:14px;">
       ${[0,1,2].map(i=>`<div class="chip ${i<streak?'active':''}" style="${i===streak?'border-color:#c98a3e;color:#c98a3e;':''}">${i+1}</div>`).join('')}
     </div>
