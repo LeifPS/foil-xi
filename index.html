@@ -1133,7 +1133,7 @@ async function renderSBCList(view){
   renderOReiPanel();
   renderKontinentalpokalPanel();
   renderWinStreakPanel();
-  const squadLocked = new Set([...Object.values(squad.slots), ...Object.values(squad.bench||{})]);
+  const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
   const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
@@ -1185,7 +1185,7 @@ async function openSBCBuilder(sbc){
   activeSBC = sbc; sbcSelection = new Set(); sbcManagerSelection = null;
   const view = document.getElementById('view');
   view.innerHTML = `<div class="view-head"><h2>${sbc.name}</h2><p class="hint">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p></div>`;
-  const squadLocked = new Set([...Object.values(squad.slots), ...Object.values(squad.bench||{})]);
+  const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
   view.innerHTML = `
     <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Spieler, die aktuell in deiner Kader-Editor-Aufstellung stehen, im Transfermarkt gelistet sind oder in einem Handelsangebot stecken, sind markiert und k\u00f6nnen hier nicht verwendet werden.</p></div>
@@ -1521,7 +1521,6 @@ async function getExternalLockedUids(){
 async function getLockedUids(){
   const locked = await getExternalLockedUids();
   Object.values(squad.slots).forEach(uid=>locked.add(uid));
-  Object.values(squad.bench||{}).forEach(uid=>locked.add(uid));
   return locked;
 }
 let sellModalMode = 'manual';
@@ -2483,22 +2482,15 @@ const FORMATIONS = {
    {id:'lw',label:'LW',x:18,y:16},{id:'st',label:'ST',x:50,y:11},{id:'rw',label:'RW',x:82,y:16}
  ]}
 };
-// ===== Bench: 7 free substitute slots - any player can sit on any slot, no fixed position =====
-const BENCH_SLOTS = Array.from({length:7}, (_,i)=>({id:'sub'+(i+1), label:'ERS'}));
-function allSquadUids(){ // every uid currently used, starting XI + bench together
-  return new Set([...Object.values(squad.slots||{}), ...Object.values(squad.bench||{})]);
+function allSquadUids(){ // every uid currently used in the starting XI
+  return new Set(Object.values(squad.slots||{}));
 }
-function allSquadNames(excludeSlotKey){ // name -> uid, across starting XI + bench, excluding one slot key ("slots:id" or "bench:id")
+function allSquadNames(excludeSlotKey){ // name -> uid, across the starting XI, excluding one slot key ("slots:id")
   const map = new Map();
   Object.keys(squad.slots||{}).forEach(id=>{
     if(excludeSlotKey==='slots:'+id) return;
     const c = ownedCard(squad.slots[id]);
     if(c) map.set(c.n, squad.slots[id]);
-  });
-  Object.keys(squad.bench||{}).forEach(id=>{
-    if(excludeSlotKey==='bench:'+id) return;
-    const c = ownedCard(squad.bench[id]);
-    if(c) map.set(c.n, squad.bench[id]);
   });
   return map;
 }
@@ -2680,11 +2672,9 @@ async function init(){
   managerCollection = await sGet('managerCollection');
   if(!managerCollection) managerCollection = [];
   squad = await sGet('squad');
-  if(!squad){ squad = {formation:'433', slots:{}, managerUid:null, bench:{}, subRules:{enabled:true, presetKey:'normal', threshold:SUB_RULE_PRESETS.normal.threshold}, tactics:{...DEFAULT_TACTICS}}; await sSet('squad', squad); }
+  if(!squad){ squad = {formation:'433', slots:{}, managerUid:null, tactics:{...DEFAULT_TACTICS}}; await sSet('squad', squad); }
   else {
     if(squad.managerUid===undefined) squad.managerUid = null;
-    if(!squad.bench) squad.bench = {};
-    if(!squad.subRules) squad.subRules = {enabled:true, presetKey:'normal', threshold:SUB_RULE_PRESETS.normal.threshold};
     if(!squad.tactics) squad.tactics = {...DEFAULT_TACTICS};
   }
   squadPresets = await sGet('squadPresets');
@@ -3491,22 +3481,6 @@ function renderSquad(view){
         <p class="hint">Beim Ver\u00f6ffentlichen werden Formation, Rating und Spielernamen mit anderen Spielern geteilt, damit sie gegen deinen Verein antreten k\u00f6nnen. Es werden keine pers\u00f6nlichen Daten geteilt.</p>
       </div>
     </div>
-    <div class="bench-section" style="margin-top:22px;">
-      <div class="lbl" style="margin-bottom:10px;color:var(--muted);font-size:11px;text-transform:uppercase;">Ersatzbank (7 freie Pl\u00e4tze)</div>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Jeder Spieler kann auf jeden Bank-Platz \u2014 keine feste Position. Es gibt keinen automatischen Rating-Bonus f\u00fcrs Besetzen; die Bank z\u00e4hlt nur, wenn w\u00e4hrend des Spiels tats\u00e4chlich gewechselt wird.</p>
-      <div class="bench-row" id="bench-row" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
-    </div>
-    <div class="sub-rules-section" style="margin-top:22px;">
-      <div class="lbl" style="margin-bottom:10px;color:var(--muted);font-size:11px;text-transform:uppercase;">Auswechsel-Regeln (vor dem Spiel festgelegt)</div>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Spieler werden im Spielverlauf m\u00fcde und verlieren an St\u00e4rke. Automatische Wechsel (max. 5 pro Spiel) bringen frische Ersatzspieler, sobald ein Feldspieler deutlich erm\u00fcdet ist \u2014 nach der von dir hier festgelegten Regel. W\u00e4hrend des Spiels selbst gibt es keine manuelle Entscheidung.</p>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;">
-        <input type="checkbox" id="subrules-enabled" ${squad.subRules && squad.subRules.enabled===false ? '' : 'checked'}>
-        <span style="font-size:13px;">Automatische Wechsel aktivieren</span>
-      </label>
-      <div class="formation-select" id="subrules-presets">
-        ${Object.entries(SUB_RULE_PRESETS).map(([key,p])=>`<div class="chip subrule-chip" data-key="${key}" style="${(squad.subRules&&squad.subRules.presetKey||'normal')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${p.desc}">${p.label}</div>`).join('')}
-      </div>
-    </div>
     <div class="tactics-section" style="margin-top:22px;">
       <div class="lbl" style="margin-bottom:10px;color:var(--muted);font-size:11px;text-transform:uppercase;">Taktik (vor dem Spiel festgelegt)</div>
       <p class="hint" style="margin-top:0;margin-bottom:8px;">Mentalit\u00e4t: verschiebt Angriff/Abwehr sp\u00fcrbar.</p>
@@ -3562,35 +3536,6 @@ function renderSquad(view){
     el.addEventListener('click', ()=>openPicker(slot));
     pitch.appendChild(el);
   });
-  const benchRow = document.getElementById('bench-row');
-  BENCH_SLOTS.forEach((slot,i)=>{
-    const uid = squad.bench[slot.id];
-    const card = uid ? ownedCard(uid) : null;
-    const el = document.createElement('div');
-    el.style.cssText = 'cursor:pointer;';
-    if(card){
-      el.appendChild(cardEl(card, 'xs'));
-    } else {
-      el.innerHTML = `<div class="empty-slot-inner" style="width:70px;height:100px;">ERS ${i+1}</div>`;
-    }
-    el.addEventListener('click', ()=>openPicker(slot, true));
-    benchRow.appendChild(el);
-  });
-  document.getElementById('subrules-enabled').addEventListener('change', async (e)=>{
-    squad.subRules = squad.subRules || {};
-    squad.subRules.enabled = e.target.checked;
-    await sSet('squad', squad);
-  });
-  document.querySelectorAll('.subrule-chip').forEach(chip=>{
-    chip.addEventListener('click', async ()=>{
-      const key = chip.dataset.key;
-      squad.subRules = squad.subRules || {};
-      squad.subRules.presetKey = key;
-      squad.subRules.threshold = SUB_RULE_PRESETS[key].threshold;
-      await sSet('squad', squad);
-      renderSquad(document.getElementById('view'));
-    });
-  });
   document.querySelectorAll('.tactic-chip').forEach(chip=>{
     chip.addEventListener('click', async ()=>{
       const group = chip.dataset.group, key = chip.dataset.key;
@@ -3622,7 +3567,7 @@ function renderSquad(view){
       </div>`);
     document.getElementById('cancel-clear').addEventListener('click', closeModal);
     document.getElementById('do-clear').addEventListener('click', async ()=>{
-      squad.slots = {}; squad.managerUid = null; squad.bench = {};
+      squad.slots = {}; squad.managerUid = null;
       await sSet('squad', squad);
       closeModal();
       toast('Kader geleert.');
@@ -3631,27 +3576,26 @@ function renderSquad(view){
   });
   document.getElementById('publish-squad').addEventListener('click', publishSquad);
 }
-async function openPicker(slot, isBench=false){
-  const pool = isBench ? squad.bench : squad.slots;
+async function openPicker(slot){
   const used = allSquadUids();
   const externalLocked = await getExternalLockedUids();
-  const usedNames = allSquadNames((isBench?'bench:':'slots:')+slot.id);
+  const usedNames = allSquadNames('slots:'+slot.id);
   let items = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
-  items = items.map(x=>({...x, pen: isBench ? 0 : compatPenalty(slot.label, mainPos(x.card.pos))})).filter(x=>x.pen!==null);
+  items = items.map(x=>({...x, pen: compatPenalty(slot.label, mainPos(x.card.pos))})).filter(x=>x.pen!==null);
   items.sort((a,b)=>{
     if(a.pen!==b.pen) return a.pen-b.pen;
     return b.card.ov-a.card.ov;
   });
-  const currentUid = pool[slot.id];
+  const currentUid = squad.slots[slot.id];
   openModal(`
-    <h2 style="margin-bottom:4px;">${isBench?'Ersatzspieler':posDE(slot.label)+' ausw\u00e4hlen'}</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">${isBench ? 'Ersatzspieler k\u00f6nnen jede Position abdecken und erh\u00f6hen die Kaderbreite (kleiner Rating-Bonus).' : `Nur Spieler, die ${posDE(slot.label)} abdecken k\u00f6nnen, werden angezeigt. Abweichende Positionen kosten einen Rating-Abzug (angezeigt als \u2212N).`} Karten im Transfermarkt oder in einem Handelsangebot sind gerade nicht verf\u00fcgbar. Derselbe Spieler (auch als andere Variante) kann nur einmal gleichzeitig aufgestellt werden \u2014 egal ob Start-XI oder Bank.</p>
+    <h2 style="margin-bottom:4px;">${posDE(slot.label)} ausw\u00e4hlen</h2>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${posDE(slot.label)} abdecken k\u00f6nnen, werden angezeigt. Abweichende Positionen kosten einen Rating-Abzug (angezeigt als \u2212N). Karten im Transfermarkt oder in einem Handelsangebot sind gerade nicht verf\u00fcgbar. Derselbe Spieler (auch als andere Variante) kann nur einmal gleichzeitig aufgestellt werden.</p>
     ${currentUid?`<button class="action-btn secondary" id="clear-slot" style="margin-bottom:14px;width:180px;">Spieler entfernen</button>`:''}
     <div class="picker-list" id="picker-list"></div>
     ${!items.length?'<p class="hint">Noch keine passenden Spieler in deinem Verein f\u00fcr diese Position.</p>':''}`);
   if(currentUid){
     document.getElementById('clear-slot').addEventListener('click', async ()=>{
-      delete pool[slot.id];
+      delete squad.slots[slot.id];
       await sSet('squad', squad); closeModal(); renderSquad(document.getElementById('view'));
     });
   }
@@ -3680,8 +3624,7 @@ async function openPicker(slot, isBench=false){
       if(locked){ toast('Diese Karte ist gerade im Transfermarkt gelistet oder in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier einzusetzen.'); return; }
       if(nameDupe){ toast(`${card.n} steht bereits an anderer Stelle in deiner Aufstellung \u2014 derselbe Spieler kann nicht doppelt aufgestellt werden.`); return; }
       Object.keys(squad.slots).forEach(s=>{ if(squad.slots[s]===uid) delete squad.slots[s]; });
-      Object.keys(squad.bench).forEach(s=>{ if(squad.bench[s]===uid) delete squad.bench[s]; });
-      pool[slot.id]=uid;
+      squad.slots[slot.id]=uid;
       await sSet('squad', squad);
       closeModal();
       renderSquad(document.getElementById('view'));
@@ -3732,7 +3675,7 @@ function saveSquadAsPreset(){
     if(!name) return;
     squadPresets.push({
       id: genId(), name: name.slice(0,30),
-      formation: squad.formation, slots: {...squad.slots}, bench: {...squad.bench}, managerUid: squad.managerUid
+      formation: squad.formation, slots: {...squad.slots}, managerUid: squad.managerUid
     });
     await sSet('squadPresets', squadPresets);
     toast('Kader gespeichert.');
@@ -3744,7 +3687,6 @@ async function loadSquadPreset(id){
   if(!preset) return;
   squad.formation = preset.formation;
   const validSlots = {};
-  const validBench = {};
   const usedNames = new Set();
   let dropped = 0;
   Object.entries(preset.slots||{}).forEach(([slotId,uid])=>{
@@ -3754,15 +3696,7 @@ async function loadSquadPreset(id){
     usedNames.add(card.n);
     validSlots[slotId] = uid;
   });
-  Object.entries(preset.bench||{}).forEach(([slotId,uid])=>{
-    const card = ownedCard(uid);
-    if(!card){ dropped++; return; }
-    if(usedNames.has(card.n)){ dropped++; return; }
-    usedNames.add(card.n);
-    validBench[slotId] = uid;
-  });
   squad.slots = validSlots;
-  squad.bench = validBench;
   squad.managerUid = (preset.managerUid && managerCollection.some(m=>m.uid===preset.managerUid)) ? preset.managerUid : null;
   await sSet('squad', squad);
   toast(dropped ? `Kader "${preset.name}" geladen \u2014 ${dropped} Spieler nicht mehr verf\u00fcgbar oder doppelt, Positionen leer gelassen.` : `Kader "${preset.name}" geladen.`);
@@ -4215,8 +4149,7 @@ async function loadIncomingDuels(){
         const {rating, filled} = squadRating();
         if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); acceptBtn.disabled=false; declineBtn.disabled=false; return; }
         const myPlayers = getMySquadPlayers();
-        const myBench = getMyBenchPlayers();
-        const md = buildDecisiveMatch(rating, duel.fromRating, myPlayers, duel.fromPlayers, myBench, squad.subRules, [], null, squad.tactics);
+        const md = buildDecisiveMatch(rating, duel.fromRating, myPlayers, duel.fromPlayers, squad.tactics);
         const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p2':'p1', isPenalty:e.isPenalty}));
         const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p2':'p1', isPenalty:e.isPenalty})) : null;
         const incidents = md.incidents.map(inc=>({...inc, side: inc.side==='me'?'p2':'p1'}));
@@ -4233,7 +4166,6 @@ async function loadIncomingDuels(){
           p1Goals: md.oppGoals, p2Goals: md.myGoals,
           events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
           p1Profile: md.oppProfile, p2Profile: md.myProfile,
-          p1Subs: md.oppSubs, p2Subs: md.mySubs,
           incidents, p1RedMinute: md.oppRedMinute, p2RedMinute: md.myRedMinute,
           startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
         };
@@ -4944,7 +4876,7 @@ function pickScorer(players){
   const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
   return {n:chosen.n, img:chosen.img};
 }
-function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, mySubs=[], oppSubs=[]){
+function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0){
   const used = new Set();
   function uniqueMinute(){
     let m; let tries=0;
@@ -4952,16 +4884,8 @@ function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90
     used.add(m); return m;
   }
   const events = [];
-  for(let i=0;i<myGoals;i++){
-    const m = uniqueMinute();
-    const onPitch = playersOnPitchAt(myPlayers, mySubs, m+minuteOffset);
-    events.push({minute:m+minuteOffset, side:'me', scorer:pickScorer(onPitch)});
-  }
-  for(let i=0;i<oppGoals;i++){
-    const m = uniqueMinute();
-    const onPitch = playersOnPitchAt(oppPlayers, oppSubs, m+minuteOffset);
-    events.push({minute:m+minuteOffset, side:'opp', scorer:pickScorer(onPitch)});
-  }
+  for(let i=0;i<myGoals;i++) events.push({minute:uniqueMinute()+minuteOffset, side:'me', scorer:pickScorer(myPlayers)});
+  for(let i=0;i<oppGoals;i++) events.push({minute:uniqueMinute()+minuteOffset, side:'opp', scorer:pickScorer(oppPlayers)});
   events.sort((a,b)=>a.minute-b.minute);
   return events;
 }
@@ -4999,21 +4923,6 @@ function pkWinProbability(myScore, oppScore, myKicksTaken, oppKicksTaken, myProb
   }
   return clamp(wins/iterations, 0.01, 0.99);
 }
-// ===== FATIGUE & AUTOMATIC SUBSTITUTIONS =====
-// Players get progressively weaker over the match; up to 5 automatic substitutions per team
-// can bring on a fresh bench player once a starter's fatigue crosses a pre-set threshold.
-// Substitution rules are configured BEFORE the match (Squad Editor) - never a manual in-match choice.
-function fatigueDrop(minute, isGK){
-  const capped = Math.min(Math.max(minute,0), 120);
-  const raw = capped/18; // ~2.5 by half-time(45'), 5 by full-time, up to ~6.7 in extra time
-  return isGK ? raw*0.4 : raw; // keepers barely tire
-}
-const SUB_RULE_PRESETS = {
-  early:  {label:'Fr\u00fch wechseln',  threshold:2.2, desc:'Wechselt schon bei leichter Erm\u00fcdung \u2014 frischere Spieler, aber fr\u00fch verbrauchte Wechsel.'},
-  normal: {label:'Normal',          threshold:3.2, desc:'Ausgewogener Standard-Ansatz.'},
-  late:   {label:'Sp\u00e4t wechseln',  threshold:4.2, desc:'Wechselt erst bei deutlicher Erm\u00fcdung \u2014 h\u00e4lt Wechsel f\u00fcr die Schlussphase zur\u00fcck.'},
-};
-const DEFAULT_SUB_RULES = {enabled:true, threshold:SUB_RULE_PRESETS.normal.threshold};
 // ===== TACTICS: mentality + pressing, both configured before the match, both with real effects =====
 const TACTIC_MENTALITY = {
   offensive:  {label:'Offensiv',      attackMod: 3, defenseMod:-3, desc:'Mehr Angriffsdruck, aber anf\u00e4lliger in der Abwehr.'},
@@ -5053,70 +4962,9 @@ function planCardsAndPenalties(cardMult=1, players=[]){
   }
   return {cards, redMinute, penalty};
 }
-function planSubstitutions(startingXI, bench, subRules){
-  const rules = (subRules && subRules.enabled!==undefined) ? subRules : DEFAULT_SUB_RULES;
-  if(!rules.enabled || !bench || !bench.length) return [];
-  const threshold = rules.threshold || DEFAULT_SUB_RULES.threshold;
-  const maxSubs = 5;
-  const maxPerCheckpoint = 2; // real teams rarely make more than 1-2 changes at the exact same moment
-  const subs = [];
-  const usedBench = new Set();
-  const subbedOut = new Set();
-  // each player tires a little differently - this is what spreads substitutions out across the match
-  // instead of the whole bench coming on in one single wave the instant fatigue crosses the line
-  const jitter = startingXI.map(()=> (Math.random()-0.5)*2.4); // +/-1.2 fatigue-equivalent of individual variation
-  for(let minute=15; minute<=90 && subs.length<maxSubs; minute+=15){
-    let madeThisCheckpoint = 0;
-    const order = startingXI.map((_,idx)=>idx).sort(()=>Math.random()-0.5); // don't always favor the same slot order
-    for(const idx of order){
-      if(subs.length>=maxSubs || madeThisCheckpoint>=maxPerCheckpoint || subbedOut.has(idx)) continue;
-      const p = startingXI[idx];
-      if(mainPos(p.pos)==='GK') continue; // no automatic keeper changes
-      if(fatigueDrop(minute,false)+jitter[idx] < threshold) continue;
-      // pick the best-fitting available bench player for this exact position (lowest penalty wins),
-      // same compatibility logic used when building the starting XI - a real coach picks the closest fit
-      const candidates = bench
-        .map((b,i)=>({i, b, pen: compatPenalty(p.pos, mainPos(b.pos))}))
-        .filter(c=>!usedBench.has(c.i) && c.pen!==null);
-      if(!candidates.length) continue;
-      candidates.sort((a,b)=>a.pen-b.pen);
-      const best = candidates[0];
-      usedBench.add(best.i); subbedOut.add(idx); madeThisCheckpoint++;
-      subs.push({minute, outIdx:idx, outPlayer:p, inPlayer:best.b});
-    }
-  }
-  return subs;
-}
-function matchFatigueAdjustment(subsCount){
-  const baseFatigue = 2.5; // average fatigue impact across a full 90 minutes, pre-substitutions
-  const subsCredit = subsCount*0.4; // each completed sub claws a bit of that back
-  return Math.max(0.5, baseFatigue-subsCredit);
-}
-function instantFatigueAdjustment(minute, subsSoFar, redMinute){
-  // degradation relative to a fully fresh, 11-man team, at THIS exact minute
-  const fatiguePart = -Math.max(0, fatigueDrop(minute,false) - subsSoFar*0.4);
-  const redPart = (redMinute!=null && minute>=redMinute) ? -6 : 0;
-  return fatiguePart + redPart;
-}
-function playersOnPitchAt(startingXI, subs, minute){
-  return startingXI.map((p,idx)=>{
-    const sub = (subs||[]).filter(s=>s.outIdx===idx && s.minute<=minute).pop();
-    if(sub){
-      const minutesOn = minute-sub.minute;
-      const posPen = compatPenalty(p.pos, mainPos(sub.inPlayer.pos)) || 0;
-      return {...sub.inPlayer, pos:p.pos, ov: Math.max(1, Math.round(sub.inPlayer.ov - posPen - fatigueDrop(minutesOn, mainPos(sub.inPlayer.pos)==='GK')))};
-    }
-    return {...p, ov: Math.max(1, Math.round(p.ov - fatigueDrop(minute, mainPos(p.pos)==='GK')))};
-  });
-}
-function getMyBenchPlayers(){
-  const list = [];
-  BENCH_SLOTS.forEach(slot=>{
-    const uid = squad.bench && squad.bench[slot.id];
-    const card = uid ? ownedCard(uid) : null;
-    if(card) list.push({n:card.n, pos:card.pos, ov:card.ov, img:card.img});
-  });
-  return list;
+function liveRedCardAdjustment(minute, redMinute){
+  // a sent-off team plays the rest of the match a man down - meaningfully weaker from that point on
+  return (redMinute!=null && minute>=redMinute) ? -6 : 0;
 }
 
 function computeTeamProfile(players, fallbackOv){
@@ -5182,7 +5030,7 @@ function updateWinProbEl(pct){
   if(fill) fill.style.width = p+'%';
   if(txt) txt.textContent = p+'%';
 }
-function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=[], mySubRules=null, oppBench=[], oppSubRules=null, myTactics=null, oppTactics=null){
+function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactics=null, oppTactics=null){
   const myT = myTactics || DEFAULT_TACTICS;
   const oppT = oppTactics || DEFAULT_TACTICS;
   const myMent = TACTIC_MENTALITY[myT.mentality] || TACTIC_MENTALITY.balanced;
@@ -5190,8 +5038,6 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=
   const myPress = TACTIC_PRESSING[myT.pressing] || TACTIC_PRESSING.normal;
   const oppPress = TACTIC_PRESSING[oppT.pressing] || TACTIC_PRESSING.normal;
 
-  const mySubs = planSubstitutions(myPlayers, myBench, mySubRules);
-  const oppSubs = planSubstitutions(oppPlayers, oppBench, oppSubRules);
   const myIncidents = planCardsAndPenalties(myPress.cardMult, myPlayers);
   const oppIncidents = planCardsAndPenalties(oppPress.cardMult, oppPlayers);
 
@@ -5201,28 +5047,23 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=
   const myProfileRaw = {attack: myProfileRaw0.attack+myMent.attackMod+myPress.attackMod, defense: myProfileRaw0.defense+myMent.defenseMod};
   const oppProfileRaw = {attack: oppProfileRaw0.attack+oppMent.attackMod+oppPress.attackMod, defense: oppProfileRaw0.defense+oppMent.defenseMod};
 
-  const myFatigue = matchFatigueAdjustment(mySubs.length);
-  const oppFatigue = matchFatigueAdjustment(oppSubs.length);
   const myRedPenalty = myIncidents.redMinute!=null ? (90-myIncidents.redMinute)/90*6 : 0;
   const oppRedPenalty = oppIncidents.redMinute!=null ? (90-oppIncidents.redMinute)/90*6 : 0;
-  const myProfileForLambda = {attack: myProfileRaw.attack-myFatigue-myRedPenalty, defense: myProfileRaw.defense-myFatigue-myRedPenalty};
-  const oppProfileForLambda = {attack: oppProfileRaw.attack-oppFatigue-oppRedPenalty, defense: oppProfileRaw.defense-oppFatigue-oppRedPenalty};
+  const myProfileForLambda = {attack: myProfileRaw.attack-myRedPenalty, defense: myProfileRaw.defense-myRedPenalty};
+  const oppProfileForLambda = {attack: oppProfileRaw.attack-oppRedPenalty, defense: oppProfileRaw.defense-oppRedPenalty};
 
   const myExp = computeLambda(myProfileForLambda.attack, oppProfileForLambda.defense);
   const oppExp = computeLambda(oppProfileForLambda.attack, myProfileForLambda.defense);
   let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
-  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0, mySubs, oppSubs);
+  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0);
 
-  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count -
-  // the scorer is picked from whoever is actually on the pitch at that exact minute
+  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count
   if(myIncidents.penalty && myIncidents.penalty.scored){
-    const onPitch = playersOnPitchAt(myPlayers, mySubs, myIncidents.penalty.minute);
-    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(onPitch), isPenalty:true});
+    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myPlayers), isPenalty:true});
     myGoals++;
   }
   if(oppIncidents.penalty && oppIncidents.penalty.scored){
-    const onPitch = playersOnPitchAt(oppPlayers, oppSubs, oppIncidents.penalty.minute);
-    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(onPitch), isPenalty:true});
+    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppPlayers), isPenalty:true});
     oppGoals++;
   }
   events90.sort((a,b)=>a.minute-b.minute);
@@ -5241,18 +5082,16 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=
     const myExpET = clamp(myExp*(30/90), 0.05, 2);
     const oppExpET = clamp(oppExp*(30/90), 0.05, 2);
     const myETGoals = simGoals(myExpET), oppETGoals = simGoals(oppExpET);
-    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90, mySubs, oppSubs);
+    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90);
     myGoals += myETGoals; oppGoals += oppETGoals;
     if(myGoals===oppGoals){
       wentToPK = true;
-      const myFinalXI = playersOnPitchAt(myPlayers, mySubs, 120);
-      const oppFinalXI = playersOnPitchAt(oppPlayers, oppSubs, 120);
-      shootout = simulateShootout(myRating, oppRating, myFinalXI, oppFinalXI);
+      shootout = simulateShootout(myRating, oppRating, myPlayers, oppPlayers);
     }
   }
   const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':'opp');
   return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide,
-    myProfile: myProfileRaw, oppProfile: oppProfileRaw, mySubs, oppSubs, incidents,
+    myProfile: myProfileRaw, oppProfile: oppProfileRaw, incidents,
     myRedMinute: myIncidents.redMinute, oppRedMinute: oppIncidents.redMinute};
 }
 function goalRowHTML(minute, scorer, teamName, side){
@@ -5277,12 +5116,10 @@ function pkRowHTML(round, kick, teamName, side){
       <span class="gteam">${teamName}</span>
     </div>`;
 }
-function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, mySubs=[], oppSubs=[], incidents=[], myRedMinute=null, oppRedMinute=null){
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null){
   const liveProfileAt = (minute)=>{
-    const mySoFar = mySubs.filter(s=>s.minute<=minute).length;
-    const oppSoFar = oppSubs.filter(s=>s.minute<=minute).length;
-    const myAdj = instantFatigueAdjustment(minute, mySoFar, myRedMinute);
-    const oppAdj = instantFatigueAdjustment(minute, oppSoFar, oppRedMinute);
+    const myAdj = liveRedCardAdjustment(minute, myRedMinute);
+    const oppAdj = liveRedCardAdjustment(minute, oppRedMinute);
     return {
       my: {attack: myProfile.attack+myAdj, defense: myProfile.defense+myAdj},
       opp: {attack: oppProfile.attack+oppAdj, defense: oppProfile.defense+oppAdj},
@@ -5321,15 +5158,6 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
               const row = document.createElement('div');
               row.innerHTML = goalRowHTML(m, e.scorer, (e.side==='me'?myName:oppName)+(e.isPenalty?' (Elfmeter)':''), e.side);
               logEl.prepend(row.firstElementChild);
-            }
-          });
-          const dueSubs = [...mySubs.filter(s=>s.minute===m).map(s=>({...s,mine:true})), ...oppSubs.filter(s=>s.minute===m).map(s=>({...s,mine:false}))];
-          dueSubs.forEach(s=>{
-            if(logEl){
-              const row = document.createElement('div');
-              row.className = 'goal-row';
-              row.innerHTML = `<span class="gm">${m}'</span><span class="gname">\ud83d\udd04 ${s.inPlayer.n} f\u00fcr ${s.outPlayer.n}</span><span class="gteam">${s.mine?myName:oppName}</span>`;
-              logEl.prepend(row);
             }
           });
           incidents.filter(inc=>inc.minute===m).forEach(inc=>{
@@ -5404,7 +5232,7 @@ async function playFullMatch(md, myName, oppName){
   const myScorers = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
   const incidents = md.incidents || [];
-  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, md.mySubs, md.oppSubs, incidents, md.myRedMinute, md.oppRedMinute);
+  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute);
   if(md.wentToET){
     toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
     md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
@@ -5412,7 +5240,7 @@ async function playFullMatch(md, myName, oppName){
     const startedAtET = md.startedAt + md.durationMs;
     const waitET = startedAtET - Date.now();
     if(waitET>0) await new Promise(r=>setTimeout(r, waitET));
-    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, md.mySubs, md.oppSubs, incidents, md.myRedMinute, md.oppRedMinute));
+    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute));
   }
   if(md.wentToPK){
     toast('Auch nach Verl\u00e4ngerung unentschieden \u2014 Elfmeterschie\u00dfen entscheidet!');
@@ -5502,8 +5330,7 @@ async function runLocalMatch(myRating, opp, opts={}){
   inMatch = true;
   try{
     const myPlayers = getMySquadPlayers();
-    const myBench = getMyBenchPlayers();
-    const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players, myBench, squad.subRules, [], null, squad.tactics);
+    const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players, squad.tactics);
     md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
     const myName = profile.displayName || 'Dein Verein';
     const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
@@ -5611,14 +5438,12 @@ async function enterSyncedMatch(matchDoc){
   if(waitMs>0) await new Promise(r=>setTimeout(r, waitMs));
   const myProfile = amP1 ? matchDoc.p1Profile : matchDoc.p2Profile;
   const oppProfile = amP1 ? matchDoc.p2Profile : matchDoc.p1Profile;
-  const mySubs = (amP1 ? matchDoc.p1Subs : matchDoc.p2Subs) || [];
-  const oppSubs = (amP1 ? matchDoc.p2Subs : matchDoc.p1Subs) || [];
   const incidents = (matchDoc.incidents||[]).map(inc=>({...inc, side:(inc.side==='p1')===amP1 ? 'me':'opp'}));
   const myRedMinute = amP1 ? matchDoc.p1RedMinute : matchDoc.p2RedMinute;
   const oppRedMinute = amP1 ? matchDoc.p2RedMinute : matchDoc.p1RedMinute;
   const md = {events90, eventsET, shootout, wentToET:matchDoc.wentToET, wentToPK:matchDoc.wentToPK, startedAt:matchDoc.startedAt, durationMs:matchDoc.durationMs,
     myProfile: myProfile || {attack:meSide.rating, defense:meSide.rating}, oppProfile: oppProfile || {attack:oppSide.rating, defense:oppSide.rating},
-    mySubs, oppSubs, incidents, myRedMinute, oppRedMinute};
+    incidents, myRedMinute, oppRedMinute};
   const final = await playFullMatch(md, meSide.name, oppSide.name);
   let winnerSide;
   if(matchDoc.wentToPK){
@@ -5647,7 +5472,6 @@ async function joinQueue(){
     return;
   }
   const myPlayers = getMySquadPlayers();
-  const myBench = getMyBenchPlayers();
   const startTime = Date.now();
   try{
     await fb.setDoc(fb.doc(fb.db,'queue',profile.userId), {
@@ -5726,7 +5550,7 @@ async function joinQueue(){
           const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
           if(!queueActive) return;
           if(!existing.exists()){
-            const md = buildDecisiveMatch(rating, other.rating, myPlayers, other.players, myBench, squad.subRules, [], null, squad.tactics);
+            const md = buildDecisiveMatch(rating, other.rating, myPlayers, other.players, squad.tactics);
             const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2', isPenalty:e.isPenalty}));
             const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2', isPenalty:e.isPenalty})) : null;
             const incidents = md.incidents.map(inc=>({...inc, side: inc.side==='me'?'p1':'p2'}));
@@ -5742,7 +5566,6 @@ async function joinQueue(){
               p1Goals: md.myGoals, p2Goals: md.oppGoals,
               events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
               p1Profile: md.myProfile, p2Profile: md.oppProfile,
-              p1Subs: md.mySubs, p2Subs: md.oppSubs,
               incidents, p1RedMinute: md.myRedMinute, p2RedMinute: md.oppRedMinute,
               startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
             };
