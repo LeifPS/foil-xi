@@ -2483,13 +2483,8 @@ const FORMATIONS = {
    {id:'lw',label:'LW',x:18,y:16},{id:'st',label:'ST',x:50,y:11},{id:'rw',label:'RW',x:82,y:16}
  ]}
 };
-// ===== Bench: 7 substitute slots, loosely position-typed like a real matchday squad =====
-const BENCH_SLOTS = [
-  {id:'sub1', label:'GK'},
-  {id:'sub2', label:'CB'}, {id:'sub3', label:'CB'},
-  {id:'sub4', label:'CM'}, {id:'sub5', label:'CM'},
-  {id:'sub6', label:'ST'}, {id:'sub7', label:'ST'},
-];
+// ===== Bench: 7 free substitute slots - any player can sit on any slot, no fixed position =====
+const BENCH_SLOTS = Array.from({length:7}, (_,i)=>({id:'sub'+(i+1), label:'ERS'}));
 function allSquadUids(){ // every uid currently used, starting XI + bench together
   return new Set([...Object.values(squad.slots||{}), ...Object.values(squad.bench||{})]);
 }
@@ -2506,12 +2501,6 @@ function allSquadNames(excludeSlotKey){ // name -> uid, across starting XI + ben
     if(c) map.set(c.n, squad.bench[id]);
   });
   return map;
-}
-function benchDepthBonus(){
-  const filled = BENCH_SLOTS.map(s=>squad.bench && squad.bench[s.id]).filter(Boolean);
-  if(!filled.length) return 0;
-  const avgOv = filled.reduce((sum,uid)=>{ const c=ownedCard(uid); return sum+(c?c.ov:0); },0)/filled.length;
-  return Math.max(0, Math.min(3, Math.round((avgOv-75)/8))); // modest, capped +0 to +3
 }
 
 
@@ -3457,7 +3446,7 @@ function squadRating(){
   if(filled===0) return {rating:0, filled:0};
   const base = effSum/filled;
   const bonus = (exactCount/11)*2;
-  let rating = Math.min(99, Math.round(base+bonus)) + benchDepthBonus();
+  let rating = Math.min(99, Math.round(base+bonus));
   const mgr = getAssignedManager();
   if(mgr){
     rating = mgr.boostType==='percent' ? rating*(1+mgr.boostValue/100) : rating+mgr.boostValue;
@@ -3502,7 +3491,8 @@ function renderSquad(view){
       </div>
     </div>
     <div class="bench-section" style="margin-top:22px;">
-      <div class="lbl" style="margin-bottom:10px;color:var(--muted);font-size:11px;text-transform:uppercase;">Ersatzbank ${benchDepthBonus()>0?`<span style="color:var(--turf-bright);">(+${benchDepthBonus()} Rating Kaderbreite-Bonus)</span>`:''}</div>
+      <div class="lbl" style="margin-bottom:10px;color:var(--muted);font-size:11px;text-transform:uppercase;">Ersatzbank (7 freie Pl\u00e4tze)</div>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Jeder Spieler kann auf jeden Bank-Platz \u2014 keine feste Position. Es gibt keinen automatischen Rating-Bonus f\u00fcrs Besetzen; die Bank z\u00e4hlt nur, wenn w\u00e4hrend des Spiels tats\u00e4chlich gewechselt wird.</p>
       <div class="bench-row" id="bench-row" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
     </div>
     <div class="sub-rules-section" style="margin-top:22px;">
@@ -3561,7 +3551,7 @@ function renderSquad(view){
     pitch.appendChild(el);
   });
   const benchRow = document.getElementById('bench-row');
-  BENCH_SLOTS.forEach(slot=>{
+  BENCH_SLOTS.forEach((slot,i)=>{
     const uid = squad.bench[slot.id];
     const card = uid ? ownedCard(uid) : null;
     const el = document.createElement('div');
@@ -3569,7 +3559,7 @@ function renderSquad(view){
     if(card){
       el.appendChild(cardEl(card, 'xs'));
     } else {
-      el.innerHTML = `<div class="empty-slot-inner" style="width:70px;height:100px;">${posDE(slot.label)}</div>`;
+      el.innerHTML = `<div class="empty-slot-inner" style="width:70px;height:100px;">ERS ${i+1}</div>`;
     }
     el.addEventListener('click', ()=>openPicker(slot, true));
     benchRow.appendChild(el);
@@ -5006,10 +4996,16 @@ function planSubstitutions(startingXI, bench, subRules){
       if(subs.length>=maxSubs || subbedOut.has(idx)) return;
       if(mainPos(p.pos)==='GK') return; // no automatic keeper changes
       if(fatigueDrop(minute,false) < threshold) return;
-      const bi = bench.findIndex((b,i)=>!usedBench.has(i) && posGroup2(mainPos(b.pos))===posGroup2(mainPos(p.pos)));
-      if(bi===-1) return;
-      usedBench.add(bi); subbedOut.add(idx);
-      subs.push({minute, outIdx:idx, outPlayer:p, inPlayer:bench[bi]});
+      // pick the best-fitting available bench player for this exact position (lowest penalty wins),
+      // same compatibility logic used when building the starting XI - a real coach picks the closest fit
+      const candidates = bench
+        .map((b,i)=>({i, b, pen: compatPenalty(p.pos, mainPos(b.pos))}))
+        .filter(c=>!usedBench.has(c.i) && c.pen!==null);
+      if(!candidates.length) return;
+      candidates.sort((a,b)=>a.pen-b.pen);
+      const best = candidates[0];
+      usedBench.add(best.i); subbedOut.add(idx);
+      subs.push({minute, outIdx:idx, outPlayer:p, inPlayer:best.b});
     });
   }
   return subs;
@@ -5034,7 +5030,8 @@ function buildScoringPool(startingXI, subs){
   subs.forEach(s=>{
     const minutesPlayed = 90-s.minute;
     if(minutesPlayed<=0) return;
-    pool.push({...s.inPlayer, ov: Math.max(1, Math.round(s.inPlayer.ov - fatigueDrop(minutesPlayed, mainPos(s.inPlayer.pos)==='GK')))});
+    const posPen = compatPenalty(s.outPlayer.pos, mainPos(s.inPlayer.pos)) || 0;
+    pool.push({...s.inPlayer, pos:s.outPlayer.pos, ov: Math.max(1, Math.round(s.inPlayer.ov - posPen - fatigueDrop(minutesPlayed, mainPos(s.inPlayer.pos)==='GK')))});
   });
   return pool;
 }
