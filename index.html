@@ -633,9 +633,9 @@ async function initFirebase(){
     const fsMod = await withTimeout(import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore-lite.js`), 6000);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
     const db = fsMod.getFirestore(app);
-    // connectivity probe - if this fails/hangs we fall back to local mode. limit(0) means the
-    // query returns zero documents, so this costs 0 Firestore reads while still validating the connection.
-    await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(0))), 6000);
+    // connectivity probe - if this fails/hangs we fall back to local mode. Firestore's limit()
+    // requires a positive integer (limit(0) throws), so this costs at most 1 read per session.
+    await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1))), 6000);
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
       getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
       updateDoc:fsMod.updateDoc, increment:fsMod.increment};
