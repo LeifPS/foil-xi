@@ -4944,7 +4944,7 @@ function pickScorer(players){
   const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
   return {n:chosen.n, img:chosen.img};
 }
-function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0){
+function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, mySubs=[], oppSubs=[]){
   const used = new Set();
   function uniqueMinute(){
     let m; let tries=0;
@@ -4952,8 +4952,16 @@ function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90
     used.add(m); return m;
   }
   const events = [];
-  for(let i=0;i<myGoals;i++) events.push({minute:uniqueMinute()+minuteOffset, side:'me', scorer:pickScorer(myPlayers)});
-  for(let i=0;i<oppGoals;i++) events.push({minute:uniqueMinute()+minuteOffset, side:'opp', scorer:pickScorer(oppPlayers)});
+  for(let i=0;i<myGoals;i++){
+    const m = uniqueMinute();
+    const onPitch = playersOnPitchAt(myPlayers, mySubs, m+minuteOffset);
+    events.push({minute:m+minuteOffset, side:'me', scorer:pickScorer(onPitch)});
+  }
+  for(let i=0;i<oppGoals;i++){
+    const m = uniqueMinute();
+    const onPitch = playersOnPitchAt(oppPlayers, oppSubs, m+minuteOffset);
+    events.push({minute:m+minuteOffset, side:'opp', scorer:pickScorer(onPitch)});
+  }
   events.sort((a,b)=>a.minute-b.minute);
   return events;
 }
@@ -5050,25 +5058,32 @@ function planSubstitutions(startingXI, bench, subRules){
   if(!rules.enabled || !bench || !bench.length) return [];
   const threshold = rules.threshold || DEFAULT_SUB_RULES.threshold;
   const maxSubs = 5;
+  const maxPerCheckpoint = 2; // real teams rarely make more than 1-2 changes at the exact same moment
   const subs = [];
   const usedBench = new Set();
   const subbedOut = new Set();
+  // each player tires a little differently - this is what spreads substitutions out across the match
+  // instead of the whole bench coming on in one single wave the instant fatigue crosses the line
+  const jitter = startingXI.map(()=> (Math.random()-0.5)*2.4); // +/-1.2 fatigue-equivalent of individual variation
   for(let minute=15; minute<=90 && subs.length<maxSubs; minute+=15){
-    startingXI.forEach((p,idx)=>{
-      if(subs.length>=maxSubs || subbedOut.has(idx)) return;
-      if(mainPos(p.pos)==='GK') return; // no automatic keeper changes
-      if(fatigueDrop(minute,false) < threshold) return;
+    let madeThisCheckpoint = 0;
+    const order = startingXI.map((_,idx)=>idx).sort(()=>Math.random()-0.5); // don't always favor the same slot order
+    for(const idx of order){
+      if(subs.length>=maxSubs || madeThisCheckpoint>=maxPerCheckpoint || subbedOut.has(idx)) continue;
+      const p = startingXI[idx];
+      if(mainPos(p.pos)==='GK') continue; // no automatic keeper changes
+      if(fatigueDrop(minute,false)+jitter[idx] < threshold) continue;
       // pick the best-fitting available bench player for this exact position (lowest penalty wins),
       // same compatibility logic used when building the starting XI - a real coach picks the closest fit
       const candidates = bench
         .map((b,i)=>({i, b, pen: compatPenalty(p.pos, mainPos(b.pos))}))
         .filter(c=>!usedBench.has(c.i) && c.pen!==null);
-      if(!candidates.length) return;
+      if(!candidates.length) continue;
       candidates.sort((a,b)=>a.pen-b.pen);
       const best = candidates[0];
-      usedBench.add(best.i); subbedOut.add(idx);
+      usedBench.add(best.i); subbedOut.add(idx); madeThisCheckpoint++;
       subs.push({minute, outIdx:idx, outPlayer:p, inPlayer:best.b});
-    });
+    }
   }
   return subs;
 }
@@ -5083,21 +5098,16 @@ function instantFatigueAdjustment(minute, subsSoFar, redMinute){
   const redPart = (redMinute!=null && minute>=redMinute) ? -6 : 0;
   return fatiguePart + redPart;
 }
-function buildScoringPool(startingXI, subs){
-  if(!subs || !subs.length) return startingXI;
-  const pool = [];
-  startingXI.forEach((p,idx)=>{
-    const sub = subs.find(s=>s.outIdx===idx);
-    const minutesPlayed = sub ? sub.minute : 90;
-    pool.push({...p, ov: Math.max(1, Math.round(p.ov - fatigueDrop(minutesPlayed, mainPos(p.pos)==='GK')))});
+function playersOnPitchAt(startingXI, subs, minute){
+  return startingXI.map((p,idx)=>{
+    const sub = (subs||[]).filter(s=>s.outIdx===idx && s.minute<=minute).pop();
+    if(sub){
+      const minutesOn = minute-sub.minute;
+      const posPen = compatPenalty(p.pos, mainPos(sub.inPlayer.pos)) || 0;
+      return {...sub.inPlayer, pos:p.pos, ov: Math.max(1, Math.round(sub.inPlayer.ov - posPen - fatigueDrop(minutesOn, mainPos(sub.inPlayer.pos)==='GK')))};
+    }
+    return {...p, ov: Math.max(1, Math.round(p.ov - fatigueDrop(minute, mainPos(p.pos)==='GK')))};
   });
-  subs.forEach(s=>{
-    const minutesPlayed = 90-s.minute;
-    if(minutesPlayed<=0) return;
-    const posPen = compatPenalty(s.outPlayer.pos, mainPos(s.inPlayer.pos)) || 0;
-    pool.push({...s.inPlayer, pos:s.outPlayer.pos, ov: Math.max(1, Math.round(s.inPlayer.ov - posPen - fatigueDrop(minutesPlayed, mainPos(s.inPlayer.pos)==='GK')))});
-  });
-  return pool;
 }
 function getMyBenchPlayers(){
   const list = [];
@@ -5201,17 +5211,18 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=
   const myExp = computeLambda(myProfileForLambda.attack, oppProfileForLambda.defense);
   const oppExp = computeLambda(oppProfileForLambda.attack, myProfileForLambda.defense);
   let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
-  const myScoringPool = buildScoringPool(myPlayers, mySubs);
-  const oppScoringPool = buildScoringPool(oppPlayers, oppSubs);
-  const events90 = buildMatchEvents(myGoals, oppGoals, myScoringPool, oppScoringPool, 90, 0);
+  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0, mySubs, oppSubs);
 
-  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count
+  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count -
+  // the scorer is picked from whoever is actually on the pitch at that exact minute
   if(myIncidents.penalty && myIncidents.penalty.scored){
-    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myScoringPool), isPenalty:true});
+    const onPitch = playersOnPitchAt(myPlayers, mySubs, myIncidents.penalty.minute);
+    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(onPitch), isPenalty:true});
     myGoals++;
   }
   if(oppIncidents.penalty && oppIncidents.penalty.scored){
-    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppScoringPool), isPenalty:true});
+    const onPitch = playersOnPitchAt(oppPlayers, oppSubs, oppIncidents.penalty.minute);
+    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(onPitch), isPenalty:true});
     oppGoals++;
   }
   events90.sort((a,b)=>a.minute-b.minute);
@@ -5230,11 +5241,13 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=
     const myExpET = clamp(myExp*(30/90), 0.05, 2);
     const oppExpET = clamp(oppExp*(30/90), 0.05, 2);
     const myETGoals = simGoals(myExpET), oppETGoals = simGoals(oppExpET);
-    eventsET = buildMatchEvents(myETGoals, oppETGoals, myScoringPool, oppScoringPool, 30, 90);
+    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90, mySubs, oppSubs);
     myGoals += myETGoals; oppGoals += oppETGoals;
     if(myGoals===oppGoals){
       wentToPK = true;
-      shootout = simulateShootout(myRating, oppRating, myScoringPool, oppScoringPool);
+      const myFinalXI = playersOnPitchAt(myPlayers, mySubs, 120);
+      const oppFinalXI = playersOnPitchAt(oppPlayers, oppSubs, 120);
+      shootout = simulateShootout(myRating, oppRating, myFinalXI, oppFinalXI);
     }
   }
   const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':'opp');
