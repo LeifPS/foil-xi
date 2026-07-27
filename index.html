@@ -5018,18 +5018,29 @@ const TACTIC_PRESSING = {
   low:    {label:'Tiefes Pressing',  attackMod:-1,   cardMult:0.6, desc:'Weniger Risiko und Karten, aber weniger Balleroberungen.'},
 };
 const DEFAULT_TACTICS = {mentality:'balanced', pressing:'normal'};
-function planCardsAndPenalties(cardMult=1){
+function pickCardRecipient(players){
+  if(!players || !players.length) return {n:'Unbekannt'};
+  const weighted = [];
+  players.forEach(p=>{
+    const g = posGroup2(mainPos(p.pos));
+    const w = g==='DEF' ? 3 : g==='MID' ? 2.6 : g==='FWD' ? 1.4 : 0.2; // defenders/midfielders foul more than forwards/keepers
+    const reps = Math.max(1, Math.round(w*2));
+    for(let i=0;i<reps;i++) weighted.push(p);
+  });
+  return weighted[Math.floor(Math.random()*weighted.length)] || players[0];
+}
+function planCardsAndPenalties(cardMult=1, players=[]){
   const cards = [];
-  const numYellows = Math.min(6, poissonGoals(2.2*cardMult)); // ~2.2 yellow cards per team per match on average
-  for(let i=0;i<numYellows;i++) cards.push({minute:1+Math.floor(Math.random()*90), type:'yellow'});
+  const numYellows = Math.min(3, poissonGoals(0.5*cardMult)); // ~0.5 yellow cards per team per match on average - a card should feel notable, not routine
+  for(let i=0;i<numYellows;i++) cards.push({minute:1+Math.floor(Math.random()*90), type:'yellow', player:pickCardRecipient(players)});
   let redMinute = null;
-  if(Math.random() < 0.05*cardMult){ // ~5% chance of a red card per team per match at normal pressing
+  if(Math.random() < 0.012*cardMult){ // ~1.2% chance of a red card per team per match at normal pressing
     redMinute = 1+Math.floor(Math.random()*90);
-    cards.push({minute:redMinute, type:'red'});
+    cards.push({minute:redMinute, type:'red', player:pickCardRecipient(players)});
   }
   cards.sort((a,b)=>a.minute-b.minute);
   let penalty = null;
-  if(Math.random() < 0.15){ // ~15% chance of a penalty being awarded per team per match
+  if(Math.random() < 0.08){ // ~8% chance of a penalty being awarded per team per match
     penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<0.78}; // ~78% real-world conversion rate
   }
   return {cards, redMinute, penalty};
@@ -5093,7 +5104,7 @@ function getMyBenchPlayers(){
   BENCH_SLOTS.forEach(slot=>{
     const uid = squad.bench && squad.bench[slot.id];
     const card = uid ? ownedCard(uid) : null;
-    if(card) list.push({n:card.n, pos:slot.label, ov:card.ov, img:card.img});
+    if(card) list.push({n:card.n, pos:card.pos, ov:card.ov, img:card.img});
   });
   return list;
 }
@@ -5171,8 +5182,8 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=
 
   const mySubs = planSubstitutions(myPlayers, myBench, mySubRules);
   const oppSubs = planSubstitutions(oppPlayers, oppBench, oppSubRules);
-  const myIncidents = planCardsAndPenalties(myPress.cardMult);
-  const oppIncidents = planCardsAndPenalties(oppPress.cardMult);
+  const myIncidents = planCardsAndPenalties(myPress.cardMult, myPlayers);
+  const oppIncidents = planCardsAndPenalties(oppPress.cardMult, oppPlayers);
 
   const myProfileRaw0 = computeTeamProfile(myPlayers, myRating);
   const oppProfileRaw0 = computeTeamProfile(oppPlayers, oppRating);
@@ -5313,7 +5324,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
             if(logEl){
               const row = document.createElement('div');
               row.className = 'goal-row';
-              row.innerHTML = `<span class="gm">${m}'</span><span class="gname">${INCIDENT_ICON[inc.type]} ${INCIDENT_LABEL[inc.type]}</span><span class="gteam">${inc.side==='me'?myName:oppName}</span>`;
+              row.innerHTML = `<span class="gm">${m}'</span><span class="gname">${INCIDENT_ICON[inc.type]} ${inc.player ? inc.player.n+' \u2014 '+INCIDENT_LABEL[inc.type] : INCIDENT_LABEL[inc.type]}</span><span class="gteam">${inc.side==='me'?myName:oppName}</span>`;
               logEl.prepend(row);
             }
           });
