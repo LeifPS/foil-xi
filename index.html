@@ -631,14 +631,18 @@ async function initFirebase(){
   try{
     const appMod = await withTimeout(import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app.js`), 6000);
     const fsMod = await withTimeout(import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore-lite.js`), 6000);
+    const authMod = await withTimeout(import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-auth.js`), 6000);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
     const db = fsMod.getFirestore(app);
+    const auth = authMod.getAuth(app);
     // connectivity probe - if this fails/hangs we fall back to local mode. Firestore's limit()
     // requires a positive integer (limit(0) throws), so this costs at most 1 read per session.
     await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1))), 6000);
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
       getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
-      updateDoc:fsMod.updateDoc, increment:fsMod.increment};
+      updateDoc:fsMod.updateDoc, increment:fsMod.increment,
+      auth, createUserWithEmailAndPassword:authMod.createUserWithEmailAndPassword,
+      signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signOut:authMod.signOut};
     return true;
   }catch(e){
     console.warn('Firebase backend unavailable, using local shared storage fallback:', e);
@@ -647,6 +651,19 @@ async function initFirebase(){
   }
 }
 const fbReady = initFirebase();
+const CLUB_AUTH_DOMAIN = '@foileleven-club.auth'; // synthetic email domain - club login uses Firebase Auth under the hood
+function clubAuthEmail(clubId){ return clubId + CLUB_AUTH_DOMAIN; } // clubId is already sanitized to [a-z0-9_-], so this is always a valid, unique, collision-free email
+function authErrorMessage(code){
+  const map = {
+    'auth/wrong-password':'Falsches Passwort.',
+    'auth/invalid-credential':'Falsches Passwort.',
+    'auth/user-not-found':'Kein Passwort f\u00fcr diesen Verein gefunden.',
+    'auth/weak-password':'Passwort ist zu kurz (mind. 6 Zeichen).',
+    'auth/email-already-in-use':'F\u00fcr diesen Verein ist bereits ein Passwort gesetzt.',
+    'auth/too-many-requests':'Zu viele Versuche \u2014 bitte kurz warten und erneut versuchen.',
+  };
+  return map[code] || 'Etwas ist schiefgelaufen \u2014 bitte erneut versuchen.';
+}
 
 function posGroup(pos){
   const p = pos.split(',')[0].trim();
@@ -2615,17 +2632,109 @@ function showEntryGate(prefill){
     const val = document.getElementById('gate-input').value;
     const id = sanitizeClubId(val || '');
     if(!id){ document.getElementById('gate-err').textContent = 'Bitte gib einen Namen ein (Buchstaben/Zahlen).'; return; }
-    clubId = id;
-    try{ history.replaceState(null, '', location.pathname + '?club=' + encodeURIComponent(id)); }catch(e){}
-    document.getElementById('modal-root').innerHTML = '';
-    await init();
+    await proceedWithClubId(id);
   };
   document.getElementById('gate-submit').addEventListener('click', submit);
   document.getElementById('gate-input').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
   document.getElementById('gate-input').focus();
 }
+async function proceedWithClubId(id){
+  clubId = id;
+  try{ history.replaceState(null, '', location.pathname + '?club=' + encodeURIComponent(id)); }catch(e){}
+  await fbReady;
+  if(!fb){
+    // no backend reachable - can't authenticate, fall back straight into local/offline mode
+    document.getElementById('modal-root').innerHTML = '';
+    await init();
+    return;
+  }
+  let hasPassword = false;
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'saves',id));
+    if(snap.exists()){
+      const d = snap.data();
+      hasPassword = !!(d.profile && d.profile.hasPassword);
+    }
+  }catch(e){ console.warn('club lookup failed', e); }
+  if(hasPassword) showSignInModal(id);
+  else showSetPasswordModal(id);
+}
+function showSetPasswordModal(id){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:380px;text-align:center;">
+        <h2 style="margin-bottom:8px;">Passwort f\u00fcr "${id}" festlegen</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Dieser Verein hat noch kein Passwort \u2014 lege jetzt eins fest, um ihn ab sofort zu sch\u00fctzen. Merke es dir gut, es gibt keine Wiederherstellung.</p>
+        <input id="pw-input1" type="password" placeholder="Neues Passwort (mind. 6 Zeichen)" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:10px;">
+        <input id="pw-input2" type="password" placeholder="Passwort wiederholen" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
+        <button class="action-btn" id="pw-submit" style="width:100%;">Passwort festlegen</button>
+        <button class="action-btn secondary" id="pw-back" style="width:100%;margin-top:8px;">Anderen Verein w\u00e4hlen</button>
+        <p class="hint" id="pw-err" style="color:var(--danger);min-height:14px;"></p>
+      </div>
+    </div>`;
+  document.getElementById('pw-back').addEventListener('click', ()=>showEntryGate(id));
+  const submit = async (e)=>{
+    const p1 = document.getElementById('pw-input1').value;
+    const p2 = document.getElementById('pw-input2').value;
+    const errEl = document.getElementById('pw-err');
+    if(p1.length<6){ errEl.textContent = 'Passwort muss mindestens 6 Zeichen haben.'; return; }
+    if(p1!==p2){ errEl.textContent = 'Die Passw\u00f6rter stimmen nicht \u00fcberein.'; return; }
+    e.target.disabled = true;
+    try{
+      await fb.createUserWithEmailAndPassword(fb.auth, clubAuthEmail(id), p1);
+      document.getElementById('modal-root').innerHTML = '';
+      await init();
+      profile.hasPassword = true;
+      await sSet('profile', profile);
+      toast('Passwort gesetzt \u2014 dein Verein ist jetzt gesch\u00fctzt.');
+    }catch(err){
+      console.warn('set password failed', err);
+      if(err.code==='auth/email-already-in-use'){ showSignInModal(id); return; }
+      errEl.textContent = authErrorMessage(err.code);
+      e.target.disabled = false;
+    }
+  };
+  document.getElementById('pw-submit').addEventListener('click', submit);
+  document.getElementById('pw-input2').addEventListener('keydown', e=>{ if(e.key==='Enter') submit({target:document.getElementById('pw-submit')}); });
+  document.getElementById('pw-input1').focus();
+}
+function showSignInModal(id){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:380px;text-align:center;">
+        <h2 style="margin-bottom:8px;">"${id}" \u2014 Passwort eingeben</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Dieser Verein ist passwortgesch\u00fctzt.</p>
+        <input id="pw-input" type="password" placeholder="Passwort" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
+        <button class="action-btn" id="pw-submit" style="width:100%;">Anmelden</button>
+        <button class="action-btn secondary" id="pw-back" style="width:100%;margin-top:8px;">Anderen Verein w\u00e4hlen</button>
+        <p class="hint" id="pw-err" style="color:var(--danger);min-height:14px;"></p>
+      </div>
+    </div>`;
+  document.getElementById('pw-back').addEventListener('click', ()=>showEntryGate(id));
+  const submit = async (e)=>{
+    const pw = document.getElementById('pw-input').value;
+    const errEl = document.getElementById('pw-err');
+    if(!pw){ errEl.textContent = 'Bitte Passwort eingeben.'; return; }
+    e.target.disabled = true;
+    try{
+      await fb.signInWithEmailAndPassword(fb.auth, clubAuthEmail(id), pw);
+      document.getElementById('modal-root').innerHTML = '';
+      await init();
+    }catch(err){
+      console.warn('sign in failed', err);
+      errEl.textContent = authErrorMessage(err.code);
+      e.target.disabled = false;
+    }
+  };
+  document.getElementById('pw-submit').addEventListener('click', submit);
+  document.getElementById('pw-input').addEventListener('keydown', e=>{ if(e.key==='Enter') submit({target:document.getElementById('pw-submit')}); });
+  document.getElementById('pw-input').focus();
+}
 function switchClub(){
   profile = null; collection = []; squad = null; clubId = null;
+  try{ if(fb && fb.auth) fb.signOut(fb.auth); }catch(e){}
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
   showEntryGate();
 }
@@ -2634,7 +2743,7 @@ function boot(){
   try{ fromUrl = new URLSearchParams(location.search).get('club'); }catch(e){}
   if(fromUrl){
     const id = sanitizeClubId(fromUrl);
-    if(id){ clubId = id; init(); return; }
+    if(id){ proceedWithClubId(id); return; }
   }
   showEntryGate();
 }
@@ -2642,7 +2751,7 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, soundOn:true};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, soundOn:true, hasPassword:false};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -2659,6 +2768,7 @@ async function init(){
     if(profile.oreiFirstWinClaimed===undefined) profile.oreiFirstWinClaimed = false;
     if(profile.oreiSecondWinClaimed===undefined) profile.oreiSecondWinClaimed = false;
     if(profile.winStreak===undefined) profile.winStreak = 0;
+    if(profile.hasPassword===undefined) profile.hasPassword = false;
   }
   soundEnabled = profile.soundOn;
   collection = await sGet('collection');
