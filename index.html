@@ -2650,12 +2650,12 @@ async function proceedWithClubId(id){
   }
   let hasPassword = false;
   try{
-    const snap = await fb.getDoc(fb.doc(fb.db,'saves',id));
-    if(snap.exists()){
-      const d = snap.data();
-      hasPassword = !!(d.profile && d.profile.hasPassword);
-    }
-  }catch(e){ console.warn('club lookup failed', e); }
+    // this MUST be checked via a separate, publicly-readable registry doc (not the private save data),
+    // since we aren't authenticated yet at this point and locked-down security rules correctly block
+    // reading the private saves/{id} document before sign-in
+    const snap = await fb.getDoc(fb.doc(fb.db,'clubRegistry',id));
+    hasPassword = snap.exists() && !!snap.data().hasPassword;
+  }catch(e){ console.warn('club registry lookup failed', e); }
   if(hasPassword) showSignInModal(id);
   else showSetPasswordModal(id);
 }
@@ -2687,6 +2687,7 @@ function showSetPasswordModal(id){
       await init();
       profile.hasPassword = true;
       await sSet('profile', profile);
+      try{ await fb.setDoc(fb.doc(fb.db,'clubRegistry',id), {hasPassword:true}); }catch(e){ console.warn('registry write failed', e); }
       toast('Passwort gesetzt \u2014 dein Verein ist jetzt gesch\u00fctzt.');
     }catch(err){
       console.warn('set password failed', err);
