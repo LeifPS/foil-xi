@@ -2680,11 +2680,12 @@ async function init(){
   managerCollection = await sGet('managerCollection');
   if(!managerCollection) managerCollection = [];
   squad = await sGet('squad');
-  if(!squad){ squad = {formation:'433', slots:{}, managerUid:null, bench:{}, subRules:{enabled:true, presetKey:'normal', threshold:SUB_RULE_PRESETS.normal.threshold}}; await sSet('squad', squad); }
+  if(!squad){ squad = {formation:'433', slots:{}, managerUid:null, bench:{}, subRules:{enabled:true, presetKey:'normal', threshold:SUB_RULE_PRESETS.normal.threshold}, tactics:{...DEFAULT_TACTICS}}; await sSet('squad', squad); }
   else {
     if(squad.managerUid===undefined) squad.managerUid = null;
     if(!squad.bench) squad.bench = {};
     if(!squad.subRules) squad.subRules = {enabled:true, presetKey:'normal', threshold:SUB_RULE_PRESETS.normal.threshold};
+    if(!squad.tactics) squad.tactics = {...DEFAULT_TACTICS};
   }
   squadPresets = await sGet('squadPresets');
   if(!squadPresets) squadPresets = [];
@@ -3505,6 +3506,17 @@ function renderSquad(view){
       <div class="formation-select" id="subrules-presets">
         ${Object.entries(SUB_RULE_PRESETS).map(([key,p])=>`<div class="chip subrule-chip" data-key="${key}" style="${(squad.subRules&&squad.subRules.presetKey||'normal')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${p.desc}">${p.label}</div>`).join('')}
       </div>
+    </div>
+    <div class="tactics-section" style="margin-top:22px;">
+      <div class="lbl" style="margin-bottom:10px;color:var(--muted);font-size:11px;text-transform:uppercase;">Taktik (vor dem Spiel festgelegt)</div>
+      <p class="hint" style="margin-top:0;margin-bottom:8px;">Mentalit\u00e4t: verschiebt Angriff/Abwehr sp\u00fcrbar.</p>
+      <div class="formation-select" id="tactics-mentality" style="margin-bottom:14px;">
+        ${Object.entries(TACTIC_MENTALITY).map(([key,t])=>`<div class="chip tactic-chip" data-group="mentality" data-key="${key}" style="${(squad.tactics&&squad.tactics.mentality||'balanced')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
+      </div>
+      <p class="hint" style="margin-top:0;margin-bottom:8px;">Pressing: mehr Balleroberungen gegen deutlich mehr Kartenrisiko.</p>
+      <div class="formation-select" id="tactics-pressing">
+        ${Object.entries(TACTIC_PRESSING).map(([key,t])=>`<div class="chip tactic-chip" data-group="pressing" data-key="${key}" style="${(squad.tactics&&squad.tactics.pressing||'normal')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
+      </div>
     </div>`;
   document.querySelectorAll('.preset-chip').forEach(chip=>{
     chip.addEventListener('click', (e)=>{
@@ -3575,6 +3587,15 @@ function renderSquad(view){
       squad.subRules = squad.subRules || {};
       squad.subRules.presetKey = key;
       squad.subRules.threshold = SUB_RULE_PRESETS[key].threshold;
+      await sSet('squad', squad);
+      renderSquad(document.getElementById('view'));
+    });
+  });
+  document.querySelectorAll('.tactic-chip').forEach(chip=>{
+    chip.addEventListener('click', async ()=>{
+      const group = chip.dataset.group, key = chip.dataset.key;
+      squad.tactics = squad.tactics || {...DEFAULT_TACTICS};
+      squad.tactics[group] = key;
       await sSet('squad', squad);
       renderSquad(document.getElementById('view'));
     });
@@ -4195,9 +4216,10 @@ async function loadIncomingDuels(){
         if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); acceptBtn.disabled=false; declineBtn.disabled=false; return; }
         const myPlayers = getMySquadPlayers();
         const myBench = getMyBenchPlayers();
-        const md = buildDecisiveMatch(rating, duel.fromRating, myPlayers, duel.fromPlayers, myBench, squad.subRules);
-        const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p2':'p1'}));
-        const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p2':'p1'})) : null;
+        const md = buildDecisiveMatch(rating, duel.fromRating, myPlayers, duel.fromPlayers, myBench, squad.subRules, [], null, squad.tactics);
+        const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p2':'p1', isPenalty:e.isPenalty}));
+        const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p2':'p1', isPenalty:e.isPenalty})) : null;
+        const incidents = md.incidents.map(inc=>({...inc, side: inc.side==='me'?'p2':'p1'}));
         const shootout = md.shootout ? {
           p1Kicks: md.shootout.oppKicks, p2Kicks: md.shootout.myKicks,
           p1Prob: md.shootout.oppProb, p2Prob: md.shootout.myProb,
@@ -4212,6 +4234,7 @@ async function loadIncomingDuels(){
           events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
           p1Profile: md.oppProfile, p2Profile: md.myProfile,
           p1Subs: md.oppSubs, p2Subs: md.mySubs,
+          incidents, p1RedMinute: md.oppRedMinute, p2RedMinute: md.myRedMinute,
           startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
         };
         try{
@@ -4983,6 +5006,34 @@ const SUB_RULE_PRESETS = {
   late:   {label:'Sp\u00e4t wechseln',  threshold:4.2, desc:'Wechselt erst bei deutlicher Erm\u00fcdung \u2014 h\u00e4lt Wechsel f\u00fcr die Schlussphase zur\u00fcck.'},
 };
 const DEFAULT_SUB_RULES = {enabled:true, threshold:SUB_RULE_PRESETS.normal.threshold};
+// ===== TACTICS: mentality + pressing, both configured before the match, both with real effects =====
+const TACTIC_MENTALITY = {
+  offensive:  {label:'Offensiv',      attackMod: 3, defenseMod:-3, desc:'Mehr Angriffsdruck, aber anf\u00e4lliger in der Abwehr.'},
+  balanced:   {label:'Ausgeglichen',  attackMod: 0, defenseMod: 0, desc:'Keine Verschiebung \u2014 solider Standard.'},
+  defensive:  {label:'Defensiv',      attackMod:-3, defenseMod: 3, desc:'Stabiler hinten, aber weniger Torgefahr.'},
+};
+const TACTIC_PRESSING = {
+  high:   {label:'Hohes Pressing', attackMod: 1.5, cardMult:1.6, desc:'Erobert den Ball fr\u00fcher, aber deutlich mehr Fouls und Karten.'},
+  normal: {label:'Normales Pressing', attackMod: 0,   cardMult:1.0, desc:'Ausgewogener Standard-Ansatz.'},
+  low:    {label:'Tiefes Pressing',  attackMod:-1,   cardMult:0.6, desc:'Weniger Risiko und Karten, aber weniger Balleroberungen.'},
+};
+const DEFAULT_TACTICS = {mentality:'balanced', pressing:'normal'};
+function planCardsAndPenalties(cardMult=1){
+  const cards = [];
+  const numYellows = Math.min(6, poissonGoals(2.2*cardMult)); // ~2.2 yellow cards per team per match on average
+  for(let i=0;i<numYellows;i++) cards.push({minute:1+Math.floor(Math.random()*90), type:'yellow'});
+  let redMinute = null;
+  if(Math.random() < 0.05*cardMult){ // ~5% chance of a red card per team per match at normal pressing
+    redMinute = 1+Math.floor(Math.random()*90);
+    cards.push({minute:redMinute, type:'red'});
+  }
+  cards.sort((a,b)=>a.minute-b.minute);
+  let penalty = null;
+  if(Math.random() < 0.15){ // ~15% chance of a penalty being awarded per team per match
+    penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<0.78}; // ~78% real-world conversion rate
+  }
+  return {cards, redMinute, penalty};
+}
 function planSubstitutions(startingXI, bench, subRules){
   const rules = (subRules && subRules.enabled!==undefined) ? subRules : DEFAULT_SUB_RULES;
   if(!rules.enabled || !bench || !bench.length) return [];
@@ -5015,9 +5066,11 @@ function matchFatigueAdjustment(subsCount){
   const subsCredit = subsCount*0.4; // each completed sub claws a bit of that back
   return Math.max(0.5, baseFatigue-subsCredit);
 }
-function instantFatigueAdjustment(minute, subsSoFar){
-  // degradation relative to a fully fresh team, at THIS exact minute - substitutions genuinely help here
-  return -Math.max(0, fatigueDrop(minute,false) - subsSoFar*0.4);
+function instantFatigueAdjustment(minute, subsSoFar, redMinute){
+  // degradation relative to a fully fresh, 11-man team, at THIS exact minute
+  const fatiguePart = -Math.max(0, fatigueDrop(minute,false) - subsSoFar*0.4);
+  const redPart = (redMinute!=null && minute>=redMinute) ? -6 : 0;
+  return fatiguePart + redPart;
 }
 function buildScoringPool(startingXI, subs){
   if(!subs || !subs.length) return startingXI;
@@ -5108,21 +5161,58 @@ function updateWinProbEl(pct){
   if(fill) fill.style.width = p+'%';
   if(txt) txt.textContent = p+'%';
 }
-function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=[], mySubRules=null, oppBench=[], oppSubRules=null){
+function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=[], mySubRules=null, oppBench=[], oppSubRules=null, myTactics=null, oppTactics=null){
+  const myT = myTactics || DEFAULT_TACTICS;
+  const oppT = oppTactics || DEFAULT_TACTICS;
+  const myMent = TACTIC_MENTALITY[myT.mentality] || TACTIC_MENTALITY.balanced;
+  const oppMent = TACTIC_MENTALITY[oppT.mentality] || TACTIC_MENTALITY.balanced;
+  const myPress = TACTIC_PRESSING[myT.pressing] || TACTIC_PRESSING.normal;
+  const oppPress = TACTIC_PRESSING[oppT.pressing] || TACTIC_PRESSING.normal;
+
   const mySubs = planSubstitutions(myPlayers, myBench, mySubRules);
   const oppSubs = planSubstitutions(oppPlayers, oppBench, oppSubRules);
-  const myProfileRaw = computeTeamProfile(myPlayers, myRating);
-  const oppProfileRaw = computeTeamProfile(oppPlayers, oppRating);
+  const myIncidents = planCardsAndPenalties(myPress.cardMult);
+  const oppIncidents = planCardsAndPenalties(oppPress.cardMult);
+
+  const myProfileRaw0 = computeTeamProfile(myPlayers, myRating);
+  const oppProfileRaw0 = computeTeamProfile(oppPlayers, oppRating);
+  // tactics shift the raw profile before anything else - this is what gets stored/shown externally too
+  const myProfileRaw = {attack: myProfileRaw0.attack+myMent.attackMod+myPress.attackMod, defense: myProfileRaw0.defense+myMent.defenseMod};
+  const oppProfileRaw = {attack: oppProfileRaw0.attack+oppMent.attackMod+oppPress.attackMod, defense: oppProfileRaw0.defense+oppMent.defenseMod};
+
   const myFatigue = matchFatigueAdjustment(mySubs.length);
   const oppFatigue = matchFatigueAdjustment(oppSubs.length);
-  const myProfile = {attack: myProfileRaw.attack-myFatigue, defense: myProfileRaw.defense-myFatigue};
-  const oppProfile = {attack: oppProfileRaw.attack-oppFatigue, defense: oppProfileRaw.defense-oppFatigue};
-  const myExp = computeLambda(myProfile.attack, oppProfile.defense);
-  const oppExp = computeLambda(oppProfile.attack, myProfile.defense);
+  const myRedPenalty = myIncidents.redMinute!=null ? (90-myIncidents.redMinute)/90*6 : 0;
+  const oppRedPenalty = oppIncidents.redMinute!=null ? (90-oppIncidents.redMinute)/90*6 : 0;
+  const myProfileForLambda = {attack: myProfileRaw.attack-myFatigue-myRedPenalty, defense: myProfileRaw.defense-myFatigue-myRedPenalty};
+  const oppProfileForLambda = {attack: oppProfileRaw.attack-oppFatigue-oppRedPenalty, defense: oppProfileRaw.defense-oppFatigue-oppRedPenalty};
+
+  const myExp = computeLambda(myProfileForLambda.attack, oppProfileForLambda.defense);
+  const oppExp = computeLambda(oppProfileForLambda.attack, myProfileForLambda.defense);
   let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
   const myScoringPool = buildScoringPool(myPlayers, mySubs);
   const oppScoringPool = buildScoringPool(oppPlayers, oppSubs);
   const events90 = buildMatchEvents(myGoals, oppGoals, myScoringPool, oppScoringPool, 90, 0);
+
+  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count
+  if(myIncidents.penalty && myIncidents.penalty.scored){
+    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myScoringPool), isPenalty:true});
+    myGoals++;
+  }
+  if(oppIncidents.penalty && oppIncidents.penalty.scored){
+    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppScoringPool), isPenalty:true});
+    oppGoals++;
+  }
+  events90.sort((a,b)=>a.minute-b.minute);
+
+  const incidents = [
+    ...myIncidents.cards.map(c=>({...c, side:'me'})),
+    ...oppIncidents.cards.map(c=>({...c, side:'opp'})),
+  ];
+  if(myIncidents.penalty && !myIncidents.penalty.scored) incidents.push({minute:myIncidents.penalty.minute, type:'penalty_miss', side:'me'});
+  if(oppIncidents.penalty && !oppIncidents.penalty.scored) incidents.push({minute:oppIncidents.penalty.minute, type:'penalty_miss', side:'opp'});
+  incidents.sort((a,b)=>a.minute-b.minute);
+
   let eventsET=null, shootout=null, wentToET=false, wentToPK=false;
   if(myGoals===oppGoals){
     wentToET = true;
@@ -5137,7 +5227,9 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myBench=
     }
   }
   const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':'opp');
-  return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide, myProfile: myProfileRaw, oppProfile: oppProfileRaw, mySubs, oppSubs};
+  return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide,
+    myProfile: myProfileRaw, oppProfile: oppProfileRaw, mySubs, oppSubs, incidents,
+    myRedMinute: myIncidents.redMinute, oppRedMinute: oppIncidents.redMinute};
 }
 function goalRowHTML(minute, scorer, teamName, side){
   const initials = initialsOf(scorer.n || '??');
@@ -5161,17 +5253,19 @@ function pkRowHTML(round, kick, teamName, side){
       <span class="gteam">${teamName}</span>
     </div>`;
 }
-function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, mySubs=[], oppSubs=[]){
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, mySubs=[], oppSubs=[], incidents=[], myRedMinute=null, oppRedMinute=null){
   const liveProfileAt = (minute)=>{
     const mySoFar = mySubs.filter(s=>s.minute<=minute).length;
     const oppSoFar = oppSubs.filter(s=>s.minute<=minute).length;
-    const myAdj = instantFatigueAdjustment(minute, mySoFar);
-    const oppAdj = instantFatigueAdjustment(minute, oppSoFar);
+    const myAdj = instantFatigueAdjustment(minute, mySoFar, myRedMinute);
+    const oppAdj = instantFatigueAdjustment(minute, oppSoFar, oppRedMinute);
     return {
       my: {attack: myProfile.attack+myAdj, defense: myProfile.defense+myAdj},
       opp: {attack: oppProfile.attack+oppAdj, defense: oppProfile.defense+oppAdj},
     };
   };
+  const INCIDENT_ICON = {yellow:'\ud83d\udfe8', red:'\ud83d\udfe5', penalty_miss:'\u274c \u26bd'};
+  const INCIDENT_LABEL = {yellow:'Gelbe Karte', red:'Rote Karte', penalty_miss:'Elfmeter versch\u00f6ssen'};
   return new Promise(resolve=>{
     const area = document.getElementById('match-area');
     let live = document.getElementById('live-match');
@@ -5201,7 +5295,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
             playSfx(e.side==='me' ? 'goalFor' : 'goalAgainst');
             if(logEl){
               const row = document.createElement('div');
-              row.innerHTML = goalRowHTML(m, e.scorer, e.side==='me'?myName:oppName, e.side);
+              row.innerHTML = goalRowHTML(m, e.scorer, (e.side==='me'?myName:oppName)+(e.isPenalty?' (Elfmeter)':''), e.side);
               logEl.prepend(row.firstElementChild);
             }
           });
@@ -5211,6 +5305,15 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
               const row = document.createElement('div');
               row.className = 'goal-row';
               row.innerHTML = `<span class="gm">${m}'</span><span class="gname">\ud83d\udd04 ${s.inPlayer.n} f\u00fcr ${s.outPlayer.n}</span><span class="gteam">${s.mine?myName:oppName}</span>`;
+              logEl.prepend(row);
+            }
+          });
+          incidents.filter(inc=>inc.minute===m).forEach(inc=>{
+            if(inc.type==='yellow') playSfx('notification');
+            if(logEl){
+              const row = document.createElement('div');
+              row.className = 'goal-row';
+              row.innerHTML = `<span class="gm">${m}'</span><span class="gname">${INCIDENT_ICON[inc.type]} ${INCIDENT_LABEL[inc.type]}</span><span class="gteam">${inc.side==='me'?myName:oppName}</span>`;
               logEl.prepend(row);
             }
           });
@@ -5276,7 +5379,8 @@ async function playFullMatch(md, myName, oppName){
   const totalHorizon = md.wentToET ? 120 : 90;
   const myScorers = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
-  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, md.mySubs, md.oppSubs);
+  const incidents = md.incidents || [];
+  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, md.mySubs, md.oppSubs, incidents, md.myRedMinute, md.oppRedMinute);
   if(md.wentToET){
     toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
     md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
@@ -5284,7 +5388,7 @@ async function playFullMatch(md, myName, oppName){
     const startedAtET = md.startedAt + md.durationMs;
     const waitET = startedAtET - Date.now();
     if(waitET>0) await new Promise(r=>setTimeout(r, waitET));
-    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, md.mySubs, md.oppSubs));
+    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, md.mySubs, md.oppSubs, incidents, md.myRedMinute, md.oppRedMinute));
   }
   if(md.wentToPK){
     toast('Auch nach Verl\u00e4ngerung unentschieden \u2014 Elfmeterschie\u00dfen entscheidet!');
@@ -5375,7 +5479,7 @@ async function runLocalMatch(myRating, opp, opts={}){
   try{
     const myPlayers = getMySquadPlayers();
     const myBench = getMyBenchPlayers();
-    const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players, myBench, squad.subRules);
+    const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players, myBench, squad.subRules, [], null, squad.tactics);
     md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
     const myName = profile.displayName || 'Dein Verein';
     const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
@@ -5458,7 +5562,7 @@ async function enterSyncedMatch(matchDoc){
   const oppSide = amP1 ? matchDoc.p2 : matchDoc.p1;
   const myGoalsFinal = amP1 ? matchDoc.p1Goals : matchDoc.p2Goals;
   const oppGoalsFinal = amP1 ? matchDoc.p2Goals : matchDoc.p1Goals;
-  const translate = e => ({minute:e.minute, scorer:e.scorer, side:(e.side==='p1')===amP1 ? 'me':'opp'});
+  const translate = e => ({minute:e.minute, scorer:e.scorer, side:(e.side==='p1')===amP1 ? 'me':'opp', isPenalty:e.isPenalty});
   const events90 = matchDoc.events90.map(translate);
   const eventsET = matchDoc.eventsET ? matchDoc.eventsET.map(translate) : null;
   let shootout = null;
@@ -5485,9 +5589,12 @@ async function enterSyncedMatch(matchDoc){
   const oppProfile = amP1 ? matchDoc.p2Profile : matchDoc.p1Profile;
   const mySubs = (amP1 ? matchDoc.p1Subs : matchDoc.p2Subs) || [];
   const oppSubs = (amP1 ? matchDoc.p2Subs : matchDoc.p1Subs) || [];
+  const incidents = (matchDoc.incidents||[]).map(inc=>({...inc, side:(inc.side==='p1')===amP1 ? 'me':'opp'}));
+  const myRedMinute = amP1 ? matchDoc.p1RedMinute : matchDoc.p2RedMinute;
+  const oppRedMinute = amP1 ? matchDoc.p2RedMinute : matchDoc.p1RedMinute;
   const md = {events90, eventsET, shootout, wentToET:matchDoc.wentToET, wentToPK:matchDoc.wentToPK, startedAt:matchDoc.startedAt, durationMs:matchDoc.durationMs,
     myProfile: myProfile || {attack:meSide.rating, defense:meSide.rating}, oppProfile: oppProfile || {attack:oppSide.rating, defense:oppSide.rating},
-    mySubs, oppSubs};
+    mySubs, oppSubs, incidents, myRedMinute, oppRedMinute};
   const final = await playFullMatch(md, meSide.name, oppSide.name);
   let winnerSide;
   if(matchDoc.wentToPK){
@@ -5595,9 +5702,10 @@ async function joinQueue(){
           const existing = await fb.getDoc(fb.doc(fb.db,'matches',mid));
           if(!queueActive) return;
           if(!existing.exists()){
-            const md = buildDecisiveMatch(rating, other.rating, myPlayers, other.players, myBench, squad.subRules);
-            const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'}));
-            const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2'})) : null;
+            const md = buildDecisiveMatch(rating, other.rating, myPlayers, other.players, myBench, squad.subRules, [], null, squad.tactics);
+            const events90 = md.events90.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2', isPenalty:e.isPenalty}));
+            const eventsET = md.eventsET ? md.eventsET.map(e=>({minute:e.minute, scorer:e.scorer, side: e.side==='me'?'p1':'p2', isPenalty:e.isPenalty})) : null;
+            const incidents = md.incidents.map(inc=>({...inc, side: inc.side==='me'?'p1':'p2'}));
             const shootout = md.shootout ? {
               p1Kicks: md.shootout.myKicks, p2Kicks: md.shootout.oppKicks,
               p1Prob: md.shootout.myProb, p2Prob: md.shootout.oppProb,
@@ -5611,6 +5719,7 @@ async function joinQueue(){
               events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
               p1Profile: md.myProfile, p2Profile: md.oppProfile,
               p1Subs: md.mySubs, p2Subs: md.oppSubs,
+              incidents, p1RedMinute: md.myRedMinute, p2RedMinute: md.oppRedMinute,
               startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
             };
             if(!queueActive) return; // cancelled right before we'd have created the match - back out cleanly
