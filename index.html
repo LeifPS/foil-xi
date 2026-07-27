@@ -2691,7 +2691,7 @@ function showSetPasswordModal(id){
       toast('Passwort gesetzt \u2014 dein Verein ist jetzt gesch\u00fctzt.');
     }catch(err){
       console.warn('set password failed', err);
-      if(err.code==='auth/email-already-in-use'){ showSignInModal(id); return; }
+      if(err.code==='auth/email-already-in-use'){ showSignInModal(id); toast('F\u00fcr diesen Verein gibt es bereits ein Passwort \u2014 bitte anmelden.'); return; }
       errEl.textContent = authErrorMessage(err.code);
       e.target.disabled = false;
     }
@@ -2723,6 +2723,8 @@ function showSignInModal(id){
       await fb.signInWithEmailAndPassword(fb.auth, clubAuthEmail(id), pw);
       document.getElementById('modal-root').innerHTML = '';
       await init();
+      // self-heal: if an earlier registry write failed (e.g. the rule wasn't live yet), fix it now that we're authenticated
+      try{ await fb.setDoc(fb.doc(fb.db,'clubRegistry',id), {hasPassword:true}); }catch(e){ console.warn('registry heal failed', e); }
     }catch(err){
       console.warn('sign in failed', err);
       errEl.textContent = authErrorMessage(err.code);
