@@ -3272,21 +3272,19 @@ function renderStore(view){
   document.getElementById('redeem-btn').addEventListener('click', redeemCode);
   document.getElementById('redeem-input').addEventListener('keydown', e=>{ if(e.key==='Enter') redeemCode(); });
 }
-const REDEEM_CODES = {
-  'UNLIMITED': async ()=>{ await atomicCoinChange(999999999 - profile.coins); toast('Cheat aktiviert: unendlich Coins.'); },
-  'TESTCOINS': async ()=>{ await atomicCoinChange(100000); toast('+100.000 Coins hinzugef\u00fcgt.'); },
-  'GOLDBOOST': async ()=>{ await atomicCoinChange(20000); toast('+20.000 Coins hinzugef\u00fcgt.'); },
-};
 async function redeemCode(){
   const input = document.getElementById('redeem-input');
-  const code = (input.value||'').trim().toUpperCase();
+  const code = (input.value||'').trim();
   if(!code) return;
-  const fn = REDEEM_CODES[code];
-  if(!fn){ toast('Ung\u00fcltiger Code.'); playSfx('error'); return; }
-  await fn();
-  playSfx('coin');
+  openModal(`
+    <div style="text-align:center;padding:10px 0;">
+      <div style="font-size:40px;margin-bottom:10px;">\ud83d\udc40</div>
+      <h2 style="margin-bottom:8px;">Bitte nicht cheaten</h2>
+      <p class="hint" style="margin-top:0;">Codes gibt es hier nicht \u2014 versuch's stattdessen mit Packs, Herausforderungen oder dem Transfermarkt.</p>
+      <button class="action-btn" id="cheat-modal-ok" style="margin-top:10px;">Verstanden</button>
+    </div>`);
+  document.getElementById('cheat-modal-ok').addEventListener('click', closeModal);
   input.value = '';
-  renderStore(document.getElementById('view'));
 }
 
 async function buyPack(pack){
