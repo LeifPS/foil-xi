@@ -290,6 +290,9 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard .nc-club{width:16px;height:16px;object-fit:contain;}
 .pcard .nc-club-mono{width:16px;height:16px;border-radius:4px;background:var(--acc,rgba(255,255,255,.15));color:#0a0d12;
   font-family:'Anton';font-size:7.5px;display:flex;align-items:center;justify-content:center;}
+.pcard .nc-league{width:16px;height:16px;object-fit:contain;}
+.pcard .nc-league-mono{width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.12);color:var(--muted);
+  font-family:'Anton';font-size:7px;display:flex;align-items:center;justify-content:center;}
 .pcard .stats{display:grid;grid-template-columns:1fr 1fr;gap:3px 9px;margin-top:auto;padding-top:7px;border-top:1px solid rgba(255,255,255,.09);}
 .pcard .mgr-boost{margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.09);text-align:center;
   font-family:'JetBrains Mono';font-weight:700;font-size:11.5px;color:var(--acc);}
@@ -312,7 +315,8 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.mini .name{font-size:11px;}
 .pcard.mini .nat-club-icons{height:13px;gap:4px;}
 .pcard.mini .nc-flag{width:16px;height:11px;}
-.pcard.mini .nc-flag-mono, .pcard.mini .nc-club-mono{width:13px;height:13px;font-size:5.5px;}
+.pcard.mini .nc-flag-mono, .pcard.mini .nc-club-mono, .pcard.mini .nc-league-mono{width:13px;height:13px;font-size:5.5px;}
+.pcard.mini .nc-league{width:13px;height:13px;}
 .pcard.mini .nc-club{width:13px;height:13px;}
 .pcard.mini .stats{gap:2px 6px;}
 .pcard.mini .stat{font-size:7.5px;}
@@ -353,7 +357,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   box-shadow:0 0 44px -4px var(--cs-acc,#e8c468), 0 14px 30px rgba(0,0,0,.55);}
 @keyframes futFrameIn{to{transform:scale(1) rotateX(0);opacity:1;}}
 .fut-visual-svg{width:78%;height:78%;}
-.fut-visual-img{width:100%;height:100%;object-fit:cover;}
+.fut-visual-flag{width:100%;height:100%;object-fit:cover;}
+.fut-visual-logo-pad{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle, rgba(255,255,255,.94) 0%, rgba(255,255,255,.88) 65%, rgba(255,255,255,.8) 100%);
+  padding:14px;box-sizing:border-box;}
+.fut-visual-logo{width:100%;height:100%;object-fit:contain;object-position:center;}
 .fut-step-label{font-family:'JetBrains Mono';font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.55);
   margin-bottom:10px;opacity:0;animation:csBannerIn .4s .35s forwards;}
 .fut-step-value{font-family:'Anton';font-size:36px;letter-spacing:.02em;text-transform:uppercase;text-align:center;
@@ -3223,8 +3231,10 @@ function cardEl(card, size=''){
        <div class="pos-label"><div class="pt">${posDE(mainPos(card.pos))}</div><div class="pu"></div></div>`;
   const flagCode = NAT_FLAG[card.nat];
   const clubLogoUrl = CLUB_LOGO[card.club];
+  const leagueLogoUrl = LEAGUE_LOGO[card.lg];
   const natClubIcons = `<div class="nat-club-icons">
     ${flagCode ? `<img class="nc-flag" src="https://flagcdn.com/w40/${flagCode}.png" alt="" title="${natDE(card.nat)}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-flag-mono" title="${natDE(card.nat)}">${(card.nat||'?').slice(0,2).toUpperCase()}</div>`}
+    ${card.lg ? (leagueLogoUrl ? `<img class="nc-league" src="${leagueLogoUrl}" alt="" title="${card.lg}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-league-mono" title="${card.lg}">${initialsOf2(card.lg)}</div>`) : ''}
     ${clubLogoUrl ? `<img class="nc-club" src="${clubLogoUrl}" alt="" title="${card.club}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-club-mono" title="${card.club}">${initialsOf2(card.club)}</div>`}
   </div>`;
   const bodyInner = card.isManager
@@ -3764,9 +3774,9 @@ function showFUTRevealSequence(card, onDone){
   const steps = [
     {label:'Position', value: posDE(mainPos(card.pos)), visual: positionPitchSVG(mainPos(card.pos))},
     {label:'Nationalit\u00e4t', value: NAT_DE[card.nat]||card.nat,
-      visual: flagCode ? `<img class="fut-visual-img" src="https://flagcdn.com/w320/${flagCode}.png" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.nat,'hex')},
-    {label:'Liga', value: card.lg, visual: LEAGUE_LOGO[card.lg] ? `<img class="fut-visual-img" src="${LEAGUE_LOGO[card.lg]}" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.lg,'hex')},
-    {label:'Verein', value: card.club, visual: CLUB_LOGO[card.club] ? `<img class="fut-visual-img" src="${CLUB_LOGO[card.club]}" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.club,'shield')},
+      visual: flagCode ? `<img class="fut-visual-img fut-visual-flag" src="https://flagcdn.com/w320/${flagCode}.png" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.nat,'hex')},
+    {label:'Liga', value: card.lg, visual: LEAGUE_LOGO[card.lg] ? `<div class="fut-visual-logo-pad"><img class="fut-visual-img fut-visual-logo" src="${LEAGUE_LOGO[card.lg]}" alt="" onerror="this.parentElement.style.display='none'"></div>` : monogramBadgeSVG(card.lg,'hex')},
+    {label:'Verein', value: card.club, visual: CLUB_LOGO[card.club] ? `<div class="fut-visual-logo-pad"><img class="fut-visual-img fut-visual-logo" src="${CLUB_LOGO[card.club]}" alt="" onerror="this.parentElement.style.display='none'"></div>` : monogramBadgeSVG(card.club,'shield')},
   ];
   let i = 0;
   function renderStep(){
