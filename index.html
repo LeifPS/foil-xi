@@ -3462,6 +3462,22 @@ function positionPitchSVG(posLabel){
 function initialsOf2(name){
   return (name||'').split(/[\s.,''-]+/).filter(Boolean).map(w=>w[0]).join('').slice(0,3).toUpperCase() || '?';
 }
+const LEAGUE_LOGO = {
+  'Premier League': 'https://assets.football-logos.cc/logos/england/64x64/english-premier-league-v2.0792019b.png',
+  'Championship': 'https://assets.football-logos.cc/logos/england/64x64/efl-championship.4cd5a6cf.png',
+  'League One': 'https://assets.football-logos.cc/logos/england/64x64/efl-league-one.09905e74.png',
+  'La Liga': 'https://assets.football-logos.cc/logos/spain/64x64/la-liga--no-text.fca6d769.png',
+  'La Liga 2': 'https://assets.football-logos.cc/logos/spain/64x64/la-liga-2--no-text.56b4cb56.png',
+  'Serie A': 'https://assets.football-logos.cc/logos/italy/64x64/serie-a.17993e8d.png',
+  'Serie B': 'https://assets.football-logos.cc/logos/italy/64x64/serie-b.fad1c540.png',
+  'Bundesliga': 'https://assets.football-logos.cc/logos/germany/64x64/bundesliga.a474741c.png',
+  'Ligue 1': 'https://assets.football-logos.cc/logos/france/64x64/ligue-1.b25b82e4.png',
+  'Ligue 2': 'https://assets.football-logos.cc/logos/france/64x64/ligue-2.c9971d2b.png',
+  'Primeira Liga': 'https://assets.football-logos.cc/logos/portugal/64x64/primeira-liga.d92ff0a8.png',
+  'Eredivisie': 'https://assets.football-logos.cc/logos/netherlands/64x64/eredivisie--no-text.be0ea797.png',
+  'Süper Lig': 'https://assets.football-logos.cc/logos/turkey/64x64/super-lig.7ea65f20.png',
+  'Primera División': 'https://assets.football-logos.cc/logos/argentina/64x64/argentina-primera-division.9003b2b6.png',
+};
 function monogramBadgeSVG(name, shape){
   const letters = initialsOf2(name);
   const shapePath = shape==='shield'
@@ -3489,7 +3505,7 @@ function showFUTRevealSequence(card, onDone){
     {label:'Position', value: posDE(mainPos(card.pos)), visual: positionPitchSVG(mainPos(card.pos))},
     {label:'Nationalit\u00e4t', value: NAT_DE[card.nat]||card.nat,
       visual: flagCode ? `<img class="fut-visual-img" src="https://flagcdn.com/w320/${flagCode}.png" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.nat,'hex')},
-    {label:'Liga', value: card.lg, visual: monogramBadgeSVG(card.lg,'hex')},
+    {label:'Liga', value: card.lg, visual: LEAGUE_LOGO[card.lg] ? `<img class="fut-visual-img" src="${LEAGUE_LOGO[card.lg]}" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.lg,'hex')},
     {label:'Verein', value: card.club, visual: monogramBadgeSVG(card.club,'shield')},
   ];
   let i = 0;
