@@ -283,7 +283,13 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 
 .pcard .card-body{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;padding:0 11px 10px;margin-top:-14px;}
 .pcard .name{font-family:'Anton';font-size:14px;text-align:center;letter-spacing:.01em;line-height:1.1;}
-.pcard .nat-club{font-size:8.5px;color:var(--muted);text-align:center;margin-top:2px;}
+.pcard .nat-club-icons{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:3px;height:16px;}
+.pcard .nc-flag{width:20px;height:14px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.15);}
+.pcard .nc-flag-mono{width:20px;height:14px;border-radius:2px;background:rgba(255,255,255,.12);color:var(--muted);
+  font-family:'JetBrains Mono';font-size:6.5px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.pcard .nc-club{width:16px;height:16px;object-fit:contain;}
+.pcard .nc-club-mono{width:16px;height:16px;border-radius:4px;background:var(--acc,rgba(255,255,255,.15));color:#0a0d12;
+  font-family:'Anton';font-size:7.5px;display:flex;align-items:center;justify-content:center;}
 .pcard .stats{display:grid;grid-template-columns:1fr 1fr;gap:3px 9px;margin-top:auto;padding-top:7px;border-top:1px solid rgba(255,255,255,.09);}
 .pcard .mgr-boost{margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.09);text-align:center;
   font-family:'JetBrains Mono';font-weight:700;font-size:11.5px;color:var(--acc);}
@@ -304,6 +310,10 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.mini .var-tag{font-size:6.5px;padding:1.5px 7px;}
 .pcard.mini .card-body{margin-top:-10px;padding:0 8px 7px;}
 .pcard.mini .name{font-size:11px;}
+.pcard.mini .nat-club-icons{height:13px;gap:4px;}
+.pcard.mini .nc-flag{width:16px;height:11px;}
+.pcard.mini .nc-flag-mono, .pcard.mini .nc-club-mono{width:13px;height:13px;font-size:5.5px;}
+.pcard.mini .nc-club{width:13px;height:13px;}
 .pcard.mini .stats{gap:2px 6px;}
 .pcard.mini .stat{font-size:7.5px;}
 .pcard.xs{width:86px;height:152px;border-radius:10px;}
@@ -318,7 +328,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.xs .pos-label .pu{width:11px;}
 .pcard.xs .stats{display:grid;gap:2px 6px;padding-top:5px;}
 .pcard.xs .stat{font-size:6.8px;}
-.pcard.xs .nat-club{display:none;}
+.pcard.xs .nat-club-icons{display:none;}
 
 /* ---- cutscene ---- */
 .cutscene-overlay{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;
@@ -670,9 +680,11 @@ function withTimeout(promise, ms){
 }
 async function initFirebase(){
   try{
-    const appMod = await withTimeout(import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app.js`), 6000);
-    const fsMod = await withTimeout(import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore-lite.js`), 6000);
-    const authMod = await withTimeout(import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-auth.js`), 6000);
+    const [appMod, fsMod, authMod] = await withTimeout(Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore-lite.js`),
+      import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-auth.js`),
+    ]), 6000);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
     const db = fsMod.getFirestore(app);
     const auth = authMod.getAuth(app);
@@ -2975,14 +2987,20 @@ function cardEl(card, size=''){
        <div class="pos-label"><div class="pt">TRAINER</div><div class="pu"></div></div>`
     : `<div><div class="ov">${card.ov}</div><div class="ov-underline"></div></div>
        <div class="pos-label"><div class="pt">${posDE(mainPos(card.pos))}</div><div class="pu"></div></div>`;
+  const flagCode = NAT_FLAG[card.nat];
+  const clubLogoUrl = CLUB_LOGO[card.club];
+  const natClubIcons = `<div class="nat-club-icons">
+    ${flagCode ? `<img class="nc-flag" src="https://flagcdn.com/w40/${flagCode}.png" alt="" title="${natDE(card.nat)}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-flag-mono" title="${natDE(card.nat)}">${(card.nat||'?').slice(0,2).toUpperCase()}</div>`}
+    ${clubLogoUrl ? `<img class="nc-club" src="${clubLogoUrl}" alt="" title="${card.club}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-club-mono" title="${card.club}">${initialsOf2(card.club)}</div>`}
+  </div>`;
   const bodyInner = card.isManager
     ? `${varTag}
        <div class="name">${card.n}</div>
-       <div class="nat-club">${natDE(card.nat)} \u00b7 ${card.club}</div>
+       ${natClubIcons}
        <div class="mgr-boost">Team-Rating ${card.boostType==='percent'?`${boostText}`:`${boostText} Punkte`}</div>`
     : `${varTag}
        <div class="name">${card.n}</div>
-       <div class="nat-club">${natDE(card.nat)} \u00b7 ${card.club}</div>
+       ${natClubIcons}
        <div class="stats">
          ${statBar(STAT_DE.PAC,card.pac)}${statBar(STAT_DE.DRI,card.dri)}
          ${statBar(STAT_DE.SHO,card.sho)}${statBar(STAT_DE.DEF,card.defn)}
@@ -3475,6 +3493,16 @@ const LEAGUE_LOGO = {
   'Eredivisie': 'https://assets.football-logos.cc/logos/netherlands/64x64/eredivisie--no-text.be0ea797.png',
   'Süper Lig': 'https://assets.football-logos.cc/logos/turkey/64x64/super-lig.7ea65f20.png',
   'Primera División': 'https://assets.football-logos.cc/logos/argentina/64x64/argentina-primera-division.9003b2b6.png',
+  'Premiership': 'https://assets.football-logos.cc/logos/scotland/64x64/scottish-premiership--no-text.b0762431.png',
+};
+// Real club crest images (sourced from football-logos.cc, whose license explicitly permits non-commercial fan
+// projects like this game). Building this list out is a slow, one-club-per-lookup process, so it starts with
+// a handful of the very biggest names and can keep growing over time. Every other club uses the monogram badge.
+const CLUB_LOGO = {
+  'Real Madrid': 'https://assets.football-logos.cc/logos/spain/1500x1500/real-madrid.e34f5ba5.png',
+  'FC Barcelona': 'https://assets.football-logos.cc/logos/spain/1500x1500/barcelona.af4e5453.png',
+  'Manchester City': 'https://assets.football-logos.cc/logos/england/1500x1500/manchester-city.8d2b6688.png',
+  'Liverpool': 'https://assets.football-logos.cc/logos/england/1500x1500/liverpool.d03fd250.png',
 };
 function monogramBadgeSVG(name, shape){
   const letters = initialsOf2(name);
@@ -3504,7 +3532,7 @@ function showFUTRevealSequence(card, onDone){
     {label:'Nationalit\u00e4t', value: NAT_DE[card.nat]||card.nat,
       visual: flagCode ? `<img class="fut-visual-img" src="https://flagcdn.com/w320/${flagCode}.png" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.nat,'hex')},
     {label:'Liga', value: card.lg, visual: LEAGUE_LOGO[card.lg] ? `<img class="fut-visual-img" src="${LEAGUE_LOGO[card.lg]}" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.lg,'hex')},
-    {label:'Verein', value: card.club, visual: monogramBadgeSVG(card.club,'shield')},
+    {label:'Verein', value: card.club, visual: CLUB_LOGO[card.club] ? `<img class="fut-visual-img" src="${CLUB_LOGO[card.club]}" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.club,'shield')},
   ];
   let i = 0;
   function renderStep(){
