@@ -3231,7 +3231,7 @@ function cardEl(card, size=''){
        <div class="pos-label"><div class="pt">${posDE(mainPos(card.pos))}</div><div class="pu"></div></div>`;
   const flagCode = NAT_FLAG[card.nat];
   const clubLogoUrl = CLUB_LOGO[card.club];
-  const leagueLogoUrl = LEAGUE_LOGO[card.lg];
+  const leagueLogoUrl = resolveLeagueLogo(card);
   const natClubIcons = `<div class="nat-club-icons">
     ${flagCode ? `<img class="nc-flag" src="https://flagcdn.com/w40/${flagCode}.png" alt="" title="${natDE(card.nat)}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-flag-mono" title="${natDE(card.nat)}">${(card.nat||'?').slice(0,2).toUpperCase()}</div>`}
     ${card.lg ? (leagueLogoUrl ? `<img class="nc-league" src="${leagueLogoUrl}" alt="" title="${card.lg}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-league-mono" title="${card.lg}">${initialsOf2(card.lg)}</div>`) : ''}
@@ -3738,7 +3738,53 @@ const LEAGUE_LOGO = {
   'Süper Lig': 'https://assets.football-logos.cc/logos/turkey/64x64/super-lig.7ea65f20.png',
   'Primera División': 'https://assets.football-logos.cc/logos/argentina/64x64/argentina-primera-division.9003b2b6.png',
   'Premiership': 'https://assets.football-logos.cc/logos/scotland/64x64/scottish-premiership--no-text.b0762431.png',
+  'Allsvenskan': 'https://football-logos.cc/logos/sweden/1500x1500/allsvenskan.e7fc03e6.png',
+  'Categoría Primera A': 'https://football-logos.cc/logos/colombia/1500x1500/categoria-primera-a.0ee59ece.png',
+  'División Profesional': 'https://football-logos.cc/logos/bolivia/1500x1500/primera-division-de-bolivia.4488ebb7.png',
+  'División de Fútbol Profesional': 'https://football-logos.cc/logos/uruguay/1500x1500/liga-auf-uruguaya.2b36ada7.png',
+  'Ekstraklasa': 'https://football-logos.cc/logos/poland/1500x1500/ekstraklasa.720c715a.png',
+  'Eliteserien': 'https://football-logos.cc/logos/norway/1500x1500/eliteserien.1c6f7176.png',
+  'Hrvatska nogometna liga': 'https://football-logos.cc/logos/croatia/1500x1500/croatian-football-league.8cbdaaad.png',
+  'K League 1': 'https://football-logos.cc/logos/south-korea/1500x1500/k-league-1.bd90f26f.png',
+  'Liga 1': 'https://football-logos.cc/logos/indonesia/1500x1500/indonesian-super-league.111bee33.png',
+  'Liga I': 'https://assets.football-logos.cc/logos/romania/1500x1500/superliga.5da8252d.png',
+  'Liga Profesional de Fútbol': 'https://football-logos.cc/logos/argentina/1500x1500/argentina-primera-division.818d8b2e.png',
+  'Major League Soccer': 'https://football-logos.cc/logos/usa/1500x1500/mls.2211b328.png',
+  'Nemzeti Bajnokság I': 'https://assets.football-logos.cc/logos/hungary/1500x1500/nemzeti-bajnoksag.bd684103.png',
+  'Premyer Liqa': 'https://assets.football-logos.cc/logos/azerbaijan/1500x1500/azerbaijan-premier-league.5a0cf95d.png',
+  'Pro League': 'https://assets.football-logos.cc/logos/belgium/1500x1500/belgian-pro-league.4edfc9fb.png',
+  'První liga': 'https://assets.football-logos.cc/logos/czech-republic/1500x1500/chance-liga.d1fda7ad.png',
+  'Superliga': 'https://assets.football-logos.cc/logos/denmark/1500x1500/danish-super-liga.d0fbfbe8.png',
+  'Série A': 'https://assets.football-logos.cc/logos/brazil/1500x1500/brazilian-serie-a.5cf5c902.png',
+  'Veikkausliiga': 'https://football-logos.cc/logos/finland/1500x1500/veikkausliiga.e1cfd702.png',
+  'A-League Men': 'https://assets.football-logos.cc/logos/australia/1500x1500/a-league.6a62e024.png',
 };
+// "Super League" collides across 4 different real leagues in our data (Switzerland, Greece, China, India) -
+// resolve which one applies by club, since the league NAME field can't tell them apart on its own.
+const SUPERLEAGUE_COUNTRY = {
+  'BSC Young Boys':'switzerland', 'FC Basel 1893':'switzerland', 'FC Lausanne-Sport':'switzerland',
+  'FC Lugano':'switzerland', 'FC Luzern':'switzerland', 'FC Sion':'switzerland', 'FC St.Gallen 1879':'switzerland',
+  'FC Zürich':'switzerland', 'Grasshopper Club Zürich':'switzerland', 'Servette FC':'switzerland',
+  'AEK Athens':'greece', 'Olympiacos FC':'greece', 'PAOK':'greece', 'Panathinaikos FC':'greece',
+  'Beijing Guoan':'china', 'Changchun Yatai':'china', 'Chengdu Rongcheng':'china', 'Dalian Yingbo':'china',
+  'Henan FC':'china', 'Qingdao Hainiu FC':'china', 'Qingdao West Coast FC':'china', 'Shandong Taishan':'china',
+  'Shanghai Port':'china', 'Shanghai Shenhua':'china', 'Shenzhen Peng City':'china', 'Tianjin Jinmen Tiger':'china',
+  'Wuhan Three Towns':'china', 'Yunnan Yukun':'china', 'Zhejiang FC':'china',
+  'Mohun Bagan Super Giant':'india', 'NorthEast United':'india',
+};
+const SUPERLEAGUE_LOGO = {
+  switzerland: 'https://assets.football-logos.cc/logos/switzerland/512x512/swiss-football-league.1d8f9f9d.png',
+  greece: 'https://assets.football-logos.cc/logos/greece/512x512/super-league-1.ea9b3a50.png',
+  china: 'https://assets.football-logos.cc/logos/china/512x512/chinese-super-league.13e4c13a.png',
+  india: 'https://assets.football-logos.cc/logos/india/512x512/indian-super-league.8fd5406f.png',
+};
+function resolveLeagueLogo(card){
+  if(card.lg==='Super League'){
+    const country = SUPERLEAGUE_COUNTRY[card.club];
+    return country ? SUPERLEAGUE_LOGO[country] : null;
+  }
+  return LEAGUE_LOGO[card.lg];
+}
 // Real club crest images (sourced from football-logos.cc, whose license explicitly permits non-commercial fan
 // projects like this game). Building this list out is a slow, one-club-per-lookup process, so it starts with
 // a handful of the very biggest names and can keep growing over time. Every other club uses the monogram badge.
@@ -3747,6 +3793,108 @@ const CLUB_LOGO = {
   'FC Barcelona': 'https://assets.football-logos.cc/logos/spain/1500x1500/barcelona.af4e5453.png',
   'Manchester City': 'https://assets.football-logos.cc/logos/england/1500x1500/manchester-city.8d2b6688.png',
   'Liverpool': 'https://assets.football-logos.cc/logos/england/1500x1500/liverpool.d03fd250.png',
+  // Cyprus
+  'APOEL FC': 'https://assets.football-logos.cc/logos/cyprus/1500x1500/apoel.e54d171c.png',
+  // Germany - 2. Bundesliga
+  '1. FC Kaiserslautern': 'https://assets.football-logos.cc/logos/germany/1500x1500/fc-kaiserslautern.5ca3bfa5.png',
+  '1. FC Magdeburg': 'https://assets.football-logos.cc/logos/germany/1500x1500/1-fc-magdeburg.30674987.png',
+  '1. FC Nürnberg': 'https://assets.football-logos.cc/logos/germany/1500x1500/fc-nurnberg.1fc7e589.png',
+  'DSC Arminia Bielefeld': 'https://assets.football-logos.cc/logos/germany/1500x1500/arminia-bielefeld.0d6a00f5.png',
+  'Dynamo Dresden': 'https://assets.football-logos.cc/logos/germany/1500x1500/dynamo-dresden.8cddabe4.png',
+  'Eintracht Braunschweig': 'https://assets.football-logos.cc/logos/germany/1500x1500/eintracht-braunschweig.7ca513ef.png',
+  'FC Schalke 04': 'https://assets.football-logos.cc/logos/germany/1500x1500/schalke-04.1bf03bd5.png',
+  'Fortuna Düsseldorf': 'https://assets.football-logos.cc/logos/germany/1500x1500/fortuna-dusseldorf.0aaa0376.png',
+  'Hannover 96': 'https://assets.football-logos.cc/logos/germany/1500x1500/hannover-96.600c304d.png',
+  'Hertha BSC': 'https://assets.football-logos.cc/logos/germany/1500x1500/hertha-bsc.e1e27349.png',
+  'Holstein Kiel': 'https://assets.football-logos.cc/logos/germany/1500x1500/holstein-kiel.278dbec8.png',
+  'Karlsruher SC': 'https://assets.football-logos.cc/logos/germany/1500x1500/karlsruher.f11e9333.png',
+  'SC Paderborn 07': 'https://assets.football-logos.cc/logos/germany/1500x1500/paderborn.6f11a6bf.png',
+  'SC Preußen Münster': 'https://assets.football-logos.cc/logos/germany/1500x1500/preussen-munster.5f55a60a.png',
+  'SV Darmstadt 98': 'https://assets.football-logos.cc/logos/germany/1500x1500/darmstadt.9d66c765.png',
+  'SV Elversberg': 'https://assets.football-logos.cc/logos/germany/1500x1500/sv-elversberg.a3127b4f.png',
+  'SpVgg Greuther Fürth': 'https://assets.football-logos.cc/logos/germany/1500x1500/spvgg-greuther-furth.c140a149.png',
+  'VfL Bochum 1848': 'https://assets.football-logos.cc/logos/germany/1500x1500/vfl-bochum.80b48071.png',
+  // Germany - 3. Liga
+  'SV Wehen Wiesbaden': 'https://assets.football-logos.cc/logos/germany/1500x1500/wiesbaden.a941ddee.png',
+  'TSV 1860 München': 'https://assets.football-logos.cc/logos/germany/1500x1500/tsv-1860-munchen.51576b20.png',
+  // Australia
+  'Adelaide United': 'https://assets.football-logos.cc/logos/australia/1500x1500/adelaide-united.b7a271e3.png',
+  // Germany - Bundesliga
+  'FC Bayern München': 'https://assets.football-logos.cc/logos/germany/1500x1500/bayern-munchen.1eac18e8.png',
+  'Borussia Dortmund': 'https://assets.football-logos.cc/logos/germany/1500x1500/borussia-dortmund.145250de.png',
+  'Bayer 04 Leverkusen': 'https://assets.football-logos.cc/logos/germany/1500x1500/bayer-leverkusen.ada32552.png',
+  'RB Leipzig': 'https://assets.football-logos.cc/logos/germany/1500x1500/rb-leipzig.ea056608.png',
+  'VfB Stuttgart': 'https://assets.football-logos.cc/logos/germany/1500x1500/vfb-stuttgart.f5cd8411.png',
+  'Eintracht Frankfurt': 'https://assets.football-logos.cc/logos/germany/1500x1500/eintracht-frankfurt.7c29dd10.png',
+  'VfL Wolfsburg': 'https://assets.football-logos.cc/logos/germany/1500x1500/wolfsburg.addfa528.png',
+  'TSG 1899 Hoffenheim': 'https://assets.football-logos.cc/logos/germany/1500x1500/hoffenheim.2f2360de.png',
+  '1. FC Union Berlin': 'https://assets.football-logos.cc/logos/germany/1500x1500/union-berlin.c52a8c27.png',
+  'FC Augsburg': 'https://assets.football-logos.cc/logos/germany/1500x1500/augsburg.d9c1d8e1.png',
+  '1. FSV Mainz 05': 'https://assets.football-logos.cc/logos/germany/1500x1500/mainz-05.8c9e3bc2.png',
+  'SV Werder Bremen': 'https://assets.football-logos.cc/logos/germany/1500x1500/werder-bremen.1f55046e.png',
+  'Borussia Mönchengladbach': 'https://assets.football-logos.cc/logos/germany/1500x1500/borussia-monchengladbach.b7e9b162.png',
+  '1. FC Heidenheim 1846': 'https://assets.football-logos.cc/logos/germany/1500x1500/fc-heidenheim.102ae86d.png',
+  'FC St. Pauli': 'https://assets.football-logos.cc/logos/germany/1500x1500/st-pauli.4603e7f7.png',
+  '1. FC Köln': 'https://assets.football-logos.cc/logos/germany/1500x1500/koln.a7446cd4.png',
+  // England - Championship
+  'Birmingham City': 'https://assets.football-logos.cc/logos/england/1500x1500/birmingham.a03d7341.png',
+  'Blackburn Rovers': 'https://assets.football-logos.cc/logos/england/1500x1500/blackburn-rovers.9753d478.png',
+  'Bolton Wanderers': 'https://assets.football-logos.cc/logos/england/1500x1500/bolton.2b624032.png',
+  'Bristol City': 'https://assets.football-logos.cc/logos/england/1500x1500/bristol-city.5f7f1fd3.png',
+  'Burnley': 'https://assets.football-logos.cc/logos/england/1500x1500/burnley.ca981a69.png',
+  'Cardiff City': 'https://assets.football-logos.cc/logos/england/1500x1500/cardiff-city.3d5ebaba.png',
+  'Charlton Athletic': 'https://assets.football-logos.cc/logos/england/1500x1500/charlton.c049501b.png',
+  'Derby County': 'https://assets.football-logos.cc/logos/england/1500x1500/derby-county.7b9e3833.png',
+  'Lincoln City': 'https://assets.football-logos.cc/logos/england/1500x1500/lincoln-city.e50a74a8.png',
+  'Middlesbrough': 'https://assets.football-logos.cc/logos/england/1500x1500/middlesbrough.20488c14.png',
+  'Millwall FC': 'https://assets.football-logos.cc/logos/england/1500x1500/millwall.247dc0c7.png',
+  'Norwich City': 'https://assets.football-logos.cc/logos/england/1500x1500/norwich-city.c5752aff.png',
+  'Portsmouth': 'https://assets.football-logos.cc/logos/england/1500x1500/portsmouth.641e57e5.png',
+  'Preston North End': 'https://assets.football-logos.cc/logos/england/1500x1500/preston-north-end.652c04f0.png',
+  'Queens Park Rangers': 'https://assets.football-logos.cc/logos/england/1500x1500/queens-park-rangers.4405eb83.png',
+  'Sheffield United': 'https://assets.football-logos.cc/logos/england/1500x1500/sheffield-united.7adf8cd6.png',
+  'Southampton': 'https://assets.football-logos.cc/logos/england/1500x1500/southampton.a461171e.png',
+  'Stoke City': 'https://assets.football-logos.cc/logos/england/1500x1500/stoke-city.049d00e1.png',
+  'Swansea City': 'https://assets.football-logos.cc/logos/england/1500x1500/swansea-city.fff229fe.png',
+  'Watford': 'https://assets.football-logos.cc/logos/england/1500x1500/watford.25412912.png',
+  'West Bromwich Albion': 'https://assets.football-logos.cc/logos/england/1500x1500/west-bromwich-albion.929ac1c8.png',
+  'West Ham United': 'https://assets.football-logos.cc/logos/england/1500x1500/west-ham.f014677a.png',
+  'Wolverhampton Wanderers': 'https://assets.football-logos.cc/logos/england/1500x1500/wolves.7d27a880.png',
+  'Wrexham': 'https://assets.football-logos.cc/logos/england/1500x1500/wrexham.eaf0e9de.png',
+  // France
+  'Paris Saint-Germain': 'https://assets.football-logos.cc/logos/france/1500x1500/paris-saint-germain.976d063a.png',
+  'Olympique de Marseille': 'https://assets.football-logos.cc/logos/france/1500x1500/marseille.6f770410.png',
+  'OGC Nice': 'https://assets.football-logos.cc/logos/france/1500x1500/nice.56debe22.png',
+  // Italy
+  'Juventus': 'https://assets.football-logos.cc/logos/italy/1500x1500/juventus.309408e0.png',
+  'Inter': 'https://assets.football-logos.cc/logos/italy/1500x1500/inter.d4ebfb95.png',
+  'AC Milan': 'https://assets.football-logos.cc/logos/italy/1500x1500/milan.6b4c62be.png',
+  'Napoli': 'https://assets.football-logos.cc/logos/italy/1500x1500/napoli.3e57a185.png',
+  'Roma': 'https://assets.football-logos.cc/logos/italy/1500x1500/roma.90753835.png',
+  'Lazio': 'https://assets.football-logos.cc/logos/italy/1500x1500/lazio.b6301260.png',
+  'Atalanta': 'https://assets.football-logos.cc/logos/italy/1500x1500/atalanta.fff93c78.png',
+  'Fiorentina': 'https://assets.football-logos.cc/logos/italy/1500x1500/fiorentina.3a19a902.png',
+  'Bologna': 'https://assets.football-logos.cc/logos/italy/1500x1500/bologna.92dd0e4c.png',
+  // Portugal
+  'Sporting CP': 'https://assets.football-logos.cc/logos/portugal/1500x1500/sporting-cp.ac57eada.png',
+  'SL Benfica': 'https://assets.football-logos.cc/logos/portugal/1500x1500/benfica.0e20d1a2.png',
+  'FC Porto': 'https://assets.football-logos.cc/logos/portugal/1500x1500/fc-porto.bef0a887.png',
+  // Netherlands
+  'Ajax': 'https://assets.football-logos.cc/logos/netherlands/1500x1500/ajax.ba64e68a.png',
+  'PSV': 'https://assets.football-logos.cc/logos/netherlands/1500x1500/psv.235a2590.png',
+  'Feyenoord': 'https://assets.football-logos.cc/logos/netherlands/1500x1500/feyenoord.6ee42168.png',
+  // Spain
+  'Atlético Madrid': 'https://assets.football-logos.cc/logos/spain/1500x1500/atletico-madrid.1acb70ea.png',
+  'Athletic Club': 'https://assets.football-logos.cc/logos/spain/1500x1500/athletic-club.ec38af57.png',
+  'Real Betis Balompié': 'https://assets.football-logos.cc/logos/spain/1500x1500/real-betis.18a05d13.png',
+  'RC Celta': 'https://assets.football-logos.cc/logos/spain/1500x1500/celta.06769d38.png',
+  'Sevilla FC': 'https://assets.football-logos.cc/logos/spain/1500x1500/sevilla.f1a10bfd.png',
+  'Girona FC': 'https://assets.football-logos.cc/logos/spain/1500x1500/girona.c049a8f9.png',
+  'Real Sociedad': 'https://assets.football-logos.cc/logos/spain/1500x1500/real-sociedad.7d3dbc7c.png',
+  'Valencia CF': 'https://assets.football-logos.cc/logos/spain/1500x1500/valencia.410c19ea.png',
+  // Turkey
+  'Fenerbahçe SK': 'https://assets.football-logos.cc/logos/turkey/1500x1500/fenerbahce.865697ea.png',
+  'Galatasaray SK': 'https://assets.football-logos.cc/logos/turkey/1500x1500/galatasaray.a30b6ee6.png',
 };
 function monogramBadgeSVG(name, shape){
   const letters = initialsOf2(name);
@@ -3775,7 +3923,7 @@ function showFUTRevealSequence(card, onDone){
     {label:'Position', value: posDE(mainPos(card.pos)), visual: positionPitchSVG(mainPos(card.pos))},
     {label:'Nationalit\u00e4t', value: NAT_DE[card.nat]||card.nat,
       visual: flagCode ? `<img class="fut-visual-img fut-visual-flag" src="https://flagcdn.com/w320/${flagCode}.png" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.nat,'hex')},
-    {label:'Liga', value: card.lg, visual: LEAGUE_LOGO[card.lg] ? `<div class="fut-visual-logo-pad"><img class="fut-visual-img fut-visual-logo" src="${LEAGUE_LOGO[card.lg]}" alt="" onerror="this.parentElement.style.display='none'"></div>` : monogramBadgeSVG(card.lg,'hex')},
+    {label:'Liga', value: card.lg, visual: resolveLeagueLogo(card) ? `<div class="fut-visual-logo-pad"><img class="fut-visual-img fut-visual-logo" src="${resolveLeagueLogo(card)}" alt="" onerror="this.parentElement.style.display='none'"></div>` : monogramBadgeSVG(card.lg,'hex')},
     {label:'Verein', value: card.club, visual: CLUB_LOGO[card.club] ? `<div class="fut-visual-logo-pad"><img class="fut-visual-img fut-visual-logo" src="${CLUB_LOGO[card.club]}" alt="" onerror="this.parentElement.style.display='none'"></div>` : monogramBadgeSVG(card.club,'shield')},
   ];
   let i = 0;
