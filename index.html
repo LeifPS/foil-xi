@@ -380,12 +380,27 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .fut-step-eyebrow{position:absolute;top:14%;font-family:'JetBrains Mono';font-size:10.5px;letter-spacing:.2em;
   color:rgba(255,255,255,.35);opacity:0;animation:csBannerIn .4s .1s forwards;}
 /* ===== elite (90+) enhancements: extra light rays + sparkle, bigger and slower for gravitas ===== */
-.fut-elite .fut-visual-frame{width:150px;height:110px;border-width:3px;
+.fut-elite .fut-visual-frame{width:150px;height:110px;border-width:3px;position:relative;
   box-shadow:0 0 70px -6px var(--cs-acc,#e8c468), 0 0 120px -20px var(--cs-acc,#e8c468), 0 16px 34px rgba(0,0,0,.6);
-  animation:futFrameIn .6s .1s cubic-bezier(.2,.8,.3,1.15) forwards, futEliteFramePulse 2.2s 1s ease-in-out infinite;}
+  animation:futFrameIn .6s .1s cubic-bezier(.34,1.5,.4,1) forwards, futEliteFramePulse 2.2s 1s ease-in-out infinite;}
 @keyframes futEliteFramePulse{0%,100%{box-shadow:0 0 70px -6px var(--cs-acc,#e8c468), 0 0 120px -20px var(--cs-acc,#e8c468), 0 16px 34px rgba(0,0,0,.6);}
   50%{box-shadow:0 0 100px -4px var(--cs-acc,#e8c468), 0 0 160px -10px var(--cs-acc,#e8c468), 0 16px 34px rgba(0,0,0,.6);}}
+.fut-elite .fut-visual-frame::after{content:'';position:absolute;inset:-3px;border-radius:16px;padding:3px;
+  background:conic-gradient(from 0deg, transparent 0%, #fff 8%, var(--cs-acc,#e8c468) 16%, transparent 26%, transparent 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+  animation:futBorderSweep 2.6s linear infinite; pointer-events:none;}
+@keyframes futBorderSweep{to{transform:rotate(360deg);}}
 .fut-elite .fut-step-value{font-size:42px;}
+.fut-elite-badge{position:absolute;top:6%;font-family:'Anton';font-size:11px;letter-spacing:.18em;
+  color:#0a0d12;background:linear-gradient(100deg, var(--cs-acc,#e8c468), #fff 50%, var(--cs-acc,#e8c468));
+  padding:4px 14px;border-radius:100px;opacity:0;transform:scale(.6);
+  animation:futBadgeIn .5s .15s cubic-bezier(.3,1.6,.4,1) forwards;box-shadow:0 4px 16px rgba(0,0,0,.4);}
+@keyframes futBadgeIn{to{opacity:1;transform:scale(1);}}
+.fut-elite-shockwave{position:absolute;top:50%;left:50%;width:20px;height:20px;border-radius:50%;
+  border:2px solid var(--cs-acc,#e8c468);transform:translate(-50%,-50%) scale(0);opacity:0;pointer-events:none;
+  animation:futShockwave 1.1s ease-out;}
+@keyframes futShockwave{0%{transform:translate(-50%,-50%) scale(0);opacity:.9;}100%{transform:translate(-50%,-50%) scale(14);opacity:0;}}
 .fut-elite-rays{position:absolute;inset:-20%;background:conic-gradient(from 0deg, transparent 0deg, var(--cs-acc,#e8c468) 3deg, transparent 8deg, transparent 40deg, var(--cs-acc,#e8c468) 43deg, transparent 48deg, transparent 90deg, var(--cs-acc,#e8c468) 93deg, transparent 98deg);
   opacity:.16;animation:futRaySpin 8s linear infinite;pointer-events:none;}
 @keyframes futRaySpin{to{transform:rotate(360deg);}}
@@ -8689,7 +8704,7 @@ function showFUTRevealSequence(card, onDone){
     overlay.classList.remove('fut-step-flash');
     overlay.innerHTML = `
       <div class="cs-burst"></div>
-      ${elite?'<div class="fut-elite-rays"></div><div class="fut-elite-sparkle"></div>':''}
+      ${elite?'<div class="fut-elite-rays"></div><div class="fut-elite-sparkle"></div><div class="fut-elite-badge">LEGEND\u00c4R</div><div class="fut-elite-shockwave" key="'+i+'"></div>':''}
       <div class="fut-flash"></div>
       <div class="fut-step-eyebrow">ENTH\u00dcLLUNG ${i+1} / ${steps.length}</div>
       <div class="fut-visual-frame">${s.visual}</div>
