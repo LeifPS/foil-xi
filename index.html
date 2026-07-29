@@ -5305,7 +5305,7 @@ async function loadSalesHistory(){
     snap.docs.forEach(d=>{
       const s = d.data();
       if(!salesHistoryCache.has(s.cardId)) salesHistoryCache.set(s.cardId, []);
-      salesHistoryCache.get(s.cardId).push(s.price);
+      salesHistoryCache.get(s.cardId).push({price:s.price, timestamp:s.timestamp||0});
     });
   }catch(e){ console.warn('sales history load failed', e); }
   return salesHistoryCache;
@@ -5321,20 +5321,54 @@ function computeRAP(card){
   const baseline = getBaselineRAP(card);
   if(arr.length>=3){
     const recent = arr.slice(0,10);
-    return Math.round(recent.reduce((s,p)=>s+p,0)/recent.length);
+    return Math.round(recent.reduce((s,p)=>s+p.price,0)/recent.length);
   }
   if(arr.length>0){
     const w = arr.length/3;
-    const realAvg = arr.reduce((s,p)=>s+p,0)/arr.length;
+    const realAvg = arr.reduce((s,p)=>s+p.price,0)/arr.length;
     return Math.round(realAvg*w + baseline*(1-w));
   }
   return baseline;
 }
+function renderPriceHistorySVG(cardId, width=320, height=140){
+  const arr = (salesHistoryCache && salesHistoryCache.get(cardId)) || [];
+  const points = arr.filter(p=>p.timestamp>0).sort((a,b)=>a.timestamp-b.timestamp);
+  if(points.length<2){
+    return `<div style="display:flex;align-items:center;justify-content:center;height:${height}px;color:var(--muted);font-size:12.5px;">Noch nicht genug Verkaufsdaten f\u00fcr einen Preisverlauf.</div>`;
+  }
+  const prices = points.map(p=>p.price);
+  const min = Math.min(...prices), max = Math.max(...prices);
+  const range = Math.max(1, max-min);
+  const pad = 20;
+  const xs = points.map((_,i)=> pad + (i/(points.length-1)) * (width-pad*2));
+  const ys = points.map(p=> height-pad - ((p.price-min)/range) * (height-pad*2));
+  const path = xs.map((x,i)=> (i===0?'M':'L') + x.toFixed(1) + ',' + ys[i].toFixed(1)).join(' ');
+  const areaPath = path + ` L${xs[xs.length-1].toFixed(1)},${height-pad} L${xs[0].toFixed(1)},${height-pad} Z`;
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">
+    <defs><linearGradient id="phg-${cardId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--turf-bright)" stop-opacity=".35"/>
+      <stop offset="100%" stop-color="var(--turf-bright)" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${areaPath}" fill="url(#phg-${cardId})"/>
+    <path d="${path}" fill="none" stroke="var(--turf-bright)" stroke-width="2"/>
+    ${xs.map((x,i)=>`<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="2.5" fill="var(--turf-bright)"/>`).join('')}
+    <text x="${pad}" y="14" font-size="10" fill="var(--muted)" font-family="JetBrains Mono">${max.toLocaleString('de-DE')}</text>
+    <text x="${pad}" y="${height-6}" font-size="10" fill="var(--muted)" font-family="JetBrains Mono">${min.toLocaleString('de-DE')}</text>
+  </svg>`;
+}
+function showPriceHistoryModal(card){
+  openModal(`
+    <h2 style="margin-bottom:4px;">Preisverlauf</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">${card.n} \u2014 letzte Verk\u00e4ufe am Transfermarkt, \u00e4ltester zu neuestem Verkauf.</p>
+    <div style="background:var(--panel2);border-radius:12px;padding:10px;">${renderPriceHistorySVG(card.id)}</div>`);
+}
 function rapBadge(card, opts={}){
   const el = document.createElement('div');
   el.className = 'mono rap-badge';
-  el.style.cssText = `text-align:center;font-size:9.5px;color:var(--gold);margin-top:3px;white-space:nowrap;${opts.style||''}`;
+  el.style.cssText = `text-align:center;font-size:9.5px;color:var(--gold);margin-top:3px;white-space:nowrap;cursor:pointer;${opts.style||''}`;
   el.textContent = `RAP ${computeRAP(card).toLocaleString('de-DE')}`;
+  el.title = 'Preisverlauf ansehen';
+  el.addEventListener('click', (e)=>{ e.stopPropagation(); showPriceHistoryModal(card); });
   return el;
 }
 // ===== club net worth leaderboard =====
@@ -5398,6 +5432,16 @@ const UPDATE_LOGS = [
     {type:'fix', label:'Bugfix', items:[
       'Spielerfotos: Das Monogramm erschien bislang manchmal zus\u00e4tzlich zum echten Foto, abh\u00e4ngig von CSS-Stapelreihenfolge. Jetzt wird in JavaScript entschieden \u2014 ist ein Foto hinterlegt, wird ausschlie\u00dflich dieses gezeigt; das Monogramm erscheint nur noch, wenn das Foto beim Laden tats\u00e4chlich fehlschl\u00e4gt.',
       '6 der 24 neuen Karten hatten falsch zugeordnete oder doppelt verwendete Bilder (u.\u00a0a. Mbapp\u00e9/Neymar Jr teilten sich ein Bild). Alle 24 Karten haben jetzt best\u00e4tigt eindeutige, korrekte Fotos.',
+    ]},
+  ]},
+  {id:2, version:'1.2.0', date:'29.07.2026', title:'Draft-Modus & Preisverlauf', sections:[
+    {type:'new', label:'Neu', items:[
+      'Draft-Modus (unter Herausforderungen) \u2014 Eintritt 15.000 Coins. Stelle in 11 Runden je 1 von 3 Zufallskarten (Rating 76\u201391) f\u00fcr eine 4-3-3-Aufstellung zusammen und tritt damit gegen st\u00e4rker werdende Gegner an (Start-Rating 74, +7 pro Sieg). Maximal 4 Siege m\u00f6glich, eine Niederlage beendet den Lauf sofort \u2014 der gedraftete Kader geh\u00f6rt dir danach nicht.',
+      'Belohnungen nach Siegen: 0 Siege = 1.000 Coins, 1 = 3.000, 2 = 7.000, 3 = 12.000 + Rare Gold Pack, 4 = 20.000 Coins + Icon Moment Pack.',
+      'Preisverlauf am Transfermarkt \u2014 auf die RAP-Anzeige einer beliebigen Karte tippen zeigt jetzt ein Liniendiagramm der letzten Verkaufspreise \u00fcber Zeit.',
+    ]},
+    {type:'fix', label:'Bugfix', items:[
+      'Match-Engine intern erweitert, damit tempor\u00e4re K\u00e4der (wie beim Draft) korrekt gegen Gegner antreten k\u00f6nnen, ohne den echten gespeicherten Vereinskader zu beeinflussen.',
     ]},
   ]},
 ];
@@ -5715,6 +5759,118 @@ const SBC_DEFS = [
 let activeSBC = null;
 let ogPackTierPools = null;
 let sbcSelection = new Set();
+const DRAFT_ENTRY_COST = 15000;
+const DRAFT_REWARD_TABLE = {
+  0: {coins:1000, desc:'1.000 Coins Trostpreis'},
+  1: {coins:3000, desc:'3.000 Coins'},
+  2: {coins:7000, packId:null, desc:'7.000 Coins'},
+  3: {coins:12000, packId:'raregold', desc:'12.000 Coins + Rare Gold Pack'},
+  4: {coins:20000, packId:'iconmoment', desc:'20.000 Coins + Icon Moment Pack'},
+};
+let draftState = null;
+function draftCandidatePool(slotLabel){
+  const pool = ALL_BASE.concat(ALL_SPECIAL).filter(c=>{
+    const pen = compatPenalty(slotLabel, mainPos(c.pos));
+    return pen!==null && pen<=2 && c.ov>=76 && c.ov<=91;
+  });
+  return pool.length ? pool : ALL_BASE;
+}
+function startDraft(){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
+  if(profile.coins < DRAFT_ENTRY_COST){ toast('Nicht genug Coins f\u00fcr den Draft-Eintritt.'); return; }
+  openModal(`
+    <h2 style="margin-bottom:4px;">Draft starten?</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Kostet ${DRAFT_ENTRY_COST.toLocaleString('de-DE')} Coins. Du stellst einen Zufallskader zusammen und spielst damit, bis du verlierst (max. 4 Siege). Der Kader geh\u00f6rt dir danach nicht \u2014 nur die Belohnung z\u00e4hlt.</p>
+    <button class="action-btn" id="draft-confirm-yes" style="width:100%;margin-bottom:8px;">Ja, Draft starten</button>
+    <button class="action-btn secondary" id="draft-confirm-no" style="width:100%;">Abbrechen</button>`);
+  document.getElementById('draft-confirm-no').addEventListener('click', closeModal);
+  document.getElementById('draft-confirm-yes').addEventListener('click', async ()=>{
+    closeModal();
+    await atomicCoinChange(-DRAFT_ENTRY_COST);
+    draftState = {slotIdx:0, picks:[], wins:0, options:null};
+    renderDraftPanel();
+  });
+}
+function renderDraftPanel(){
+  const box = document.getElementById('draft-content');
+  if(!box) return;
+  if(!draftState){
+    box.innerHTML = `
+      <p class="hint" style="margin-top:0;">Stelle aus zuf\u00e4lligen 3er-Auswahlen einen kompletten Kader zusammen (4-3-3) und tritt damit gegen st\u00e4rker werdende Gegner an. Die Karten geh\u00f6ren dir nicht \u2014 nur die Belohnung z\u00e4hlt. Maximal 4 Siege m\u00f6glich, eine Niederlage beendet den Lauf.</p>
+      <button class="action-btn" id="draft-start-btn">Draft starten (${DRAFT_ENTRY_COST.toLocaleString('de-DE')} Coins)</button>`;
+    document.getElementById('draft-start-btn').addEventListener('click', startDraft);
+    return;
+  }
+  if(draftState.slotIdx < 11){
+    const form = FORMATIONS['433'].slots;
+    const slot = form[draftState.slotIdx];
+    if(!draftState.options) draftState.options = Array.from({length:3}, ()=>pick(draftCandidatePool(slot.label)));
+    box.innerHTML = `
+      <p class="hint" style="margin-top:0;">Position ${draftState.slotIdx+1}/11: <b style="color:var(--chalk);">${posDE(slot.label)}</b> \u2014 w\u00e4hle einen Spieler.</p>
+      <div class="picker-list" id="draft-pick-list"></div>`;
+    const list = document.getElementById('draft-pick-list');
+    draftState.options.forEach((card,idx)=>{
+      const wrap = document.createElement('div');
+      wrap.style.cursor = 'pointer';
+      wrap.appendChild(cardEl(card,'mini'));
+      wrap.addEventListener('click', ()=>{
+        draftState.picks.push({n:card.n, pos:slot.label, ov:card.ov, img:card.img});
+        draftState.slotIdx++;
+        draftState.options = null;
+        renderDraftPanel();
+      });
+      list.appendChild(wrap);
+    });
+    return;
+  }
+  // squad complete - show gauntlet state
+  const myRating = Math.round(draftState.picks.reduce((s,p)=>s+p.ov,0)/draftState.picks.length);
+  box.innerHTML = `
+    <p class="hint" style="margin-top:0;">Kader komplett \u2014 Rating ${myRating}. Sieg ${draftState.wins}/4. ${draftState.wins>0?'Belohnung bisher: '+DRAFT_REWARD_TABLE[draftState.wins].desc:''}</p>
+    <div id="draft-match-area"></div>
+    ${draftState.wins<4 ? `<button class="action-btn" id="draft-play-btn">N\u00e4chstes Spiel (Sieg ${draftState.wins+1}/4)</button>` : `<button class="action-btn" id="draft-claim-btn">Maximalbelohnung abholen</button>`}`;
+  const playBtn = document.getElementById('draft-play-btn');
+  if(playBtn) playBtn.addEventListener('click', playDraftMatch);
+  const claimBtn = document.getElementById('draft-claim-btn');
+  if(claimBtn) claimBtn.addEventListener('click', ()=>claimDraftReward(true));
+}
+async function playDraftMatch(){
+  const myRating = Math.round(draftState.picks.reduce((s,p)=>s+p.ov,0)/draftState.picks.length);
+  const oppRating = 74 + draftState.wins*7; // escalating difficulty each round
+  const opp = buildFixedRatingOpponent(oppRating);
+  const area = document.getElementById('draft-match-area');
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      <div class="team-blob"><div class="r">${myRating}</div><div class="t">Draft-Elf</div></div>
+      <div class="vs-x">VS</div>
+      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner}</div></div>
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(myRating, opp, {friendly:true, overridePlayers:draftState.picks, onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      draftState.wins++;
+      toast(`Sieg ${draftState.wins}/4!`);
+      if(draftState.wins>=4){ toast('Maximalserie erreicht! Belohnung abholen.'); }
+      renderDraftPanel();
+    } else {
+      toast('Niederlage \u2014 Draft-Lauf beendet.');
+      await claimDraftReward(false);
+    }
+  }});
+}
+async function claimDraftReward(maxed){
+  const reward = DRAFT_REWARD_TABLE[draftState.wins];
+  await atomicCoinChange(reward.coins);
+  let msg = `Draft beendet mit ${draftState.wins}/4 Siegen: +${reward.coins.toLocaleString('de-DE')} Coins`;
+  if(reward.packId){
+    const pack = PACKS.find(p=>p.id===reward.packId);
+    if(pack){ msg += ` + ${pack.name}`; showPackOpening(pack, pack.draw()); }
+  }
+  toast(msg);
+  draftState = null;
+  renderDraftPanel();
+}
 async function renderSBCList(view){
   const completed = new Set(profile.completedSBCs||[]);
   view.innerHTML = `
@@ -5722,6 +5878,10 @@ async function renderSBCList(view){
     <div class="vs-panel" id="tournament-panel" style="margin-bottom:22px;">
       <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Turnier-Modus</h3>
       <div id="tournament-content"></div>
+    </div>
+    <div class="vs-panel" id="draft-panel" style="margin-bottom:22px;border-color:#4da8ff;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#4da8ff;text-transform:uppercase;letter-spacing:.04em;">Draft-Modus</h3>
+      <div id="draft-content"></div>
     </div>
     <div class="vs-panel" id="ballondor-panel" style="margin-bottom:22px;border-color:var(--gold-dim);">
       <h3 style="font-size:15px;margin-bottom:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.04em;">Ballon d'Or Herausforderung</h3>
@@ -5754,6 +5914,7 @@ async function renderSBCList(view){
     <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">SBCs (Squad Building Challenges)</h3>
     <div class="pack-grid" id="sbc-grid"><p class="hint">Pr\u00fcfe Erf\u00fcllbarkeit\u2026</p></div>`;
   renderTournamentPanel();
+  renderDraftPanel();
   renderBallonDorPanel();
   PRIME_CHALLENGES.forEach(renderPrimeChallengePanel);
   renderOReiPanel();
@@ -11063,8 +11224,8 @@ async function runLocalMatch(myRating, opp, opts={}){
   if(inMatch){ toast('Es l\u00e4uft bereits ein anderes Match \u2014 bitte kurz warten und erneut versuchen.'); return; }
   inMatch = true;
   try{
-    const myPlayers = getMySquadPlayers();
-    const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players, squad.tactics);
+    const myPlayers = opts.overridePlayers || getMySquadPlayers();
+    const md = buildDecisiveMatch(myRating, opp.rating, myPlayers, opp.players, opts.overridePlayers ? null : squad.tactics);
     md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
     const myName = profile.displayName || 'Dein Verein';
     const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
