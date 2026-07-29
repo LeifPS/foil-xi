@@ -6998,6 +6998,40 @@ const FORMATIONS = {
    {id:'cb1',label:'CB',x:26,y:80},{id:'cb2',label:'CB',x:50,y:84},{id:'cb3',label:'CB',x:74,y:80},
    {id:'lm',label:'LM',x:14,y:52},{id:'cm1',label:'CM',x:38,y:54},{id:'cm2',label:'CM',x:62,y:54},{id:'rm',label:'RM',x:86,y:52},
    {id:'lw',label:'LW',x:18,y:16},{id:'st',label:'ST',x:50,y:11},{id:'rw',label:'RW',x:82,y:16}
+ ]},
+ '4141':{label:'4-1-4-1', slots:[
+   {id:'gk',label:'GK',x:50,y:92},
+   {id:'lb',label:'LB',x:14,y:76},{id:'cb1',label:'CB',x:36,y:80},{id:'cb2',label:'CB',x:64,y:80},{id:'rb',label:'RB',x:86,y:76},
+   {id:'cdm',label:'CDM',x:50,y:62},
+   {id:'lm',label:'LM',x:14,y:42},{id:'cm1',label:'CM',x:36,y:44},{id:'cm2',label:'CM',x:64,y:44},{id:'rm',label:'RM',x:86,y:42},
+   {id:'st',label:'ST',x:50,y:12}
+ ]},
+ '4411':{label:'4-4-1-1', slots:[
+   {id:'gk',label:'GK',x:50,y:92},
+   {id:'lb',label:'LB',x:14,y:76},{id:'cb1',label:'CB',x:36,y:80},{id:'cb2',label:'CB',x:64,y:80},{id:'rb',label:'RB',x:86,y:76},
+   {id:'lm',label:'LM',x:14,y:48},{id:'cm1',label:'CM',x:38,y:50},{id:'cm2',label:'CM',x:62,y:50},{id:'rm',label:'RM',x:86,y:48},
+   {id:'cam',label:'CAM',x:50,y:28},
+   {id:'st',label:'ST',x:50,y:10}
+ ]},
+ '532':{label:'5-3-2', slots:[
+   {id:'gk',label:'GK',x:50,y:92},
+   {id:'lwb',label:'LWB',x:8,y:68},{id:'cb1',label:'CB',x:28,y:80},{id:'cb2',label:'CB',x:50,y:84},{id:'cb3',label:'CB',x:72,y:80},{id:'rwb',label:'RWB',x:92,y:68},
+   {id:'cm1',label:'CM',x:32,y:50},{id:'cm2',label:'CM',x:50,y:46},{id:'cm3',label:'CM',x:68,y:50},
+   {id:'st1',label:'ST',x:38,y:14},{id:'st2',label:'ST',x:62,y:14}
+ ]},
+ '3412':{label:'3-4-1-2', slots:[
+   {id:'gk',label:'GK',x:50,y:92},
+   {id:'cb1',label:'CB',x:26,y:80},{id:'cb2',label:'CB',x:50,y:84},{id:'cb3',label:'CB',x:74,y:80},
+   {id:'lm',label:'LM',x:14,y:54},{id:'cm1',label:'CM',x:38,y:54},{id:'cm2',label:'CM',x:62,y:54},{id:'rm',label:'RM',x:86,y:54},
+   {id:'cam',label:'CAM',x:50,y:32},
+   {id:'st1',label:'ST',x:38,y:12},{id:'st2',label:'ST',x:62,y:12}
+ ]},
+ '4222':{label:'4-2-2-2', slots:[
+   {id:'gk',label:'GK',x:50,y:92},
+   {id:'lb',label:'LB',x:14,y:76},{id:'cb1',label:'CB',x:36,y:80},{id:'cb2',label:'CB',x:64,y:80},{id:'rb',label:'RB',x:86,y:76},
+   {id:'cdm1',label:'CDM',x:36,y:60},{id:'cdm2',label:'CDM',x:64,y:60},
+   {id:'lam',label:'CAM',x:28,y:34},{id:'ram',label:'CAM',x:72,y:34},
+   {id:'st1',label:'ST',x:38,y:12},{id:'st2',label:'ST',x:62,y:12}
  ]}
 };
 function allSquadUids(){ // every uid currently used in the starting XI
@@ -8833,7 +8867,8 @@ function squadRating(){
     if(!card) return;
     roster.push({slot, card});
   });
-  const chemPlayers = computeChemistry(roster.map(r=>({ov:r.card.ov, club:r.card.club, nat:r.card.nat, lg:r.card.lg})));
+  const mgrForChem = getAssignedManager();
+  const chemPlayers = computeChemistry(roster.map(r=>({ov:r.card.ov, club:r.card.club, nat:r.card.nat, lg:r.card.lg})), mgrForChem?mgrForChem.nat:null);
   roster.forEach((r,idx)=>{
     filled++;
     const mp = mainPos(r.card.pos);
@@ -8860,7 +8895,8 @@ function getSquadChemistryDetail(){
     const card = uid ? ownedCard(uid) : null;
     if(card) roster.push({slotId:slot.id, card});
   });
-  const chemPlayers = computeChemistry(roster.map(r=>({ov:r.card.ov, club:r.card.club, nat:r.card.nat, lg:r.card.lg})));
+  const mgr = getAssignedManager();
+  const chemPlayers = computeChemistry(roster.map(r=>({ov:r.card.ov, club:r.card.club, nat:r.card.nat, lg:r.card.lg})), mgr?mgr.nat:null);
   const bySlot = {}, breakdownBySlot = {};
   roster.forEach((r,idx)=>{ bySlot[r.slotId] = chemPlayers[idx].chem; breakdownBySlot[r.slotId] = chemPlayers[idx].chemBreakdown; });
   const total = chemPlayers.reduce((s,p)=>s+p.chem,0);
@@ -8872,6 +8908,7 @@ function chemBreakdownText(b){
   if(b.clubLinks>0) parts.push(`${b.clubLinks} Vereinskollege${b.clubLinks>1?'n':''}`);
   if(b.leagueLinks>0) parts.push(`${b.leagueLinks} Liga-Kollege${b.leagueLinks>1?'n':''}`);
   if(b.natLinks>0) parts.push(`${b.natLinks} Landsmann${b.natLinks>1?'/Landsleute':''}`);
+  if(b.mgrLink) parts.push('gleiche Nationalit\u00e4t wie der Trainer');
   return parts.length ? parts.join(', ') : 'Keine gemeinsamen Verbindungen';
 }
 function posGroup2(label){
@@ -10275,18 +10312,19 @@ function poissonGoals(lambda){
   do{ k++; p *= Math.random(); }while(p>L && k<12);
   return k-1;
 }
-function computeChemistry(players){
+function computeChemistry(players, managerNat){
   return players.map(p=>{
-    let score = 0, clubLinks=0, leagueLinks=0, natLinks=0;
+    let score = 0, clubLinks=0, leagueLinks=0, natLinks=0, mgrLink=false;
     players.forEach(other=>{
       if(other===p) return;
       if(other.club && other.club===p.club){ score += 3; clubLinks++; }
       else if(other.lg && other.lg===p.lg){ score += 1.5; leagueLinks++; }
       if(other.nat && other.nat===p.nat){ score += 1; natLinks++; }
     });
+    if(managerNat && p.nat && p.nat===managerNat){ score += 1.5; mgrLink = true; } // small boost for sharing the manager's nationality
     const stars = score>=14 ? 3 : score>=7 ? 2 : score>=3 ? 1 : 0;
     const ovAdjust = stars===3 ? 3 : stars===2 ? 2 : stars===1 ? 1 : 0;
-    return {...p, chem:stars, chemOv: Math.max(1, Math.round(p.ov+ovAdjust)), chemBreakdown:{clubLinks, leagueLinks, natLinks}};
+    return {...p, chem:stars, chemOv: Math.max(1, Math.round(p.ov+ovAdjust)), chemBreakdown:{clubLinks, leagueLinks, natLinks, mgrLink}};
   });
 }
 function getMySquadPlayers(){
@@ -10302,7 +10340,7 @@ function getMySquadPlayers(){
       list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg});
     }
   });
-  return computeChemistry(list).map(p=>({...p, ov:p.chemOv}));
+  return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
 }
 let FALLBACK_SCORER_POOL = null;
 function fallbackScorerPool(){
