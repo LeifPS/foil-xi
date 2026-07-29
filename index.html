@@ -4768,8 +4768,8 @@ const PLAYERS_PRIME = [
     "id": 9800200,
     "n": "Cristiano Ronaldo",
     "pos": "ST, LW",
-    "ov": 109,
-    "pot": 109,
+    "ov": 107,
+    "pot": 107,
     "nat": "Portugal",
     "lg": "La Liga",
     "club": "Real Madrid",
@@ -4790,8 +4790,8 @@ const PLAYERS_PRIME = [
     "id": 9800201,
     "n": "Lionel Messi",
     "pos": "RW, ST, CAM",
-    "ov": 109,
-    "pot": 109,
+    "ov": 107,
+    "pot": 107,
     "nat": "Argentina",
     "lg": "La Liga",
     "club": "Barcelona",
@@ -4812,8 +4812,8 @@ const PLAYERS_PRIME = [
     "id": 9800202,
     "n": "Neymar Jr",
     "pos": "LW, CAM",
-    "ov": 109,
-    "pot": 109,
+    "ov": 107,
+    "pot": 107,
     "nat": "Brazil",
     "lg": "Ligue 1",
     "club": "Paris Saint-Germain",
@@ -5392,6 +5392,7 @@ async function updateMyNetWorthEntry(){
     });
   }catch(e){ console.warn('net worth update failed', e); }
 }
+const LEADERBOARD_EXCLUDED_USERS = new Set(['leifps','tst']);
 async function loadNetWorthLeaderboard(){
   const box = document.getElementById('networth-list');
   if(!box) return;
@@ -5400,8 +5401,8 @@ async function loadNetWorthLeaderboard(){
   let entries = [];
   try{
     entries = await cachedRead('networth-board', 45000, async ()=>{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(8)));
-      return snap.docs.map(d=>d.data());
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(8+LEADERBOARD_EXCLUDED_USERS.size)));
+      return snap.docs.map(d=>d.data()).filter(e=>!LEADERBOARD_EXCLUDED_USERS.has(e.userId)).slice(0,8);
     });
   }catch(e){ console.warn('net worth leaderboard read failed', e); }
   if(!box) return;
@@ -5464,6 +5465,24 @@ const UPDATE_LOGS = [
   {id:5, version:'1.3.0', date:'29.07.2026', title:'Spielerbewertungen jetzt auch online', sections:[
     {type:'new', label:'Neu', items:[
       'Mann des Spiels und Spielerbewertungen (1\u201310) gibt es jetzt auch nach echten Online-Duellen und Warteschlangen-Matches, nicht mehr nur nach Bot-Matches. Basiert auf deinem aktuellen Kader zum Zeitpunkt des Spielendes.',
+    ]},
+  ]},
+  {id:6, version:'1.3.1', date:'29.07.2026', title:'Bestenlisten bereinigt', sections:[
+    {type:'fix', label:'Bugfix', items:[
+      'Die Konten "leifps" und "tst" erscheinen nicht mehr in der Vereinswert- und der Kaderbestenliste (fest hinterlegter Ausschluss, betrifft nur diese zwei spezifischen Konten).',
+    ]},
+  ]},
+  {id:7, version:'1.3.2', date:'29.07.2026', title:'PRIME-Karten abgeschw\u00e4cht', sections:[
+    {type:'balance', label:'Balance', items:[
+      'Alle drei PRIME-Karten (Cristiano Ronaldo, Lionel Messi, Neymar Jr) von 109 auf 107 OVR gesenkt.',
+    ]},
+  ]},
+  {id:8, version:'1.4.0', date:'29.07.2026', title:'Admin-Panel', sections:[
+    {type:'new', label:'Neu', items:[
+      'Neues Admin-Panel, sichtbar nur f\u00fcr die Konten "leifps" und "test" (eigener Reiter in der Navigation).',
+      'Eigener Account: beliebige Coins gutschreiben, jedes Pack kostenlos \u00f6ffnen, jede Karte direkt zum eigenen Kader hinzuf\u00fcgen.',
+      'Nutzerverwaltung: beliebigen Verein per Namen laden, Coins geben/abziehen, Karte oder komplettes Pack direkt in dessen Kader legen, Verwarnung schicken (wird beim n\u00e4chsten Login des Nutzers als Hinweisfenster angezeigt), Verein sperren/entsperren.',
+      'Gesperrte Vereine k\u00f6nnen sich nicht mehr einloggen und sehen stattdessen eine Sperr-Meldung.',
     ]},
   ]},
 ];
@@ -7625,6 +7644,16 @@ async function init(){
     if(profile.lastSeenUpdateLog===undefined) profile.lastSeenUpdateLog = 0;
     if(!profile.crest) profile.crest = {shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(profile.displayName||'?')[0].toUpperCase()};
   }
+  if(profile.banned && !isAdmin()){
+    document.getElementById('modal-root').innerHTML = `
+      <div class="modal-overlay" style="cursor:default;">
+        <div class="modal-box" style="max-width:380px;text-align:center;">
+          <h2 style="margin-bottom:8px;color:var(--danger);">Verein gesperrt</h2>
+          <p class="hint" style="margin-top:0;">Dieser Verein wurde von einem Administrator gesperrt und kann nicht weiterspielen.</p>
+        </div>
+      </div>`;
+    return;
+  }
   soundEnabled = profile.soundOn;
   collection = await sGet('collection');
   if(!collection){
@@ -7647,6 +7676,17 @@ async function init(){
   renderNav();
   renderView('store');
   updateCoinDisplay();
+  if(profile.pendingWarning){
+    const warningMsg = profile.pendingWarning;
+    profile.pendingWarning = null;
+    await sSet('profile', profile);
+    openModal(`
+      <h2 style="margin-bottom:8px;color:var(--danger);">\u26a0 Verwarnung</h2>
+      <p class="hint" style="margin-top:0;margin-bottom:16px;">Ein Administrator hat dir folgende Nachricht geschickt:</p>
+      <p style="background:var(--panel2);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:16px;">${warningMsg}</p>
+      <button class="action-btn" id="warning-ok" style="width:100%;">Verstanden</button>`);
+    document.getElementById('warning-ok').addEventListener('click', closeModal);
+  }
   const switchBtn = document.getElementById('switch-club-btn');
   if(switchBtn) switchBtn.onclick = switchClub;
   const soundBtn = document.getElementById('sound-toggle');
@@ -7878,9 +7918,12 @@ function cardEl(card, size=''){
 
 // ===== nav & routing =====
 const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen']];
+const ADMIN_USERS = new Set(['leifps','test']);
+function isAdmin(){ return clubId && ADMIN_USERS.has(clubId); }
 function renderNav(){
   const nav = document.getElementById('nav');
-  nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${label}</button>`).join('');
+  nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${label}</button>`).join('')
+    + (isAdmin() ? `<button class="nav-btn ${currentTab==='admin'?'active':''}" data-tab="admin" style="color:#ff5f5f;">\u2699 Admin</button>` : '');
   nav.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click', ()=>{ currentTab=b.dataset.tab; renderNav(); renderView(currentTab); }));
 }
 
@@ -7892,6 +7935,7 @@ function renderView(tab){
   if(tab==='sbc') return renderSBCList(view);
   if(tab==='trade') return renderTrade(view);
   if(tab==='play') return renderPlay(view);
+  if(tab==='admin') return isAdmin() ? renderAdminPanel(view) : renderPlay(view);
 }
 
 // ===== STORE =====
@@ -9137,6 +9181,181 @@ function showCutscene(card, onDone){
 
 // ===== CLUB =====
 let clubFilter = {q:'', pos:'ALL', sort:'ov'};
+async function renderAdminPanel(view){
+  view.innerHTML = `
+    <div class="view-head"><h2>\u2699 Admin-Panel</h2><p>Eingeloggt als Administrator (${clubId}). Mit gro\u00dfer Macht kommt gro\u00dfe Verantwortung.</p></div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Mein Account</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="action-btn secondary" id="admin-add-coins" style="width:auto;">+100.000 Coins (mir)</button>
+        <button class="action-btn secondary" id="admin-open-any-pack" style="width:auto;">Beliebiges Pack kostenlos \u00f6ffnen</button>
+        <button class="action-btn secondary" id="admin-add-card" style="width:auto;">Karte direkt hinzuf\u00fcgen</button>
+      </div>
+    </div>
+    <div class="vs-panel" style="border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Nutzer verwalten</h3>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <input id="admin-user-search" placeholder="Vereinsname (Login-ID)...">
+        <button class="action-btn" id="admin-user-load" style="width:auto;padding:9px 16px;">Laden</button>
+      </div>
+      <div id="admin-user-content"></div>
+    </div>`;
+  document.getElementById('admin-add-coins').addEventListener('click', async ()=>{
+    await atomicCoinChange(100000);
+    toast('100.000 Coins hinzugef\u00fcgt.');
+  });
+  document.getElementById('admin-open-any-pack').addEventListener('click', openAdminPackPicker);
+  document.getElementById('admin-add-card').addEventListener('click', openAdminAddCardModal);
+  const doLoad = ()=>loadAdminUserPanel(document.getElementById('admin-user-search').value.trim());
+  document.getElementById('admin-user-load').addEventListener('click', doLoad);
+  document.getElementById('admin-user-search').addEventListener('keydown', e=>{ if(e.key==='Enter') doLoad(); });
+}
+function adminFullCardPool(){
+  return ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, UCLW_SPECIALS, OGICON_CARDS, SIGNATURE_SEASON_CARDS);
+}
+function openAdminPackPicker(){
+  openModal(`
+    <h2 style="margin-bottom:12px;">Pack ausw\u00e4hlen (kostenlos, f\u00fcr mich)</h2>
+    <div class="picker-list" id="admin-pack-list"></div>`);
+  const list = document.getElementById('admin-pack-list');
+  PACKS.forEach(pack=>{
+    const btn = document.createElement('button');
+    btn.className = 'action-btn secondary';
+    btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
+    btn.textContent = pack.name;
+    btn.addEventListener('click', ()=>{ closeModal(); showPackOpening(pack, pack.draw()); });
+    list.appendChild(btn);
+  });
+}
+function openAdminAddCardModal(){
+  openModal(`
+    <h2 style="margin-bottom:4px;">Karte direkt hinzuf\u00fcgen (f\u00fcr mich)</h2>
+    <input id="admin-card-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:10px 0 12px;">
+    <div class="picker-list" id="admin-card-results" style="max-height:340px;overflow-y:auto;"></div>`);
+  const pool = adminFullCardPool();
+  const input = document.getElementById('admin-card-search');
+  const results = document.getElementById('admin-card-results');
+  input.addEventListener('input', ()=>{
+    const q = input.value.trim().toLowerCase();
+    if(q.length<2){ results.innerHTML=''; return; }
+    results.innerHTML = '';
+    pool.filter(c=>c.n.toLowerCase().includes(q)).slice(0,20).forEach(card=>{
+      const wrap = document.createElement('div');
+      wrap.style.cursor='pointer';
+      wrap.appendChild(cardEl(card,'mini'));
+      wrap.addEventListener('click', async ()=>{
+        collection.push({uid:genId(), cardId:card.id});
+        await sSet('collection', collection);
+        toast(`${card.n} (${card.variantLabel||'Basis'}) hinzugef\u00fcgt.`);
+        closeModal();
+      });
+      results.appendChild(wrap);
+    });
+  });
+}
+async function loadAdminUserPanel(targetId){
+  const box = document.getElementById('admin-user-content');
+  if(!box) return;
+  targetId = sanitizeClubId(targetId||'');
+  if(!targetId){ box.innerHTML = '<p class="hint">Bitte einen g\u00fcltigen Vereinsnamen eingeben.</p>'; return; }
+  await fbReady;
+  if(!fb){ box.innerHTML = '<p class="hint">Ben\u00f6tigt das Online-Backend.</p>'; return; }
+  box.innerHTML = '<p class="hint">L\u00e4dt\u2026</p>';
+  let snap;
+  try{ snap = await fb.getDoc(fb.doc(fb.db,'saves',targetId)); }
+  catch(e){ box.innerHTML = '<p class="hint">Fehler beim Laden.</p>'; return; }
+  if(!snap.exists()){ box.innerHTML = `<p class="hint">Kein Verein mit dem Namen "${targetId}" gefunden.</p>`; return; }
+  const data = snap.data();
+  const p = data.profile || {};
+  box.innerHTML = `
+    <div style="margin-bottom:14px;">
+      <div style="font-weight:700;font-size:16px;">${p.displayName||targetId} <span class="mono" style="color:var(--muted);font-size:12px;">(${targetId})</span></div>
+      <div class="hint" style="margin-top:2px;">Coins: <b style="color:var(--gold);">${(p.coins||0).toLocaleString('de-DE')}</b> \u00b7 Siege: ${p.wins||0} \u00b7 Niederlagen: ${p.losses||0}
+      ${p.banned ? ' \u00b7 <b style="color:var(--danger);">GESPERRT</b>' : ''}</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="action-btn secondary" id="admin-give-coins" style="width:auto;">Coins geben</button>
+      <button class="action-btn secondary" id="admin-give-card" style="width:auto;">Karte schicken</button>
+      <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
+      <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
+      <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
+    </div>`;
+  document.getElementById('admin-give-coins').addEventListener('click', ()=>{
+    askTextModal('Coins hinzuf\u00fcgen (negativ zum Abziehen)', '0', async (val)=>{
+      const amount = parseInt(val,10);
+      if(!Number.isFinite(amount)) return;
+      const newProfile = {...p, coins:(p.coins||0)+amount};
+      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+      toast(`${amount>=0?'+':''}${amount.toLocaleString('de-DE')} Coins f\u00fcr ${targetId}.`);
+      loadAdminUserPanel(targetId);
+    }, 12);
+  });
+  document.getElementById('admin-give-card').addEventListener('click', ()=>openAdminSendCardModal(targetId, data));
+  document.getElementById('admin-give-pack').addEventListener('click', ()=>openAdminSendPackModal(targetId, data));
+  document.getElementById('admin-send-warning').addEventListener('click', ()=>{
+    askTextModal('Verwarnungstext', 'z. B. Bitte fair spielen...', async (msg)=>{
+      if(!msg) return;
+      const newProfile = {...p, pendingWarning:msg};
+      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+      toast(`Verwarnung an ${targetId} gesendet.`);
+    }, 200);
+  });
+  document.getElementById('admin-toggle-ban').addEventListener('click', async ()=>{
+    const newProfile = {...p, banned: !p.banned};
+    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+    toast(p.banned ? `${targetId} entsperrt.` : `${targetId} gesperrt.`);
+    loadAdminUserPanel(targetId);
+  });
+}
+function openAdminSendCardModal(targetId, data){
+  openModal(`
+    <h2 style="margin-bottom:4px;">Karte an ${targetId} schicken</h2>
+    <input id="admin-send-card-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:10px 0 12px;">
+    <div class="picker-list" id="admin-send-card-results" style="max-height:340px;overflow-y:auto;"></div>`);
+  const pool = adminFullCardPool();
+  const input = document.getElementById('admin-send-card-search');
+  const results = document.getElementById('admin-send-card-results');
+  input.addEventListener('input', ()=>{
+    const q = input.value.trim().toLowerCase();
+    if(q.length<2){ results.innerHTML=''; return; }
+    results.innerHTML = '';
+    pool.filter(c=>c.n.toLowerCase().includes(q)).slice(0,20).forEach(card=>{
+      const wrap = document.createElement('div');
+      wrap.style.cursor='pointer';
+      wrap.appendChild(cardEl(card,'mini'));
+      wrap.addEventListener('click', async ()=>{
+        const targetCollection = (data.collection || []).slice();
+        targetCollection.push({uid:genId(), cardId:card.id});
+        await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection:targetCollection}, {merge:true});
+        toast(`${card.n} an ${targetId} geschickt.`);
+        closeModal();
+      });
+      results.appendChild(wrap);
+    });
+  });
+}
+function openAdminSendPackModal(targetId, data){
+  openModal(`
+    <h2 style="margin-bottom:12px;">Pack f\u00fcr ${targetId} \u00f6ffnen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Die gezogenen Karten werden direkt in den Kader von ${targetId} gelegt (ohne Animation bei dir).</p>
+    <div class="picker-list" id="admin-send-pack-list"></div>`);
+  const list = document.getElementById('admin-send-pack-list');
+  PACKS.forEach(pack=>{
+    const btn = document.createElement('button');
+    btn.className = 'action-btn secondary';
+    btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
+    btn.textContent = pack.name;
+    btn.addEventListener('click', async ()=>{
+      const drawn = pack.draw();
+      const targetCollection = (data.collection || []).slice();
+      drawn.forEach(card=>targetCollection.push({uid:genId(), cardId:card.id}));
+      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection:targetCollection}, {merge:true});
+      toast(`${pack.name} f\u00fcr ${targetId} ge\u00f6ffnet: ${drawn.map(c=>c.n).join(', ')}`);
+      closeModal();
+    });
+    list.appendChild(btn);
+  });
+}
 function renderClub(view){
   view.innerHTML = `
     <div class="view-head" style="display:flex;align-items:center;gap:16px;">
@@ -10648,8 +10867,8 @@ async function loadLeaderboard(){
   if(fb){
     try{
       squads = await cachedRead('squad-leaderboard', 45000, async ()=>{
-        const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'squads'), fb.orderBy('rating','desc'), fb.limit(8)));
-        return snap.docs.map(d=>d.data());
+        const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'squads'), fb.orderBy('rating','desc'), fb.limit(8+LEADERBOARD_EXCLUDED_USERS.size)));
+        return snap.docs.map(d=>d.data()).filter(s=>!LEADERBOARD_EXCLUDED_USERS.has(s.userId)).slice(0,8);
       });
     }catch(e){ console.warn('Firebase leaderboard read failed', e); }
   }
@@ -10657,7 +10876,7 @@ async function loadLeaderboard(){
     const keys = await sList('squad:', true);
     for(const k of keys.slice(0,30)){
       const s = await sGet(k, true);
-      if(s) squads.push(s);
+      if(s && !LEADERBOARD_EXCLUDED_USERS.has(s.userId)) squads.push(s);
     }
     squads.sort((a,b)=>b.rating-a.rating);
     squads = squads.slice(0,8);
