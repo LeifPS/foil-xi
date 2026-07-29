@@ -5499,6 +5499,11 @@ const UPDATE_LOGS = [
       'Zeitgeist Pack \u2014 Ziehchance pro Karte nochmal angehoben: Signature Season 0,25\u2009%\u2009\u2192\u20090,35\u2009%, Era Definer 0,9\u2009%\u2009\u2192\u20091,3\u2009%, Signature Icon 3\u2009%\u2009\u2192\u20094\u2009%, Rating 95\u201399 9\u2009%\u2009\u2192\u200911\u2009%, Rating 90\u201394 24\u2009%\u2009\u2192\u200927\u2009%.',
     ]},
   ]},
+  {id:11, version:'1.5.2', date:'29.07.2026', title:'Cutscenes \u00fcberspringbar', sections:[
+    {type:'new', label:'Neu', items:[
+      'Alle Karten-Enthüllungs-Cutscenes (Enthüllungssequenz f\u00fcr 85+ Karten, finale Kartenanzeige, normale Pack-Enthüllung) k\u00f6nnen jetzt jederzeit per Klick/Antippen \u00fcbersprungen werden, statt auf die volle Animationsdauer warten zu m\u00fcssen.',
+    ]},
+  ]},
 ];
 const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
@@ -8389,13 +8394,20 @@ function revealQueue(cards, i, pack){
     stage.appendChild(big);
     updatePackProgress(i+1, cards.length);
     playSfx('cardReveal', c.ov>=90?1:0);
-    setTimeout(()=>{
+    let advanced = false;
+    let leaveTimer = null;
+    const advance = ()=>{
+      if(advanced) return; advanced = true;
+      if(leaveTimer) clearTimeout(leaveTimer);
       big.classList.add('leaving');
       setTimeout(()=>{
         addToTray(c);
         revealQueue(cards, i+1, pack);
       }, 320);
-    }, 850);
+    };
+    stage.style.cursor = 'pointer';
+    stage.addEventListener('click', advance, {once:true});
+    leaveTimer = setTimeout(advance, 850);
   }
 }
 function showPickScreen(cards, pickCount){
@@ -9195,6 +9207,13 @@ function showFUTRevealSequence(card, onDone){
     {label:'Verein', value: card.club, visual: CLUB_LOGO[card.club] ? `<div class="fut-visual-logo-pad"><img class="fut-visual-img fut-visual-logo" src="${CLUB_LOGO[card.club]}" alt="" onerror="this.parentElement.style.display='none'"></div>` : monogramBadgeSVG(card.club,'shield')},
   ];
   let i = 0;
+  let advanceTimer = null;
+  function advance(){
+    if(advanceTimer){ clearTimeout(advanceTimer); advanceTimer = null; }
+    i++;
+    if(i>=steps.length){ overlay.remove(); showCutscene(card, onDone); return; }
+    renderStep();
+  }
   function renderStep(){
     const s = steps[i];
     overlay.classList.remove('fut-step-flash');
@@ -9206,14 +9225,13 @@ function showFUTRevealSequence(card, onDone){
       <div class="fut-visual-frame">${s.visual}</div>
       <div class="fut-step-label">${s.label}</div>
       <div class="fut-step-value">${s.value}</div>
-      <div class="fut-step-track">${steps.map((_,idx)=>`<div class="fut-step-seg ${idx<i?'done':idx===i?'active':''}"></div>`).join('')}</div>`;
+      <div class="fut-step-track">${steps.map((_,idx)=>`<div class="fut-step-seg ${idx<i?'done':idx===i?'active':''}"></div>`).join('')}</div>
+      <div class="cs-hint">Zum \u00dcberspringen tippen</div>`;
     playSfx('notification');
-    setTimeout(()=>{
-      i++;
-      if(i>=steps.length){ overlay.remove(); showCutscene(card, onDone); return; }
-      renderStep();
-    }, elite?1500:1300);
+    advanceTimer = setTimeout(advance, elite?1500:1300);
   }
+  overlay.style.cursor = 'pointer';
+  overlay.addEventListener('click', advance);
   renderStep();
 }
 function showCutscene(card, onDone){
