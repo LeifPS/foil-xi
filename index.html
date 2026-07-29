@@ -401,7 +401,16 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   border:2px solid var(--cs-acc,#e8c468);transform:translate(-50%,-50%) scale(0);opacity:0;pointer-events:none;
   animation:futShockwave 1.1s ease-out;}
 @keyframes futShockwave{0%{transform:translate(-50%,-50%) scale(0);opacity:.9;}100%{transform:translate(-50%,-50%) scale(14);opacity:0;}}
-.fut-elite-rays{position:absolute;inset:-20%;background:conic-gradient(from 0deg, transparent 0deg, var(--cs-acc,#e8c468) 3deg, transparent 8deg, transparent 40deg, var(--cs-acc,#e8c468) 43deg, transparent 48deg, transparent 90deg, var(--cs-acc,#e8c468) 93deg, transparent 98deg);
+.fut-elite-rays{position:absolute;inset:-20%;background:conic-gradient(from 0deg,
+    transparent 0deg, var(--cs-acc,#e8c468) 3deg, transparent 8deg,
+    transparent 40deg, var(--cs-acc,#e8c468) 43deg, transparent 48deg,
+    transparent 85deg, var(--cs-acc,#e8c468) 88deg, transparent 93deg,
+    transparent 130deg, var(--cs-acc,#e8c468) 133deg, transparent 138deg,
+    transparent 175deg, var(--cs-acc,#e8c468) 178deg, transparent 183deg,
+    transparent 220deg, var(--cs-acc,#e8c468) 223deg, transparent 228deg,
+    transparent 265deg, var(--cs-acc,#e8c468) 268deg, transparent 273deg,
+    transparent 310deg, var(--cs-acc,#e8c468) 313deg, transparent 318deg,
+    transparent 355deg, var(--cs-acc,#e8c468) 358deg, transparent 360deg);
   opacity:.16;animation:futRaySpin 8s linear infinite;pointer-events:none;}
 @keyframes futRaySpin{to{transform:rotate(360deg);}}
 .fut-elite-sparkle{position:absolute;inset:0;pointer-events:none;
@@ -6051,6 +6060,29 @@ async function getExternalLockedUids(){
     return locked;
   });
 }
+async function getMarketLockedUidsOnly(){
+  await fbReady;
+  if(!fb) return new Set();
+  return cachedRead('market-locks-only:'+profile.userId, 8000, async ()=>{
+    const locked = new Set();
+    try{
+      const marketSnap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.where('sellerUserId','==',profile.userId)));
+      marketSnap.docs.forEach(d=>locked.add(d.data().cardUid));
+    }catch(e){ console.warn('market lock check failed', e); }
+    return locked;
+  });
+}
+async function withdrawMarketListingByCardUid(uid){
+  if(!fb) return false;
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.where('sellerUserId','==',profile.userId), fb.where('cardUid','==',uid)));
+    for(const d of snap.docs){ await fb.deleteDoc(fb.doc(fb.db,'market', d.id)); }
+    invalidateReadCache('market-listings');
+    invalidateReadCache('external-locks:'+profile.userId);
+    invalidateReadCache('market-locks-only:'+profile.userId);
+    return true;
+  }catch(e){ console.warn('auto-withdraw failed', e); return false; }
+}
 async function getLockedUids(){
   const locked = await getExternalLockedUids();
   Object.values(squad.slots).forEach(uid=>locked.add(uid));
@@ -9078,6 +9110,7 @@ function renderSquad(view){
 async function openPicker(slot){
   const used = allSquadUids();
   const externalLocked = await getExternalLockedUids();
+  const marketLocked = await getMarketLockedUidsOnly();
   const usedNames = allSquadNames('slots:'+slot.id);
   let items = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
   items = items.map(x=>({...x, pen: compatPenalty(slot.label, mainPos(x.card.pos))})).filter(x=>x.pen!==null);
@@ -9088,7 +9121,7 @@ async function openPicker(slot){
   const currentUid = squad.slots[slot.id];
   openModal(`
     <h2 style="margin-bottom:4px;">${posDE(slot.label)} ausw\u00e4hlen</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${posDE(slot.label)} abdecken k\u00f6nnen, werden angezeigt. Abweichende Positionen kosten einen Rating-Abzug (angezeigt als \u2212N). Karten im Transfermarkt oder in einem Handelsangebot sind gerade nicht verf\u00fcgbar. Derselbe Spieler (auch als andere Variante) kann nur einmal gleichzeitig aufgestellt werden.</p>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${posDE(slot.label)} abdecken k\u00f6nnen, werden angezeigt. Abweichende Positionen kosten einen Rating-Abzug (angezeigt als \u2212N). Karten im Transfermarkt kannst du direkt einsetzen \u2014 das Angebot wird dabei automatisch zur\u00fcckgezogen. Karten in einem laufenden Handelsangebot sind weiterhin nicht verf\u00fcgbar. Derselbe Spieler (auch als andere Variante) kann nur einmal gleichzeitig aufgestellt werden.</p>
     ${currentUid?`<button class="action-btn secondary" id="clear-slot" style="margin-bottom:14px;width:180px;">Spieler entfernen</button>`:''}
     <div class="picker-list" id="picker-list"></div>
     ${!items.length?'<p class="hint">Noch keine passenden Spieler in deinem Verein f\u00fcr diese Position.</p>':''}`);
@@ -9100,9 +9133,10 @@ async function openPicker(slot){
   }
   const list = document.getElementById('picker-list');
   items.forEach(({uid,card,pen})=>{
-    const locked = uid!==currentUid && externalLocked.has(uid);
+    const onMarket = uid!==currentUid && marketLocked.has(uid);
+    const tradeLocked = uid!==currentUid && externalLocked.has(uid) && !onMarket;
     const nameDupe = uid!==currentUid && usedNames.has(card.n);
-    const blocked = locked || nameDupe;
+    const blocked = tradeLocked || nameDupe;
     const wrap = document.createElement('div');
     wrap.style.cursor = blocked ? 'not-allowed' : 'pointer';
     wrap.style.position='relative';
@@ -9112,16 +9146,24 @@ async function openPicker(slot){
       const tag=document.createElement('div'); tag.className='oop-tag'; tag.textContent='-'+pen;
       wrap.appendChild(tag);
     }
-    if(locked){
-      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM ANGEBOT';
+    if(tradeLocked){
+      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM HANDEL';
+      wrap.appendChild(badge);
+    } else if(onMarket){
+      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.style.background='var(--gold)'; badge.style.color='#2a1d00'; badge.textContent='IM ANGEBOT';
       wrap.appendChild(badge);
     } else if(nameDupe){
       const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='SCHON AUFGESTELLT';
       wrap.appendChild(badge);
     }
     wrap.addEventListener('click', async ()=>{
-      if(locked){ toast('Diese Karte ist gerade im Transfermarkt gelistet oder in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier einzusetzen.'); return; }
+      if(tradeLocked){ toast('Diese Karte ist gerade in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier einzusetzen.'); return; }
       if(nameDupe){ toast(`${card.n} steht bereits an anderer Stelle in deiner Aufstellung \u2014 derselbe Spieler kann nicht doppelt aufgestellt werden.`); return; }
+      if(onMarket){
+        const ok = await withdrawMarketListingByCardUid(uid);
+        if(!ok){ toast('Angebot konnte nicht zur\u00fcckgezogen werden \u2014 bitte erneut versuchen.'); return; }
+        toast(`${card.n} wurde vom Transfermarkt zur\u00fcckgezogen und eingesetzt.`);
+      }
       Object.keys(squad.slots).forEach(s=>{ if(squad.slots[s]===uid) delete squad.slots[s]; });
       squad.slots[slot.id]=uid;
       await sSet('squad', squad);
