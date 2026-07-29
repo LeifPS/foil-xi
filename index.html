@@ -4850,7 +4850,7 @@ const PLAYERS_SIGNATURE_SEASON = [
   {id:9800415,n:'M. Salah',pos:'RW, RM',ov:103,pot:103,nat:'Egypt',lg:'Premier League',club:'Liverpool',pac:97,sho:96,pas:90,dri:95,defn:50,phy:82,foot:'Left',img:'https://cdn3.futbin.com/content/fifa26/img/players/p84095411.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=26f0658d797e56cbc70e9d0c6fcd8e84',gk:false,variant:'era_definer',variantLabel:'Era Definer',theme:'eradef',season:'2017/18',baseId:209331},
   {id:9800416,n:'K. De Bruyne',pos:'CM, CAM',ov:103,pot:103,nat:'Belgium',lg:'Premier League',club:'Manchester City',pac:78,sho:91,pas:99,dri:93,defn:76,phy:84,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p50524633.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=e5c9464677a2319c20c9712ea05ad358',gk:false,variant:'era_definer',variantLabel:'Era Definer',theme:'eradef',season:'2019/20',baseId:192985},
   {id:9800417,n:'E. Haaland',pos:'ST',ov:104,pot:104,nat:'Norway',lg:'Premier League',club:'Manchester City',pac:92,sho:99,pas:84,dri:88,defn:52,phy:96,foot:'Left',img:'https://cdn3.futbin.com/content/fifa26/img/players/p184788461.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=f5c324b8ea192be25d1e0bddea62e492',gk:false,variant:'era_definer',variantLabel:'Era Definer',theme:'eradef',season:'2022/23',baseId:239085},
-  {id:9800418,n:'K. Mbapp\u00e9',pos:'ST, LW',ov:104,pot:104,nat:'France',lg:'Ligue 1',club:'Paris Saint-Germain',pac:99,sho:96,pas:89,dri:98,defn:43,phy:84,foot:'Right',img:'https://cdn3.futbin.com/content/fifa25/img/players/p84076951.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=cdfb97f6a0150211d6f05b7b0cc171b8',gk:false,variant:'era_definer',variantLabel:'Era Definer',theme:'eradef',season:'2022',baseId:231747},
+  {id:9800418,n:'K. Mbapp\u00e9',pos:'ST, LW',ov:104,pot:104,nat:'France',lg:'Ligue 1',club:'Paris Saint-Germain',pac:99,sho:96,pas:89,dri:98,defn:43,phy:84,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p201558339.png?fm=png&ixlib=java-2.1.0&verzion=1&w=252&s=1c857c8fb182a2c17f4672708b0333fe',gk:false,variant:'era_definer',variantLabel:'Era Definer',theme:'eradef',season:'2022',baseId:231747},
   {id:9800419,n:'Neymar Jr',pos:'LW, CAM',ov:104,pot:104,nat:'Brazil',lg:'La Liga',club:'FC Barcelona',pac:94,sho:91,pas:92,dri:99,defn:40,phy:70,foot:'Right',img:'https://cdn3.futbin.com/content/fifa25/img/players/p84076951.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=cdfb97f6a0150211d6f05b7b0cc171b8',gk:false,variant:'era_definer',variantLabel:'Era Definer',theme:'eradef',season:'2014/15'},
   {id:9800420,n:'Ronaldinho',pos:'LW, CAM',ov:106,pot:106,nat:'Brazil',lg:'La Liga',club:'FC Barcelona',pac:94,sho:93,pas:96,dri:99,defn:43,phy:82,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p134245858.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=31e7ecb5004b0d867832ccfb56a24178',gk:false,variant:'signature_season',variantLabel:'Signature Season',theme:'sigseason',season:'2005'},
   {id:9800421,n:'Neymar Jr',pos:'LW, CAM',ov:106,pot:106,nat:'Brazil',lg:'La Liga',club:'FC Barcelona',pac:96,sho:92,pas:93,dri:99,defn:41,phy:72,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p50522519.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=277ade9716b56644dd80291b9088fac0',gk:false,variant:'signature_season',variantLabel:'Signature Season',theme:'sigseason',season:'2014/15'},
@@ -5385,6 +5385,13 @@ function genId(){ return 'c'+Date.now().toString(36)+Math.random().toString(36).
 function specialsByVariant(tags){ return ALL_SPECIAL.filter(c=>tags.includes(c.variant)); }
 
 // ===== pack definitions =====
+const UPDATE_LOGS = [
+  {id:1, date:'29.07.2026', title:'Zeitgeist Pack ist da', changes:[
+    'Neues Pack: Zeitgeist Pack (32.000 Coins) mit 24 brandneuen Karten \u2014 Signature Icon, Era Definer und die extrem seltene Signature Season-Variante.',
+    'Die Chancen im Zeitgeist Pack wurden nochmal spürbar angehoben.',
+    'Karten-Fotos werden jetzt zuverlässiger angezeigt: kein Monogramm mehr, wenn eigentlich ein echtes Foto vorhanden ist.',
+  ]},
+];
 const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
     desc:'5 Kaderspieler, Rating 70-76.',
@@ -5520,7 +5527,7 @@ const PACKS = [
       const sigIcon = SIGNATURE_SEASON_CARDS.filter(c=>c.variant==='signature_icon');
       const eraDefiner = SIGNATURE_SEASON_CARDS.filter(c=>c.variant==='era_definer');
       const sigSeason = SIGNATURE_SEASON_CARDS.filter(c=>c.variant==='signature_season');
-      const P = {sigSeason:0.0018, eraDefiner:0.006, sigIcon:0.02, rare:0.07, good:0.21};
+      const P = {sigSeason:0.0025, eraDefiner:0.009, sigIcon:0.03, rare:0.09, good:0.24};
       return Array.from({length:5}, ()=>{
         const r = Math.random();
         let acc = 0;
@@ -7404,7 +7411,7 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, soundOn:true, hasPassword:false, lastSeenUpdateLog:UPDATE_LOGS.length, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -7422,6 +7429,7 @@ async function init(){
     if(profile.oreiSecondWinClaimed===undefined) profile.oreiSecondWinClaimed = false;
     if(profile.winStreak===undefined) profile.winStreak = 0;
     if(profile.hasPassword===undefined) profile.hasPassword = false;
+    if(profile.lastSeenUpdateLog===undefined) profile.lastSeenUpdateLog = 0;
     if(!profile.crest) profile.crest = {shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(profile.displayName||'?')[0].toUpperCase()};
   }
   soundEnabled = profile.soundOn;
@@ -7460,9 +7468,45 @@ async function init(){
     });
   }
   initGlobalSfxListeners();
+  if(profile.lastSeenUpdateLog < UPDATE_LOGS.length){
+    showUpdateLogModal(UPDATE_LOGS.filter(l=>l.id>profile.lastSeenUpdateLog));
+  }
 }
 
 function updateCoinDisplay(){ document.getElementById('coin-display').textContent = profile.coins.toLocaleString('de-DE'); }
+function showUpdateLogModal(logs){
+  const latestId = Math.max(...UPDATE_LOGS.map(l=>l.id));
+  openModal(`
+    <h2 style="margin-bottom:4px;">${logs.length>1 ? 'Neuigkeiten' : logs[0].title}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Was sich seit deinem letzten Besuch getan hat:</p>
+    ${logs.map(l=>`
+      <div style="margin-bottom:18px;">
+        <div style="font-family:'JetBrains Mono';font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">${l.date}</div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:8px;">${l.title}</div>
+        <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.6;">
+          ${l.changes.map(c=>`<li>${c}</li>`).join('')}
+        </ul>
+      </div>`).join('')}
+    <button class="action-btn" id="updatelog-ok" style="width:100%;margin-top:6px;">Alles klar</button>`);
+  document.getElementById('updatelog-ok').addEventListener('click', async ()=>{
+    profile.lastSeenUpdateLog = latestId;
+    await sSet('profile', profile);
+    closeModal();
+  });
+}
+function showUpdateLogHistory(){
+  openModal(`
+    <h2 style="margin-bottom:4px;">Update-Verlauf</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Alle bisherigen \u00c4nderungen am Spiel, neueste zuerst.</p>
+    ${[...UPDATE_LOGS].reverse().map(l=>`
+      <div style="margin-bottom:18px;">
+        <div style="font-family:'JetBrains Mono';font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">${l.date}</div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:8px;">${l.title}</div>
+        <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.6;">
+          ${l.changes.map(c=>`<li>${c}</li>`).join('')}
+        </ul>
+      </div>`).join('')}`);
+}
 
 // ===== toast =====
 function toast(msg){
@@ -8897,7 +8941,8 @@ function renderClub(view){
         <h2>Mein Verein</h2>
         <p>${collection.length} Spieler im Besitz. RAP (Recent Average Price) zeigt den gesch\u00e4tzten Marktwert jeder Karte \u2014 verkaufen kannst du nur noch \u00fcber den Transfermarkt.</p>
         <p class="hint" style="margin:6px 0 0;">Anzeigename beim Online-Spielen: <b style="color:var(--chalk);">${profile.displayName||profile.userId}</b>
-          <button class="action-btn secondary" id="rename-club" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button></p>
+          <button class="action-btn secondary" id="rename-club" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button>
+          <button class="action-btn secondary" id="view-update-log" style="width:auto;padding:4px 10px;font-size:11px;margin-left:6px;">Update-Verlauf</button></p>
       </div>
     </div>
     <div class="toolbar">
@@ -8929,6 +8974,7 @@ function renderClub(view){
       renderClub(document.getElementById('view'));
     }, 24);
   });
+  document.getElementById('view-update-log').addEventListener('click', showUpdateLogHistory);
   document.getElementById('club-pos').value = clubFilter.pos;
   document.getElementById('club-sort').value = clubFilter.sort;
   document.getElementById('club-search').addEventListener('input', e=>{ clubFilter.q=e.target.value; drawClubGrid(); });
