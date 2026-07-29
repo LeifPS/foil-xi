@@ -5386,10 +5386,19 @@ function specialsByVariant(tags){ return ALL_SPECIAL.filter(c=>tags.includes(c.v
 
 // ===== pack definitions =====
 const UPDATE_LOGS = [
-  {id:1, date:'29.07.2026', title:'Zeitgeist Pack ist da', changes:[
-    'Neues Pack: Zeitgeist Pack (32.000 Coins) mit 24 brandneuen Karten \u2014 Signature Icon, Era Definer und die extrem seltene Signature Season-Variante.',
-    'Die Chancen im Zeitgeist Pack wurden nochmal spürbar angehoben.',
-    'Karten-Fotos werden jetzt zuverlässiger angezeigt: kein Monogramm mehr, wenn eigentlich ein echtes Foto vorhanden ist.',
+  {id:1, version:'1.1.0', date:'29.07.2026', title:'Zeitgeist Pack', sections:[
+    {type:'new', label:'Neu', items:[
+      'Zeitgeist Pack hinzugef\u00fcgt \u2014 32.000 Coins, 5 Karten pro \u00d6ffnung.',
+      'Enth\u00e4lt 24 neue Karten in 3 Varianten: Signature Icon (13 Karten, Rating 100\u2013102), Era Definer (7 Karten, Rating 103\u2013104), Signature Season (4 Karten, Rating 106\u2013108).',
+      'Neue Spieler in diesem Pool: u.\u00a0a. Xavi, Iniesta, Modri\u0107, Henry, Kak\u00e1, Ronaldinho, Ibrahimovi\u0107, Benzema, Salah, De Bruyne, Haaland, Mbapp\u00e9, Neymar Jr, Cristiano Ronaldo und Messi.',
+    ]},
+    {type:'balance', label:'Balance', items:[
+      'Zeitgeist Pack \u2014 Ziehchance pro Karte erh\u00f6ht: Signature Season 0,18\u2009%\u2009\u2192\u20090,25\u2009%, Era Definer 0,6\u2009%\u2009\u2192\u20090,9\u2009%, Signature Icon 2\u2009%\u2009\u2192\u20093\u2009%, Rating 95\u201399 7\u2009%\u2009\u2192\u20099\u2009%, Rating 90\u201394 21\u2009%\u2009\u2192\u200924\u2009%.',
+    ]},
+    {type:'fix', label:'Bugfix', items:[
+      'Spielerfotos: Das Monogramm erschien bislang manchmal zus\u00e4tzlich zum echten Foto, abh\u00e4ngig von CSS-Stapelreihenfolge. Jetzt wird in JavaScript entschieden \u2014 ist ein Foto hinterlegt, wird ausschlie\u00dflich dieses gezeigt; das Monogramm erscheint nur noch, wenn das Foto beim Laden tats\u00e4chlich fehlschl\u00e4gt.',
+      '6 der 24 neuen Karten hatten falsch zugeordnete oder doppelt verwendete Bilder (u.\u00a0a. Mbapp\u00e9/Neymar Jr teilten sich ein Bild). Alle 24 Karten haben jetzt best\u00e4tigt eindeutige, korrekte Fotos.',
+    ]},
   ]},
 ];
 const PACKS = [
@@ -7474,19 +7483,37 @@ async function init(){
 }
 
 function updateCoinDisplay(){ document.getElementById('coin-display').textContent = profile.coins.toLocaleString('de-DE'); }
+const UPDATELOG_SECTION_STYLE = {
+  new:     {icon:'\u2728', color:'var(--turf-bright)'},
+  balance: {icon:'\u2696\uFE0F', color:'#e8c468'},
+  fix:     {icon:'\uD83D\uDD27', color:'#4da8ff'},
+};
+function renderUpdateLogEntry(l){
+  return `
+    <div style="margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,.08);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px;">
+        <span style="font-family:'JetBrains Mono';font-size:11px;font-weight:700;color:#0a0d12;background:var(--turf-bright);padding:2px 8px;border-radius:100px;">v${l.version}</span>
+        <span style="font-family:'JetBrains Mono';font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">${l.date}</span>
+      </div>
+      <div style="font-weight:700;font-size:17px;margin:6px 0 12px;">${l.title}</div>
+      ${l.sections.map(sec=>{
+        const st = UPDATELOG_SECTION_STYLE[sec.type] || {icon:'\u2022', color:'var(--muted)'};
+        return `
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${st.color};margin-bottom:6px;">${st.icon} ${sec.label}</div>
+          <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.65;">
+            ${sec.items.map(c=>`<li style="margin-bottom:4px;">${c}</li>`).join('')}
+          </ul>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
 function showUpdateLogModal(logs){
   const latestId = Math.max(...UPDATE_LOGS.map(l=>l.id));
   openModal(`
-    <h2 style="margin-bottom:4px;">${logs.length>1 ? 'Neuigkeiten' : logs[0].title}</h2>
+    <h2 style="margin-bottom:4px;">${logs.length>1 ? 'Neuigkeiten' : 'Neu in Foil Eleven'}</h2>
     <p class="hint" style="margin-top:0;margin-bottom:16px;">Was sich seit deinem letzten Besuch getan hat:</p>
-    ${logs.map(l=>`
-      <div style="margin-bottom:18px;">
-        <div style="font-family:'JetBrains Mono';font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">${l.date}</div>
-        <div style="font-weight:700;font-size:15px;margin-bottom:8px;">${l.title}</div>
-        <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.6;">
-          ${l.changes.map(c=>`<li>${c}</li>`).join('')}
-        </ul>
-      </div>`).join('')}
+    <div style="max-height:60vh;overflow-y:auto;">${logs.map(renderUpdateLogEntry).join('')}</div>
     <button class="action-btn" id="updatelog-ok" style="width:100%;margin-top:6px;">Alles klar</button>`);
   document.getElementById('updatelog-ok').addEventListener('click', async ()=>{
     profile.lastSeenUpdateLog = latestId;
@@ -7498,14 +7525,7 @@ function showUpdateLogHistory(){
   openModal(`
     <h2 style="margin-bottom:4px;">Update-Verlauf</h2>
     <p class="hint" style="margin-top:0;margin-bottom:16px;">Alle bisherigen \u00c4nderungen am Spiel, neueste zuerst.</p>
-    ${[...UPDATE_LOGS].reverse().map(l=>`
-      <div style="margin-bottom:18px;">
-        <div style="font-family:'JetBrains Mono';font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">${l.date}</div>
-        <div style="font-weight:700;font-size:15px;margin-bottom:8px;">${l.title}</div>
-        <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.6;">
-          ${l.changes.map(c=>`<li>${c}</li>`).join('')}
-        </ul>
-      </div>`).join('')}`);
+    <div style="max-height:65vh;overflow-y:auto;">${[...UPDATE_LOGS].reverse().map(renderUpdateLogEntry).join('')}</div>`);
 }
 
 // ===== toast =====
