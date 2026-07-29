@@ -7719,12 +7719,18 @@ function tierKeyForOv(ov){
 }
 function simulatePackOdds(pack, iterations=3000){
   const tierCounts = {gold:0, goldrare:0, elite:0, icon:0, ultimate:0};
+  const ratingAtLeastCounts = {r80:0, r85:0, r90:0, r95:0, r100:0, r105:0, r108:0};
+  const atLeastRatingPackCounts = {r80:0, r85:0, r90:0, r95:0, r100:0, r105:0, r108:0};
+  const variantCounts = {};
+  const atLeastVariantCounts = {};
   const mgrBoostCounts = {};
   const cardCounts = new Map(); // id -> {card, count}
   let totalCards=0, totalManagers=0, atLeastElite=0, atLeastIcon=0, atLeastUltimate=0, atLeastSpecial=0, atLeastManager=0;
   for(let i=0;i<iterations;i++){
     const drawn = pack.draw();
     let hasElite=false, hasIcon=false, hasUltimate=false, hasSpecial=false, hasManager=false;
+    const seenRatings = {r80:false, r85:false, r90:false, r95:false, r100:false, r105:false, r108:false};
+    const seenVariants = new Set();
     drawn.forEach(c=>{
       const entry = cardCounts.get(c.id);
       if(entry) entry.count++; else cardCounts.set(c.id, {card:c, count:1});
@@ -7738,11 +7744,26 @@ function simulatePackOdds(pack, iterations=3000){
       totalCards++;
       const key = tierKeyForOv(c.ov);
       tierCounts[key]++;
+      if(c.ov>=80) ratingAtLeastCounts.r80++;
+      if(c.ov>=80) seenRatings.r80=true;
+      if(c.ov>=85){ ratingAtLeastCounts.r85++; seenRatings.r85=true; }
+      if(c.ov>=90){ ratingAtLeastCounts.r90++; seenRatings.r90=true; }
+      if(c.ov>=95){ ratingAtLeastCounts.r95++; seenRatings.r95=true; }
+      if(c.ov>=100){ ratingAtLeastCounts.r100++; seenRatings.r100=true; }
+      if(c.ov>=105){ ratingAtLeastCounts.r105++; seenRatings.r105=true; }
+      if(c.ov>=108){ ratingAtLeastCounts.r108++; seenRatings.r108=true; }
       if(key==='elite'||key==='icon'||key==='ultimate') hasElite=true;
       if(key==='icon'||key==='ultimate') hasIcon=true;
       if(key==='ultimate') hasUltimate=true;
-      if(c.variant && c.variant!=='base') hasSpecial=true;
+      if(c.variant && c.variant!=='base'){
+        hasSpecial=true;
+        const variantLabel = c.variantLabel || c.variant;
+        variantCounts[variantLabel] = (variantCounts[variantLabel]||0)+1;
+        seenVariants.add(variantLabel);
+      }
     });
+    Object.keys(seenRatings).forEach(k=>{ if(seenRatings[k]) atLeastRatingPackCounts[k]++; });
+    seenVariants.forEach(label=>{ atLeastVariantCounts[label] = (atLeastVariantCounts[label]||0)+1; });
     if(hasElite) atLeastElite++;
     if(hasIcon) atLeastIcon++;
     if(hasUltimate) atLeastUltimate++;
@@ -7751,15 +7772,20 @@ function simulatePackOdds(pack, iterations=3000){
   }
   const totalPicks = totalCards + totalManagers;
   const cardPct = Array.from(cardCounts.values())
-    .map(({card,count})=>({card, pct: totalPicks ? count/totalPicks*100 : 0}))
-    .sort((a,b)=>b.pct-a.pct);
+    .map(({card,count})=>({card, pct: count/iterations*100, perPickPct: totalPicks ? count/totalPicks*100 : 0}))
+    .sort((a,b)=>(b.card.ov||0)-(a.card.ov||0) || b.pct-a.pct);
   const tierPct = {};
   TIER_ORDER_ODDS.forEach(k=>{ tierPct[k] = totalCards ? (tierCounts[k]/totalCards*100) : 0; });
+  const ratingAtLeastPct = Object.fromEntries(Object.entries(ratingAtLeastCounts).map(([k,count])=>[k, totalCards ? count/totalCards*100 : 0]));
+  const atLeastRatingPackPct = Object.fromEntries(Object.entries(atLeastRatingPackCounts).map(([k,count])=>[k, count/iterations*100]));
+  const variantPct = Object.entries(variantCounts)
+    .map(([label,count])=>[label, totalCards ? count/totalCards*100 : 0, atLeastVariantCounts[label]/iterations*100])
+    .sort((a,b)=>b[2]-a[2]);
   const mgrBoostPct = Object.entries(mgrBoostCounts)
     .map(([label,count])=>[label, totalManagers ? count/totalManagers*100 : 0])
     .sort((a,b)=>b[1]-a[1]);
   return {
-    tierPct, mgrBoostPct, cardPct,
+    tierPct, ratingAtLeastPct, atLeastRatingPackPct, variantPct, mgrBoostPct, cardPct,
     atLeastElitePct: atLeastElite/iterations*100,
     atLeastIconPct: atLeastIcon/iterations*100,
     atLeastUltimatePct: atLeastUltimate/iterations*100,
@@ -7779,32 +7805,44 @@ function showPackOdds(pack){
     const odds = simulatePackOdds(pack, 3000);
     const body = document.getElementById('odds-body');
     if(!body) return;
+    const fmtPct = v => v<0.05 && v>0 ? '<0.1%' : `${v.toFixed(1)}%`;
+    const oddsBar = (pct, color='var(--gold)') => `<div class="bar" style="height:6px;"><i style="width:${Math.max(0.4, Math.min(100,pct))}%;background:${color};"></i></div>`;
     const tierRows = TIER_ORDER_ODDS.filter(k=>odds.tierPct[k]>0).map(k=>`
       <div class="stat" style="margin-bottom:8px;">
-        <div class="stat-head"><span>${TIER_LABEL_ODDS[k]}</span><span>${odds.tierPct[k].toFixed(1)}%</span></div>
-        <div class="bar" style="height:6px;"><i style="width:${odds.tierPct[k]}%;background:${TIER_COLOR_ODDS[k]};"></i></div>
+        <div class="stat-head"><span>${TIER_LABEL_ODDS[k]}</span><span>${fmtPct(odds.tierPct[k])}</span></div>
+        ${oddsBar(odds.tierPct[k], TIER_COLOR_ODDS[k])}
       </div>`).join('');
     const atLeastRows = [
       ['Mindestens 1x Elite+ (85+) pro \u00d6ffnung', odds.atLeastElitePct],
       ['Mindestens 1x Icon+ (90+) pro \u00d6ffnung', odds.atLeastIconPct],
       ['Mindestens 1x Ultimate (95+) pro \u00d6ffnung', odds.atLeastUltimatePct],
+      ['Mindestens 1x 100+ pro \u00d6ffnung', odds.atLeastRatingPackPct.r100 || 0],
+      ['Mindestens 1x 105+ pro \u00d6ffnung', odds.atLeastRatingPackPct.r105 || 0],
+      ['Mindestens 1x 108+ pro \u00d6ffnung', odds.atLeastRatingPackPct.r108 || 0],
       ['Mindestens 1x Sonderkarte (Variante) pro \u00d6ffnung', odds.atLeastSpecialPct],
     ].filter(([,v])=>v>0.05).map(([label,v])=>`
-      <div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">${label}</span><span class="mono" style="color:var(--gold);">${v.toFixed(1)}%</span></div>`).join('');
-    const mgrRow = odds.atLeastManagerPct>0 ? `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">Trainerkarte enthalten</span><span class="mono" style="color:var(--gold);">${odds.atLeastManagerPct.toFixed(1)}%</span></div>` : '';
+      <div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">${label}</span><span class="mono" style="color:var(--gold);">${fmtPct(v)}</span></div>`).join('');
+    const variantRows = (odds.variantPct||[]).filter(([,perCard,perPack])=>perCard>0.05 || perPack>0.05).slice(0,12).map(([label,perCard,perPack])=>`
+      <div class="stat" style="margin-bottom:8px;">
+        <div class="stat-head"><span>${label}</span><span>${fmtPct(perPack)} pro Pack</span></div>
+        ${oddsBar(perPack, 'var(--teal)')}
+        <div class="hint" style="font-size:10.5px;margin-top:2px;">${fmtPct(perCard)} pro Karte</div>
+      </div>`).join('');
+    const mgrRow = odds.atLeastManagerPct>0 ? `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">Trainerkarte enthalten</span><span class="mono" style="color:var(--gold);">${fmtPct(odds.atLeastManagerPct)}</span></div>` : '';
     const mgrBoostRows = (odds.mgrBoostPct||[]).map(([label,pct])=>`
       <div class="stat" style="margin-bottom:8px;">
-        <div class="stat-head"><span>${label}</span><span>${pct.toFixed(1)}%</span></div>
-        <div class="bar" style="height:6px;"><i style="width:${pct}%;background:var(--gold);"></i></div>
+        <div class="stat-head"><span>${label}</span><span>${fmtPct(pct)}</span></div>
+        ${oddsBar(pct)}
       </div>`).join('');
     body.innerHTML = `
+      <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Kurz\u00fcberblick pro Pack-\u00d6ffnung</div>
+      ${atLeastRows || '<p class="hint">Keine relevanten Treffer-Schwellen in diesem Pack.</p>'}${mgrRow}
       <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Seltenheits-Verteilung pro Karte</div>
       ${tierRows || '<p class="hint">Keine Spielerkarten in diesem Pack.</p>'}
+      ${variantRows ? `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Sondervarianten</div>${variantRows}` : ''}
       ${mgrBoostRows ? `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer-Bonus-Verteilung</div>${mgrBoostRows}` : ''}
-      <div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Chancen pro Pack-\u00d6ffnung</div>
-      ${atLeastRows}${mgrRow}
-      <p class="hint" style="margin-top:12px;">Garantien aus der Paketbeschreibung (z.\u00a0B. "1 garantiert 85+") erscheinen hier entsprechend nahe 100\u00a0%.</p>
-      <div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Chance auf jede einzelne Karte</div>
+      <p class="hint" style="margin-top:12px;">Simulation mit ${odds.iterations.toLocaleString('de-DE')} \u00d6ffnungen. Garantien aus der Paketbeschreibung erscheinen entsprechend nahe 100\u00a0%.</p>
+      <div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Top-Einzelkarten nach Rating</div>
       <div id="odds-card-grid" class="club-grid" style="max-height:340px;overflow:auto;"></div>`;
     const CARD_ODDS_LIMIT = 60;
     const cardGrid = document.getElementById('odds-card-grid');
@@ -7817,7 +7855,7 @@ function showPackOdds(pack){
         const tag = document.createElement('div');
         tag.className = 'price-pill';
         tag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;';
-        tag.innerHTML = `<div class="pdot"></div>${pct<0.1?'<0.1':pct.toFixed(1)}%`;
+        tag.innerHTML = `<div class="pdot"></div>${fmtPct(pct)}`;
         wrap.appendChild(tag);
         cardGrid.appendChild(wrap);
       });
@@ -7825,7 +7863,7 @@ function showPackOdds(pack){
         const more = document.createElement('p');
         more.className = 'hint';
         more.style.cssText = 'width:100%;margin-top:8px;';
-        more.textContent = `+ ${odds.cardPct.length-CARD_ODDS_LIMIT} weitere Karten mit jeweils unter ${shown[shown.length-1].pct.toFixed(1)}% Chance (Pool zu gro\u00df, um alle anzuzeigen).`;
+        more.textContent = `+ ${odds.cardPct.length-CARD_ODDS_LIMIT} weitere Karten mit jeweils unter ${fmtPct(shown[shown.length-1].pct)} Chance pro Pack-\u00d6ffnung.`;
         cardGrid.appendChild(more);
       }
     }
