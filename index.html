@@ -5365,10 +5365,11 @@ function showPriceHistoryModal(card){
 function rapBadge(card, opts={}){
   const el = document.createElement('div');
   el.className = 'mono rap-badge';
-  el.style.cssText = `text-align:center;font-size:9.5px;color:var(--gold);margin-top:3px;white-space:nowrap;cursor:pointer;${opts.style||''}`;
+  el.style.cssText = `text-align:center;font-size:9.5px;color:var(--gold);margin-top:3px;white-space:nowrap;cursor:pointer;padding:6px 4px;margin:3px -4px -4px;min-height:22px;box-sizing:border-box;${opts.style||''}`;
   el.textContent = `RAP ${computeRAP(card).toLocaleString('de-DE')}`;
   el.title = 'Preisverlauf ansehen';
-  el.addEventListener('click', (e)=>{ e.stopPropagation(); showPriceHistoryModal(card); });
+  el.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); showPriceHistoryModal(card); });
+  el.addEventListener('touchend', (e)=>{ e.stopPropagation(); }, {passive:true});
   return el;
 }
 // ===== club net worth leaderboard =====
@@ -5442,6 +5443,27 @@ const UPDATE_LOGS = [
     ]},
     {type:'fix', label:'Bugfix', items:[
       'Match-Engine intern erweitert, damit tempor\u00e4re K\u00e4der (wie beim Draft) korrekt gegen Gegner antreten k\u00f6nnen, ohne den echten gespeicherten Vereinskader zu beeinflussen.',
+    ]},
+  ]},
+  {id:3, version:'1.2.1', date:'29.07.2026', title:'Mann des Spiels & Spielerbewertungen', sections:[
+    {type:'new', label:'Neu', items:[
+      'Nach jedem Bot-/Herausforderungs-Match gibt es jetzt eine Spielerbewertung 1\u201310 pro Spieler, inklusive Mann-des-Spiels-Auszeichnung.',
+      'Bewertung setzt sich zusammen aus: Basis 6,4, Bonus f\u00fcr Tore (bis zu +2,8, abnehmend pro weiterem Tor), Ergebnis-Bonus (+0,45 bei Sieg, +0,1 bei Unentschieden, \u22120,35 bei Niederlage), Abzug f\u00fcr Karten (\u22120,7 Gelb, \u22122,2 Rot) sowie kleiner nat\u00fcrlicher Schwankung.',
+      'Gilt f\u00fcr alle Bot-Matches: normales Spiel, Turnier, PRIME-Herausforderungen, O Rei, Kontinentalpokal, Serie ohne Niederlage und Draft-Modus. Online-Duelle/Warteschlange noch nicht enthalten.',
+    ]},
+  ]},
+  {id:4, version:'1.2.2', date:'29.07.2026', title:'Draft-Kosten & Preisverlauf auf Mobile', sections:[
+    {type:'balance', label:'Balance', items:[
+      'Draft-Modus-Eintritt gesenkt: 15.000 \u2192 10.000 Coins.',
+    ]},
+    {type:'fix', label:'Bugfix', items:[
+      'Preisverlauf auf Mobile: Die RAP-Anzeige (der Ausl\u00f6ser f\u00fcr den Preisverlauf) war zu klein zum zuverl\u00e4ssigen Antippen und lag oft in Konflikt mit dem Klick auf die Karte selbst. Tippfl\u00e4che deutlich vergr\u00f6\u00dfert.',
+      'Preisverlauf war auf der eigentlichen Transfermarkt-\u00dcbersicht gar nicht erreichbar (nur der Verkaufspreis wurde angezeigt). Jetzt auch dort verf\u00fcgbar.',
+    ]},
+  ]},
+  {id:5, version:'1.3.0', date:'29.07.2026', title:'Spielerbewertungen jetzt auch online', sections:[
+    {type:'new', label:'Neu', items:[
+      'Mann des Spiels und Spielerbewertungen (1\u201310) gibt es jetzt auch nach echten Online-Duellen und Warteschlangen-Matches, nicht mehr nur nach Bot-Matches. Basiert auf deinem aktuellen Kader zum Zeitpunkt des Spielendes.',
     ]},
   ]},
 ];
@@ -5759,7 +5781,7 @@ const SBC_DEFS = [
 let activeSBC = null;
 let ogPackTierPools = null;
 let sbcSelection = new Set();
-const DRAFT_ENTRY_COST = 15000;
+const DRAFT_ENTRY_COST = 10000;
 const DRAFT_REWARD_TABLE = {
   0: {coins:1000, desc:'1.000 Coins Trostpreis'},
   1: {coins:3000, desc:'3.000 Coins'},
@@ -6268,6 +6290,7 @@ function drawMarketGrid(){
     wrap.className = 'club-card-wrap';
     wrap.style.cursor = 'pointer';
     wrap.appendChild(cardEl(card,'mini'));
+    wrap.appendChild(rapBadge(card, {style:'position:relative;z-index:2;'}));
     const priceTag = document.createElement('div');
     priceTag.className = 'price-pill';
     priceTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;';
@@ -11220,6 +11243,42 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   }
   return {result, winnerSide};
 }
+function computeMatchRatings(myPlayers, myGoals, oppGoals, myScorers, incidents, winnerSide){
+  const scorerCounts = {};
+  (myScorers||[]).forEach(n=>{ scorerCounts[n] = (scorerCounts[n]||0)+1; });
+  const myCards = (incidents||[]).filter(inc=>inc.side==='me');
+  const resultBonus = winnerSide==='me' ? 0.45 : (myGoals===oppGoals ? 0.1 : -0.35);
+  const ratings = myPlayers.map(p=>{
+    let r = 6.4 + resultBonus;
+    const goals = scorerCounts[p.n] || 0;
+    if(goals>0) r += Math.min(2.8, goals*1.6); // diminishing per extra goal, capped
+    const card = myCards.find(inc=>inc.player && inc.player.n===p.n);
+    if(card){ r += card.type==='red' ? -2.2 : (card.type==='yellow' ? -0.7 : 0); }
+    r += (Math.random()-0.5)*0.7; // small natural variance
+    r = Math.max(2.5, Math.min(10, r));
+    return {n:p.n, pos:p.pos, rating: Math.round(r*10)/10, goals};
+  });
+  const motm = ratings.reduce((best,p)=> (!best || p.rating>best.rating) ? p : best, null);
+  return {ratings, motm};
+}
+function renderMatchRatingsHTML(matchRatings){
+  const {ratings, motm} = matchRatings;
+  const ratingColor = r => r>=8 ? 'var(--turf-bright)' : r>=6.5 ? '#e8c468' : 'var(--danger)';
+  return `
+    <div style="margin-top:16px;">
+      ${motm ? `<div style="text-align:center;margin-bottom:12px;">
+        <div style="font-family:'JetBrains Mono';font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Mann des Spiels</div>
+        <div style="font-family:'Anton';font-size:18px;color:var(--gold);">${motm.n} <span style="font-size:14px;color:${ratingColor(motm.rating)};">${motm.rating.toFixed(1)}</span></div>
+      </div>` : ''}
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;font-size:12.5px;">
+        ${ratings.map(p=>`
+          <div style="color:var(--chalk);">${p.n}${p.goals?` \u26bd${p.goals>1?'\u00d7'+p.goals:''}`:''}</div>
+          <div style="color:var(--muted);text-align:right;">${posDE(p.pos)}</div>
+          <div style="text-align:right;font-family:'JetBrains Mono';font-weight:700;color:${ratingColor(p.rating)};">${p.rating.toFixed(1)}</div>
+        `).join('')}
+      </div>
+    </div>`;
+}
 async function runLocalMatch(myRating, opp, opts={}){
   if(inMatch){ toast('Es l\u00e4uft bereits ein anderes Match \u2014 bitte kurz warten und erneut versuchen.'); return; }
   inMatch = true;
@@ -11231,7 +11290,10 @@ async function runLocalMatch(myRating, opp, opts={}){
     const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
     const final = await playFullMatch(md, myName, oppName);
     const outcome = await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, final.myScorers, opts.friendly);
-    if(opts.onComplete) opts.onComplete(outcome);
+    const matchRatings = computeMatchRatings(myPlayers, final.myGoals, final.oppGoals, final.myScorers, md.incidents, md.winnerSide);
+    const resultArea = document.getElementById('result-area');
+    if(resultArea) resultArea.insertAdjacentHTML('beforeend', renderMatchRatingsHTML(matchRatings));
+    if(opts.onComplete) opts.onComplete({...outcome, matchRatings});
   } finally {
     inMatch = false;
   }
@@ -11347,6 +11409,10 @@ async function enterSyncedMatch(matchDoc){
     winnerSide = myGoalsFinal>oppGoalsFinal ? 'me' : 'opp';
   }
   await applyMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers);
+  const myPlayersForRating = getMySquadPlayers();
+  const matchRatings = computeMatchRatings(myPlayersForRating, myGoalsFinal, oppGoalsFinal, final.myScorers, incidents, winnerSide);
+  const resultArea = document.getElementById('result-area');
+  if(resultArea) resultArea.insertAdjacentHTML('beforeend', renderMatchRatingsHTML(matchRatings));
   if(fb && matchDoc.mid){
     try{ await fb.deleteDoc(fb.doc(fb.db,'matches',matchDoc.mid)); }catch(e){}
   }
