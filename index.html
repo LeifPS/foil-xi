@@ -10181,7 +10181,7 @@ const TOURNAMENT_FORMATS = {
   singleElim: { name: 'Single Elimination', validSizes: [4, 8, 16, 32, 64] },
   doubleElim: { name: 'Double Elimination', validSizes: [4, 8, 16, 32] },
   groupToElim: { name: 'Gruppenphase → K.O.', validSizes: [8, 16, 32] },
-  roundRobin: { name: 'Round Robin', validSizes: [4, 6, 8] }
+  roundRobin: { name: 'Round Robin', validSizes: Array.from({length: 13}, (_, i) => i + 4) }
 };
 const HOSTED_TOURNAMENT_DEFAULT_FORMAT = 'singleElim';
 const HOSTED_TOURNAMENT_DEFAULT_SIZE = 8;
@@ -10261,6 +10261,7 @@ function simulateDoubleElimBracket(participants){
     const winnersNext = [];
     for(let i=0;i<winnersRound.length;i+=2){
       const a=winnersRound[i], b=winnersRound[i+1];
+      if(!b) { winnersNext.push(a); continue; } // Bye if odd number
       const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
       const winnerIsA = md.winnerSide==='me';
       winnerMatches.push({
@@ -10279,6 +10280,7 @@ function simulateDoubleElimBracket(participants){
       const losersNext = [];
       for(let i=0;i<losersRound.length;i+=2){
         const a=losersRound[i], b=losersRound[i+1];
+        if(!b) { losersNext.push(a); continue; } // Bye if odd number
         const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
         const winnerIsA = md.winnerSide==='me';
         loserMatches.push({
@@ -10293,15 +10295,19 @@ function simulateDoubleElimBracket(participants){
     } else if(losersRound.length===1 && winnersRound.length===1){
       // Grand Finals: Winner of Winners vs Winner of Losers
       const a=winnersRound[0], b=losersRound[0];
-      const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
-      const winnerIsA = md.winnerSide==='me';
-      rounds.push({matches: [{
-        aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
-        aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
-        winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, type:'grand'
-      }], stage: 'Grand Finals'});
-      winnersRound = winnerIsA ? [a] : [b];
-      losersRound = [];
+      if(a && b){
+        const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
+        const winnerIsA = md.winnerSide==='me';
+        rounds.push({matches: [{
+          aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
+          aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
+          winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, type:'grand'
+        }], stage: 'Grand Finals'});
+        winnersRound = winnerIsA ? [a] : [b];
+        losersRound = [];
+      } else {
+        break;
+      }
     } else {
       break;
     }
@@ -10356,7 +10362,9 @@ function simulateGroupStageBracket(participants){
 function simulateRoundRobinBracket(participants){
   const standings = participants.map(p=>({...p, wins:0, goals:0}));
   const rounds = [];
-  let matches = [];
+  
+  // Create matches list
+  const matches = [];
   for(let i=0;i<participants.length;i++){
     for(let j=i+1;j<participants.length;j++){
       const a=standings[i], b=standings[j];
@@ -10366,14 +10374,42 @@ function simulateRoundRobinBracket(participants){
       standings[i].goals += md.myGoals;
       standings[j].goals += md.oppGoals;
       matches.push({
+        aIdx: i, bIdx: j,
         aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
         aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
         winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId
       });
     }
   }
+  
+  // Distribute matches into matchdays where each participant plays at most 1 game per day
+  const numParticipants = participants.length;
+  const numMatchdays = numParticipants % 2 === 0 ? numParticipants - 1 : numParticipants;
+  const matchdays = Array.from({length: numMatchdays}, () => []);
+  
+  // Use circular rotation algorithm to create balanced matchdays
+  const positions = Array.from({length: numParticipants}, (_, i) => i);
+  for(let day = 0; day < numMatchdays; day++){
+    const dayMatches = [];
+    const used = new Set();
+    
+    // For each participant, find their match on this day
+    for(let m of matches){
+      if(day % numMatchdays === (m.aIdx + m.bIdx) % numMatchdays && !used.has(m.aIdx) && !used.has(m.bIdx)){
+        dayMatches.push(m);
+        used.add(m.aIdx);
+        used.add(m.bIdx);
+      }
+    }
+    
+    if(dayMatches.length > 0){
+      rounds.push({matches: dayMatches, stage: `Spieltag ${day + 1}`, standings: standings.slice()});
+    }
+  }
+  
+  // Sort standings by wins and goal difference
   standings.sort((a,b)=>b.wins-a.wins || b.goals-a.goals);
-  rounds.push({matches, stage:'Alle Spiele', standings: standings, isRoundRobin: true});
+  
   return {rounds, winnerUserId:standings[0].userId, winnerName:standings[0].name};
 }
 function simulateHostedBracket(participants, format='singleElim'){
@@ -10575,10 +10611,7 @@ async function joinHostedTournament(id){
         const participants = t.participants.concat([{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()}]);
         if(participants.length>=t.maxSlots){
           const out = prepareHostedTournamentRun(t, participants);
-          const isRoundRobin = t.format === 'roundRobin';
-          const finalStatus = isRoundRobin ? 'completed' : 'running';
-          const finalVisibleRounds = isRoundRobin ? out.rounds.length : Math.min(1, out.rounds.length);
-          tx.update(ref, {participants:out.participants, status:finalStatus, rounds:out.rounds, visibleRounds: finalVisibleRounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+          tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
           if(out.hostRefundCoins>0 && fb.increment){
             tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
           }
@@ -10602,10 +10635,7 @@ async function joinHostedTournament(id){
           t.participants.push({userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()});
           if(t.participants.length>=t.maxSlots){
             const out = resolveHostedTournamentOutcome(t, t.participants);
-            const isRoundRobin = t.format === 'roundRobin';
-            const finalStatus = isRoundRobin ? 'completed' : 'running';
-            const finalVisibleRounds = isRoundRobin ? out.rounds.length : Math.min(1, out.rounds.length);
-            await fb.setDoc(ref, {...t, participants:out.participants, status:finalStatus, rounds:out.rounds, visibleRounds: finalVisibleRounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
+            await fb.setDoc(ref, {...t, participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
             if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
               try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
             }
@@ -10649,10 +10679,7 @@ async function startHostedTournament(id){
         if(t.hostUserId!==profile.userId){ result='not-host'; return; }
         if(t.status!=='registering'){ result='already-running'; return; }
         const out = prepareHostedTournamentRun(t, t.participants);
-        const isRoundRobin = t.format === 'roundRobin';
-        const finalStatus = isRoundRobin ? 'completed' : 'running';
-        const finalVisibleRounds = isRoundRobin ? out.rounds.length : Math.min(1, out.rounds.length);
-        tx.update(ref, {participants:out.participants, status:finalStatus, rounds:out.rounds, visibleRounds: finalVisibleRounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+        tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
         if(out.hostRefundCoins>0 && fb.increment){
           tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
         }
@@ -10667,10 +10694,7 @@ async function startHostedTournament(id){
         else if(t.status!=='registering'){ result='already-running'; }
         else{
           const out = resolveHostedTournamentOutcome(t, t.participants);
-          const isRoundRobin = t.format === 'roundRobin';
-          const finalStatus = isRoundRobin ? 'completed' : 'running';
-          const finalVisibleRounds = isRoundRobin ? out.rounds.length : Math.min(1, out.rounds.length);
-          await fb.setDoc(ref, {...t, participants:out.participants, status:finalStatus, rounds:out.rounds, visibleRounds: finalVisibleRounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
+          await fb.setDoc(ref, {...t, participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
           if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
             try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
           }
