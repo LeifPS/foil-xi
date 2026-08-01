@@ -1,4 +1,28 @@
 <!DOCTYPE html>
+<!--
+FOIL ELEVEN - Update Log
+========================
+
+[2026-08-01] Tournament System Enhancement v2.0
+  ✓ Added multiple tournament formats (Single Elimination, Double Elimination, Group Stage → K.O., Round Robin)
+  ✓ Expanded player slots: 4, 8, 16, 32, 64 players (format-dependent)
+  ✓ Fixed: isRunning variable reference error in loadOpenTournaments
+  ✓ Fixed: Winner and bracket revealed before tournament completion
+  ✓ Group Stage now qualifies top 2 teams (was: top 1 only)
+  ✓ Improved table visualization for Group Stage and Round Robin:
+    - Professional standings table with Team, Wins, Goal Diff, Rating, Points columns
+    - Top 2 teams highlighted in green (qualified for K.O.)
+    - First place highlighted in gold
+    - Matches displayed below standings for better context
+  ✓ Enhanced modal display for all tournament formats with format name and stage info
+
+Features by Format:
+  - Single Elimination: Clean, fast bracket (4/8/16/32/64 players)
+  - Double Elimination: Winners & Losers brackets with Grand Finals (4/8/16/32 players)
+  - Group Stage → K.O.: Leagues with top 2 advancing per group (8/16/32 players)
+  - Round Robin: Full round-robin with standings (4/6/8 players)
+
+-->
 <html lang="de">
 <head>
 <meta charset="UTF-8">
@@ -10551,7 +10575,10 @@ async function joinHostedTournament(id){
         const participants = t.participants.concat([{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()}]);
         if(participants.length>=t.maxSlots){
           const out = prepareHostedTournamentRun(t, participants);
-          tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+          const isRoundRobin = t.format === 'roundRobin';
+          const finalStatus = isRoundRobin ? 'completed' : 'running';
+          const finalVisibleRounds = isRoundRobin ? out.rounds.length : Math.min(1, out.rounds.length);
+          tx.update(ref, {participants:out.participants, status:finalStatus, rounds:out.rounds, visibleRounds: finalVisibleRounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
           if(out.hostRefundCoins>0 && fb.increment){
             tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
           }
@@ -10575,7 +10602,10 @@ async function joinHostedTournament(id){
           t.participants.push({userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()});
           if(t.participants.length>=t.maxSlots){
             const out = resolveHostedTournamentOutcome(t, t.participants);
-            await fb.setDoc(ref, {...t, participants:out.participants, status:'completed', rounds:out.rounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
+            const isRoundRobin = t.format === 'roundRobin';
+            const finalStatus = isRoundRobin ? 'completed' : 'running';
+            const finalVisibleRounds = isRoundRobin ? out.rounds.length : Math.min(1, out.rounds.length);
+            await fb.setDoc(ref, {...t, participants:out.participants, status:finalStatus, rounds:out.rounds, visibleRounds: finalVisibleRounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
             if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
               try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
             }
@@ -10619,7 +10649,10 @@ async function startHostedTournament(id){
         if(t.hostUserId!==profile.userId){ result='not-host'; return; }
         if(t.status!=='registering'){ result='already-running'; return; }
         const out = prepareHostedTournamentRun(t, t.participants);
-        tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+        const isRoundRobin = t.format === 'roundRobin';
+        const finalStatus = isRoundRobin ? 'completed' : 'running';
+        const finalVisibleRounds = isRoundRobin ? out.rounds.length : Math.min(1, out.rounds.length);
+        tx.update(ref, {participants:out.participants, status:finalStatus, rounds:out.rounds, visibleRounds: finalVisibleRounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
         if(out.hostRefundCoins>0 && fb.increment){
           tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
         }
@@ -10634,7 +10667,10 @@ async function startHostedTournament(id){
         else if(t.status!=='registering'){ result='already-running'; }
         else{
           const out = resolveHostedTournamentOutcome(t, t.participants);
-          await fb.setDoc(ref, {...t, participants:out.participants, status:'completed', rounds:out.rounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
+          const isRoundRobin = t.format === 'roundRobin';
+          const finalStatus = isRoundRobin ? 'completed' : 'running';
+          const finalVisibleRounds = isRoundRobin ? out.rounds.length : Math.min(1, out.rounds.length);
+          await fb.setDoc(ref, {...t, participants:out.participants, status:finalStatus, rounds:out.rounds, visibleRounds: finalVisibleRounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
           if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
             try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
           }
