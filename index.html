@@ -10133,6 +10133,7 @@ let queueActive = false;
 let autorollEnabled = false;
 let queueTimer = null;
 let inMatch = false; // true for the entire duration of an actual match (not just searching), prevents any overlap
+let tournamentLiveRefreshTimer = null;
 
 // ===== FRIENDS & DUELS =====
 async function addFriend(rawName){
@@ -10152,7 +10153,13 @@ async function removeFriend(userId){
 }
 let pendingDuelId = null, pendingDuelTimer = null;
 // ===== HOSTED TOURNAMENTS: set a prize (coins or a card), invite others to register, bots fill empty slots =====
-const HOSTED_TOURNAMENT_SIZES = [4, 8, 16];
+const TOURNAMENT_FORMATS = {
+  singleElim: { name: 'Single Elimination', validSizes: [4, 8, 16, 32, 64] },
+  doubleElim: { name: 'Double Elimination', validSizes: [4, 8, 16, 32] },
+  groupToElim: { name: 'Gruppenphase → K.O.', validSizes: [8, 16, 32] },
+  roundRobin: { name: 'Round Robin', validSizes: [4, 6, 8] }
+};
+const HOSTED_TOURNAMENT_DEFAULT_FORMAT = 'singleElim';
 const HOSTED_TOURNAMENT_DEFAULT_SIZE = 8;
 function isBotParticipantId(userId){ return typeof userId==='string' && userId.startsWith('bot_'); }
 function tournamentPrizeLabel(t){
@@ -10180,10 +10187,19 @@ function normalizeTournamentDoc(t){
         return {matches: []};
       });
     }
+  } else {
+    t.rounds = [];
+  }
+  if(typeof t.visibleRounds !== 'number'){
+    if(t.status==='running') t.visibleRounds = Math.min(1, t.rounds.length);
+    else if(t.status==='completed') t.visibleRounds = t.rounds.length;
+    else t.visibleRounds = 0;
+  } else {
+    t.visibleRounds = Math.min(t.visibleRounds, t.rounds.length);
   }
   return t;
 }
-function simulateHostedBracket(participants){
+function simulateSingleElimBracket(participants){
   const shuffled = participants.slice();
   for(let i=shuffled.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]; }
   let round = shuffled;
@@ -10207,6 +10223,144 @@ function simulateHostedBracket(participants){
   }
   return {rounds, winnerUserId:round[0].userId, winnerName:round[0].name};
 }
+function simulateDoubleElimBracket(participants){
+  const shuffled = participants.slice();
+  for(let i=shuffled.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]; }
+  const rounds = [];
+  let winnersRound = shuffled;
+  let losersRound = [];
+  let roundNum = 0;
+  while(winnersRound.length>1 || losersRound.length>0){
+    roundNum++;
+    // Winners bracket matches
+    const winnerMatches = [];
+    const winnersNext = [];
+    for(let i=0;i<winnersRound.length;i+=2){
+      const a=winnersRound[i], b=winnersRound[i+1];
+      const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
+      const winnerIsA = md.winnerSide==='me';
+      winnerMatches.push({
+        aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
+        aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
+        winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, type:'winners'
+      });
+      winnersNext.push(winnerIsA ? a : b);
+      losersRound.push(winnerIsA ? b : a);
+    }
+    if(winnerMatches.length>0) rounds.push({matches: winnerMatches, stage: 'Winners R'+roundNum});
+    winnersRound = winnersNext;
+    // Losers bracket matches
+    if(losersRound.length>1){
+      const loserMatches = [];
+      const losersNext = [];
+      for(let i=0;i<losersRound.length;i+=2){
+        const a=losersRound[i], b=losersRound[i+1];
+        const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
+        const winnerIsA = md.winnerSide==='me';
+        loserMatches.push({
+          aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
+          aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
+          winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, type:'losers'
+        });
+        losersNext.push(winnerIsA ? a : b);
+      }
+      if(loserMatches.length>0) rounds.push({matches: loserMatches, stage: 'Losers R'+roundNum});
+      losersRound = losersNext;
+    } else if(losersRound.length===1 && winnersRound.length===1){
+      // Grand Finals: Winner of Winners vs Winner of Losers
+      const a=winnersRound[0], b=losersRound[0];
+      const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
+      const winnerIsA = md.winnerSide==='me';
+      rounds.push({matches: [{
+        aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
+        aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
+        winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, type:'grand'
+      }], stage: 'Grand Finals'});
+      winnersRound = winnerIsA ? [a] : [b];
+      losersRound = [];
+    } else {
+      break;
+    }
+  }
+  return {rounds, winnerUserId:winnersRound[0]?.userId, winnerName:winnersRound[0]?.name};
+}
+function simulateGroupStageBracket(participants){
+  const numGroups = participants.length<=8 ? 2 : 4;
+  const groupSize = Math.ceil(participants.length / numGroups);
+  const groups = [];
+  let idx = 0;
+  for(let g=0;g<numGroups;g++){
+    const group = [];
+    for(let i=0;i<groupSize && idx<participants.length;i++, idx++){
+      group.push(participants[idx]);
+    }
+    groups.push(group);
+  }
+  const rounds = [];
+  const groupRoundResults = [];
+  groups.forEach((group, groupIdx)=>{
+    const groupMatches = [];
+    const standings = group.map(p=>({...p, wins:0, goals:0}));
+    for(let i=0;i<group.length;i++){
+      for(let j=i+1;j<group.length;j++){
+        const a=standings[i], b=standings[j];
+        const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
+        const winnerIsA = md.winnerSide==='me';
+        if(winnerIsA){ standings[i].wins++; } else { standings[j].wins++; }
+        standings[i].goals += md.myGoals;
+        standings[j].goals += md.oppGoals;
+        groupMatches.push({
+          aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
+          aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
+          winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId
+        });
+      }
+    }
+    standings.sort((a,b)=>b.wins-a.wins || b.goals-a.goals);
+    groupRoundResults.push({groupIdx, standings});
+    rounds.push({matches: groupMatches, stage: `Gruppe ${String.fromCharCode(65+groupIdx)}`});
+  });
+  // Knockout from group winners
+  const knockoutParticipants = groupRoundResults.map(r=>r.standings[0]);
+  if(knockoutParticipants.length>1){
+    const koResult = simulateSingleElimBracket(knockoutParticipants);
+    rounds.push(...koResult.rounds.map((r,i)=>({...r, stage:'K.O. Runde '+(i+1)})));
+    return {rounds, winnerUserId:koResult.winnerUserId, winnerName:koResult.winnerName};
+  }
+  return {rounds, winnerUserId:knockoutParticipants[0]?.userId, winnerName:knockoutParticipants[0]?.name};
+}
+function simulateRoundRobinBracket(participants){
+  const standings = participants.map(p=>({...p, wins:0, goals:0}));
+  const rounds = [];
+  let matches = [];
+  for(let i=0;i<participants.length;i++){
+    for(let j=i+1;j<participants.length;j++){
+      const a=standings[i], b=standings[j];
+      const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
+      const winnerIsA = md.winnerSide==='me';
+      if(winnerIsA){ standings[i].wins++; } else { standings[j].wins++; }
+      standings[i].goals += md.myGoals;
+      standings[j].goals += md.oppGoals;
+      matches.push({
+        aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
+        aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
+        winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId
+      });
+    }
+  }
+  standings.sort((a,b)=>b.wins-a.wins || b.goals-a.goals);
+  rounds.push({matches, stage:'Alle Spiele'});
+  return {rounds, winnerUserId:standings[0].userId, winnerName:standings[0].name};
+}
+function simulateHostedBracket(participants, format='singleElim'){
+  switch(format){
+    case 'doubleElim': return simulateDoubleElimBracket(participants);
+    case 'groupToElim': return simulateGroupStageBracket(participants);
+    case 'roundRobin': return simulateRoundRobinBracket(participants);
+    case 'singleElim':
+    default: return simulateSingleElimBracket(participants);
+  }
+}
 function fillAndSimulateHostedTournament(t){
   // Defensive truncation: normally participants.length is always <= maxSlots (join is guarded),
   // but this guards any legacy doc from before the join-race fix from ever reaching
@@ -10220,7 +10374,7 @@ function fillAndSimulateHostedTournament(t){
       participants.push({userId:'bot_'+genId(), name:bot.owner+' (CPU)', rating:bot.rating, players:bot.players, isBot:true});
     }
   }
-  const {rounds, winnerUserId, winnerName} = simulateHostedBracket(participants);
+  const {rounds, winnerUserId, winnerName} = simulateHostedBracket(participants, t.format||'singleElim');
   return {participants, rounds, winnerUserId, winnerName};
 }
 // Computes the final bracket/winner for a hosted tournament and figures out whether the prize is
@@ -10228,17 +10382,17 @@ function fillAndSimulateHostedTournament(t){
 // the caller applies them (via a transaction or a plain update, depending on context), since this
 // same resolution logic is needed both when a join fills the last slot and when the host manually
 // starts the tournament with bots.
-function resolveHostedTournamentOutcome(t, participantsBeforeBots){
+function prepareHostedTournamentRun(t, participantsBeforeBots){
   const {participants, rounds, winnerUserId, winnerName} = fillAndSimulateHostedTournament({...t, participants: participantsBeforeBots});
   const botWon = isBotParticipantId(winnerUserId);
   const hostSelfWonCard = !botWon && winnerUserId===t.hostUserId && t.prizeType==='card';
-  // A bot "winning" means nobody real is left to claim the prize. A coin prize was already deducted
-  // from the host's balance at creation time, so it goes straight back to them rather than being
-  // lost forever; a staked card was only ever locked (never actually removed from the host's
-  // collection - see hostTournamentPrompt), so there's nothing to physically refund for that case.
   const hostRefundCoins = (botWon && t.prizeType!=='card') ? (t.prizeCoins||0) : 0;
   const prizeClaimed = botWon || hostSelfWonCard;
-  return {participants, rounds, winnerUserId, winnerName, prizeClaimed, hostRefundCoins};
+  return {participants, rounds, winnerUserId, winnerName, botWon, hostSelfWonCard, prizeClaimed, hostRefundCoins};
+}
+function resolveHostedTournamentOutcome(t, participantsBeforeBots){
+  const run = prepareHostedTournamentRun(t, participantsBeforeBots);
+  return {participants: run.participants, rounds: run.rounds, winnerUserId: run.winnerUserId, winnerName: run.winnerName, prizeClaimed: run.prizeClaimed, hostRefundCoins: run.hostRefundCoins};
 }
 let hostPrizeCardUid = null; // card selected in the currently-open host-tournament modal, if any
 async function hostTournamentPrompt(){
@@ -10251,11 +10405,17 @@ async function hostTournamentPrompt(){
   const eligibleCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !locked.has(x.uid));
   openModal(`
     <h2 style="margin-bottom:4px;">Turnier veranstalten</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle Teilnehmerzahl und Preis. Sobald das Turnier voll ist, startet es automatisch \u2014 du musst nicht dabei sein. Freie Pl\u00e4tze werden mit echten CPU-Vereinen aufgef\u00fcllt.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle Format, Teilnehmerzahl und Preis. Sobald das Turnier voll ist, startet es automatisch \u2014 du musst nicht dabei sein. Freie Pl\u00e4tze werden mit echten CPU-Vereinen aufgef\u00fcllt.</p>
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Format</div>
+    <div class="toolbar" style="margin-bottom:14px;">
+      <select id="bracket-format">
+        ${Object.entries(TOURNAMENT_FORMATS).map(([key, fmt]) => `<option value="${key}" ${key===HOSTED_TOURNAMENT_DEFAULT_FORMAT?'selected':''}>${fmt.name}</option>`).join('')}
+      </select>
+    </div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Teilnehmerzahl</div>
     <div class="toolbar" style="margin-bottom:14px;">
       <select id="bracket-size">
-        ${HOSTED_TOURNAMENT_SIZES.map(n=>`<option value="${n}" ${n===HOSTED_TOURNAMENT_DEFAULT_SIZE?'selected':''}>${n} Teilnehmer</option>`).join('')}
+        ${TOURNAMENT_FORMATS[HOSTED_TOURNAMENT_DEFAULT_FORMAT].validSizes.map(n=>`<option value="${n}" ${n===HOSTED_TOURNAMENT_DEFAULT_SIZE?'selected':''}>${n} Teilnehmer</option>`).join('')}
       </select>
     </div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Preis</div>
@@ -10279,6 +10439,12 @@ async function hostTournamentPrompt(){
       <button class="action-btn" id="prize-confirm" style="flex:1;">Turnier erstellen</button>
     </div>`);
   document.getElementById('prize-cancel').addEventListener('click', closeModal);
+  const formatSelect = document.getElementById('bracket-format');
+  const sizeSelect = document.getElementById('bracket-size');
+  formatSelect.addEventListener('change', ()=>{
+    const fmt = TOURNAMENT_FORMATS[formatSelect.value];
+    sizeSelect.innerHTML = fmt.validSizes.map(n=>`<option value="${n}" ${n===HOSTED_TOURNAMENT_DEFAULT_SIZE && fmt.validSizes.includes(HOSTED_TOURNAMENT_DEFAULT_SIZE)?'selected':''}>${n} Teilnehmer</option>`).join('');
+  });
   const typeSelect = document.getElementById('prize-type');
   typeSelect.addEventListener('change', ()=>{
     document.getElementById('prize-coins-block').style.display = typeSelect.value==='coins' ? 'block':'none';
@@ -10306,11 +10472,12 @@ async function hostTournamentPrompt(){
     await fbReady;
     if(!fb){ toast('Turniere ben\u00f6tigen das Online-Backend.'); e.target.disabled=false; return; }
     const maxSlots = Number(document.getElementById('bracket-size').value) || HOSTED_TOURNAMENT_DEFAULT_SIZE;
+    const format = formatSelect.value || HOSTED_TOURNAMENT_DEFAULT_FORMAT;
     const prizeType = typeSelect.value;
     const myPlayers = getMySquadPlayers();
     const baseDoc = {
       id: genId(), hostUserId:profile.userId, hostName:profile.displayName||profile.userId,
-      maxSlots, participants:[{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:myPlayers}],
+      maxSlots, format, participants:[{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:myPlayers}],
       status:'registering', createdAt:Date.now()
     };
     if(prizeType==='card'){
@@ -10383,17 +10550,12 @@ async function joinHostedTournament(id){
         if(t.participants.length>=t.maxSlots){ outcome='full'; return; }
         const participants = t.participants.concat([{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()}]);
         if(participants.length>=t.maxSlots){
-          // the last slot just filled - no reason to make everyone wait for the host to come back
-          // and press "start", so the tournament plays itself out immediately, right here
-          const out = resolveHostedTournamentOutcome(t, participants);
-          // prizeType/prizeCoins included explicitly (not just implied) so a pre-migration doc -
-          // which never had a prizeType field - is actually upgraded in Firestore right here, not
-          // just shimmed in memory for this one call
-          tx.update(ref, {participants:out.participants, status:'completed', rounds:out.rounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+          const out = prepareHostedTournamentRun(t, participants);
+          tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
           if(out.hostRefundCoins>0 && fb.increment){
             tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
           }
-          outcome='joined-and-completed'; completedWinnerName=out.winnerName;
+          outcome='joined-and-running';
         } else {
           tx.update(ref, {participants, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
           outcome='joined';
@@ -10456,9 +10618,8 @@ async function startHostedTournament(id){
         const t = normalizeTournamentDoc(snap.data());
         if(t.hostUserId!==profile.userId){ result='not-host'; return; }
         if(t.status!=='registering'){ result='already-running'; return; }
-        const out = resolveHostedTournamentOutcome(t, t.participants);
-        // prizeType/prizeCoins included explicitly so a pre-migration doc is upgraded at rest
-        tx.update(ref, {participants:out.participants, status:'completed', rounds:out.rounds, winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+        const out = prepareHostedTournamentRun(t, t.participants);
+        tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
         if(out.hostRefundCoins>0 && fb.increment){
           tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
         }
@@ -10489,6 +10650,77 @@ async function startHostedTournament(id){
     invalidateReadCache('my-tournament-results:'+profile.userId);
     loadMyTournamentResults();
   }catch(e){ console.warn('start tournament failed', e); toast('Turnier konnte nicht gestartet werden.'); }
+}
+async function advanceHostedTournamentRound(id){
+  await fbReady;
+  if(!fb) return;
+  const ref = fb.doc(fb.db,'tournaments', id);
+  let result = null;
+  try{
+    if(fb.runTransaction){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const snap = await tx.get(ref);
+        if(!snap.exists()){ result='gone'; return; }
+        const t = normalizeTournamentDoc(snap.data());
+        if(t.status!=='running'){ result='not-running'; return; }
+        if(t.hostUserId!==profile.userId){ result='not-host'; return; }
+        const totalRounds = (t.rounds||[]).length;
+        const current = Math.min(Math.max(0, t.visibleRounds||0), totalRounds);
+        if(current>=totalRounds){ result='already-complete'; return; }
+        const nextVisible = current + 1;
+        const updates = {visibleRounds: nextVisible};
+        if(nextVisible>=totalRounds){
+          updates.status = 'completed';
+          const botWon = isBotParticipantId(t.winnerUserId);
+          const hostSelfWonCard = !botWon && t.prizeType==='card' && t.winnerUserId===t.hostUserId;
+          updates.prizeClaimed = botWon || hostSelfWonCard;
+          if(botWon && t.prizeType!=='card' && fb.increment){
+            tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(t.prizeCoins||0)});
+          }
+        }
+        tx.update(ref, updates);
+        result = nextVisible>=totalRounds ? 'completed' : 'advanced';
+      });
+    } else {
+      const snap = await fb.getDoc(ref);
+      if(!snap.exists()){ result='gone'; }
+      else{
+        const t = normalizeTournamentDoc(snap.data());
+        if(t.status!=='running'){ result='not-running'; }
+        else if(t.hostUserId!==profile.userId){ result='not-host'; }
+        else{
+          const totalRounds = (t.rounds||[]).length;
+          const current = Math.min(Math.max(0, t.visibleRounds||0), totalRounds);
+          if(current>=totalRounds){ result='already-complete'; }
+          else{
+            const nextVisible = current + 1;
+            const updates = {...t, visibleRounds: nextVisible};
+            if(nextVisible>=totalRounds){
+              updates.status='completed';
+              const botWon = isBotParticipantId(t.winnerUserId);
+              const hostSelfWonCard = !botWon && t.prizeType==='card' && t.winnerUserId===t.hostUserId;
+              updates.prizeClaimed = botWon || hostSelfWonCard;
+              if(botWon && t.prizeType!=='card') await atomicCoinChange(t.prizeCoins||0);
+            }
+            await fb.setDoc(ref, updates);
+            result = nextVisible>=totalRounds ? 'completed' : 'advanced';
+          }
+        }
+      }
+    }
+    if(result==='gone') toast('Turnier existiert nicht mehr.');
+    else if(result==='not-running') toast('Turnier wird nicht als laufend gef fchrt.');
+    else if(result==='not-host') toast('Nur der Veranstalter kann die n e4chste Runde simulieren.');
+    else if(result==='already-complete') toast('Turnier ist bereits abgeschlossen.');
+    else if(result==='advanced') toast('N e4chste Runde simuliert.');
+    else if(result==='completed') toast('Turnier abgeschlossen!');
+    invalidateReadCache('open-tournaments');
+    loadOpenTournaments();
+    if(result==='completed'){
+      invalidateReadCache('my-tournament-results:'+profile.userId);
+      loadMyTournamentResults();
+    }
+  }catch(e){ console.warn('advance hosted tournament failed', e); toast('N e4chste Runde konnte nicht simuliert werden.'); }
 }
 async function cancelHostedTournament(id){
   await fbReady;
@@ -10606,10 +10838,13 @@ async function claimTournamentPrize(id){
 }
 function showBracketModal(t){
   const roundNames = t.rounds.length===3 ? ['Viertelfinale','Halbfinale','Finale'] : t.rounds.map((_,i)=>'Runde '+(i+1));
-  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:16px;">Preis: ${tournamentPrizeLabel(t)} \u2014 Sieger: <b style="color:var(--gold);">${t.winnerName}</b></p>`;
-  t.rounds.forEach((round,i)=>{
+  const isCompleted = t.status==='completed';
+  const visibleRoundsCount = isCompleted ? t.rounds.length : (t.visibleRounds||0);
+  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:16px;">Format: ${(TOURNAMENT_FORMATS[t.format]?.name || 'Single Elimination')} | Preis: ${tournamentPrizeLabel(t)}${isCompleted ? ` \u2014 Sieger: <b style="color:var(--gold);">${t.winnerName}</b>` : ''}</p>`;
+  t.rounds.slice(0, visibleRoundsCount).forEach((round,i)=>{
     const matches = Array.isArray(round) ? round : (round.matches||[]);
-    html += `<div class="lbl" style="margin:14px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${roundNames[i]||('Runde '+(i+1))}</div>`;
+    const stageName = round.stage || roundNames[i] || ('Runde '+(i+1));
+    html += `<div class="lbl" style="margin:14px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${stageName}</div>`;
     matches.forEach(m=>{
       html += `<div class="leader-row"><span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${m.aName} (${m.aRating})</span><span class="mono">${m.aGoals}:${m.bGoals}${m.wentToPK?' n.E.':''}</span><span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${m.bName} (${m.bRating})</span></div>`;
     });
@@ -10630,7 +10865,7 @@ async function loadOpenTournaments(){
   if(!fb){ box.innerHTML = '<p class="hint">Ben\u00f6tigt das Online-Backend.</p>'; return; }
   try{
     const list = await cachedRead('open-tournaments', 20000, async ()=>{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','==','registering'), fb.limit(20)));
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','in',['registering','running']), fb.limit(20)));
       return snap.docs.map(d=>normalizeTournamentDoc(d.data()));
     });
     if(!box) return;
@@ -10642,9 +10877,10 @@ async function loadOpenTournaments(){
       row.style.flexWrap = 'wrap';
       const joined = t.participants.some(p=>p.userId===profile.userId);
       const isHost = t.hostUserId===profile.userId;
+      const isRunning = t.status==='running';
       const info = document.createElement('span');
       info.style.flex = '1';
-      info.innerHTML = `<b>${t.hostName}</b>s Turnier \u2014 <span class="mono" style="color:var(--gold);">${tournamentPrizeLabel(t)}</span> \u2014 `;
+      info.innerHTML = `<b>${t.hostName}</b>s Turnier (${TOURNAMENT_FORMATS[t.format]?.name || 'Single Elimination'}) \u2014 <span class="mono" style="color:var(--gold);">${tournamentPrizeLabel(t)}</span> \u2014 `;
       const participantsSpan = document.createElement('span');
       participantsSpan.className = 'mono';
       participantsSpan.style.cssText = 'text-decoration:underline;cursor:pointer;';
@@ -10653,7 +10889,7 @@ async function loadOpenTournaments(){
       info.appendChild(participantsSpan);
       const btns = document.createElement('div');
       btns.style.cssText = 'display:flex;gap:8px;margin-top:6px;width:100%;';
-      if(!joined && t.participants.length<t.maxSlots){
+      if(!joined && t.status==='registering' && t.participants.length<t.maxSlots){
         const joinBtn = document.createElement('button'); joinBtn.className='action-btn'; joinBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; joinBtn.textContent='Beitreten';
         joinBtn.addEventListener('click', ()=>{ joinBtn.disabled=true; joinHostedTournament(t.id); });
         btns.appendChild(joinBtn);
@@ -10661,10 +10897,22 @@ async function loadOpenTournaments(){
         const tag = document.createElement('span'); tag.className='mono'; tag.style.cssText='color:var(--turf-bright);align-self:center;'; tag.textContent='\u2713 Angemeldet';
         btns.appendChild(tag);
       }
+      if(isRunning){
+        const watchBtn = document.createElement('button'); watchBtn.className='action-btn secondary'; watchBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; watchBtn.textContent='Live ansehen';
+        watchBtn.addEventListener('click', ()=>showBracketModal(t));
+        btns.appendChild(watchBtn);
+      }
       if(isHost){
-        const startBtn = document.createElement('button'); startBtn.className='action-btn secondary'; startBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; startBtn.textContent='Turnier starten';
-        startBtn.addEventListener('click', ()=>{ startBtn.disabled=true; startHostedTournament(t.id); });
-        btns.appendChild(startBtn);
+        if(t.status==='registering'){
+          const startBtn = document.createElement('button'); startBtn.className='action-btn secondary'; startBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; startBtn.textContent='Turnier starten';
+          startBtn.addEventListener('click', ()=>{ startBtn.disabled=true; startHostedTournament(t.id); });
+          btns.appendChild(startBtn);
+        }
+        if(isRunning && (t.visibleRounds||0) < (t.rounds||[]).length){
+          const advanceBtn = document.createElement('button'); advanceBtn.className='action-btn'; advanceBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; advanceBtn.textContent='Nächste Runde';
+          advanceBtn.addEventListener('click', ()=>{ advanceBtn.disabled=true; advanceHostedTournamentRound(t.id).finally(()=>{ advanceBtn.disabled=false; }); });
+          btns.appendChild(advanceBtn);
+        }
         const cancelBtn = document.createElement('button'); cancelBtn.className='action-btn secondary'; cancelBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;color:#ff8a8a;border-color:#ff8a8a;'; cancelBtn.textContent='Absagen';
         cancelBtn.addEventListener('click', ()=>{ cancelBtn.disabled=true; cancelHostedTournament(t.id); });
         btns.appendChild(cancelBtn);
@@ -11389,6 +11637,11 @@ function renderPlay(view){
   loadSalesHistory().then(async ()=>{ await updateMyNetWorthEntry(); loadNetWorthLeaderboard(); });
   loadOpenTournaments();
   loadMyTournamentResults();
+  if(tournamentLiveRefreshTimer) clearInterval(tournamentLiveRefreshTimer);
+  tournamentLiveRefreshTimer = setInterval(()=>{
+    if(currentTab==='play') loadOpenTournaments();
+    else { clearInterval(tournamentLiveRefreshTimer); tournamentLiveRefreshTimer = null; }
+  }, 12000);
 }
 function countPrimeCards(players){
   return (players||[]).filter(p=>p.variant==='prime').length;
