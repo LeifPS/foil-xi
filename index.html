@@ -10317,11 +10317,11 @@ function simulateGroupStageBracket(participants){
       }
     }
     standings.sort((a,b)=>b.wins-a.wins || b.goals-a.goals);
-    groupRoundResults.push({groupIdx, standings});
-    rounds.push({matches: groupMatches, stage: `Gruppe ${String.fromCharCode(65+groupIdx)}`});
+    groupRoundResults.push({groupIdx, standings, groupMatches});
+    rounds.push({matches: groupMatches, stage: `Gruppe ${String.fromCharCode(65+groupIdx)}`, standings: standings.slice(0, 3), isGroupStage: true});
   });
-  // Knockout from group winners
-  const knockoutParticipants = groupRoundResults.map(r=>r.standings[0]);
+  // Knockout from top 2 of each group
+  const knockoutParticipants = groupRoundResults.flatMap(r=>r.standings.slice(0, 2));
   if(knockoutParticipants.length>1){
     const koResult = simulateSingleElimBracket(knockoutParticipants);
     rounds.push(...koResult.rounds.map((r,i)=>({...r, stage:'K.O. Runde '+(i+1)})));
@@ -10349,7 +10349,7 @@ function simulateRoundRobinBracket(participants){
     }
   }
   standings.sort((a,b)=>b.wins-a.wins || b.goals-a.goals);
-  rounds.push({matches, stage:'Alle Spiele'});
+  rounds.push({matches, stage:'Alle Spiele', standings: standings, isRoundRobin: true});
   return {rounds, winnerUserId:standings[0].userId, winnerName:standings[0].name};
 }
 function simulateHostedBracket(participants, format='singleElim'){
@@ -10844,10 +10844,46 @@ function showBracketModal(t){
   t.rounds.slice(0, visibleRoundsCount).forEach((round,i)=>{
     const matches = Array.isArray(round) ? round : (round.matches||[]);
     const stageName = round.stage || roundNames[i] || ('Runde '+(i+1));
-    html += `<div class="lbl" style="margin:14px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${stageName}</div>`;
-    matches.forEach(m=>{
-      html += `<div class="leader-row"><span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${m.aName} (${m.aRating})</span><span class="mono">${m.aGoals}:${m.bGoals}${m.wentToPK?' n.E.':''}</span><span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${m.bName} (${m.bRating})</span></div>`;
-    });
+    html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${stageName}</div>`;
+    
+    // Show standings table for group stage and round robin
+    if(round.standings && round.standings.length>0){
+      html += `<div style="margin-bottom:12px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;overflow:hidden;">
+        <div style="display:grid;grid-template-columns:1fr 30px 30px 30px 40px;gap:0;font-size:12px;font-weight:600;background:var(--line);padding:8px;color:var(--muted);text-align:center;">
+          <div style="text-align:left;padding:0 8px;">Team</div>
+          <div>S</div>
+          <div>+/-</div>
+          <div>Tor</div>
+          <div>Pkte</div>
+        </div>`;
+      round.standings.forEach((p, idx)=>{
+        const goals = (p.goals||0);
+        const points = (p.wins||0) * 3;
+        const highlight = idx < 2 ? 'background:rgba(95,225,201,0.08);' : '';
+        html += `<div style="display:grid;grid-template-columns:1fr 30px 30px 30px 40px;gap:0;padding:8px;border-top:1px solid var(--line);${highlight}align-items:center;font-size:11px;">
+          <div style="text-align:left;padding:0 8px;color:${idx===0?'var(--gold)':'var(--chalk)'};">${p.name}</div>
+          <div style="text-align:center;color:var(--teal);">${p.wins||0}</div>
+          <div style="text-align:center;color:var(--muted);">${goals>=0?'+':''}${goals}</div>
+          <div style="text-align:center;color:var(--muted);">${p.rating}</div>
+          <div style="text-align:center;font-weight:600;color:var(--gold);">${points}</div>
+        </div>`;
+      });
+      html += `</div>`;
+      
+      // Show matches below standings
+      if(matches.length>0){
+        html += `<div style="margin-top:8px;">`;
+        matches.forEach(m=>{
+          html += `<div class="leader-row" style="font-size:12px;padding:6px 0;"><span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${m.aName}</span><span class="mono">${m.aGoals}:${m.bGoals}</span><span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${m.bName}</span></div>`;
+        });
+        html += `</div>`;
+      }
+    } else {
+      // Standard bracket display
+      matches.forEach(m=>{
+        html += `<div class="leader-row"><span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${m.aName} (${m.aRating})</span><span class="mono">${m.aGoals}:${m.bGoals}${m.wentToPK?' n.E.':''}</span><span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${m.bName} (${m.bRating})</span></div>`;
+      });
+    }
   });
   openModal(html + `<button class="modal-close" id="bracket-close" style="margin-top:16px;">Schlie\u00dfen</button>`);
   document.getElementById('bracket-close').addEventListener('click', closeModal);
