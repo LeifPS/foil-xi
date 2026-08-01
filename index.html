@@ -5394,17 +5394,39 @@ async function updateMyNetWorthEntry(){
   }catch(e){ console.warn('net worth update failed', e); }
 }
 const LEADERBOARD_EXCLUDED_USERS = new Set(['leifps','tst']);
+// Temporary, admin-controlled leaderboard bans - distinct from a full account ban (profile.banned
+// blocks login entirely). A leaderboard ban leaves the account fully playable; it just hides that
+// account from the public leaderboards until the ban expires or an admin lifts it early. Useful for
+// e.g. a squad that's legitimately playable but was saved under since-changed balance rules (an old
+// card rating, a since-added roster limit) and would otherwise unfairly top the rankings, without
+// punishing the account itself. Backed by its own small collection (leaderboardBans/{userId} ->
+// {until, bannedBy, reason, createdAt}) rather than denormalizing onto the squads/networth leaderboard
+// docs, since those get fully overwritten whenever the owner republishes their squad or net worth.
+async function getLeaderboardBannedUserIds(){
+  if(!fb) return new Set();
+  return cachedRead('leaderboard-bans', 30000, async ()=>{
+    const banned = new Set();
+    try{
+      const snap = await fb.getDocs(fb.collection(fb.db,'leaderboardBans'));
+      const now = Date.now();
+      snap.docs.forEach(d=>{ const b = d.data(); if(b.until && b.until>now) banned.add(d.id); });
+    }catch(e){ console.warn('leaderboard ban check failed', e); }
+    return banned;
+  });
+}
 async function loadNetWorthLeaderboard(){
   const box = document.getElementById('networth-list');
   if(!box) return;
   await fbReady;
   if(!fb){ box.innerHTML = `<p class="hint">Ben\u00f6tigt das Online-Backend.</p>`; return; }
+  const bannedIds = await getLeaderboardBannedUserIds();
   let entries = [];
   try{
-    entries = await cachedRead('networth-board', 45000, async ()=>{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(8+LEADERBOARD_EXCLUDED_USERS.size)));
-      return snap.docs.map(d=>d.data()).filter(e=>!LEADERBOARD_EXCLUDED_USERS.has(e.userId)).slice(0,8);
+    const raw = await cachedRead('networth-board', 45000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(20)));
+      return snap.docs.map(d=>d.data());
     });
+    entries = raw.filter(e=>!LEADERBOARD_EXCLUDED_USERS.has(e.userId) && !bannedIds.has(e.userId)).slice(0,8);
   }catch(e){ console.warn('net worth leaderboard read failed', e); }
   if(!box) return;
   if(!entries.length){ box.innerHTML = `<p class="hint">Noch keine Daten \u2014 besuche "Mein Verein", um teilzunehmen.</p>`; return; }
@@ -5533,6 +5555,12 @@ const UPDATE_LOGS = [
     {type:'fix', label:'Bugfix', items:[
       'Turniere, die vor der Kartenpreis-Funktion erstellt wurden, hatten kein prizeType-Feld und liefen nur zuf\u00e4llig richtig, weil \u00fcberall implizit "nicht Karte = Coins" prophezeit wurde. Jetzt gibt es eine explizite Migrationsfunktion, die jeden alten Turnier-Datensatz beim Lesen sauber auf prizeType:"coins" normalisiert.',
       'Zus\u00e4tzlich wird das normalisierte Feld beim n\u00e4chsten Schreibzugriff (Beitritt, Start, Abholung) direkt in Firestore mitgespeichert \u2014 ein altes Turnier ist damit nach der ersten Interaktion dauerhaft im neuen Format und wird nicht bei jedem Lesevorgang erneut nur tempor\u00e4r im Arbeitsspeicher "geflickt".',
+    ]},
+  ]},
+  {id:16, version:'1.6.2', date:'01.08.2026', title:'Admin: tempor\u00e4re Leaderboard-Sperre', sections:[
+    {type:'new', label:'Neu', items:[
+      'Admin-Panel: Vereine k\u00f6nnen jetzt zeitlich befristet (in Tagen w\u00e4hlbar) von beiden \u00f6ffentlichen Bestenlisten (Kader-Rating und Vereinswert) ausgeschlossen werden, ohne den Account selbst zu sperren \u2014 er bleibt normal spielbar. Gedacht f\u00fcr F\u00e4lle wie einen alten Kader aus der Zeit vor einer Balance-\u00c4nderung (z.\u00a0B. fr\u00fchere PRIME-Bewertung oder ein seitdem eingef\u00fchrtes Limit), der sich nicht mehr korrigieren l\u00e4sst, aber auch nicht unfair oben in der Bestenliste stehen soll.',
+      'Sperre kann vom Admin jederzeit vorzeitig wieder aufgehoben werden.',
     ]},
   ]},
 ];
@@ -9384,17 +9412,23 @@ async function loadAdminUserPanel(targetId){
   await fbReady;
   if(!fb){ box.innerHTML = '<p class="hint">Ben\u00f6tigt das Online-Backend.</p>'; return; }
   box.innerHTML = '<p class="hint">L\u00e4dt\u2026</p>';
-  let snap;
-  try{ snap = await fb.getDoc(fb.doc(fb.db,'saves',targetId)); }
+  let snap, banSnap;
+  try{
+    snap = await fb.getDoc(fb.doc(fb.db,'saves',targetId));
+    banSnap = await fb.getDoc(fb.doc(fb.db,'leaderboardBans',targetId));
+  }
   catch(e){ box.innerHTML = '<p class="hint">Fehler beim Laden.</p>'; return; }
   if(!snap.exists()){ box.innerHTML = `<p class="hint">Kein Verein mit dem Namen "${targetId}" gefunden.</p>`; return; }
   const data = snap.data();
   const p = data.profile || {};
+  const ban = banSnap.exists() ? banSnap.data() : null;
+  const leaderboardBanned = !!(ban && ban.until > Date.now());
   box.innerHTML = `
     <div style="margin-bottom:14px;">
       <div style="font-weight:700;font-size:16px;">${p.displayName||targetId} <span class="mono" style="color:var(--muted);font-size:12px;">(${targetId})</span></div>
       <div class="hint" style="margin-top:2px;">Coins: <b style="color:var(--gold);">${(p.coins||0).toLocaleString('de-DE')}</b> \u00b7 Siege: ${p.wins||0} \u00b7 Niederlagen: ${p.losses||0}
-      ${p.banned ? ' \u00b7 <b style="color:var(--danger);">GESPERRT</b>' : ''}</div>
+      ${p.banned ? ' \u00b7 <b style="color:var(--danger);">GESPERRT</b>' : ''}
+      ${leaderboardBanned ? ` \u00b7 <b style="color:var(--danger);">Leaderboard-gesperrt bis ${new Date(ban.until).toLocaleString('de-DE')}</b>` : ''}</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="action-btn secondary" id="admin-give-coins" style="width:auto;">Coins geben</button>
@@ -9402,6 +9436,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
       <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
       <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
+      <button class="action-btn secondary" id="admin-toggle-lb-ban" style="width:auto;color:${leaderboardBanned?'var(--turf-bright)':'var(--danger)'};">${leaderboardBanned?'Leaderboard-Sperre aufheben':'Tempor\u00e4r vom Leaderboard sperren'}</button>
     </div>`;
   document.getElementById('admin-give-coins').addEventListener('click', ()=>{
     askTextModal('Coins hinzuf\u00fcgen (negativ zum Abziehen)', '0', async (val)=>{
@@ -9428,6 +9463,28 @@ async function loadAdminUserPanel(targetId){
     await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
     toast(p.banned ? `${targetId} entsperrt.` : `${targetId} gesperrt.`);
     loadAdminUserPanel(targetId);
+  });
+  document.getElementById('admin-toggle-lb-ban').addEventListener('click', async ()=>{
+    if(leaderboardBanned){
+      try{ await fb.deleteDoc(fb.doc(fb.db,'leaderboardBans',targetId)); }
+      catch(e){ console.warn('lift leaderboard ban failed', e); toast('Sperre konnte nicht aufgehoben werden.'); return; }
+      invalidateReadCache('leaderboard-bans');
+      toast(`Leaderboard-Sperre f\u00fcr ${targetId} aufgehoben.`);
+      loadAdminUserPanel(targetId);
+    } else {
+      askTextModal('F\u00fcr wie viele Tage vom Leaderboard sperren?', 'z. B. 30', async (val)=>{
+        const days = parseInt(val,10);
+        if(!Number.isFinite(days) || days<=0){ toast('Bitte eine g\u00fcltige Anzahl Tage angeben.'); return; }
+        try{
+          await fb.setDoc(fb.doc(fb.db,'leaderboardBans',targetId), {
+            until: Date.now() + days*86400000, bannedBy: profile.userId, createdAt: Date.now()
+          });
+        }catch(e){ console.warn('set leaderboard ban failed', e); toast('Sperre konnte nicht gesetzt werden.'); return; }
+        invalidateReadCache('leaderboard-bans');
+        toast(`${targetId} f\u00fcr ${days} Tag${days===1?'':'e'} vom Leaderboard gesperrt.`);
+        loadAdminUserPanel(targetId);
+      }, 4);
+    }
   });
 }
 function openAdminSendCardModal(targetId, data){
@@ -10113,6 +10170,17 @@ function tournamentPrizeLabel(t){
 function normalizeTournamentDoc(t){
   if(!t) return t;
   if(t.prizeType!=='card'){ t.prizeType='coins'; t.prizeCoins = t.prizeCoins||0; }
+  if(Array.isArray(t.rounds)){
+    if(t.rounds.length && Array.isArray(t.rounds[0])){
+      t.rounds = t.rounds.map(matches=>({matches}));
+    } else {
+      t.rounds = t.rounds.map(round=>{
+        if(Array.isArray(round)) return {matches: round};
+        if(round && typeof round==='object' && Array.isArray(round.matches)) return round;
+        return {matches: []};
+      });
+    }
+  }
   return t;
 }
 function simulateHostedBracket(participants){
@@ -10134,7 +10202,7 @@ function simulateHostedBracket(participants){
       });
       nextRound.push(winnerIsA ? a : b);
     }
-    rounds.push(matches);
+    rounds.push({matches});
     round = nextRound;
   }
   return {rounds, winnerUserId:round[0].userId, winnerName:round[0].name};
@@ -10539,7 +10607,8 @@ async function claimTournamentPrize(id){
 function showBracketModal(t){
   const roundNames = t.rounds.length===3 ? ['Viertelfinale','Halbfinale','Finale'] : t.rounds.map((_,i)=>'Runde '+(i+1));
   let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:16px;">Preis: ${tournamentPrizeLabel(t)} \u2014 Sieger: <b style="color:var(--gold);">${t.winnerName}</b></p>`;
-  t.rounds.forEach((matches,i)=>{
+  t.rounds.forEach((round,i)=>{
+    const matches = Array.isArray(round) ? round : (round.matches||[]);
     html += `<div class="lbl" style="margin:14px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${roundNames[i]||('Runde '+(i+1))}</div>`;
     matches.forEach(m=>{
       html += `<div class="leader-row"><span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${m.aName} (${m.aRating})</span><span class="mono">${m.aGoals}:${m.bGoals}${m.wentToPK?' n.E.':''}</span><span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${m.bName} (${m.bRating})</span></div>`;
@@ -11328,23 +11397,25 @@ async function loadLeaderboard(){
   const box = document.getElementById('leader-list');
   await fbReady;
   if(!box) return;
+  const bannedIds = await getLeaderboardBannedUserIds();
   let squads = [];
   if(fb){
     try{
-      squads = await cachedRead('squad-leaderboard', 45000, async ()=>{
+      const raw = await cachedRead('squad-leaderboard', 45000, async ()=>{
         const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'squads'), fb.orderBy('rating','desc'), fb.limit(20)));
-        return snap.docs.map(d=>d.data())
-          .filter(s=>!LEADERBOARD_EXCLUDED_USERS.has(s.userId))
-          .filter(s=>countPrimeCards(s.players)<=1)
-          .slice(0,8);
+        return snap.docs.map(d=>d.data());
       });
+      squads = raw
+        .filter(s=>!LEADERBOARD_EXCLUDED_USERS.has(s.userId) && !bannedIds.has(s.userId))
+        .filter(s=>countPrimeCards(s.players)<=1)
+        .slice(0,8);
     }catch(e){ console.warn('Firebase leaderboard read failed', e); }
   }
   if(!fb || !squads.length){
     const keys = await sList('squad:', true);
     for(const k of keys.slice(0,30)){
       const s = await sGet(k, true);
-      if(s && !LEADERBOARD_EXCLUDED_USERS.has(s.userId) && countPrimeCards(s.players)<=1) squads.push(s);
+      if(s && !LEADERBOARD_EXCLUDED_USERS.has(s.userId) && !bannedIds.has(s.userId) && countPrimeCards(s.players)<=1) squads.push(s);
     }
     squads.sort((a,b)=>b.rating-a.rating);
     squads = squads.slice(0,8);
