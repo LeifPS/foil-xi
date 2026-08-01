@@ -5587,6 +5587,11 @@ const UPDATE_LOGS = [
       'Sperre kann vom Admin jederzeit vorzeitig wieder aufgehoben werden.',
     ]},
   ]},
+  {id:17, version:'1.6.3', date:'01.08.2026', title:'"Mein Verein" l\u00e4dt jetzt auch bei 1000+ Karten sofort', sections:[
+    {type:'fix', label:'Bugfix', items:[
+      'Bei gro\u00dfen Sammlungen (1000+ Karten) baute "Mein Verein" bisher f\u00fcr jede einzelne Karte sofort die komplette Kartenansicht (Foto, Statistiken, Abzeichen) auf einmal auf \u2014 das blockierte beim \u00d6ffnen der Seite spürbar. Jetzt wird nur der erste Batch (60 Karten) sofort angezeigt, der Rest l\u00e4dt automatisch nach, sobald man weiter runterscrollt. Filter, Suche und Sortierung funktionieren unver\u00e4ndert.',
+    ]},
+  ]},
 ];
 const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
@@ -9560,6 +9565,41 @@ function openAdminSendPackModal(targetId, data){
     list.appendChild(btn);
   });
 }
+// Renders a large list of cards incrementally instead of building DOM for every item up front.
+// With 1000+ owned cards, cardEl() building the full stat/photo markup for every single one in one
+// synchronous pass is what actually costs the 1s+ load time on "Mein Verein" - most of that list is
+// never even scrolled into view. This renders one batch immediately (so the page looks complete
+// right away) and appends more batches, via an IntersectionObserver on a trailing sentinel element,
+// only as the person actually scrolls toward the bottom.
+function renderLazyGrid(container, items, renderItem, opts={}){
+  if(!container) return;
+  const batchSize = opts.batchSize || 60;
+  if(container._lazyObserver){ container._lazyObserver.disconnect(); }
+  container.innerHTML = '';
+  if(!items.length){
+    if(opts.emptyHtml) container.innerHTML = opts.emptyHtml;
+    return;
+  }
+  const sentinel = document.createElement('div');
+  sentinel.style.cssText = 'width:100%;height:1px;';
+  let rendered = 0;
+  const observer = new IntersectionObserver((entries)=>{
+    if(entries.some(e=>e.isIntersecting)) renderNextBatch();
+  }, {rootMargin:'800px'});
+  function renderNextBatch(){
+    if(!container.isConnected){ observer.disconnect(); return; } // navigated away - stop working on a detached view
+    const frag = document.createDocumentFragment();
+    const end = Math.min(rendered+batchSize, items.length);
+    for(let i=rendered;i<end;i++) frag.appendChild(renderItem(items[i]));
+    container.insertBefore(frag, sentinel);
+    rendered = end;
+    if(rendered>=items.length){ observer.disconnect(); sentinel.remove(); }
+  }
+  container.appendChild(sentinel);
+  container._lazyObserver = observer;
+  renderNextBatch(); // first batch renders immediately, synchronously - the page never looks empty
+  observer.observe(sentinel);
+}
 function renderClub(view){
   view.innerHTML = `
     <div class="view-head" style="display:flex;align-items:center;gap:16px;">
@@ -9619,8 +9659,7 @@ function drawManagerClubGrid(){
   if(!grid) return;
   const items = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr)
     .sort((a,b)=> MGR_TIER_ORDER[b.mgr.tier]-MGR_TIER_ORDER[a.mgr.tier]);
-  grid.innerHTML = '';
-  items.forEach(({uid,mgr})=>{
+  renderLazyGrid(grid, items, ({uid,mgr})=>{
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
     wrap.appendChild(cardEl(mgr));
@@ -9633,18 +9672,17 @@ function drawManagerClubGrid(){
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
     rapTag.innerHTML = `<div class="pdot"></div>RAP ~${computeRAP(mgr).toLocaleString('de-DE')}`;
     wrap.appendChild(rapTag);
-    grid.appendChild(wrap);
+    return wrap;
   });
 }
 function drawClubGrid(){
   const grid = document.getElementById('club-grid');
+  if(!grid) return;
   let items = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
   if(clubFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(clubFilter.q.toLowerCase()));
   if(clubFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===clubFilter.pos);
   items.sort((a,b)=> clubFilter.sort==='ov' ? b.card.ov-a.card.ov : a.card.n.localeCompare(b.card.n));
-  grid.innerHTML='';
-  if(!items.length){ grid.innerHTML = `<div class="empty-state" style="width:100%;"><h3>Keine Spieler gefunden</h3><p>Versuche einen anderen Filter oder \u00f6ffne ein Pack im Kartenladen.</p></div>`; return; }
-  items.forEach(({uid,card})=>{
+  renderLazyGrid(grid, items, ({uid,card})=>{
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap';
     wrap.appendChild(cardEl(card));
@@ -9653,8 +9691,8 @@ function drawClubGrid(){
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
     rapTag.innerHTML = `<div class="pdot"></div>RAP ~${computeRAP(card).toLocaleString('de-DE')}`;
     wrap.appendChild(rapTag);
-    grid.appendChild(wrap);
-  });
+    return wrap;
+  }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Spieler gefunden</h3><p>Versuche einen anderen Filter oder \u00f6ffne ein Pack im Kartenladen.</p></div>`});
 }
 
 // ===== SQUAD BUILDER =====
