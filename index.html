@@ -6234,6 +6234,16 @@ const UPDATE_LOGS = [
       'Joachim L\u00f6w (WM-Sieger-Trainer 2014, +9\u00a0% Boost) ist jetzt als seltener Trainer im Deutsche Legenden Pack ziehbar (~0,15\u00a0% pro Karte) \u2014 etwas seltener als die Ikone-Stufe.',
     ]},
   ]},
+  {id:33, version:'1.9.0', date:'02.08.2026', title:'Alle 100+ Karten aus dem Deutsche Legenden Pack: volle Chemie', sections:[
+    {type:'balance', label:'Balance', items:[
+      'Nicht mehr nur die Ikone-Stufe: jetzt haben alle drei Stufen des Deutsche Legenden Packs (Ikone, WM-Legende, Nationalmannschaft-Legende) immer 3 Sterne Chemie (+3 Rating), genau wie OG Icons \u2014 unabh\u00e4ngig von Verein, Liga oder Nation der restlichen Aufstellung.',
+    ]},
+  ]},
+  {id:34, version:'1.9.1', date:'02.08.2026', title:'"Fortfahren ohne Speicherung" auf der Down-Seite', sections:[
+    {type:'new', label:'Neu', items:[
+      'Die Offline-Seite (foil-eleven-down.html) hat jetzt einen dezenten "Fortfahren ohne Speicherung"-Link, der zu index.html?nosave=1 f\u00fchrt. Dort greift ein neuer Ohne-Speicherung-Modus: nur die Test-Accounts leifps, test und tst k\u00f6nnen sich einloggen \u2014 jeder andere Vereinsname wird mit einer Fehlermeldung abgewiesen, statt einen Spielstand zuzulassen, der ohnehin nicht gespeichert w\u00fcrde.',
+    ]},
+  ]},
 ];
 const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
@@ -8313,6 +8323,12 @@ async function sList(prefix, shared=false){
 function sanitizeClubId(raw){
   return raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60);
 }
+// Set when arriving via the "Fortfahren ohne Speicherung" button on the down page
+// (foil-eleven-down.html?...&nosave=1 -> index.html?nosave=1). While active, only the
+// dev/test accounts may log in - everyone else gets a clear message instead of a save
+// that silently won't work.
+const NOSAVE_MODE = new URLSearchParams(location.search).get('nosave') === '1';
+const NOSAVE_ALLOWED_IDS = new Set(['leifps','test','tst']);
 
 // ===== state =====
 let profile = null; // {coins,userId,displayName,wins,draws,losses}
@@ -8330,10 +8346,12 @@ function ownedCard(uid){
 
 function showEntryGate(prefill){
   const root = document.getElementById('modal-root');
+  const nosaveBanner = NOSAVE_MODE ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);">Ohne-Speicherung-Modus: nur Test-Accounts k\u00f6nnen sich anmelden.</p>` : '';
   root.innerHTML = `
     <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
       <div class="modal-box" style="max-width:380px;text-align:center;">
         <h2 style="margin-bottom:8px;">Willkommen bei FOIL ELEVEN</h2>
+        ${nosaveBanner}
         <p class="hint" style="margin-top:0;margin-bottom:16px;">W\u00e4hle einen Vereinsnamen. Er wird Teil deiner Seiten-URL, damit ein Lesezeichen oder Neuladen dieser genauen Seite automatisch denselben Spielstand l\u00e4dt \u2014 ganz ohne Browser-Speicher.</p>
         <input id="gate-input" placeholder="z. B. galaxyfc92" value="${prefill||''}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
         <button class="action-btn" id="gate-submit" style="width:100%;">Verein betreten</button>
@@ -8351,6 +8369,11 @@ function showEntryGate(prefill){
   document.getElementById('gate-input').focus();
 }
 async function proceedWithClubId(id){
+  if(NOSAVE_MODE && !NOSAVE_ALLOWED_IDS.has(id)){
+    const errEl = document.getElementById('gate-err');
+    if(errEl) errEl.textContent = 'Im Ohne-Speicherung-Modus k\u00f6nnen nur Test-Accounts sich anmelden.';
+    return;
+  }
   clubId = id;
   try{ history.replaceState(null, '', location.pathname + '?club=' + encodeURIComponent(id)); }catch(e){}
   await fbReady;
@@ -10460,7 +10483,7 @@ function getSquadChemistryDetail(){
 }
 function chemBreakdownText(b){
   if(!b) return '';
-  if(b.isOgIcon) return 'Ikone \u2014 immer maximale Chemie';
+  if(b.isOgIcon) return 'Legende \u2014 immer maximale Chemie';
   const parts = [];
   if(b.clubLinks>0) parts.push(`${b.clubLinks} Vereinskollege${b.clubLinks>1?'n':''}`);
   if(b.leagueLinks>0) parts.push(`${b.leagueLinks} Liga-Kollege${b.leagueLinks>1?'n':''}`);
@@ -10482,7 +10505,7 @@ function showPlayerChemistryModal(card, chem, breakdown){
     openModal(`
       <h2 style="margin-bottom:2px;">${card.n}</h2>
       <p style="margin:0 0 14px;font-size:22px;letter-spacing:3px;color:var(--gold);">${starsVisual}</p>
-      <p class="hint" style="margin:0 0 10px;">OG Icons und Ikone-Karten aus dem Deutsche Legenden Pack spielen sich \u00fcberall zu Hause \u2014 sie haben immer die maximale Chemie (3 Sterne, +3 Rating), unabh\u00e4ngig davon, wer sonst noch in der Aufstellung steht.</p>
+      <p class="hint" style="margin:0 0 10px;">OG Icons und alle Karten aus dem Deutsche Legenden Pack spielen sich \u00fcberall zu Hause \u2014 sie haben immer die maximale Chemie (3 Sterne, +3 Rating), unabh\u00e4ngig davon, wer sonst noch in der Aufstellung steht.</p>
       <button class="modal-close" id="chem-player-close" style="margin-top:14px;">Schlie\u00dfen</button>
     `);
     document.getElementById('chem-player-close').addEventListener('click', closeModal);
@@ -12754,11 +12777,13 @@ function computeChemistry(players, managerNat){
       if(other.nat && other.nat===p.nat){ score += 1; natLinks++; }
     });
     if(managerNat && p.nat && p.nat===managerNat){ score += 1.5; mgrLink = true; } // small boost for sharing the manager's nationality
-    // OG Icons (Fu\u00dfballg\u00f6tter Pack) and Ikone-tier Deutsche Legenden cards (Beckenbauer, Gerd
-    // M\u00fcller, Klose) always play with maximum chemistry - these are legends who fit in anywhere,
-    // regardless of actual club/league/nation links to the rest of the squad. They still
-    // contribute their own club/nation normally to OTHER players' links above.
-    const alwaysMaxChem = p.variant==='ogicon' || p.variant==='legende_ikone';
+    // OG Icons (Fu\u00dfballg\u00f6tter Pack) and every 100+ card from the Deutsche Legenden Pack (Ikone,
+    // WM-Legende, and Nationalmannschaft-Legende tiers alike) always play with maximum chemistry -
+    // these are legends who fit in anywhere, regardless of actual club/league/nation links to the
+    // rest of the squad. They still contribute their own club/nation normally to OTHER players'
+    // links above.
+    const LEGENDS_ALWAYS_MAX = new Set(['legende_ikone','legende_wm','legende_national']);
+    const alwaysMaxChem = p.variant==='ogicon' || LEGENDS_ALWAYS_MAX.has(p.variant);
     const stars = alwaysMaxChem ? 3 : (score>=14 ? 3 : score>=7 ? 2 : score>=3 ? 1 : 0);
     const ovAdjust = stars===3 ? 3 : stars===2 ? 2 : stars===1 ? 1 : 0;
     return {...p, chem:stars, chemOv: Math.max(1, Math.round(p.ov+ovAdjust)), chemBreakdown:{clubLinks, leagueLinks, natLinks, mgrLink, isOgIcon:alwaysMaxChem}};

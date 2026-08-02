@@ -146,6 +146,22 @@
     color:#5a6b5c;
   }
 
+  /* deliberately low-emphasis - this isn't meant as a real path back in for regular players */
+  .nosave-btn{
+    display:inline-block;
+    margin-top:18px;
+    background:none;
+    border:none;
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:#5a6b5c;
+    text-decoration:underline;
+    text-underline-offset:2px;
+    cursor:pointer;
+    padding:4px;
+  }
+  .nosave-btn:hover{ color:var(--muted); }
+
   @media (prefers-reduced-motion: reduce){
     .beam{ animation:none; transform:translateX(-50%) rotate(0deg); }
     .readout .row1 i{ animation:none; }
@@ -191,9 +207,20 @@
       <p>Der Anpfiff lässt gerade auf sich warten — wir reißen hinter den Kulissen ein paar Tribünen ab und bauen sie neu auf.</p>
       <p><strong>Das Spiel ist im Moment nicht spielbar.</strong> Spätestens morgen ist es wieder online.</p>
 
+      <button class="nosave-btn" id="nosave-continue" type="button">Fortfahren ohne Speicherung</button>
+
       <div class="foot">FOIL ELEVEN · Wird derzeit wiederaufgebaut</div>
     </div>
   </main>
+
+  <script>
+    // Deliberately not a real recovery path for regular players - index.html itself checks the
+    // ?nosave=1 flag and only lets the dev/test accounts (leifps/test/tst) actually sign in;
+    // everyone else sees an error there instead of a save that would silently not work.
+    document.getElementById('nosave-continue').addEventListener('click', function(){
+      window.location.href = 'index.html?nosave=1';
+    });
+  </script>
 
 </body>
 </html>
