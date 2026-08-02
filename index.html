@@ -5611,6 +5611,12 @@ const PLAYERS_LEGENDS = [
 ];
 const LEGENDS_SPECIALS = PLAYERS_LEGENDS;
 LEGENDS_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+const LEGENDS_MANAGER = {
+  id: 9970200, n:'Joachim L\u00f6w', club:'Deutschland', nat:'Germany', tier:'Legend\u00e4r',
+  boostType:'percent', boostValue:9, isManager:true, pos:'MGR', ov:99,
+  variant:'legende_mgr', variantLabel:'Legenden-Trainer', theme:'legende_mgr',
+};
+MGR_BY_ID.set(LEGENDS_MANAGER.id, LEGENDS_MANAGER);
 const WM_MANAGER = {
   id: 9800100, n:'Luis de la Fuente', club:'Spanien', nat:'Spain', tier:'Legend\u00e4r',
   boostType:'percent', boostValue:8, isManager:true, pos:'MGR', ov:99,
@@ -5794,12 +5800,13 @@ const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8
   derbyicon:'#ff4d4d',underdog:'#4dd0e1',
   uclw:'#0a1e4d',uclw_mgr:'#e8003c', ballondor:'#f2c14e', wm_mgr:'#aa151b', prime:'#ffd76a',
   sigicon:'#7ad9ff', eradef:'#ffcf5c', sigseason:'#ff6fb1',
-  ogicon:'#c98a3e', og_mgr:'#c98a3e'};
+  ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00'};
 function cardAccent(card){
   if(card.variant==='meistertrainer') return '#ff8a3d';
   if(card.variant==='uclw_mgr') return THEME_ACC.uclw_mgr;
   if(card.variant==='wm_mgr') return THEME_ACC.wm_mgr;
   if(card.variant==='og_mgr') return THEME_ACC.og_mgr;
+  if(card.variant==='legende_mgr') return THEME_ACC.legende_mgr;
   if(card.isManager && MGR_TIER_ACC[card.tier]) return MGR_TIER_ACC[card.tier];
   if(card.theme && THEME_ACC[card.theme]) return THEME_ACC[card.theme];
   return rarityInfo(card.ov).acc;
@@ -6219,6 +6226,14 @@ const UPDATE_LOGS = [
       'Preis von 32.000 auf 20.000 Coins gesenkt, Kartenanzahl von 5 auf 4 pro \u00d6ffnung reduziert. Chance auf mindestens eine 100+ Karte pro \u00d6ffnung sinkt dadurch automatisch weiter, von rund 20,5\u00a0% auf rund 16,7\u00a0% (Kartenodds selbst unver\u00e4ndert, nur eine Ziehung weniger).',
     ]},
   ]},
+  {id:32, version:'1.8.9', date:'02.08.2026', title:'Ikone-Karten haben jetzt auch maximale Chemie + neuer Legenden-Trainer', sections:[
+    {type:'balance', label:'Balance', items:[
+      'Die Ikone-Stufe im Deutsche Legenden Pack (Beckenbauer, Gerd M\u00fcller, Klose) hat jetzt genau wie die OG Icons aus dem Fu\u00dfballg\u00f6tter-Pack immer 3 Sterne Chemie (+3 Rating), egal mit wem sie aufgestellt werden. Tooltip und Punkte-Aufschl\u00fcsselung im Kader-Editor wurden entsprechend angepasst.',
+    ]},
+    {type:'new', label:'Neu', items:[
+      'Joachim L\u00f6w (WM-Sieger-Trainer 2014, +9\u00a0% Boost) ist jetzt als seltener Trainer im Deutsche Legenden Pack ziehbar (~0,15\u00a0% pro Karte) \u2014 etwas seltener als die Ikone-Stufe.',
+    ]},
+  ]},
 ];
 const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
@@ -6368,7 +6383,7 @@ const PACKS = [
       });
     }},
   {id:'deutschelegenden',name:'Deutsche Legenden Pack',cost:20000,tier:'ultimate',count:4,
-    desc:'4 Karten, ausschlie\u00dflich deutsche Spieler \u2014 auch der h\u00e4ufige Grundstock kommt nur aus Deutschland. Selten erscheint eine 100+ Legenden-Karte: alle vier deutschen Weltmeister-Jahrg\u00e4nge (1954, 1974, 1990, 2014) sowie gro\u00dfe Namen, die nie Weltmeister wurden (u.a. Vogts, Kahn, Rummenigge, Seeler). Beste m\u00f6gliche Karte im Pack: 110 (Franz Beckenbauer).',
+    desc:'4 Karten, ausschlie\u00dflich deutsche Spieler \u2014 auch der h\u00e4ufige Grundstock kommt nur aus Deutschland. Selten erscheint eine 100+ Legenden-Karte: alle vier deutschen Weltmeister-Jahrg\u00e4nge (1954, 1974, 1990, 2014) sowie gro\u00dfe Namen, die nie Weltmeister wurden (u.a. Vogts, Kahn, Rummenigge, Seeler). Noch seltener: Joachim L\u00f6w als Legenden-Trainer (+9%). Beste m\u00f6gliche Karte im Pack: 110 (Franz Beckenbauer).',
     draw(){
       const bulk = ALL_BASE.concat(ALL_SPECIAL).filter(c=>c.nat==='Germany' && !c.isManager);
       const ikone = LEGENDS_SPECIALS.filter(c=>c.variant==='legende_ikone');
@@ -6376,10 +6391,12 @@ const PACKS = [
       const natLegende = LEGENDS_SPECIALS.filter(c=>c.variant==='legende_national');
       // Per-card odds unchanged (combined 4.5%); with only 4 cards now instead of 5, the
       // at-least-one-100+-per-pack chance is 1-(1-0.045)^4 \u2248 16.8% (down from ~20.5% at 5 cards).
-      const P = {ikone:0.002, wmLegende:0.01, natLegende:0.033};
+      // Joachim L\u00f6w (rare trainer, +9%) sits just above the Ikone tier in rarity.
+      const P = {legendsMgr:0.0015, ikone:0.002, wmLegende:0.01, natLegende:0.033};
       return Array.from({length:4}, ()=>{
         const r = Math.random();
         let acc = 0;
+        if(r<(acc+=P.legendsMgr)) return LEGENDS_MANAGER;
         if(r<(acc+=P.ikone)) return pick(ikone);
         if(r<(acc+=P.wmLegende)) return pick(wmLegende);
         if(r<(acc+=P.natLegende)) return pick(natLegende);
@@ -8692,7 +8709,7 @@ function cardEl(card, size=''){
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
   const boostText = card.isManager ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue}`) : '';
-  const varTag = card.isManager ? `<div class="var-tag">${card.variant==='meistertrainer' ? 'Meistertrainer' : (card.variant==='uclw_mgr'||card.variant==='wm_mgr'||card.variant==='og_mgr') ? card.variantLabel : card.tier+'-Trainer'}</div>` : (hasVariant ? `<div class="var-tag">${card.variantLabel}</div>` : '');
+  const varTag = card.isManager ? `<div class="var-tag">${card.variant==='meistertrainer' ? 'Meistertrainer' : (card.variant==='uclw_mgr'||card.variant==='wm_mgr'||card.variant==='og_mgr'||card.variant==='legende_mgr') ? card.variantLabel : card.tier+'-Trainer'}</div>` : (hasVariant ? `<div class="var-tag">${card.variantLabel}</div>` : '');
   const badge = hasVariant && VARIANT_ICON[card.theme] ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON[card.theme]}</svg></div>` : (card.isManager ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON.manager}</svg></div>` : '');
   const photoInner = card.isManager
     ? `<div class="avatar">${initialsOf(card.n)}</div>`
@@ -10443,7 +10460,7 @@ function getSquadChemistryDetail(){
 }
 function chemBreakdownText(b){
   if(!b) return '';
-  if(b.isOgIcon) return 'OG Icon \u2014 immer maximale Chemie';
+  if(b.isOgIcon) return 'Ikone \u2014 immer maximale Chemie';
   const parts = [];
   if(b.clubLinks>0) parts.push(`${b.clubLinks} Vereinskollege${b.clubLinks>1?'n':''}`);
   if(b.leagueLinks>0) parts.push(`${b.leagueLinks} Liga-Kollege${b.leagueLinks>1?'n':''}`);
@@ -10465,7 +10482,7 @@ function showPlayerChemistryModal(card, chem, breakdown){
     openModal(`
       <h2 style="margin-bottom:2px;">${card.n}</h2>
       <p style="margin:0 0 14px;font-size:22px;letter-spacing:3px;color:var(--gold);">${starsVisual}</p>
-      <p class="hint" style="margin:0 0 10px;">OG Icons aus dem Fu\u00dfballg\u00f6tter-Pack spielen sich \u00fcberall zu Hause \u2014 sie haben immer die maximale Chemie (3 Sterne, +3 Rating), unabh\u00e4ngig davon, wer sonst noch in der Aufstellung steht.</p>
+      <p class="hint" style="margin:0 0 10px;">OG Icons und Ikone-Karten aus dem Deutsche Legenden Pack spielen sich \u00fcberall zu Hause \u2014 sie haben immer die maximale Chemie (3 Sterne, +3 Rating), unabh\u00e4ngig davon, wer sonst noch in der Aufstellung steht.</p>
       <button class="modal-close" id="chem-player-close" style="margin-top:14px;">Schlie\u00dfen</button>
     `);
     document.getElementById('chem-player-close').addEventListener('click', closeModal);
@@ -12737,13 +12754,14 @@ function computeChemistry(players, managerNat){
       if(other.nat && other.nat===p.nat){ score += 1; natLinks++; }
     });
     if(managerNat && p.nat && p.nat===managerNat){ score += 1.5; mgrLink = true; } // small boost for sharing the manager's nationality
-    // OG Icons (Fußballgötter Pack) always play with maximum chemistry - these are legends who
-    // fit in anywhere, regardless of actual club/league/nation links to the rest of the squad.
-    // They still contribute their own club/nation normally to OTHER players' links above.
-    const isOgIcon = p.variant==='ogicon';
-    const stars = isOgIcon ? 3 : (score>=14 ? 3 : score>=7 ? 2 : score>=3 ? 1 : 0);
+    // OG Icons (Fu\u00dfballg\u00f6tter Pack) and Ikone-tier Deutsche Legenden cards (Beckenbauer, Gerd
+    // M\u00fcller, Klose) always play with maximum chemistry - these are legends who fit in anywhere,
+    // regardless of actual club/league/nation links to the rest of the squad. They still
+    // contribute their own club/nation normally to OTHER players' links above.
+    const alwaysMaxChem = p.variant==='ogicon' || p.variant==='legende_ikone';
+    const stars = alwaysMaxChem ? 3 : (score>=14 ? 3 : score>=7 ? 2 : score>=3 ? 1 : 0);
     const ovAdjust = stars===3 ? 3 : stars===2 ? 2 : stars===1 ? 1 : 0;
-    return {...p, chem:stars, chemOv: Math.max(1, Math.round(p.ov+ovAdjust)), chemBreakdown:{clubLinks, leagueLinks, natLinks, mgrLink, isOgIcon}};
+    return {...p, chem:stars, chemOv: Math.max(1, Math.round(p.ov+ovAdjust)), chemBreakdown:{clubLinks, leagueLinks, natLinks, mgrLink, isOgIcon:alwaysMaxChem}};
   });
 }
 function getMySquadPlayers(){
