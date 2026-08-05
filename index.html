@@ -7268,7 +7268,7 @@ function renderSellManual(allEligible, usedInSquad){
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
     <div class="club-grid" id="sell-pick-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
     <div class="toolbar" style="margin-bottom:14px;">
-      <input id="sell-price" type="number" min="1" placeholder="Preis pro Karte in Coins">
+      <input id="sell-price" type="text" inputmode="decimal" placeholder="Preis pro Karte in Coins (z. B. 1.2m)">
     </div>
     <div class="mono" id="sell-selected-info" style="color:var(--muted);margin-bottom:12px;">0 Karten ausgew\u00e4hlt</div>
     <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:260px;">Zum Markt hinzuf\u00fcgen</button>`;
@@ -7335,7 +7335,7 @@ function renderSellManual(allEligible, usedInSquad){
   });
   document.getElementById('sell-price').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('sell-submit').click(); });
   document.getElementById('sell-submit').addEventListener('click', async (e)=>{
-    const price = Math.max(1, Math.floor(Number(document.getElementById('sell-price').value)||0));
+    const price = Math.max(1, Math.floor(parseCoinInput(document.getElementById('sell-price').value)||0));
     if(!price){ toast('Bitte einen Preis angeben.'); return; }
     if(!selected.size){ toast('Bitte mindestens eine Karte ausw\u00e4hlen.'); return; }
     e.target.disabled = true;
@@ -7387,7 +7387,16 @@ function tokenizeFormula(str){
     const ch = str[i];
     if(/\s/.test(ch)){ i++; continue; }
     if(ch==='"'){ let j=i+1, s=''; while(j<str.length && str[j]!=='"'){ s+=str[j]; j++; } tokens.push({type:'string', value:s}); i=j+1; continue; }
-    if(/[0-9.]/.test(ch)){ let j=i, s=''; while(j<str.length && /[0-9.]/.test(str[j])){ s+=str[j]; j++; } tokens.push({type:'number', value:parseFloat(s)}); i=j; continue; }
+    if(/[0-9.]/.test(ch)){
+      let j=i, s=''; while(j<str.length && /[0-9.]/.test(str[j])){ s+=str[j]; j++; }
+      let mult = 1;
+      // shorthand suffix (1.2m, 50k is NOT supported - only m/b/t/q, matching formatCoins) - only
+      // when it's not the start of a longer identifier (e.g. "min(...)" right after a number)
+      if(j<str.length && /[mbtq]/i.test(str[j]) && !/[a-zA-Z_0-9]/.test(str[j+1]||'')){
+        mult = {m:1e6,b:1e9,t:1e12,q:1e15}[str[j].toLowerCase()]; j++;
+      }
+      tokens.push({type:'number', value:parseFloat(s)*mult}); i=j; continue;
+    }
     if(/[a-zA-Z_]/.test(ch)){ let j=i, s=''; while(j<str.length && /[a-zA-Z_0-9]/.test(str[j])){ s+=str[j]; j++; } tokens.push({type:'ident', value:s}); i=j; continue; }
     if(ch==='>'||ch==='<'||ch==='='||ch==='!'){ let op=ch, j=i+1; if(str[j]==='='){ op+='='; j++; } tokens.push({type:'op', value:op}); i=j; continue; }
     if('+-*/(),'.includes(ch)){ tokens.push({type:'op', value:ch}); i++; continue; }
@@ -7491,7 +7500,7 @@ function renderSellFilter(allEligible, usedInSquad){
       <button class="nav-btn" id="price-mode-formula" style="padding:7px 12px;flex:1;">Formel</button>
     </div>
     <div class="toolbar" style="margin-bottom:6px;" id="price-flat-row">
-      <input id="filter-price" type="number" min="1" placeholder="Preis pro Karte in Coins">
+      <input id="filter-price" type="text" inputmode="decimal" placeholder="Preis pro Karte in Coins (z. B. 1.2m)">
     </div>
     <div id="price-formula-row" style="display:none;margin-bottom:6px;">
       <input id="filter-formula" placeholder="z.\u00a0B. 1000 + max(0, {ovr} - 88) * 500" style="width:100%;margin-bottom:6px;">
@@ -7528,7 +7537,7 @@ function renderSellFilter(allEligible, usedInSquad){
     updatePreview();
   });
   function priceFor(card){
-    if(priceMode==='flat') return Math.max(1, Math.floor(Number(priceInput.value)||0)) || null;
+    if(priceMode==='flat') return Math.max(1, Math.floor(parseCoinInput(priceInput.value)||0)) || null;
     if(!formulaInput.value.trim()) return null;
     return evalPriceFormula(formulaInput.value.trim(), card);
   }
@@ -7579,7 +7588,7 @@ function renderSellFilter(allEligible, usedInSquad){
       });
     }
     previewEl.textContent = matches.length ? `${matches.length} passende Karte${matches.length===1?'':'n'} gefunden${matches.length>40?' (zeige/liste nur die ersten 40)':''}.` : 'Keine passenden Karten gefunden.';
-    const hasPriceInput = priceMode==='flat' ? !!Math.max(0, Math.floor(Number(priceInput.value)||0)) : !!formulaInput.value.trim();
+    const hasPriceInput = priceMode==='flat' ? !!Math.max(0, Math.floor(parseCoinInput(priceInput.value)||0)) : !!formulaInput.value.trim();
     const btn = document.getElementById('filter-submit');
     const enabled = capped.length && ok && hasPriceInput;
     btn.disabled = !enabled; btn.style.opacity = enabled ? '1' : '.4';
@@ -7591,7 +7600,7 @@ function renderSellFilter(allEligible, usedInSquad){
     const toList = matches.slice(0,40);
     let prices;
     try{
-      prices = toList.map(({card})=>({card, price: priceMode==='flat' ? Math.max(1, Math.floor(Number(priceInput.value)||0)) : evalPriceFormula(formulaInput.value.trim(), card)}));
+      prices = toList.map(({card})=>({card, price: priceMode==='flat' ? Math.max(1, Math.floor(parseCoinInput(priceInput.value)||0)) : evalPriceFormula(formulaInput.value.trim(), card)}));
     }catch(err){ toast('Formelfehler: ' + err.message); return; }
     if(priceMode==='flat' && !prices[0].price){ toast('Bitte einen Preis angeben.'); return; }
     e.target.disabled = true;
@@ -7828,7 +7837,7 @@ async function openTradeBuilder(){
     <div class="lbl" style="margin:6px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Trainer (optional)</div>
     <div class="club-grid" id="trade-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
     <div class="toolbar" style="margin-bottom:14px;">
-      <input id="trade-coins" type="number" min="0" placeholder="Coins zus\u00e4tzlich anbieten (optional)">
+      <input id="trade-coins" type="text" inputmode="decimal" placeholder="Coins zus\u00e4tzlich anbieten (optional, z. B. 1.2m)">
     </div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Das willst du daf\u00fcr</div>
     <div class="toolbar" style="margin-bottom:10px;">
@@ -7840,7 +7849,7 @@ async function openTradeBuilder(){
       </select>
     </div>
     <div class="toolbar" id="trade-want-coins" style="margin-bottom:14px;">
-      <input id="want-coins-amount" type="number" min="0" placeholder="Gew\u00fcnschte Coins">
+      <input id="want-coins-amount" type="text" inputmode="decimal" placeholder="Gew\u00fcnschte Coins (z. B. 1.2m)">
     </div>
     <div class="toolbar" id="trade-want-cards" style="margin-bottom:14px;display:none;">
       <input id="want-cards-count" type="number" min="1" value="1" placeholder="Anzahl Karten" style="max-width:110px;">
@@ -7923,7 +7932,7 @@ async function submitTradeOffer(){
   const targetId = sanitizeClubId(targetRaw || '');
   if(!targetId){ toast('Bitte einen g\u00fcltigen Vereinsnamen eingeben.'); return; }
   if(targetId===profile.userId){ toast('Du kannst dir selbst kein Angebot senden.'); return; }
-  const offerCoins = Math.max(0, Math.floor(Number(document.getElementById('trade-coins').value)||0));
+  const offerCoins = Math.max(0, Math.floor(parseCoinInput(document.getElementById('trade-coins').value)||0));
   if(offerCoins > profile.coins){ toast('Du bietest mehr Coins an, als du besitzt.'); return; }
   // final safety re-check: none of the offered items should now be squad-assigned
   const squadValues = new Set(Object.values(squad.slots));
@@ -7932,7 +7941,7 @@ async function submitTradeOffer(){
   const kind = document.getElementById('trade-want-kind').value;
   let want;
   if(kind==='coins'){
-    want = {kind:'coins', amount: Math.max(0, Math.floor(Number(document.getElementById('want-coins-amount').value)||0))};
+    want = {kind:'coins', amount: Math.max(0, Math.floor(parseCoinInput(document.getElementById('want-coins-amount').value)||0))};
   } else if(kind==='cards'){
     want = {kind:'cards',
       count: Math.max(1, Math.floor(Number(document.getElementById('want-cards-count').value)||1)),
@@ -8598,6 +8607,16 @@ function formatCoins(n){
     i++; [div, suffix] = tiers[i]; decimals = 2; rounded = Number((n/div).toFixed(2));
   }
   return rounded.toFixed(decimals)+suffix;
+}
+// inverse of formatCoins() - lets coin input fields accept shorthand like "1.2m"/"52.2m"/"921m"/"1.53b"
+// (also t/q), in addition to a plain number. Returns NaN if the string isn't a valid number/shorthand.
+function parseCoinInput(str){
+  if(str==null) return NaN;
+  const s = String(str).trim().replace(',', '.');
+  const m = s.match(/^(-?\d+(?:\.\d+)?)\s*([mbtq])?$/i);
+  if(!m) return NaN;
+  const mult = {m:1e6,b:1e9,t:1e12,q:1e15}[(m[2]||'').toLowerCase()] || 1;
+  return parseFloat(m[1]) * mult;
 }
 function updateCoinDisplay(){ document.getElementById('coin-display').textContent = formatCoins(profile.coins); }
 const UPDATELOG_SECTION_STYLE = {
@@ -11455,7 +11474,7 @@ async function hostTournamentPrompt(){
     </div>
     <div id="prize-coins-block">
       <p class="hint" style="margin-top:0;margin-bottom:8px;">Wird sofort von deinem Konto abgezogen und beim Turnierende an den Sieger ausgezahlt. Gewinnt am Ende ein CPU-Verein (weil zu wenige echte Teilnehmer beigetreten sind), bekommst du dein Preisgeld automatisch zur\u00fcck.</p>
-      <input id="prize-input" type="number" min="100" placeholder="Preisgeld in Coins" style="width:100%;margin-bottom:14px;">
+      <input id="prize-input" type="text" inputmode="decimal" placeholder="Preisgeld in Coins (z. B. 1.2m)" style="width:100%;margin-bottom:14px;">
     </div>
     <div id="prize-card-block" style="display:none;">
       <p class="hint" style="margin-top:0;margin-bottom:8px;">Die Karte bleibt bis zum Turnierende in deinem Verein \u2014 nur gesperrt f\u00fcr Verkauf, Handel und Kader. Verlierst du, oder gewinnt am Ende ein CPU-Verein, bleibt sie einfach bei dir. Nur wenn ein echter Gegner das Turnier gewinnt, geht sie an ihn \u00fcber.</p>
@@ -11532,7 +11551,7 @@ async function hostTournamentPrompt(){
         e.target.disabled = false;
       }
     } else {
-      const prize = Math.max(100, Math.floor(Number(document.getElementById('prize-input').value)||0));
+      const prize = Math.max(100, Math.floor(parseCoinInput(document.getElementById('prize-input').value)||0));
       if(!prize){ toast('Bitte ein Preisgeld angeben.'); e.target.disabled=false; return; }
       if(profile.coins<prize){ toast('Nicht genug Coins f\u00fcr dieses Preisgeld.'); e.target.disabled=false; return; }
       await atomicCoinChange(-prize);
