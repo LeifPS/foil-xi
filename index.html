@@ -318,10 +318,13 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard .top{position:absolute;top:11px;left:12px;right:12px;z-index:2;display:flex;justify-content:space-between;align-items:flex-start;
   filter:drop-shadow(0 2px 5px rgba(0,0,0,.7));}
 .pcard .ov{font-family:'Anton';font-size:28px;line-height:1;color:var(--chalk);}
+.pcard .ov-preview{font-family:'JetBrains Mono';font-size:11px;font-weight:700;color:var(--gold);margin-top:1px;transition:opacity .26s ease;min-height:13px;}
 .pcard .ov-underline{width:22px;height:2.5px;background:var(--acc);border-radius:2px;margin-top:3px;}
 .pcard .pos-label{text-align:right;}
 .pcard .pos-label .pt{font-size:13px;font-weight:700;color:var(--chalk);font-family:'JetBrains Mono';letter-spacing:.03em;}
+.pcard .pos-label.pos-cycle .pt,.pcard .pos-label.pos-cycle .pos-bonus{transition:opacity .26s ease;}
 .pcard .pos-label .pu{width:18px;height:2.5px;background:var(--acc);border-radius:2px;margin:3px 0 0 auto;}
+.pcard .pos-label .pos-bonus{font-size:11px;font-weight:700;color:var(--gold);font-family:'JetBrains Mono';margin-top:2px;min-height:13px;}
 
 .pcard .var-tag{align-self:center;background:var(--acc);color:#0a0d12;font-family:'JetBrains Mono';font-weight:700;
   font-size:7.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 9px;border-radius:100px;
@@ -353,8 +356,10 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.mini{width:128px;height:204px;}
 .pcard.mini .photo-frame{height:118px;}
 .pcard.mini .ov{font-size:20px;}
+.pcard.mini .ov-preview{font-size:9px;min-height:11px;}
 .pcard.mini .pos-label .pt{font-size:10px;}
 .pcard.mini .pos-label .pu{width:14px;}
+.pcard.mini .pos-label .pos-bonus{font-size:9px;min-height:11px;}
 .pcard.mini .avatar{font-size:28px;}
 .pcard.mini .var-tag{font-size:6.5px;padding:1.5px 7px;}
 .pcard.mini .card-body{margin-top:-10px;padding:0 8px 7px;}
@@ -374,8 +379,10 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.xs .avatar{font-size:20px;}
 .pcard.xs .card-body{margin-top:-8px;padding:0 6px 6px;}
 .pcard.xs .name{font-size:9.5px;}
+.pcard.xs .ov-preview{font-size:7.5px;min-height:9px;}
 .pcard.xs .pos-label .pt{font-size:8.5px;}
 .pcard.xs .pos-label .pu{width:11px;}
+.pcard.xs .pos-label .pos-bonus{font-size:7.5px;min-height:9px;}
 .pcard.xs .stats{display:grid;gap:2px 6px;padding-top:5px;}
 .pcard.xs .stat{font-size:6.8px;}
 .pcard.xs .nat-club-icons{display:none;}
@@ -486,8 +493,6 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .empty-slot-inner{width:86px;height:152px;border:2px dashed var(--line);border-radius:10px;display:flex;align-items:center;
   justify-content:center;font-family:'Anton';font-size:12.5px;color:var(--muted);background:rgba(255,255,255,.02);}
 .pitch-slot:hover .empty-slot-inner{border-color:var(--turf-bright);color:var(--chalk);}
-.oop-tag{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;font-size:9px;font-weight:700;
-  padding:2px 5px;border-radius:100px;font-family:'JetBrains Mono';z-index:5;box-shadow:0 2px 5px rgba(0,0,0,.4);}
 .side-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;height:fit-content;}
 .rating-hero{display:flex;align-items:center;gap:14px;}
 .rating-hero .num{font-family:'Anton';font-size:44px;line-height:1;}
@@ -6631,8 +6636,7 @@ const DRAFT_REWARD_TABLE = {
 let draftState = null;
 function draftCandidatePool(slotLabel){
   const pool = ALL_BASE.concat(ALL_SPECIAL).filter(c=>{
-    const pen = compatPenalty(slotLabel, mainPos(c.pos));
-    return pen!==null && pen<=2 && c.ov>=76 && c.ov<=91;
+    return positionEligibility(c, slotLabel)!==null && c.ov>=76 && c.ov<=91;
   });
   return pool.length ? pool : ALL_BASE;
 }
@@ -8188,12 +8192,6 @@ const FORMATIONS = {
    {id:'lm',label:'LM',x:16,y:35},{id:'cam',label:'CAM',x:50,y:31},{id:'rm',label:'RM',x:84,y:35},
    {id:'st',label:'ST',x:50,y:11}
  ]},
- '352':{label:'3-5-2', slots:[
-   {id:'gk',label:'GK',x:50,y:92},
-   {id:'cb1',label:'CB',x:26,y:78},{id:'cb2',label:'CB',x:50,y:82},{id:'cb3',label:'CB',x:74,y:78},
-   {id:'lwb',label:'LWB',x:8,y:52},{id:'cm1',label:'CM',x:34,y:52},{id:'cm2',label:'CM',x:50,y:44},{id:'cm3',label:'CM',x:66,y:52},{id:'rwb',label:'RWB',x:92,y:52},
-   {id:'st1',label:'ST',x:38,y:15},{id:'st2',label:'ST',x:62,y:15}
- ]},
  '343':{label:'3-4-3', slots:[
    {id:'gk',label:'GK',x:50,y:92},
    {id:'cb1',label:'CB',x:26,y:80},{id:'cb2',label:'CB',x:50,y:84},{id:'cb3',label:'CB',x:74,y:80},
@@ -8213,12 +8211,6 @@ const FORMATIONS = {
    {id:'lm',label:'LM',x:14,y:48},{id:'cm1',label:'CM',x:38,y:50},{id:'cm2',label:'CM',x:62,y:50},{id:'rm',label:'RM',x:86,y:48},
    {id:'cam',label:'CAM',x:50,y:28},
    {id:'st',label:'ST',x:50,y:10}
- ]},
- '532':{label:'5-3-2', slots:[
-   {id:'gk',label:'GK',x:50,y:92},
-   {id:'lwb',label:'LWB',x:8,y:68},{id:'cb1',label:'CB',x:28,y:80},{id:'cb2',label:'CB',x:50,y:84},{id:'cb3',label:'CB',x:72,y:80},{id:'rwb',label:'RWB',x:92,y:68},
-   {id:'cm1',label:'CM',x:32,y:50},{id:'cm2',label:'CM',x:50,y:46},{id:'cm3',label:'CM',x:68,y:50},
-   {id:'st1',label:'ST',x:38,y:14},{id:'st2',label:'ST',x:62,y:14}
  ]},
  '3412':{label:'3-4-1-2', slots:[
    {id:'gk',label:'GK',x:50,y:92},
@@ -8556,6 +8548,7 @@ async function init(){
     if(squad.managerUid===undefined) squad.managerUid = null;
     if(!squad.tactics) squad.tactics = {...DEFAULT_TACTICS};
   }
+  if(migrateSquadPositions()) await sSet('squad', squad);
   squadPresets = await sGet('squadPresets');
   if(!squadPresets) squadPresets = [];
   renderNav();
@@ -8607,6 +8600,21 @@ function formatCoins(n){
     i++; [div, suffix] = tiers[i]; decimals = 2; rounded = Number((n/div).toFixed(2));
   }
   return rounded.toFixed(decimals)+suffix;
+}
+// multi-position cards: `pos` is a comma-separated list ordered most-natural-first (real FIFA data).
+// rankIndex 0 = the card's primary position. Bonus tier depends on both rank and the card's base OV.
+function cardPositions(pos){ return String(pos||'').split(',').map(s=>s.trim()).filter(Boolean); }
+function positionBonusTier(ov, rankIndex){
+  if(ov < 80) return 0; // 0 = normal, 1 = "+", 2 = "++"
+  if(ov <= 85) return rankIndex===0 ? 1 : 0;
+  return rankIndex===0 ? 2 : rankIndex===1 ? 1 : 0;
+}
+const POS_BONUS_LABEL = {0:'', 1:'+', 2:'++'};
+// null = card cannot play this slot at all (not on its own position list). Otherwise {rankIndex, bonus}.
+function positionEligibility(card, slotLabel){
+  const idx = cardPositions(card.pos).indexOf(slotLabel);
+  if(idx===-1) return null;
+  return {rankIndex:idx, bonus: positionBonusTier(card.ov, idx)};
 }
 // inverse of formatCoins() - lets coin input fields accept shorthand like "1.2m"/"52.2m"/"921m"/"1.53b"
 // (also t/q), in addition to a plain number. Returns NaN if the string isn't a valid number/shorthand.
@@ -8770,7 +8778,7 @@ function initialsOf(name){
 function statBar(label, val){
   return `<div class="stat"><div class="stat-head"><span>${label}</span><span>${val}</span></div><div class="bar"><i style="width:${Math.min(100,val)}%"></i></div></div>`;
 }
-function cardEl(card, size=''){
+function cardEl(card, size='', effOvs=null, pinnedPos=null){
   const r = rarityInfo(card.ov);
   const hasVariant = card.variant && card.variant!=='base';
   const family = hasVariant ? (PATTERN_FAMILY[card.theme || (card.isManager?'manager':'')]||'') : '';
@@ -8786,11 +8794,24 @@ function cardEl(card, size=''){
         ? `<img class="face-photo" src="${proxyImg(card.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
            <div class="avatar" style="display:none;">${initialsOf(card.n)}</div>`
         : `<div class="avatar">${initialsOf(card.n)}</div>`);
+  // effOvs: one entry per listed position (see previewEffectiveOvsForCard), null/undefined for a
+  // given index means "no preview for that position". Cycles in lockstep with the position label.
+  const effOvAt = idx => (effOvs && effOvs[idx]!=null && effOvs[idx]!==card.ov) ? `(${effOvs[idx]})` : '';
+  const ovPreview = (!card.isManager && effOvs) ? `<div class="ov-preview">${effOvAt(0)}</div>` : '';
+  const posList = card.isManager ? [] : cardPositions(card.pos);
+  // pinnedPos = card is equipped in a squad slot right now - show ONLY that actual position and its
+  // real bonus for that rank, never cycling (equipped cards are never passed effOvs either)
+  const pinnedRank = pinnedPos ? posList.indexOf(pinnedPos) : 0;
+  const activeRank = pinnedRank<0 ? 0 : pinnedRank;
+  const activePos = pinnedPos || posList[0] || mainPos(card.pos);
+  const canCycle = !pinnedPos && posList.length>1;
+  const posLabelInner = `<div class="pt">${posDE(activePos)}</div><div class="pu"></div><div class="pos-bonus">${POS_BONUS_LABEL[positionBonusTier(card.ov,activeRank)]}</div>`;
+  const cycleAttrs = canCycle ? ` data-poslist='${JSON.stringify(posList)}' data-posov="${card.ov}" data-cycleidx="0"${effOvs?` data-effovs='${JSON.stringify(effOvs)}'`:''}` : '';
   const topInner = card.isManager
     ? `<div><div class="ov">${boostText}</div><div class="ov-underline"></div></div>
        <div class="pos-label"><div class="pt">TRAINER</div><div class="pu"></div></div>`
-    : `<div><div class="ov">${card.ov}</div><div class="ov-underline"></div></div>
-       <div class="pos-label"><div class="pt">${posDE(mainPos(card.pos))}</div><div class="pu"></div></div>`;
+    : `<div><div class="ov">${card.ov}</div>${ovPreview}<div class="ov-underline"></div></div>
+       <div class="pos-label${canCycle?' pos-cycle':''}"${cycleAttrs}>${posLabelInner}</div>`;
   const flagCode = NAT_FLAG[card.nat];
   const clubLogoUrl = CLUB_LOGO[card.club];
   const leagueLogoUrl = resolveLeagueLogo(card);
@@ -8827,6 +8848,41 @@ function cardEl(card, size=''){
     </div>`;
   return div;
 }
+// auto-cycles the position label of every currently-rendered multi-position card (marked with the
+// pos-cycle class + data attributes in cardEl above) through its position list, ++/+ tag included.
+// Plain text-content update on whatever's in the DOM right now - no re-render, cheap even with many
+// cards visible at once, and naturally does nothing for cards that scrolled out of the lazy grid.
+const POS_CYCLE_FADE_MS = 260;
+function tickPositionCycle(){
+  document.querySelectorAll('.pos-label.pos-cycle').forEach(el=>{
+    let list;
+    try{ list = JSON.parse(el.dataset.poslist); }catch(e){ return; }
+    if(!list || list.length<2) return;
+    const ov = Number(el.dataset.posov);
+    const idx = (Number(el.dataset.cycleidx)+1) % list.length;
+    el.dataset.cycleidx = idx;
+    const pt = el.querySelector('.pt'), pb = el.querySelector('.pos-bonus');
+    if(!pt) return;
+    let effOvs = null;
+    if(el.dataset.effovs){ try{ effOvs = JSON.parse(el.dataset.effovs); }catch(e){} }
+    // the OV-preview box is the pos-label's sibling (the "top" row has [ov box][pos-label])
+    const ovBox = el.previousElementSibling;
+    const ovPreviewEl = ovBox ? ovBox.querySelector('.ov-preview') : null;
+    // fade out, swap text while invisible, fade back in - avoids a jarring instant text-swap
+    pt.style.opacity = '0'; if(pb) pb.style.opacity = '0'; if(ovPreviewEl) ovPreviewEl.style.opacity = '0';
+    setTimeout(()=>{
+      pt.textContent = posDE(list[idx]);
+      if(pb) pb.textContent = POS_BONUS_LABEL[positionBonusTier(ov, idx)];
+      if(ovPreviewEl){
+        const v = effOvs ? effOvs[idx] : null;
+        ovPreviewEl.textContent = (v!=null && v!==ov) ? `(${v})` : '';
+        ovPreviewEl.style.opacity = '1';
+      }
+      pt.style.opacity = '1'; if(pb) pb.style.opacity = '1';
+    }, POS_CYCLE_FADE_MS);
+  });
+}
+setInterval(tickPositionCycle, 2500);
 
 // ===== nav & routing =====
 const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen']];
@@ -10533,42 +10589,37 @@ function drawClubGrid(){
   renderLazyGrid(grid, items, ({uid,card})=>{
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap';
-    wrap.appendChild(cardEl(card));
+    wrap.style.cursor = 'pointer';
+    wrap.appendChild(cardEl(card, '', previewEffectiveOvsForCard(card, uid)));
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
     rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computeRAP(card))}`;
     wrap.appendChild(rapTag);
+    wrap.addEventListener('click', ()=>showCardInfoModal(card, uid));
     return wrap;
   }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Spieler gefunden</h3><p>Versuche einen anderen Filter oder \u00f6ffne ein Pack im Kartenladen.</p></div>`});
 }
 
 // ===== SQUAD BUILDER =====
-// Position compatibility: exact match = 0 penalty. Listed alternates = playable with a rating penalty.
-// Anything not listed for a slot cannot be assigned there at all (e.g. GK<->outfield, CB<->wide/forward).
-const POSITION_COMPAT = {
-  GK:  {GK:0},
-  CB:  {CB:0, LB:3, RB:3},
-  LB:  {LB:0, LWB:2, CB:3},
-  RB:  {RB:0, RWB:2, CB:3},
-  LWB: {LWB:0, LB:2, LM:3},
-  RWB: {RWB:0, RB:2, RM:3},
-  CDM: {CDM:0, CM:2},
-  CM:  {CM:0, CDM:2, CAM:2},
-  CAM: {CAM:0, CM:2, CF:3},
-  LM:  {LM:0, LW:2, LWB:3},
-  RM:  {RM:0, RW:2, RWB:3},
-  LW:  {LW:0, LM:2, RW:4},
-  RW:  {RW:0, RM:2, LW:4},
-  ST:  {ST:0, CF:2},
-  CF:  {CF:0, ST:2, CAM:3},
-};
-function compatPenalty(slotLabel, playerMainPos){
-  const table = POSITION_COMPAT[slotLabel];
-  if(!table) return null;
-  return (playerMainPos in table) ? table[playerMainPos] : null;
-}
 
+// self-healing squad validation, runs once per session right after the squad loads (boot()) - there's
+// no server/admin access to every user's private saved squad, so this is the only way to retroactively
+// enforce the "no more off-position placements" rule (and the 3-5-2/5-3-2 formation removal) for
+// everyone: it silently strips now-illegal slots and persists the fix before any match can be played.
+function migrateSquadPositions(){
+  let changed = false;
+  if(squad.formation==='352' || squad.formation==='532'){ squad.formation='433'; changed=true; }
+  const form = FORMATIONS[squad.formation];
+  const validIds = new Set(form.slots.map(s=>s.id));
+  Object.keys(squad.slots).forEach(slotId=>{
+    if(!validIds.has(slotId)){ delete squad.slots[slotId]; changed=true; return; }
+    const slot = form.slots.find(s=>s.id===slotId);
+    const card = ownedCard(squad.slots[slotId]);
+    if(!card || !positionEligibility(card, slot.label)){ delete squad.slots[slotId]; changed=true; }
+  });
+  return changed;
+}
 function getAssignedManager(){
   if(!squad.managerUid) return null;
   const entry = managerCollection.find(m=>m.uid===squad.managerUid);
@@ -10599,11 +10650,10 @@ function squadRating(){
   const chemPlayers = computeChemistry(boostedCards, mgr?mgr.nat:null);
   roster.forEach((r,idx)=>{
     filled++;
-    const mp = mainPos(r.card.pos);
-    const pen = compatPenalty(r.slot.label, mp);
-    const usedPen = pen==null ? 8 : pen;
-    if(pen===0) exactCount++;
-    effSum += Math.max(0, chemPlayers[idx].chemOv - usedPen);
+    const info = positionEligibility(r.card, r.slot.label);
+    const posBonus = info ? info.bonus : 0;
+    if(info && info.rankIndex===0) exactCount++;
+    effSum += chemPlayers[idx].chemOv + posBonus;
   });
   if(filled===0) return {rating:0, filled:0};
   const base = effSum/filled;
@@ -10627,6 +10677,101 @@ function getSquadChemistryDetail(){
   roster.forEach((r,idx)=>{ bySlot[r.slotId] = chemPlayers[idx].chem; breakdownBySlot[r.slotId] = chemPlayers[idx].chemBreakdown; });
   const total = chemPlayers.reduce((s,p)=>s+p.chem,0);
   return {bySlot, breakdownBySlot, total, max: roster.length*3};
+}
+// "what would this card's rating be if it optimally went into my current squad right now" - used by
+// the club grid and the slot picker. ownUid (if given) is the candidate's own uid: if it's already
+// sitting in a different slot of the current squad, that other placement is excluded from the
+// hypothetical roster so it isn't double-counted for chemistry once it "moves" into the new slot.
+function previewEffectiveOvAtSlot(card, slot, ownUid){
+  const info = positionEligibility(card, slot.label);
+  if(!info) return null;
+  const mgr = getAssignedManager();
+  const form = FORMATIONS[squad.formation];
+  let previewIdx = -1;
+  const hypoRoster = [];
+  form.slots.forEach(s=>{
+    if(s.id===slot.id){
+      previewIdx = hypoRoster.length;
+      hypoRoster.push({ov:card.ov, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant});
+      return;
+    }
+    const uid = squad.slots[s.id];
+    if(!uid || (ownUid && uid===ownUid)) return;
+    const c = ownedCard(uid);
+    // same named player already elsewhere in the squad (even a different copy/variant) - the game
+    // never allows fielding the same player twice, so exclude them here too, or a duplicate/variant
+    // of a card already in the squad would inflate its own hypothetical chemistry against itself
+    if(!c || c.n===card.n) return;
+    hypoRoster.push({ov:c.ov, club:c.club, nat:c.nat, lg:c.lg, variant:c.variant});
+  });
+  const boosted = hypoRoster.map(p=>{
+    let ov = p.ov;
+    if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
+    return {...p, ov:Math.round(ov)};
+  });
+  const chemPlayers = computeChemistry(boosted, mgr?mgr.nat:null);
+  return chemPlayers[previewIdx].chemOv + info.bonus;
+}
+// best-fitting slot in the current formation that actually has this exact position label
+// (a formation can have more than one, e.g. two CB slots - takes the best of those)
+function previewEffectiveOvForPosition(card, posLabel, ownUid){
+  const form = FORMATIONS[squad.formation];
+  let hostSlots = form.slots.filter(s=>s.label===posLabel);
+  if(!hostSlots.length){
+    // current formation has no slot at all for this position (e.g. RM in a 4-3-3) - borrow an
+    // existing slot's id and pretend it's this position instead, so the preview still shows what
+    // the card would be worth there. Prefer an empty slot (nobody has to make way); otherwise fall
+    // back to the first slot - whoever's there is the "other player" bumped to make room for 11.
+    const emptySlot = form.slots.find(s=>!squad.slots[s.id]);
+    hostSlots = [{id:(emptySlot||form.slots[0]).id, label:posLabel}];
+  }
+  let best = null;
+  hostSlots.forEach(slot=>{
+    const v = previewEffectiveOvAtSlot(card, slot, ownUid);
+    if(v!==null && (best===null || v>best)) best = v;
+  });
+  return best;
+}
+// one entry per position in the card's own list, same order - lets the UI cycle the rating display
+// in lockstep with the position label, showing how each position would actually change the rating
+function previewEffectiveOvsForCard(card, ownUid){
+  return cardPositions(card.pos).map(pos=>previewEffectiveOvForPosition(card, pos, ownUid));
+}
+// tap-to-inspect from "Mein Verein": full card visual plus, for every position it can play, the
+// bonus tier and the rating it would actually have in the CURRENT squad right now (chemistry,
+// manager boost and position bonus included) - sorted best-fit first.
+function showCardInfoModal(card, uid){
+  const form = FORMATIONS[squad.formation];
+  const equippedSlotId = uid!=null ? Object.keys(squad.slots).find(sid=>squad.slots[sid]===uid) : null;
+  const equippedSlot = equippedSlotId ? form.slots.find(s=>s.id===equippedSlotId) : null;
+  const posList = cardPositions(card.pos);
+  const rows = posList.map((pos, idx)=>{
+    const bonusLabel = POS_BONUS_LABEL[positionBonusTier(card.ov, idx)] || 'normal';
+    const hasSlot = form.slots.some(s=>s.label===pos);
+    const effOv = previewEffectiveOvForPosition(card, pos, uid);
+    const isEquippedHere = !!(equippedSlot && equippedSlot.label===pos);
+    return {pos, bonusLabel, hasSlot, effOv, isEquippedHere};
+  }).sort((a,b)=>(b.effOv??-1)-(a.effOv??-1));
+  const rowsHtml = rows.map(r=>`
+    <div class="leader-row" style="margin-bottom:6px;">
+      <span style="flex:1;">${posDE(r.pos)}${r.isEquippedHere?' <b style="color:var(--turf-bright);">★ im Kader</b>':''}${!r.hasSlot?' <span class="hint" style="font-size:10px;">(geschätzt, keine ${posDE(r.pos)}-Position in dieser Formation)</span>':''}</span>
+      <span class="mono" style="color:var(--gold);min-width:28px;text-align:right;">${r.bonusLabel}</span>
+      <span class="mono" style="min-width:66px;text-align:right;">${r.effOv!=null ? r.effOv : '—'}</span>
+    </div>`).join('');
+  openModal(`
+    <h2 style="margin-bottom:2px;">${card.n}</h2>
+    <p class="hint" style="margin:0 0 14px;">${card.variant && card.variant!=='base' ? card.variantLabel+' · ' : ''}${card.ov} OVR · ${natDE(card.nat)||card.nat||''}${card.club?' · '+card.club:''}${card.lg?' · '+card.lg:''}</p>
+    <div style="display:flex;justify-content:center;margin-bottom:16px;">${cardEl(card).outerHTML}</div>
+    <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Rating je Position in deinem Verein</div>
+    ${rowsHtml}
+    <p class="hint" style="margin:10px 0 0;">Inklusive Trainer-Boost, Chemie und Positionsbonus — so, als würde die Karte gerade dort aufgestellt.</p>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="action-btn secondary" id="card-info-rap" style="flex:1;">RAP ~${formatCoins(computeRAP(card))}</button>
+      <button class="modal-close" id="card-info-close" style="flex:1;">Schließen</button>
+    </div>
+  `);
+  document.getElementById('card-info-close').addEventListener('click', closeModal);
+  document.getElementById('card-info-rap').addEventListener('click', ()=>showPriceHistoryModal(card));
 }
 function chemBreakdownText(b){
   if(!b) return '';
@@ -10717,7 +10862,7 @@ function renderSquad(view){
   const {rating, filled} = squadRating();
   const mgr = getAssignedManager();
   view.innerHTML = `
-    <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position realistisch abdecken k\u00f6nnen, werden angeboten \u2014 nahe Alternativen kosten einen Rating-Abzug. F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></div>
+    <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position tats\u00e4chlich spielen k\u00f6nnen, werden angeboten \u2014 Karten mit mehreren Positionen bekommen auf ihrer 1. bzw. 2. gelisteten Position einen Rating-Bonus (++/+). F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></div>
     <div class="squad-layout">
       <div class="pitch" id="pitch"></div>
       <div class="side-panel">
@@ -10795,8 +10940,9 @@ function renderSquad(view){
     el.className = 'pitch-slot';
     el.style.left = slot.x+'%'; el.style.top = slot.y+'%';
     if(card){
-      const pen = compatPenalty(slot.label, mainPos(card.pos)) || 0;
-      const cardNode = cardEl(card, 'xs');
+      // equipped card: pin the label to the slot it's actually playing, no cycling through its
+      // other listed positions - the card's own pos-bonus tag already reflects this exact slot
+      const cardNode = cardEl(card, 'xs', null, slot.label);
       const chem = chemDetail.bySlot[slot.id];
       if(chem!==undefined){
         cardNode.style.position = 'relative';
@@ -10806,14 +10952,6 @@ function renderSquad(view){
         ring.title = chemBreakdownText(chemDetail.breakdownBySlot[slot.id]); // hover bonus on desktop
         ring.addEventListener('click', (e)=>{ e.stopPropagation(); showPlayerChemistryModal(card, chem, chemDetail.breakdownBySlot[slot.id]); });
         cardNode.appendChild(ring);
-      }
-      if(pen>0){
-        cardNode.style.filter = 'saturate(.75)';
-        const tag = document.createElement('div');
-        tag.className = 'oop-tag';
-        tag.textContent = '-' + pen;
-        cardNode.style.position = 'relative';
-        cardNode.appendChild(tag);
       }
       el.appendChild(cardNode);
     } else {
@@ -10868,11 +11006,8 @@ async function openPicker(slot){
   const marketLocked = await getMarketLockedUidsOnly();
   const usedNames = allSquadNames('slots:'+slot.id);
   let items = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
-  items = items.map(x=>({...x, pen: compatPenalty(slot.label, mainPos(x.card.pos))})).filter(x=>x.pen!==null);
-  items.sort((a,b)=>{
-    if(a.pen!==b.pen) return a.pen-b.pen;
-    return b.card.ov-a.card.ov;
-  });
+  items = items.map(x=>({...x, effOv: previewEffectiveOvAtSlot(x.card, slot, x.uid)})).filter(x=>x.effOv!==null);
+  items.sort((a,b)=>b.effOv-a.effOv);
   const currentUid = squad.slots[slot.id];
   const primeUidsInSquad = new Set();
   Object.entries(squad.slots).forEach(([sId,uid])=>{
@@ -10883,7 +11018,7 @@ async function openPicker(slot){
   const primeAlreadyUsed = primeUidsInSquad.size>0;
   openModal(`
     <h2 style="margin-bottom:4px;">${posDE(slot.label)} ausw\u00e4hlen</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${posDE(slot.label)} abdecken k\u00f6nnen, werden angezeigt. Abweichende Positionen kosten einen Rating-Abzug (angezeigt als \u2212N). Karten im Transfermarkt kannst du direkt einsetzen \u2014 das Angebot wird dabei automatisch zur\u00fcckgezogen. Karten in einem laufenden Handelsangebot sind weiterhin nicht verf\u00fcgbar. Derselbe Spieler (auch als andere Variante) kann nur einmal gleichzeitig aufgestellt werden. Maximal 1 PRIME-Karte gleichzeitig im Kader.</p>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${posDE(slot.label)} tats\u00e4chlich spielen k\u00f6nnen (eigene Position der Karte), werden angezeigt \u2014 sortiert nach dem Rating, das die Karte mit Chemie und Positionsbonus auf diesem Platz h\u00e4tte (in Klammern). Karten im Transfermarkt kannst du direkt einsetzen \u2014 das Angebot wird dabei automatisch zur\u00fcckgezogen. Karten in einem laufenden Handelsangebot sind weiterhin nicht verf\u00fcgbar. Derselbe Spieler (auch als andere Variante) kann nur einmal gleichzeitig aufgestellt werden. Maximal 1 PRIME-Karte gleichzeitig im Kader.</p>
     ${currentUid?`<button class="action-btn secondary" id="clear-slot" style="margin-bottom:14px;width:180px;">Spieler entfernen</button>`:''}
     <div class="picker-list" id="picker-list"></div>
     ${!items.length?'<p class="hint">Noch keine passenden Spieler in deinem Verein f\u00fcr diese Position.</p>':''}`);
@@ -10894,7 +11029,7 @@ async function openPicker(slot){
     });
   }
   const list = document.getElementById('picker-list');
-  items.forEach(({uid,card,pen})=>{
+  items.forEach(({uid,card,effOv})=>{
     const onMarket = uid!==currentUid && marketLocked.has(uid);
     const tradeLocked = uid!==currentUid && externalLocked.has(uid) && !onMarket;
     const nameDupe = uid!==currentUid && usedNames.has(card.n);
@@ -10904,11 +11039,7 @@ async function openPicker(slot){
     wrap.style.cursor = blocked ? 'not-allowed' : 'pointer';
     wrap.style.position='relative';
     wrap.style.opacity = uid===currentUid ? '1' : (blocked ? '.35' : (used.has(uid) ? '.35':'1'));
-    wrap.appendChild(cardEl(card,'mini'));
-    if(pen>0){
-      const tag=document.createElement('div'); tag.className='oop-tag'; tag.textContent='-'+pen;
-      wrap.appendChild(tag);
-    }
+    wrap.appendChild(cardEl(card,'mini', [effOv], slot.label));
     if(tradeLocked){
       const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM HANDEL';
       wrap.appendChild(badge);
@@ -12955,6 +13086,8 @@ function getMySquadPlayers(){
     if(card){
       let ov = card.ov;
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
+      const info = positionEligibility(card, slot.label);
+      if(info) ov += info.bonus;
       list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant});
     }
   });
