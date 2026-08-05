@@ -5912,8 +5912,8 @@ function renderPriceHistorySVG(cardId, width=320, height=140){
     <path d="${areaPath}" fill="url(#phg-${cardId})"/>
     <path d="${path}" fill="none" stroke="var(--turf-bright)" stroke-width="2"/>
     ${xs.map((x,i)=>`<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="2.5" fill="var(--turf-bright)"/>`).join('')}
-    <text x="${pad}" y="14" font-size="10" fill="var(--muted)" font-family="JetBrains Mono">${max.toLocaleString('de-DE')}</text>
-    <text x="${pad}" y="${height-6}" font-size="10" fill="var(--muted)" font-family="JetBrains Mono">${min.toLocaleString('de-DE')}</text>
+    <text x="${pad}" y="14" font-size="10" fill="var(--muted)" font-family="JetBrains Mono">${formatCoins(max)}</text>
+    <text x="${pad}" y="${height-6}" font-size="10" fill="var(--muted)" font-family="JetBrains Mono">${formatCoins(min)}</text>
   </svg>`;
 }
 function showPriceHistoryModal(card){
@@ -5926,7 +5926,7 @@ function rapBadge(card, opts={}){
   const el = document.createElement('div');
   el.className = 'mono rap-badge';
   el.style.cssText = `text-align:center;font-size:9.5px;color:var(--gold);margin-top:3px;white-space:nowrap;cursor:pointer;padding:6px 4px;margin:3px -4px -4px;min-height:22px;box-sizing:border-box;${opts.style||''}`;
-  el.textContent = `RAP ${computeRAP(card).toLocaleString('de-DE')}`;
+  el.textContent = `RAP ${formatCoins(computeRAP(card))}`;
   el.title = 'Preisverlauf ansehen';
   el.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); showPriceHistoryModal(card); });
   el.addEventListener('touchend', (e)=>{ e.stopPropagation(); }, {passive:true});
@@ -5994,7 +5994,7 @@ async function loadNetWorthLeaderboard(){
     const row = document.createElement('div');
     row.className = 'leader-row';
     const mine = e.userId===profile.userId;
-    row.innerHTML = `<span class="rk">${i+1}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">${(e.netWorth||0).toLocaleString('de-DE')}</span>`;
+    row.innerHTML = `<span class="rk">${i+1}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">${formatCoins((e.netWorth||0))}</span>`;
     box.appendChild(row);
   });
 }
@@ -6641,7 +6641,7 @@ function startDraft(){
   if(profile.coins < DRAFT_ENTRY_COST){ toast('Nicht genug Coins f\u00fcr den Draft-Eintritt.'); return; }
   openModal(`
     <h2 style="margin-bottom:4px;">Draft starten?</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Kostet ${DRAFT_ENTRY_COST.toLocaleString('de-DE')} Coins. Du stellst einen Zufallskader zusammen und spielst damit, bis du verlierst (max. 4 Siege). Der Kader geh\u00f6rt dir danach nicht \u2014 nur die Belohnung z\u00e4hlt.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Kostet ${formatCoins(DRAFT_ENTRY_COST)} Coins. Du stellst einen Zufallskader zusammen und spielst damit, bis du verlierst (max. 4 Siege). Der Kader geh\u00f6rt dir danach nicht \u2014 nur die Belohnung z\u00e4hlt.</p>
     <button class="action-btn" id="draft-confirm-yes" style="width:100%;margin-bottom:8px;">Ja, Draft starten</button>
     <button class="action-btn secondary" id="draft-confirm-no" style="width:100%;">Abbrechen</button>`);
   document.getElementById('draft-confirm-no').addEventListener('click', closeModal);
@@ -6658,7 +6658,7 @@ function renderDraftPanel(){
   if(!draftState){
     box.innerHTML = `
       <p class="hint" style="margin-top:0;">Stelle aus zuf\u00e4lligen 3er-Auswahlen einen kompletten Kader zusammen (4-3-3) und tritt damit gegen st\u00e4rker werdende Gegner an. Die Karten geh\u00f6ren dir nicht \u2014 nur die Belohnung z\u00e4hlt. Maximal 4 Siege m\u00f6glich, eine Niederlage beendet den Lauf.</p>
-      <button class="action-btn" id="draft-start-btn">Draft starten (${DRAFT_ENTRY_COST.toLocaleString('de-DE')} Coins)</button>`;
+      <button class="action-btn" id="draft-start-btn">Draft starten (${formatCoins(DRAFT_ENTRY_COST)} Coins)</button>`;
     document.getElementById('draft-start-btn').addEventListener('click', startDraft);
     return;
   }
@@ -6723,7 +6723,7 @@ async function playDraftMatch(){
 async function claimDraftReward(maxed){
   const reward = DRAFT_REWARD_TABLE[draftState.wins];
   await atomicCoinChange(reward.coins);
-  let msg = `Draft beendet mit ${draftState.wins}/4 Siegen: +${reward.coins.toLocaleString('de-DE')} Coins`;
+  let msg = `Draft beendet mit ${draftState.wins}/4 Siegen: +${formatCoins(reward.coins)} Coins`;
   if(reward.packId){
     const pack = PACKS.find(p=>p.id===reward.packId);
     if(pack){ msg += ` + ${pack.name}`; showPackOpening(pack, pack.draw()); }
@@ -6823,7 +6823,7 @@ function sbcRewardDisplay(sbc){
     return {label:`${BALLONDOR_CARD.n} (Ballon d'Or)`, dotColor:'#f2c14e', tierClass:'ultimate'};
   }
   if(sbc.coinReward){
-    return {label:`${sbc.coinReward.toLocaleString('de-DE')} Coins`, dotColor:'var(--gold)', tierClass:'premium'};
+    return {label:`${formatCoins(sbc.coinReward)} Coins`, dotColor:'var(--gold)', tierClass:'premium'};
   }
   const pack = PACKS.find(p=>p.id===sbc.reward);
   return {label:pack.name, dotColor: pack.tier==='ultimate'?'#ffd76a':pack.tier==='premium'?'#c78bf5':'var(--turf-bright)', tierClass:pack.tier};
@@ -6997,7 +6997,7 @@ async function submitSBC(){
   } else if(activeSBC.coinReward){
     await atomicCoinChange(activeSBC.coinReward);
     playSfx('coin');
-    toast(`Herausforderung abgeschlossen! +${activeSBC.coinReward.toLocaleString('de-DE')} Coins.`);
+    toast(`Herausforderung abgeschlossen! +${formatCoins(activeSBC.coinReward)} Coins.`);
   } else {
     const pack = PACKS.find(p=>p.id===activeSBC.reward);
     const drawn = pack.draw();
@@ -7016,11 +7016,11 @@ function describeOffer(t){
   const parts = [];
   if(t.offerCards.length) parts.push(`${t.offerCards.length} Karte${t.offerCards.length>1?'n':''}`);
   if(t.offerManagers && t.offerManagers.length) parts.push(`${t.offerManagers.length} Trainer`);
-  if(t.offerCoins) parts.push(`${t.offerCoins.toLocaleString('de-DE')} Coins`);
+  if(t.offerCoins) parts.push(`${formatCoins(t.offerCoins)} Coins`);
   return parts.join(' + ') || 'nichts';
 }
 function describeWant(want){
-  if(want.kind==='coins') return `${want.amount.toLocaleString('de-DE')} Coins`;
+  if(want.kind==='coins') return `${formatCoins(want.amount)} Coins`;
   if(want.kind==='nothing') return 'nichts (Geschenk)';
   if(want.kind==='cards') return `${want.count} Karte${want.count>1?'n':''} (mind. ${want.minOvr} Rating${want.pos&&want.pos!=='ANY'?', '+POS_GROUP_DE[want.pos]:''})`;
   if(want.kind==='manager') return `1 Trainerkarte (mind. Stufe ${want.minTier})`;
@@ -7037,8 +7037,8 @@ function renderTrade(view){
       <div class="view-head"><h2>Handel \ud83d\udd12</h2><p>Verkaufe Karten \u00f6ffentlich \u00fcber den Transfermarkt, oder mache einem bestimmten Verein ein direktes Angebot \u2014 auch Karte-gegen-Karte oder Trainer-gegen-Trainer.</p></div>
       <div class="empty-state">
         <h3>Noch gesperrt</h3>
-        <p>Der Handel schaltet sich frei, sobald dein Vereinswert <b style="color:var(--gold);">${TRADE_UNLOCK_NET_WORTH.toLocaleString('de-DE')} Coins</b> erreicht (Coins + gesch\u00e4tzter Wert aller Karten und Trainer, sichtbar in der Vereinswert-Bestenliste unter \u201eOnline spielen\u201c).</p>
-        <div class="mono" style="font-size:13px;margin-top:12px;color:var(--danger);">${netWorth.toLocaleString('de-DE')} / ${TRADE_UNLOCK_NET_WORTH.toLocaleString('de-DE')}</div>
+        <p>Der Handel schaltet sich frei, sobald dein Vereinswert <b style="color:var(--gold);">${formatCoins(TRADE_UNLOCK_NET_WORTH)} Coins</b> erreicht (Coins + gesch\u00e4tzter Wert aller Karten und Trainer, sichtbar in der Vereinswert-Bestenliste unter \u201eOnline spielen\u201c).</p>
+        <div class="mono" style="font-size:13px;margin-top:12px;color:var(--danger);">${formatCoins(netWorth)} / ${formatCoins(TRADE_UNLOCK_NET_WORTH)}</div>
         <div class="chem-bar" style="margin-top:8px;max-width:280px;"><i style="width:${pct}%;background:var(--turf-bright);"></i></div>
       </div>`;
     return;
@@ -7162,7 +7162,7 @@ function drawMarketGrid(){
     const priceTag = document.createElement('div');
     priceTag.className = 'price-pill';
     priceTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;';
-    priceTag.innerHTML = `<div class="pdot"></div>${listing.price.toLocaleString('de-DE')}`;
+    priceTag.innerHTML = `<div class="pdot"></div>${formatCoins(listing.price)}`;
     wrap.appendChild(priceTag);
     if(listing.sellerUserId===profile.userId){
       wrap.title = 'Klicken zum Verwalten';
@@ -7561,7 +7561,7 @@ function renderSellFilter(allEligible, usedInSquad){
           const tag = document.createElement('div');
           tag.className = 'mono';
           tag.style.cssText = 'text-align:center;font-size:10px;color:var(--gold);margin-top:2px;';
-          tag.textContent = price.toLocaleString('de-DE');
+          tag.textContent = formatCoins(price);
           wrap.appendChild(tag);
           grid.appendChild(wrap);
         });
@@ -7636,8 +7636,8 @@ function confirmBuyListing(listing, card){
   openModal(`
     <h2 style="margin-bottom:10px;">${card.n} kaufen?</h2>
     <div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(card,'mini').outerHTML}</div>
-    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:4px;">${listing.price.toLocaleString('de-DE')} Coins</p>
-    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${computeRAP(card).toLocaleString('de-DE')}</b> \u00b7 Verk\u00e4ufer: <b>${listing.sellerName||'Unbekannt'}</b></p>
+    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:4px;">${formatCoins(listing.price)} Coins</p>
+    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(computeRAP(card))}</b> \u00b7 Verk\u00e4ufer: <b>${listing.sellerName||'Unbekannt'}</b></p>
     <div style="display:flex;gap:10px;justify-content:center;">
       <button class="action-btn secondary" id="cancel-buy" style="width:120px;">Abbrechen</button>
       <button class="action-btn" id="do-buy" style="width:120px;">Kaufen</button>
@@ -7652,8 +7652,8 @@ function openManageListingModal(listing, card){
   openModal(`
     <h2 style="margin-bottom:10px;">${card.n} \u2014 dein Angebot</h2>
     <div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(card,'mini').outerHTML}</div>
-    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:4px;">${listing.price.toLocaleString('de-DE')} Coins</p>
-    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${computeRAP(card).toLocaleString('de-DE')}</b></p>
+    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:4px;">${formatCoins(listing.price)} Coins</p>
+    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(computeRAP(card))}</b></p>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button class="action-btn" id="change-price-btn">Preis \u00e4ndern</button>
       <button class="action-btn secondary" id="withdraw-listing-btn" style="background:var(--danger);">Zur\u00fcckziehen</button>
@@ -8582,7 +8582,24 @@ async function init(){
   }
 }
 
-function updateCoinDisplay(){ document.getElementById('coin-display').textContent = profile.coins.toLocaleString('de-DE'); }
+// abbreviates coin amounts >=1,000,000 to 3 significant figures (1.32m, 52.2m, 921m, 1.53b, ...t, ...q);
+// below that, full number with German thousands separators as before
+function formatCoins(n){
+  n = Math.round(n);
+  const abs = Math.abs(n);
+  if(abs < 1000000) return n.toLocaleString('de-DE');
+  const tiers = [[1e6,'m'],[1e9,'b'],[1e12,'t'],[1e15,'q']];
+  let i = tiers.length-1;
+  while(i>0 && abs < tiers[i][0]) i--;
+  let [div, suffix] = tiers[i];
+  let decimals = Math.abs(n/div)<10 ? 2 : Math.abs(n/div)<100 ? 1 : 0;
+  let rounded = Number((n/div).toFixed(decimals));
+  if(Math.abs(rounded)>=1000 && i<tiers.length-1){ // rounding pushed it into the next tier (e.g. 999.95m -> 1b)
+    i++; [div, suffix] = tiers[i]; decimals = 2; rounded = Number((n/div).toFixed(2));
+  }
+  return rounded.toFixed(decimals)+suffix;
+}
+function updateCoinDisplay(){ document.getElementById('coin-display').textContent = formatCoins(profile.coins); }
 const UPDATELOG_SECTION_STYLE = {
   new:     {icon:'\u2728', color:'var(--turf-bright)'},
   balance: {icon:'\u2696\uFE0F', color:'#e8c468'},
@@ -8863,7 +8880,7 @@ async function claimDailyReward(){
   playSfx('coin');
   renderStore(document.getElementById('view'));
   const drawn = reward.draw();
-  toast(`Tag ${day} abgeholt: +${reward.coins.toLocaleString('de-DE')} Coins!`);
+  toast(`Tag ${day} abgeholt: +${formatCoins(reward.coins)} Coins!`);
   showPackOpening({name:`Tag ${day} \u2013 T\u00e4gliches Pack`, tier: reward.tier||'', count: reward.count}, drawn);
 }
 function renderDailyBanner(){
@@ -8955,7 +8972,7 @@ async function claimLimitedEventReward(){
   });
   playSfx('coin');
   renderStore(document.getElementById('view'));
-  toast(`Limited Event: +${(daysToClaim * 20000).toLocaleString('de-DE')} Coins und ${daysToClaim} Premium Pack${daysToClaim===1?'':'s'} erhalten.`);
+  toast(`Limited Event: +${formatCoins((daysToClaim * 20000))} Coins und ${daysToClaim} Premium Pack${daysToClaim===1?'':'s'} erhalten.`);
   openPendingLimitedEventPacks();
 }
 function openPendingLimitedEventPacks(){
@@ -9183,7 +9200,7 @@ function renderStore(view){
         ${isWM ? `<div class="mono" id="wm-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur dieses Wochenende verf\u00fcgbar</div>` : ''}
         <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
         <div class="buyrow">
-          <div class="price-pill"><div class="pdot"></div>${pack.cost.toLocaleString('de-DE')}</div>
+          <div class="price-pill"><div class="pdot"></div>${formatCoins(pack.cost)}</div>
           <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
         </div>
       </div>`;
@@ -10267,7 +10284,7 @@ async function loadAdminUserPanel(targetId){
   box.innerHTML = `
     <div style="margin-bottom:14px;">
       <div style="font-weight:700;font-size:16px;">${p.displayName||targetId} <span class="mono" style="color:var(--muted);font-size:12px;">(${targetId})</span></div>
-      <div class="hint" style="margin-top:2px;">Coins: <b style="color:var(--gold);">${(p.coins||0).toLocaleString('de-DE')}</b> \u00b7 Siege: ${p.wins||0} \u00b7 Niederlagen: ${p.losses||0}
+      <div class="hint" style="margin-top:2px;">Coins: <b style="color:var(--gold);">${formatCoins((p.coins||0))}</b> \u00b7 Siege: ${p.wins||0} \u00b7 Niederlagen: ${p.losses||0}
       ${p.banned ? ' \u00b7 <b style="color:var(--danger);">GESPERRT</b>' : ''}
       ${leaderboardBanned ? ` \u00b7 <b style="color:var(--danger);">Leaderboard-gesperrt bis ${new Date(ban.until).toLocaleString('de-DE')}</b>` : ''}</div>
     </div>
@@ -10285,7 +10302,7 @@ async function loadAdminUserPanel(targetId){
       if(!Number.isFinite(amount)) return;
       const newProfile = {...p, coins:(p.coins||0)+amount};
       await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
-      toast(`${amount>=0?'+':''}${amount.toLocaleString('de-DE')} Coins f\u00fcr ${targetId}.`);
+      toast(`${amount>=0?'+':''}${formatCoins(amount)} Coins f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
     }, 12);
   });
@@ -10482,7 +10499,7 @@ function drawManagerClubGrid(){
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
-    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${computeRAP(mgr).toLocaleString('de-DE')}`;
+    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computeRAP(mgr))}`;
     wrap.appendChild(rapTag);
     return wrap;
   });
@@ -10501,7 +10518,7 @@ function drawClubGrid(){
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
-    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${computeRAP(card).toLocaleString('de-DE')}`;
+    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computeRAP(card))}`;
     wrap.appendChild(rapTag);
     return wrap;
   }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Spieler gefunden</h3><p>Versuche einen anderen Filter oder \u00f6ffne ein Pack im Kartenladen.</p></div>`});
@@ -11135,7 +11152,7 @@ function singleElimRoundNames(totalRounds){
 function isBotParticipantId(userId){ return typeof userId==='string' && userId.startsWith('bot_'); }
 function tournamentPrizeLabel(t){
   if(t.prizeType==='card' && t.prizeCard) return `Karte: ${t.prizeCard.n} (${t.prizeCard.ov} OVR)`;
-  return `${(t.prizeCoins||0).toLocaleString('de-DE')} Coins`;
+  return `${formatCoins((t.prizeCoins||0))} Coins`;
 }
 // Migrates a tournament doc read from Firestore into the current shape. Docs created before the
 // card-prize feature existed have no prizeType field at all (they only ever had prizeCoins), and
@@ -11777,7 +11794,7 @@ async function cancelHostedTournament(id){
         }
       }
     }
-    if(result==='cancelled') toast(refundedCoins>0 ? `Turnier abgesagt \u2014 ${refundedCoins.toLocaleString('de-DE')} Coins erstattet.` : 'Turnier abgesagt.');
+    if(result==='cancelled') toast(refundedCoins>0 ? `Turnier abgesagt \u2014 ${formatCoins(refundedCoins)} Coins erstattet.` : 'Turnier abgesagt.');
     else if(result==='not-host') toast('Nur der Veranstalter kann das Turnier absagen.');
     else if(result==='already-running') toast('Turnier l\u00e4uft bereits und kann nicht mehr abgesagt werden.');
     else if(result==='gone') toast('Turnier existiert nicht mehr.');
@@ -11846,7 +11863,7 @@ async function claimTournamentPrize(id){
     }
     if(claimed){
       playSfx('coin');
-      toast(prizeCardName ? `\ud83c\udfc6 Preis abgeholt: ${prizeCardName}!` : `\ud83c\udfc6 Preisgeld abgeholt: +${prizeCoins.toLocaleString('de-DE')} Coins!`);
+      toast(prizeCardName ? `\ud83c\udfc6 Preis abgeholt: ${prizeCardName}!` : `\ud83c\udfc6 Preisgeld abgeholt: +${formatCoins(prizeCoins)} Coins!`);
     }
     invalidateReadCache('my-tournament-results:'+profile.userId);
     loadMyTournamentResults();
@@ -12085,7 +12102,7 @@ async function loadMyTournamentResults(){
       } else if(won && !t.prizeClaimed){
         const claimBtn = document.createElement('button');
         claimBtn.className='action-btn'; claimBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;';
-        claimBtn.textContent = t.prizeType==='card' && t.prizeCard ? `Karte abholen: ${t.prizeCard.n}` : `Preis abholen (${(t.prizeCoins||0).toLocaleString('de-DE')})`;
+        claimBtn.textContent = t.prizeType==='card' && t.prizeCard ? `Karte abholen: ${t.prizeCard.n}` : `Preis abholen (${formatCoins((t.prizeCoins||0))})`;
         claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id); });
         row.appendChild(claimBtn);
       }
@@ -12207,7 +12224,7 @@ async function loadIncomingDuels(){
           startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
         };
         try{
-          await fb.setDoc(fb.doc(fb.db,'matches',matchId), matchDoc);
+          await fb.setDoc(fb.doc(fb.db,'matches',matchId), stripUndefined(matchDoc));
           await fb.setDoc(fb.doc(fb.db,'duels',duel.id), {status:'accepted', matchId}, {merge:true});
           invalidateReadCache('incoming-duels:'+profile.userId);
           enterSyncedMatch(matchDoc);
@@ -12281,7 +12298,7 @@ function renderTournamentPanel(){
     <div class="formation-select" style="margin-bottom:14px;">
       ${TOURNAMENT_ROUNDS.map((r,i)=>`<div class="chip ${i+1<t.round?'active':''}" style="${i+1===t.round?'border-color:var(--gold);color:var(--gold);':''}">${r.name}</div>`).join('')}
     </div>
-    <p class="hint" style="margin-top:0;">Aktuelle Runde: <b style="color:var(--chalk);">${round.name}</b> (Gegner-Rating ${round.minOv}-${round.maxOv}). Belohnung bei Sieg: ${round.coins>0?round.coins.toLocaleString('de-DE')+' Coins':'<b style="color:var(--gold);">UCL Winners Pack</b> \u2014 der Pokal!'}</p>
+    <p class="hint" style="margin-top:0;">Aktuelle Runde: <b style="color:var(--chalk);">${round.name}</b> (Gegner-Rating ${round.minOv}-${round.maxOv}). Belohnung bei Sieg: ${round.coins>0?formatCoins(round.coins)+' Coins':'<b style="color:var(--gold);">UCL Winners Pack</b> \u2014 der Pokal!'}</p>
     <button class="action-btn" id="tournament-play" style="width:220px;">Spiel starten</button>
     <div id="tournament-match-area" style="margin-top:14px;"></div>`;
   document.getElementById('tournament-play').addEventListener('click', playTournamentRound);
@@ -12316,7 +12333,7 @@ async function playTournamentRound(){
         await atomicCoinChange(round.coins);
         profile.tournament = {round: t.round+1};
         await sSet('profile', profile);
-        toast(`${round.name} gewonnen! +${round.coins.toLocaleString('de-DE')} Coins. Weiter geht's.`);
+        toast(`${round.name} gewonnen! +${formatCoins(round.coins)} Coins. Weiter geht's.`);
       }
     } else {
       profile.tournament = null;
@@ -12395,7 +12412,7 @@ async function playPrimeChallenge(ch){
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const ENTRY_FEE = 5000;
-  if(profile.coins<ENTRY_FEE){ toast(`Du brauchst mindestens ${ENTRY_FEE.toLocaleString('de-DE')} Coins Einsatz f\u00fcr diese Herausforderung.`); return; }
+  if(profile.coins<ENTRY_FEE){ toast(`Du brauchst mindestens ${formatCoins(ENTRY_FEE)} Coins Einsatz f\u00fcr diese Herausforderung.`); return; }
   await atomicCoinChange(-ENTRY_FEE);
   playSfx('coin');
   const opp = buildEliteOpponentXI(100, 110);
@@ -12512,7 +12529,7 @@ function renderOReiPanel(){
     <p class="hint" style="margin-top:0;">Die Kr\u00f6nung aller Herausforderungen. Voraussetzungen zum Antreten:</p>
     ${reqRow('Siege gesamt', wins>=OREI_ENTRY.wins, wins, OREI_ENTRY.wins)}
     ${reqRow('Kader-Rating', rating>=OREI_ENTRY.rating, rating, OREI_ENTRY.rating)}
-    ${reqRow('Vereinswert', netWorth>=OREI_ENTRY.netWorth, netWorth.toLocaleString('de-DE'), OREI_ENTRY.netWorth.toLocaleString('de-DE'))}
+    ${reqRow('Vereinswert', netWorth>=OREI_ENTRY.netWorth, formatCoins(netWorth), formatCoins(OREI_ENTRY.netWorth))}
     <p class="hint" style="margin:12px 0;">3 Siege in Folge gegen ein Fantasieteam mit Rating 111-114 (zuf\u00e4llig pro Versuch) n\u00f6tig \u2014 eine Niederlage setzt die Serie zur\u00fcck auf 0. Beim 1. Sieg: <b style="color:var(--gold);">30.000 Coins</b> (nur einmalig). Beim 2. Sieg in Folge: <b style="color:var(--gold);">1 Blackout Pack</b> (nur einmalig). Bei 3 in Folge: das <b style="color:#c98a3e;">Fu\u00dfballg\u00f6tter Pack</b> wird dauerhaft im Kartenladen freigeschaltet (30.000 Coins, winzige Chance auf Pel\u00e9, Maradona, Zidane oder Sir Alex Ferguson).</p>
     <div class="formation-select" style="margin-bottom:14px;">
       ${[0,1,2].map(i=>`<div class="chip ${i<streak?'active':''}" style="${i===streak?'border-color:#c98a3e;color:#c98a3e;':''}">${i+1}</div>`).join('')}
@@ -12864,6 +12881,17 @@ function showSquadModal(s){
   document.getElementById('squad-view-challenge').addEventListener('click', ()=>{ closeModal(); challengeLeaderboardSquad(s); });
 }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+// Firestore rejects any field whose value is `undefined` (e.g. a plain goal's absent isPenalty
+// flag, or a scorer without an img) - drop such keys entirely before writing a match doc
+function stripUndefined(obj){
+  if(Array.isArray(obj)) return obj.map(stripUndefined);
+  if(obj && typeof obj==='object' && !(obj instanceof Date)){
+    const out = {};
+    for(const k in obj){ if(obj[k]!==undefined) out[k] = stripUndefined(obj[k]); }
+    return out;
+  }
+  return obj;
+}
 // real Poisson process (mean = lambda exactly) - gives match scores the natural game-to-game
 // variance a real Poisson distribution has, so a small rating edge doesn't win almost every time
 function poissonGoals(lambda){
@@ -13691,7 +13719,7 @@ async function joinQueue(){
               startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
             };
             if(!queueActive) return; // cancelled right before we'd have created the match - back out cleanly
-            await fb.setDoc(fb.doc(fb.db,'matches',mid), matchDoc);
+            await fb.setDoc(fb.doc(fb.db,'matches',mid), stripUndefined(matchDoc));
             // tag the opponent's OWN queue doc instead of deleting it, so they find the match
             // even if they never personally saw me in a scan (fixes the "one side never finds it" bug)
             try{ await fb.setDoc(fb.doc(fb.db,'queue',other.userId), {matchedId: mid}, {merge:true}); }catch(_){}
