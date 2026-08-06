@@ -125,6 +125,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pack-card .buyrow{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);}
 .price-pill{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;color:var(--gold);}
 .price-pill .pdot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px var(--gold);}
+.token-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22d3ee;box-shadow:0 0 7px #22d3ee;vertical-align:middle;margin-right:5px;}
 .buy-btn{background:var(--turf);color:#eafff2;padding:8px 15px;border-radius:8px;font-weight:700;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;transition:.15s;box-shadow:0 2px 8px rgba(47,157,103,.25);}
 .buy-btn:hover{background:var(--turf-bright);box-shadow:0 3px 12px rgba(63,163,77,.4);}
 .buy-btn:disabled{background:#2a2d27;color:#666;cursor:not-allowed;box-shadow:none;}
@@ -279,6 +280,12 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.theme-eradef{--acc:#ffcf5c;background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.06) 0 2px, transparent 2px 10px),
     linear-gradient(160deg,#2a1d0d 0%,#0f0b08 72%) !important;box-shadow:0 10px 26px rgba(0,0,0,.58), 0 0 34px -5px #ffcf5c;}
+.pcard.theme-iconswap{--acc:#22d3ee;border:1.5px solid transparent;background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,.07) 0 2px, transparent 2px 10px) padding-box,
+    linear-gradient(160deg,#062226 0%,#050e12 68%) padding-box,
+    linear-gradient(90deg,#22d3ee,#a5f3fc,#22d3ee) border-box;
+  background-size:100% 100%,100% 100%,240% 240%;
+  animation:primeBorderShift 4s linear infinite;box-shadow:0 10px 26px rgba(0,0,0,.58), 0 0 30px -5px #22d3ee;}
 .pcard.theme-sigseason{--acc:#ff6fb1;border:2px solid transparent;background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.08) 0 2px, transparent 2px 8px) padding-box,
     linear-gradient(160deg,#2a1025 0%,#0b0710 62%) padding-box,
@@ -295,6 +302,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   radial-gradient(circle at 50% 10%, rgba(255,111,177,.36), transparent 56%),
   repeating-conic-gradient(from 0deg at 50% 10%, rgba(255,215,106,.12) 0deg 4deg, transparent 4deg 12deg);
   animation:primeSparkle 2s ease-in-out infinite;}
+.pcard.pattern-iconswappattern .pattern-layer{background:
+  radial-gradient(circle at 50% 12%, rgba(34,211,238,.4), transparent 58%),
+  repeating-linear-gradient(60deg, rgba(165,243,252,.08) 0 3px, transparent 3px 16px),
+  repeating-linear-gradient(-60deg, rgba(165,243,252,.06) 0 3px, transparent 3px 16px);
+  animation:primeSparkle 2.4s ease-in-out infinite;}
 
 .pcard .variant-badge{position:absolute;bottom:6px;right:6px;width:26px;height:26px;border-radius:8px;
   background:rgba(6,8,12,.72);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;z-index:2;}
@@ -533,6 +545,12 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 /* ---- play view ---- */
 .play-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
 @media(max-width:820px){.play-grid{grid-template-columns:1fr;}}
+.icon-swap-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  background:linear-gradient(135deg, rgba(34,211,238,.14), var(--panel) 55%);border:1px solid #22d3ee;border-radius:14px;padding:14px 18px;margin-bottom:18px;}
+.iconswap-tier{margin-bottom:22px;}
+.iconswap-tier h4{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;}
+.iconswap-grid{display:flex;gap:14px;flex-wrap:wrap;}
+.iconswap-card-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;width:128px;}
 .stat-row{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
 .stat-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px;flex:1;min-width:100px;text-align:center;}
 .stat-box .n{font-family:'Anton';font-size:24px;}
@@ -4873,6 +4891,16 @@ const PLAYERS_PRIME = [
     "theme": "prime"
   }
 ];
+// Icon Swap: one-time limited event (see ICON_SWAP_EVENT_END). Exclusive cards, only obtainable by
+// redeeming tokens earned from real online-match wins - never appear in any pack.
+const PLAYERS_ICONSWAP = [
+  {id:9990001,n:'F. Dimarco',pos:'LB, LM',ov:92,pot:92,nat:'Italy',lg:'Serie A',club:'Inter',pac:89,sho:87,pas:92,dri:90,defn:88,phy:86,foot:'Left',img:'https://cdn.sofifa.net/players/226/268/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:226268,swapCost:8},
+  {id:9990002,n:'H. Çalhanoğlu',pos:'CDM, CM',ov:92,pot:92,nat:'Türkiye',lg:'Serie A',club:'Inter',pac:81,sho:89,pas:94,dri:90,defn:89,phy:82,foot:'Right',img:'https://cdn.sofifa.net/players/208/128/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:208128,swapCost:8},
+  {id:9990003,n:'N. Barella',pos:'CM',ov:97,pot:97,nat:'Italy',lg:'Serie A',club:'Inter',pac:88,sho:86,pas:92,dri:93,defn:89,phy:85,foot:'Right',img:'https://cdn.sofifa.net/players/224/232/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:224232,swapCost:20},
+  {id:9990004,n:'T. Alexander-Arnold',pos:'RB, RM',ov:97,pot:97,nat:'England',lg:'La Liga',club:'Real Madrid',pac:85,sho:82,pas:97,dri:89,defn:88,phy:83,foot:'Right',img:'https://cdn.sofifa.net/players/231/281/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:231281,swapCost:20},
+  {id:9990005,n:'A. Mac Allister',pos:'CM, CDM',ov:102,pot:102,nat:'Argentina',lg:'Premier League',club:'Liverpool',pac:78,sho:93,pas:96,dri:95,defn:87,phy:85,foot:'Right',img:'https://cdn.sofifa.net/players/239/837/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:239837,swapCost:50},
+  {id:9990006,n:'J. Alvarez',pos:'ST',ov:102,pot:102,nat:'Argentina',lg:'La Liga',club:'Atlético Madrid',pac:94,sho:97,pas:91,dri:96,defn:66,phy:88,foot:'Right',img:'https://cdn.sofifa.net/players/246/191/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:246191,swapCost:50},
+];
 const PLAYERS_SIGNATURE_SEASON = [
   {id:9800400,n:'G. Buffon',pos:'GK',ov:100,pot:100,nat:'Italy',lg:'Serie A',club:'Juventus',pac:54,sho:98,pas:88,dri:94,defn:99,phy:92,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67110043.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=e71a2890d50f5f377e03a2dbbbb17ce8',gk:true,variant:'signature_icon',variantLabel:'Signature Icon',theme:'sigicon',season:'2006'},
   {id:9800401,n:'M. Neuer',pos:'GK',ov:100,pot:100,nat:'Germany',lg:'Bundesliga',club:'FC Bayern M\u00fcnchen',pac:64,sho:92,pas:95,dri:96,defn:99,phy:94,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67276359.png?fm=png&ixlib=java-2.1.0&verzion=1&w=252&s=d59c52dce591bc80bafd2da1cdd0f89e',gk:true,variant:'signature_icon',variantLabel:'Signature Icon',theme:'sigicon',season:'2013/14',baseId:167495},
@@ -5648,6 +5676,11 @@ PRIME_CARDS.forEach(p=>BY_ID.set(p.id,p));
 const PRIME_RONALDO = PRIME_CARDS.find(p=>p.n==='Cristiano Ronaldo');
 const PRIME_MESSI = PRIME_CARDS.find(p=>p.n==='Lionel Messi');
 const PRIME_NEYMAR = PRIME_CARDS.find(p=>p.n==='Neymar Jr');
+const ICONSWAP_CARDS = PLAYERS_ICONSWAP;
+ICONSWAP_CARDS.forEach(p=>BY_ID.set(p.id,p));
+// one-time event, local time - after this, earning/redeeming both close down (see icon-swap UI)
+const ICON_SWAP_EVENT_END = new Date('2026-08-13T00:00:00').getTime();
+function iconSwapEventActive(){ return Date.now() < ICON_SWAP_EVENT_END; }
 const SIGNATURE_SEASON_CARDS = PLAYERS_SIGNATURE_SEASON;
 SIGNATURE_SEASON_CARDS.forEach(p=>BY_ID.set(p.id,p));
 const OGICON_CARDS = PLAYERS_OGICONS.filter(c=>c.variant!=='og_mgr');
@@ -5805,7 +5838,7 @@ const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8
   derbyicon:'#ff4d4d',underdog:'#4dd0e1',
   uclw:'#0a1e4d',uclw_mgr:'#e8003c', ballondor:'#f2c14e', wm_mgr:'#aa151b', prime:'#ffd76a',
   sigicon:'#7ad9ff', eradef:'#ffcf5c', sigseason:'#ff6fb1',
-  ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00'};
+  ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00', iconswap:'#22d3ee'};
 function cardAccent(card){
   if(card.variant==='meistertrainer') return '#ff8a3d';
   if(card.variant==='uclw_mgr') return THEME_ACC.uclw_mgr;
@@ -6008,253 +6041,6 @@ function genId(){ return 'c'+Date.now().toString(36)+Math.random().toString(36).
 function specialsByVariant(tags){ return ALL_SPECIAL.filter(c=>tags.includes(c.variant)); }
 
 // ===== pack definitions =====
-const UPDATE_LOGS = [
-  {id:1, version:'1.1.0', date:'29.07.2026', title:'Zeitgeist Pack', sections:[
-    {type:'new', label:'Neu', items:[
-      'Zeitgeist Pack hinzugef\u00fcgt \u2014 32.000 Coins, 5 Karten pro \u00d6ffnung.',
-      'Enth\u00e4lt 24 neue Karten in 3 Varianten: Signature Icon (13 Karten, Rating 100\u2013102), Era Definer (7 Karten, Rating 103\u2013104), Signature Season (4 Karten, Rating 106\u2013108).',
-      'Neue Spieler in diesem Pool: u.\u00a0a. Xavi, Iniesta, Modri\u0107, Henry, Kak\u00e1, Ronaldinho, Ibrahimovi\u0107, Benzema, Salah, De Bruyne, Haaland, Mbapp\u00e9, Neymar Jr, Cristiano Ronaldo und Messi.',
-    ]},
-    {type:'balance', label:'Balance', items:[
-      'Zeitgeist Pack \u2014 Ziehchance pro Karte erh\u00f6ht: Signature Season 0,18\u2009%\u2009\u2192\u20090,25\u2009%, Era Definer 0,6\u2009%\u2009\u2192\u20090,9\u2009%, Signature Icon 2\u2009%\u2009\u2192\u20093\u2009%, Rating 95\u201399 7\u2009%\u2009\u2192\u20099\u2009%, Rating 90\u201394 21\u2009%\u2009\u2192\u200924\u2009%.',
-    ]},
-    {type:'fix', label:'Bugfix', items:[
-      'Spielerfotos: Das Monogramm erschien bislang manchmal zus\u00e4tzlich zum echten Foto, abh\u00e4ngig von CSS-Stapelreihenfolge. Jetzt wird in JavaScript entschieden \u2014 ist ein Foto hinterlegt, wird ausschlie\u00dflich dieses gezeigt; das Monogramm erscheint nur noch, wenn das Foto beim Laden tats\u00e4chlich fehlschl\u00e4gt.',
-      '6 der 24 neuen Karten hatten falsch zugeordnete oder doppelt verwendete Bilder (u.\u00a0a. Mbapp\u00e9/Neymar Jr teilten sich ein Bild). Alle 24 Karten haben jetzt best\u00e4tigt eindeutige, korrekte Fotos.',
-    ]},
-  ]},
-  {id:2, version:'1.2.0', date:'29.07.2026', title:'Draft-Modus & Preisverlauf', sections:[
-    {type:'new', label:'Neu', items:[
-      'Draft-Modus (unter Herausforderungen) \u2014 Eintritt 15.000 Coins. Stelle in 11 Runden je 1 von 3 Zufallskarten (Rating 76\u201391) f\u00fcr eine 4-3-3-Aufstellung zusammen und tritt damit gegen st\u00e4rker werdende Gegner an (Start-Rating 74, +7 pro Sieg). Maximal 4 Siege m\u00f6glich, eine Niederlage beendet den Lauf sofort \u2014 der gedraftete Kader geh\u00f6rt dir danach nicht.',
-      'Belohnungen nach Siegen: 0 Siege = 1.000 Coins, 1 = 3.000, 2 = 7.000, 3 = 12.000 + Rare Gold Pack, 4 = 20.000 Coins + Icon Moment Pack.',
-      'Preisverlauf am Transfermarkt \u2014 auf die RAP-Anzeige einer beliebigen Karte tippen zeigt jetzt ein Liniendiagramm der letzten Verkaufspreise \u00fcber Zeit.',
-    ]},
-    {type:'fix', label:'Bugfix', items:[
-      'Match-Engine intern erweitert, damit tempor\u00e4re K\u00e4der (wie beim Draft) korrekt gegen Gegner antreten k\u00f6nnen, ohne den echten gespeicherten Vereinskader zu beeinflussen.',
-    ]},
-  ]},
-  {id:3, version:'1.2.1', date:'29.07.2026', title:'Mann des Spiels & Spielerbewertungen', sections:[
-    {type:'new', label:'Neu', items:[
-      'Nach jedem Bot-/Herausforderungs-Match gibt es jetzt eine Spielerbewertung 1\u201310 pro Spieler, inklusive Mann-des-Spiels-Auszeichnung.',
-      'Bewertung setzt sich zusammen aus: Basis 6,4, Bonus f\u00fcr Tore (bis zu +2,8, abnehmend pro weiterem Tor), Ergebnis-Bonus (+0,45 bei Sieg, +0,1 bei Unentschieden, \u22120,35 bei Niederlage), Abzug f\u00fcr Karten (\u22120,7 Gelb, \u22122,2 Rot) sowie kleiner nat\u00fcrlicher Schwankung.',
-      'Gilt f\u00fcr alle Bot-Matches: normales Spiel, Turnier, PRIME-Herausforderungen, O Rei, Kontinentalpokal, Serie ohne Niederlage und Draft-Modus. Online-Duelle/Warteschlange noch nicht enthalten.',
-    ]},
-  ]},
-  {id:4, version:'1.2.2', date:'29.07.2026', title:'Draft-Kosten & Preisverlauf auf Mobile', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Draft-Modus-Eintritt gesenkt: 15.000 \u2192 10.000 Coins.',
-    ]},
-    {type:'fix', label:'Bugfix', items:[
-      'Preisverlauf auf Mobile: Die RAP-Anzeige (der Ausl\u00f6ser f\u00fcr den Preisverlauf) war zu klein zum zuverl\u00e4ssigen Antippen und lag oft in Konflikt mit dem Klick auf die Karte selbst. Tippfl\u00e4che deutlich vergr\u00f6\u00dfert.',
-      'Preisverlauf war auf der eigentlichen Transfermarkt-\u00dcbersicht gar nicht erreichbar (nur der Verkaufspreis wurde angezeigt). Jetzt auch dort verf\u00fcgbar.',
-    ]},
-  ]},
-  {id:5, version:'1.3.0', date:'29.07.2026', title:'Spielerbewertungen jetzt auch online', sections:[
-    {type:'new', label:'Neu', items:[
-      'Mann des Spiels und Spielerbewertungen (1\u201310) gibt es jetzt auch nach echten Online-Duellen und Warteschlangen-Matches, nicht mehr nur nach Bot-Matches. Basiert auf deinem aktuellen Kader zum Zeitpunkt des Spielendes.',
-    ]},
-  ]},
-  {id:6, version:'1.3.1', date:'29.07.2026', title:'Bestenlisten bereinigt', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Die Konten "leifps" und "tst" erscheinen nicht mehr in der Vereinswert- und der Kaderbestenliste (fest hinterlegter Ausschluss, betrifft nur diese zwei spezifischen Konten).',
-    ]},
-  ]},
-  {id:7, version:'1.3.2', date:'29.07.2026', title:'PRIME-Karten abgeschw\u00e4cht', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Alle drei PRIME-Karten (Cristiano Ronaldo, Lionel Messi, Neymar Jr) von 109 auf 107 OVR gesenkt.',
-    ]},
-  ]},
-  {id:8, version:'1.4.0', date:'29.07.2026', title:'Admin-Panel', sections:[
-    {type:'new', label:'Neu', items:[
-      'Neues Admin-Panel, sichtbar nur f\u00fcr die Konten "leifps" und "test" (eigener Reiter in der Navigation).',
-      'Eigener Account: beliebige Coins gutschreiben, jedes Pack kostenlos \u00f6ffnen, jede Karte direkt zum eigenen Kader hinzuf\u00fcgen.',
-      'Nutzerverwaltung: beliebigen Verein per Namen laden, Coins geben/abziehen, Karte oder komplettes Pack direkt in dessen Kader legen, Verwarnung schicken (wird beim n\u00e4chsten Login des Nutzers als Hinweisfenster angezeigt), Verein sperren/entsperren.',
-      'Gesperrte Vereine k\u00f6nnen sich nicht mehr einloggen und sehen stattdessen eine Sperr-Meldung.',
-    ]},
-  ]},
-  {id:9, version:'1.5.0', date:'29.07.2026', title:'PRIME-Limit & besseres SBC-Autof\u00fcllen', sections:[
-    {type:'new', label:'Neu', items:[
-      'Maximal 1 PRIME-Karte (Cristiano Ronaldo, Lionel Messi oder Neymar Jr PRIME) gleichzeitig im Kader erlaubt. Der Kader-Editor blockiert eine zweite PRIME-Karte direkt bei der Auswahl.',
-      'SBC-Automatisch-ausf\u00fcllen hat jetzt 3 Strategien zur Auswahl: "H\u00f6chstes Rating" (bisheriges Verhalten), "G\u00fcnstigste L\u00f6sung" (minimiert den RAP-Gesamtwert der genutzten Karten) und "Nur Duplikate" (bevorzugt Spieler, von denen mehrere Exemplare vorhanden sind).',
-    ]},
-    {type:'fix', label:'Bugfix', items:[
-      'Vereine, die aktuell mehr als 1 PRIME-Karte aufgestellt haben, werden vorerst aus der Kaderbestenliste entfernt, bis sie ihre Aufstellung aktualisieren und neu ver\u00f6ffentlichen. Betrifft nur Ver\u00f6ffentlichungen ab diesem Update \u2014 \u00e4ltere Eintr\u00e4ge ohne gespeicherte Kartenvariante k\u00f6nnen nicht rückwirkend gepr\u00fcft werden.',
-    ]},
-  ]},
-  {id:10, version:'1.5.1', date:'29.07.2026', title:'Zeitgeist Pack nochmal gebufft', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Zeitgeist Pack \u2014 Ziehchance pro Karte nochmal angehoben: Signature Season 0,25\u2009%\u2009\u2192\u20090,35\u2009%, Era Definer 0,9\u2009%\u2009\u2192\u20091,3\u2009%, Signature Icon 3\u2009%\u2009\u2192\u20094\u2009%, Rating 95\u201399 9\u2009%\u2009\u2192\u200911\u2009%, Rating 90\u201394 24\u2009%\u2009\u2192\u200927\u2009%.',
-    ]},
-  ]},
-  {id:11, version:'1.5.2', date:'29.07.2026', title:'Cutscenes \u00fcberspringbar', sections:[
-    {type:'new', label:'Neu', items:[
-      'Alle Karten-Enthüllungs-Cutscenes (Enthüllungssequenz f\u00fcr 85+ Karten, finale Kartenanzeige, normale Pack-Enthüllung) k\u00f6nnen jetzt jederzeit per Klick/Antippen \u00fcbersprungen werden, statt auf die volle Animationsdauer warten zu m\u00fcssen.',
-    ]},
-  ]},
-  {id:12, version:'1.5.3', date:'29.07.2026', title:'Admin-Panel besser sichtbar', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Der Admin-Zugang war bisher ein Reiter am Ende der scrollbaren Navigationsleiste und konnte dadurch leicht au\u00dferhalb des sichtbaren Bereichs landen. Jetzt ein fest sichtbarer, runder Button oben rechts auf dem Bildschirm, nur f\u00fcr "leifps" und "test" sichtbar.',
-    ]},
-  ]},
-  {id:13, version:'1.5.4', date:'01.08.2026', title:'Turnier-System: Race Conditions bei Anmeldung, Start und Preisauszahlung behoben', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Turnier-Anmeldung (Beitreten) konnte bei zwei fast gleichzeitigen Anmeldungen eine davon stillschweigend verwerfen \u2014 der Beitritt zeigte "Angemeldet!", die Person tauchte aber nicht in der Teilnehmerliste auf, weil zwei Anmeldungen sich beim Speichern gegenseitig \u00fcberschreiben konnten. L\u00e4uft jetzt \u00fcber eine Firestore-Transaction, die einen echten Konflikt erkennt und die betroffene Anmeldung sauber erneut versucht.',
-      'Turnier-Start (nur f\u00fcr den Veranstalter) hatte dasselbe Problem bei doppeltem Antippen oder zwei offenen Tabs \u2014 jetzt ebenfalls transaktional. Zus\u00e4tzlich wird die Teilnehmerliste beim Start defensiv auf die maximale Slotzahl gek\u00fcrzt, damit ein evtl. schon besch\u00e4digter \u00e4lterer Turnier-Datensatz die Bracket-Berechnung nicht zum Absturz bringt.',
-      'Preisgeld-Abholung konnte bei Abholung von zwei Ger\u00e4ten/Tabs aus fast gleichzeitig doppelt ausgezahlt werden, da Auszahlung und "bereits abgeholt"-Markierung getrennte Schritte waren. Beides passiert jetzt gemeinsam in einer Transaction \u2014 das Preisgeld wird garantiert genau einmal ausgezahlt.',
-    ]},
-  ]},
-  {id:14, version:'1.6.0', date:'01.08.2026', title:'Turnier-System \u00fcberarbeitet: Kartenpreise, w\u00e4hlbare Gr\u00f6\u00dfe, Auto-Start', sections:[
-    {type:'new', label:'Neu', items:[
-      'Preis beim Turnier-Veranstalten frei w\u00e4hlbar: Coins wie bisher, oder jetzt auch eine Karte aus dem eigenen Verein. Die Karte bleibt bis zum Turnierende im eigenen Kader (nur gesperrt f\u00fcr Verkauf, Handel und Kader-Einsatz) \u2014 nur bei einem Sieg eines echten Gegners geht sie tats\u00e4chlich in dessen Besitz \u00fcber.',
-      'Teilnehmerzahl beim Veranstalten w\u00e4hlbar: 4, 8 oder 16 statt fest 8.',
-      'Turnier startet automatisch, sobald der letzte Platz belegt ist \u2014 niemand muss mehr darauf warten, dass der Veranstalter zur\u00fcckkommt und manuell startet.',
-      'Veranstalter k\u00f6nnen ein noch nicht gestartetes Turnier jetzt absagen (Preisgeld wird erstattet, eine gestakte Karte einfach wieder freigegeben).',
-      'Teilnehmerliste eines offenen Turniers ist jetzt antippbar und zeigt Namen und Rating aller bereits Angemeldeten, bevor man selbst beitritt.',
-    ]},
-    {type:'fix', label:'Bugfix', items:[
-      'Gewinnt am Turnierende ein CPU-Verein (weil zu wenige echte Teilnehmer beigetreten sind), verfiel das Preisgeld bisher unwiderruflich \u2014 niemand konnte es je abholen. Es wird jetzt automatisch an den Veranstalter zur\u00fcckerstattet.',
-    ]},
-  ]},
-  {id:15, version:'1.6.1', date:'01.08.2026', title:'Alte Turniere korrekt migriert', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Turniere, die vor der Kartenpreis-Funktion erstellt wurden, hatten kein prizeType-Feld und liefen nur zuf\u00e4llig richtig, weil \u00fcberall implizit "nicht Karte = Coins" prophezeit wurde. Jetzt gibt es eine explizite Migrationsfunktion, die jeden alten Turnier-Datensatz beim Lesen sauber auf prizeType:"coins" normalisiert.',
-      'Zus\u00e4tzlich wird das normalisierte Feld beim n\u00e4chsten Schreibzugriff (Beitritt, Start, Abholung) direkt in Firestore mitgespeichert \u2014 ein altes Turnier ist damit nach der ersten Interaktion dauerhaft im neuen Format und wird nicht bei jedem Lesevorgang erneut nur tempor\u00e4r im Arbeitsspeicher "geflickt".',
-    ]},
-  ]},
-  {id:16, version:'1.6.2', date:'01.08.2026', title:'Admin: tempor\u00e4re Leaderboard-Sperre', sections:[
-    {type:'new', label:'Neu', items:[
-      'Admin-Panel: Vereine k\u00f6nnen jetzt zeitlich befristet (in Tagen w\u00e4hlbar) von beiden \u00f6ffentlichen Bestenlisten (Kader-Rating und Vereinswert) ausgeschlossen werden, ohne den Account selbst zu sperren \u2014 er bleibt normal spielbar. Gedacht f\u00fcr F\u00e4lle wie einen alten Kader aus der Zeit vor einer Balance-\u00c4nderung (z.\u00a0B. fr\u00fchere PRIME-Bewertung oder ein seitdem eingef\u00fchrtes Limit), der sich nicht mehr korrigieren l\u00e4sst, aber auch nicht unfair oben in der Bestenliste stehen soll.',
-      'Sperre kann vom Admin jederzeit vorzeitig wieder aufgehoben werden.',
-    ]},
-  ]},
-  {id:17, version:'1.6.3', date:'01.08.2026', title:'"Mein Verein" l\u00e4dt jetzt auch bei 1000+ Karten sofort', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Bei gro\u00dfen Sammlungen (1000+ Karten) baute "Mein Verein" bisher f\u00fcr jede einzelne Karte sofort die komplette Kartenansicht (Foto, Statistiken, Abzeichen) auf einmal auf \u2014 das blockierte beim \u00d6ffnen der Seite spürbar. Jetzt wird nur der erste Batch (60 Karten) sofort angezeigt, der Rest l\u00e4dt automatisch nach, sobald man weiter runterscrollt. Filter, Suche und Sortierung funktionieren unver\u00e4ndert.',
-    ]},
-  ]},
-  {id:18, version:'1.7.0', date:'01.08.2026', title:'Turnier-Erlebnis \u00fcberarbeitet: Live-Verfolgung, echte Tordifferenz, mehrere Bugfixes', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Zwei kaputte Textbausteine (echte Bytefehler, keine Tippfehler) bei den Runden-Meldungen behoben.',
-      'Beitritt, der den letzten Platz f\u00fcllt und das Turnier live startet, zeigte f\u00e4lschlich "Beitritt fehlgeschlagen." an, obwohl alles geklappt hat.',
-      'Turnier-Start verriet den Sieger sofort im Toast, obwohl gerade erst die erste Runde freigeschaltet wurde \u2014 hat die ganze Live-Spannung kaputt gemacht. Zeigt jetzt nur noch "Turnier live gestartet!" an.',
-      'Tabelle bei Gruppenphase/Jeder-gegen-jeden zeigte in der Spalte "Tor" f\u00e4lschlich das Rating an, "+/-" war gar keine echte Differenz (nur erzielte Tore, keine Gegentore erfasst). Jetzt werden Gegentore mitgez\u00e4hlt und die Tabelle zeigt Tore (erzielt:erhalten) sowie eine echte Tordifferenz.',
-      'Nur der Veranstalter konnte die n\u00e4chste Runde freischalten \u2014 blieb er weg, h\u00e4ngte das Turnier f\u00fcr immer in "l\u00e4uft". Da das Gesamtergebnis ohnehin schon beim Start feststeht, kann jetzt jeder die Freischaltung ausl\u00f6sen.',
-    ]},
-    {type:'new', label:'Neu', items:[
-      '"Live ansehen" enth\u00fcllt Runden jetzt von selbst alle paar Sekunden, solange die Ansicht ge\u00f6ffnet ist \u2014 kein manuelles Klicken mehr n\u00f6tig. Wer nicht warten will, kann sich das Endergebnis auch sofort anzeigen lassen.',
-      'Turnierformate einheitlich auf Deutsch benannt (vorher Englisch/Deutsch gemischt); Einfach-K.o.-Runden hei\u00dfen jetzt korrekt Achtelfinale/Viertelfinale/Halbfinale/Finale usw., unabh\u00e4ngig von der Teilnehmerzahl.',
-      'Offene Turniere zeigen jetzt ein pulsierendes "Live"-Abzeichen plus Fortschrittsbalken (Anmeldungen bzw. enth\u00fcllte Runden) und laufende Turniere stehen oben in der Liste.',
-      '"Meine Turnier-Ergebnisse" hei\u00dft jetzt "Meine Turniere" und zeigt auch laufende Turniere, an denen man teilnimmt, direkt mit "Live ansehen"-Button \u2014 nicht mehr nur fertige Ergebnisse.',
-    ]},
-  ]},
-  {id:19, version:'1.7.1', date:'01.08.2026', title:'Kader-Rating und Match-Engine rechnen Trainer-Boost jetzt gleich', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Die angezeigte Kader-Bewertung wandte den Trainer-Bonus bisher erst ganz am Ende auf die fertige Gesamtzahl an, w\u00e4hrend die tats\u00e4chliche Match-Simulation ihn zuerst pro Karte draufrechnet und die Chemie erst danach berechnet. Bei prozentualen Trainer-Boosts konnten dadurch angezeigtes Rating und tats\u00e4chlich im Match genutzte St\u00e4rke leicht auseinanderlaufen. Beide Stellen rechnen jetzt in derselben Reihenfolge (Trainer-Boost pro Karte zuerst, Chemie danach) \u2014 bei flachen Boosts (+X) \u00e4ndert sich nichts, bei prozentualen kann sich die angezeigte Zahl um ein, zwei Punkte verschieben.',
-      'Nebeneffekt: Die 130er-Rating-Obergrenze greift jetzt immer streng, auch bei starkem Trainer-Boost \u2014 vorher konnte ein prozentualer Boost die Zahl nach dem Deckel noch dar\u00fcber hinausschieben.',
-    ]},
-  ]},
-  {id:20, version:'1.7.2', date:'01.08.2026', title:'Chemie-System transparenter und ansprechender', sections:[
-    {type:'new', label:'Neu', items:[
-      'Der farbige Chemie-Punkt an jeder Karte im Kader-Editor ist jetzt antippbar (vorher nur eine Hover-Tooltip, die auf dem Handy gar nicht funktionierte) und zeigt eine genaue Punkte-Aufschl\u00fcsselung: welche Vereins-, Liga-, Nations- und Trainer-Verbindungen wie viele Punkte gebracht haben, plus wie viele Punkte bis zum n\u00e4chsten Stern fehlen.',
-      'Neuer Info-Button (?) direkt an der Chemie-Anzeige im Kader-Editor erkl\u00e4rt das komplette System: Punktevergabe, Schwellenwerte und Rating-Bonus \u2014 vorher gab es nirgends im Spiel eine Erkl\u00e4rung, wie Chemie \u00fcberhaupt funktioniert.',
-      'Die Chemie-Anzeige zeigt jetzt zus\u00e4tzlich eine Verteilung (z.\u00a0B. "3\u00d7 \u2605\u2605\u2605, 4\u00d7 \u2605\u2605\u2606, 2\u00d7 \u2606\u2606\u2606") und ein Kurzurteil ("Starke/Mittlere/Schwache Chemie") statt nur einer nackten Zahl.',
-      'Der Chemie-Punkt an den Karten ist jetzt gr\u00f6\u00dfer (bessere Tapp-Fl\u00e4che auf dem Handy).',
-    ]},
-  ]},
-  {id:21, version:'1.7.3', date:'02.08.2026', title:'Rating-Obergrenze angehoben, Zeitgeist Pack g\u00fcnstiger, Handel erst ab 80k Vereinswert', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Kader-Rating-Obergrenze von 130 auf 999 angehoben (praktisch kein echtes Limit mehr \u2014 rein rechnerisch macht das keinen Unterschied f\u00fcr Matches, da die Engine nur mit der Differenz zweier Ratings rechnet, nicht mit einer festen Skala).',
-      'Zeitgeist Pack: Preis von 32.000 auf 30.000 Coins gesenkt.',
-    ]},
-    {type:'new', label:'Neu', items:[
-      'Der Handel-Tab (Transfermarkt + Direkt-Angebote) ist jetzt erst ab einem Vereinswert von 80.000 (Coins + gesch\u00e4tzter Kartenwert) freigeschaltet. Vorher zeigt der Tab ein Schloss-Symbol und im Tab selbst den aktuellen Fortschritt zur Freischaltung.',
-    ]},
-  ]},
-  {id:22, version:'1.7.4', date:'02.08.2026', title:'WM Winners Pack: Spanien-Karten korrigiert', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Die "Weltmeister"-Karten (99er) f\u00fcr Spanien im (aktuell deaktivierten) WM Winners Pack stimmten teils nicht mit der echten WM-2026-Finalelf \u00fcberein: Carvajal (verletzt, gar nicht im Turnierkader) und Ayoze (nirgends im best\u00e4tigten WM-Kader zu finden) wurden durch Pedro Porro und Oyarzabal ersetzt \u2014 beide standen tats\u00e4chlich im Finale gegen Argentinien in der Startelf, Oyarzabal traf zudem im Halbfinale gegen Frankreich. I\u00f1igo Mart\u00ednez (ebenfalls nicht im Kader) wurde durch den echten Start-Innenverteidiger Aymeric Laporte ersetzt.',
-      'Dani Olmo, Marc Cucurella und \u00c1lex Baena standen ebenfalls in der echten Finalelf, waren aber f\u00e4lschlich nur als "Halbfinalist" (90er) statt "Weltmeister" (99er) eingestuft \u2014 korrigiert.',
-      'Da nur die Spielerdaten unter derselben Karten-ID ausgetauscht wurden (nicht neue Karten mit neuer ID angelegt), ist keine separate Migration n\u00f6tig: Wer eine der betroffenen Karten bereits besitzt, sieht ab sofort automatisch den richtigen Spieler mit den richtigen Werten \u2014 die Karte in der eigenen Sammlung "wird" einfach zur korrekten Karte.',
-    ]},
-  ]},
-  {id:23, version:'1.8.0', date:'02.08.2026', title:'Neu: Deutsche Legenden Pack', sections:[
-    {type:'new', label:'Neu', items:[
-      'Deutsche Legenden Pack hinzugef\u00fcgt (32.000 Coins, 5 Karten) \u2014 der Grundstock kommt komplett aus deutschen Spielern, keine anderen Nationalit\u00e4ten. Selten erscheint eine der 23 echten Legenden-Karten (100-110 Rating) in drei Stufen:',
-      'Ikone (110/109/108): Franz Beckenbauer, Gerd M\u00fcller, Miroslav Klose.',
-      'WM-Legende (103-106): Lothar Matth\u00e4us, Michael Ballack, Oliver Kahn, Manuel Neuer, J\u00fcrgen Klinsmann, Andreas Brehme, Karl-Heinz Rummenigge.',
-      'Nationalmannschaft-Legende (100-102): Toni Kroos, Thomas M\u00fcller, Mario G\u00f6tze, Philipp Lahm, Mesut \u00d6zil, Bastian Schweinsteiger, Mats Hummels, Fritz Walter, Uwe Seeler, Sepp Maier, Helmut Rahn, Rudi V\u00f6ller, Paul Breitner.',
-      'Alle vier deutschen WM-Titel sind vertreten (1954, 1974, 1990, 2014), erg\u00e4nzt um gro\u00dfe Namen, die nie Weltmeister wurden (Ballack, Kahn, Rummenigge, Seeler). Beste m\u00f6gliche Karte im Pack ist auf 110 gedeckelt.',
-      'Bildhinweis: F\u00fcr die meisten der 23 Legenden-Karten gibt es noch kein verifiziertes Kartenbild \u2014 statt eine URL zu raten, bleibt das Bildfeld bewusst leer (die App f\u00e4ngt fehlende Bilder bereits sauber ab). Franz Beckenbauer, Manuel Neuer, Thomas M\u00fcller und Mario G\u00f6tze nutzen bereits vorhandene, echte Bilder aus der App.',
-    ]},
-  ]},
-  {id:24, version:'1.8.1', date:'02.08.2026', title:'OG Icons haben jetzt immer maximale Chemie', sections:[
-    {type:'balance', label:'Balance', items:[
-      'OG Icons aus dem Fu\u00dfballg\u00f6tter-Pack haben jetzt immer 3 Sterne Chemie (+3 Rating), unabh\u00e4ngig davon, mit wem sie zusammen aufgestellt werden \u2014 diese Legenden passen \u00fcberall rein. Sie z\u00e4hlen weiterhin ganz normal als Vereins-/Nations-Verbindung f\u00fcr ihre Mitspieler. Tooltip und Punkte-Aufschl\u00fcsselung im Kader-Editor erkl\u00e4ren den Sonderfall jetzt auch.',
-    ]},
-    {type:'fix', label:'Sonstiges', items:[
-      'Die Spielerdaten des Deutsche-Legenden-Packs (PLAYERS_LEGENDS) sind jetzt \u00fcbersichtlich formatiert (ein Feld pro Zeile, nach Stufe gruppiert, mit Kommentar an jeder noch offenen Bild-URL) statt einer einzigen langen Zeile \u2014 einfacher direkt im Code zu bearbeiten.',
-    ]},
-  ]},
-  {id:25, version:'1.8.2', date:'02.08.2026', title:'Deutsche Legenden Pack: Kaderwechsel', sections:[
-    {type:'balance', label:'Balance', items:[
-      '\u00d6zil, G\u00f6tze, Hummels und Klose raus, daf\u00fcr rein: Uli Hoene\u00df, J\u00fcrgen Kohler, G\u00fcnter Netzer und Georg Schwarzenbeck (WM 1974- bzw. 1990-Sieger).',
-    ]},
-  ]},
-  {id:26, version:'1.8.3', date:'02.08.2026', title:'Netzer-Rating korrigiert', sections:[
-    {type:'balance', label:'Balance', items:[
-      'G\u00fcnter Netzer war mit 108 in der Ikone-Stufe direkt neben Beckenbauer (110, 2x Ballon d\'Or, WM-Sieger als Spieler und Trainer) und Gerd M\u00fcller (109, einer der besten Torj\u00e4ger aller Zeiten) zu hoch gegriffen. Er wechselt in die WM-Legende-Stufe (105, auf Augenh\u00f6he mit Ballack und Kahn) \u2014 die Ikone-Stufe hat dadurch jetzt nur noch 2 statt 3 Karten (Beckenbauer, M\u00fcller), die WM-Legende-Stufe daf\u00fcr 8 statt 7.',
-    ]},
-  ]},
-  {id:27, version:'1.8.4', date:'02.08.2026', title:'17 von 23 Legenden-Bildern erg\u00e4nzt', sections:[
-    {type:'new', label:'Neu', items:[
-      'Bild-URLs f\u00fcr 16 der 23 Deutsche-Legenden-Karten erg\u00e4nzt (jede einzeln auf fussball-legende.de nachgeschlagen, nicht geraten). Manuel Neuer hatte bereits vorher ein Bild \u2014 damit sind jetzt 17 von 23 Karten versorgt.',
-      'F\u00fcr Michael Ballack, Andreas Brehme, Fritz Walter, Sepp Maier, Helmut Rahn und Paul Breitner gibt es auf dieser Quelle keine eigene Spielerseite \u2014 deren Bildfeld bleibt bewusst leer statt eine URL zu erfinden.',
-    ]},
-  ]},
-  {id:28, version:'1.8.5', date:'02.08.2026', title:'Miroslav Klose wieder im Deutsche Legenden Pack', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Klose ist zur\u00fcck in der Ikone-Stufe (108, neben Beckenbauer und M\u00fcller) \u2014 damit hat das Pack jetzt 24 statt 23 Karten. \u00d6zil, G\u00f6tze und Hummels bleiben drau\u00dfen.',
-    ]},
-  ]},
-  {id:29, version:'1.8.6', date:'02.08.2026', title:'Rahn und Ballack raus, Berti Vogts rein', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Helmut Rahn und Michael Ballack aus dem Deutsche-Legenden-Pack entfernt. Berti Vogts (WM-Sieger 1974 als Spieler, EM-Sieger 1996 als Trainer) ersetzt Ballack in der WM-Legende-Stufe (104). Fritz Walter war als Ersatz f\u00fcr Rahn im Gespr\u00e4ch, steht aber schon im Pack (Nationalmannschaft-Legende-Stufe) \u2014 daher kein zweiter Walter, Pack hat jetzt 23 statt 24 Karten.',
-    ]},
-  ]},
-  {id:30, version:'1.8.7', date:'02.08.2026', title:'Deutsche Legenden Pack: 100+-Chance halbiert', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Die Chance auf mindestens eine 100+ Karte pro \u00d6ffnung lag bei 42\u00a0% \u2014 deutlich zu hoch f\u00fcr Karten, die eigentlich selten sein sollen. Odds der drei Legenden-Stufen gesenkt (Ikone 0,5\u00a0%\u21920,2\u00a0%, WM-Legende 2\u00a0%\u21921\u00a0%, Nationalmannschaft-Legende 8\u00a0%\u21923,3\u00a0% pro Karte), neue Chance auf mindestens eine 100+ Karte pro F\u00fcnferpack: rund 20,5\u00a0% (per Simulation gepr\u00fcft) \u2014 vergleichbar mit der Seltenheit der Top-Stufe im Zeitgeist Pack.',
-    ]},
-  ]},
-  {id:31, version:'1.8.8', date:'02.08.2026', title:'Deutsche Legenden Pack: 20.000 Coins statt 32.000, 4 statt 5 Karten', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Preis von 32.000 auf 20.000 Coins gesenkt, Kartenanzahl von 5 auf 4 pro \u00d6ffnung reduziert. Chance auf mindestens eine 100+ Karte pro \u00d6ffnung sinkt dadurch automatisch weiter, von rund 20,5\u00a0% auf rund 16,7\u00a0% (Kartenodds selbst unver\u00e4ndert, nur eine Ziehung weniger).',
-    ]},
-  ]},
-  {id:32, version:'1.8.9', date:'02.08.2026', title:'Ikone-Karten haben jetzt auch maximale Chemie + neuer Legenden-Trainer', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Die Ikone-Stufe im Deutsche Legenden Pack (Beckenbauer, Gerd M\u00fcller, Klose) hat jetzt genau wie die OG Icons aus dem Fu\u00dfballg\u00f6tter-Pack immer 3 Sterne Chemie (+3 Rating), egal mit wem sie aufgestellt werden. Tooltip und Punkte-Aufschl\u00fcsselung im Kader-Editor wurden entsprechend angepasst.',
-    ]},
-    {type:'new', label:'Neu', items:[
-      'Joachim L\u00f6w (WM-Sieger-Trainer 2014, +9\u00a0% Boost) ist jetzt als seltener Trainer im Deutsche Legenden Pack ziehbar (~0,15\u00a0% pro Karte) \u2014 etwas seltener als die Ikone-Stufe.',
-    ]},
-  ]},
-  {id:33, version:'1.9.0', date:'02.08.2026', title:'Alle 100+ Karten aus dem Deutsche Legenden Pack: volle Chemie', sections:[
-    {type:'balance', label:'Balance', items:[
-      'Nicht mehr nur die Ikone-Stufe: jetzt haben alle drei Stufen des Deutsche Legenden Packs (Ikone, WM-Legende, Nationalmannschaft-Legende) immer 3 Sterne Chemie (+3 Rating), genau wie OG Icons \u2014 unabh\u00e4ngig von Verein, Liga oder Nation der restlichen Aufstellung.',
-    ]},
-  ]},
-  {id:34, version:'1.9.1', date:'02.08.2026', title:'"Fortfahren ohne Speicherung" auf der Down-Seite', sections:[
-    {type:'new', label:'Neu', items:[
-      'Die Offline-Seite (foil-eleven-down.html) hat jetzt einen dezenten "Fortfahren ohne Speicherung"-Link, der zu index.html?nosave=1 f\u00fchrt. Dort greift ein neuer Ohne-Speicherung-Modus: nur die Test-Accounts leifps, test und tst k\u00f6nnen sich einloggen \u2014 jeder andere Vereinsname wird mit einer Fehlermeldung abgewiesen, statt einen Spielstand zuzulassen, der ohnehin nicht gespeichert w\u00fcrde.',
-    ]},
-  ]},
-  {id:35, version:'1.9.2', date:'02.08.2026', title:'Bugfix: Ohne-Speicherung-Modus schickte sofort zur\u00fcck zur Down-Seite', sections:[
-    {type:'fix', label:'Bugfix', items:[
-      'Nach erfolgreichem Login im Ohne-Speicherung-Modus landete man beim ersten fehlgeschlagenen Speicherversuch sofort wieder auf foil-eleven-down.html \u2014 die Umleitung in warnStorageOnce() lief unabh\u00e4ngig vom Modus. Jetzt \u00fcberspringt warnStorageOnce() die R\u00fcckleitung komplett, wenn der Ohne-Speicherung-Modus aktiv ist (der Zweck des Modus ist ja gerade, dass Speichern erwartbar fehlschl\u00e4gt).',
-    ]},
-  ]},
-];
 const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
     desc:'5 Kaderspieler, Rating 70-76.',
@@ -8496,7 +8282,7 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, soundOn:true, hasPassword:false, lastSeenUpdateLog:UPDATE_LOGS.length, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, limitedEventStartDate:localDateStr(new Date()), limitedEventClaimedDays:0, limitedEventLastClaimDate:null, pendingLimitedEventPacks:[]};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, limitedEventStartDate:localDateStr(new Date()), limitedEventClaimedDays:0, limitedEventLastClaimDate:null, pendingLimitedEventPacks:[], iconSwapTokens:0, iconSwapRedeemed:[]};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -8518,8 +8304,9 @@ async function init(){
     if(profile.oreiSecondWinClaimed===undefined) profile.oreiSecondWinClaimed = false;
     if(profile.winStreak===undefined) profile.winStreak = 0;
     if(profile.hasPassword===undefined) profile.hasPassword = false;
-    if(profile.lastSeenUpdateLog===undefined) profile.lastSeenUpdateLog = 0;
     if(!profile.crest) profile.crest = {shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(profile.displayName||'?')[0].toUpperCase()};
+    if(profile.iconSwapTokens===undefined) profile.iconSwapTokens = 0;
+    if(!profile.iconSwapRedeemed) profile.iconSwapRedeemed = [];
   }
   if(profile.banned && !isAdmin()){
     document.getElementById('modal-root').innerHTML = `
@@ -8579,9 +8366,6 @@ async function init(){
     });
   }
   initGlobalSfxListeners();
-  if(profile.lastSeenUpdateLog < UPDATE_LOGS.length){
-    showUpdateLogModal(UPDATE_LOGS.filter(l=>l.id>profile.lastSeenUpdateLog));
-  }
 }
 
 // abbreviates coin amounts >=1,000,000 to 3 significant figures (1.32m, 52.2m, 921m, 1.53b, ...t, ...q);
@@ -8627,50 +8411,6 @@ function parseCoinInput(str){
   return parseFloat(m[1]) * mult;
 }
 function updateCoinDisplay(){ document.getElementById('coin-display').textContent = formatCoins(profile.coins); }
-const UPDATELOG_SECTION_STYLE = {
-  new:     {icon:'\u2728', color:'var(--turf-bright)'},
-  balance: {icon:'\u2696\uFE0F', color:'#e8c468'},
-  fix:     {icon:'\uD83D\uDD27', color:'#4da8ff'},
-};
-function renderUpdateLogEntry(l){
-  return `
-    <div style="margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,.08);">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px;">
-        <span style="font-family:'JetBrains Mono';font-size:11px;font-weight:700;color:#0a0d12;background:var(--turf-bright);padding:2px 8px;border-radius:100px;">v${l.version}</span>
-        <span style="font-family:'JetBrains Mono';font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">${l.date}</span>
-      </div>
-      <div style="font-weight:700;font-size:17px;margin:6px 0 12px;">${l.title}</div>
-      ${l.sections.map(sec=>{
-        const st = UPDATELOG_SECTION_STYLE[sec.type] || {icon:'\u2022', color:'var(--muted)'};
-        return `
-        <div style="margin-bottom:12px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${st.color};margin-bottom:6px;">${st.icon} ${sec.label}</div>
-          <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.65;">
-            ${sec.items.map(c=>`<li style="margin-bottom:4px;">${c}</li>`).join('')}
-          </ul>
-        </div>`;
-      }).join('')}
-    </div>`;
-}
-function showUpdateLogModal(logs){
-  const latestId = Math.max(...UPDATE_LOGS.map(l=>l.id));
-  openModal(`
-    <h2 style="margin-bottom:4px;">${logs.length>1 ? 'Neuigkeiten' : 'Neu in Foil Eleven'}</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Was sich seit deinem letzten Besuch getan hat:</p>
-    <div style="max-height:60vh;overflow-y:auto;">${logs.map(renderUpdateLogEntry).join('')}</div>
-    <button class="action-btn" id="updatelog-ok" style="width:100%;margin-top:6px;">Alles klar</button>`);
-  document.getElementById('updatelog-ok').addEventListener('click', async ()=>{
-    profile.lastSeenUpdateLog = latestId;
-    await sSet('profile', profile);
-    closeModal();
-  });
-}
-function showUpdateLogHistory(){
-  openModal(`
-    <h2 style="margin-bottom:4px;">Update-Verlauf</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Alle bisherigen \u00c4nderungen am Spiel, neueste zuerst.</p>
-    <div style="max-height:65vh;overflow-y:auto;">${[...UPDATE_LOGS].reverse().map(renderUpdateLogEntry).join('')}</div>`);
-}
 
 // ===== toast =====
 function toast(msg){
@@ -8729,6 +8469,7 @@ const VARIANT_ICON = {
   manager:'<rect x="5" y="4" width="14" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="2" width="6" height="4" rx="1" fill="currentColor"/><line x1="8" y1="11" x2="16" y2="11" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="15" x2="13" y2="15" stroke="currentColor" stroke-width="1.4"/>',
   meistertrainer:'<rect x="4" y="4" width="13" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="7" y1="10" x2="14" y2="10" stroke="currentColor" stroke-width="1.3"/><line x1="7" y1="14" x2="12" y2="14" stroke="currentColor" stroke-width="1.3"/><path d="M18 13l1 2.2 2.4.3-1.7 1.6.4 2.3-2.1-1.1-2.1 1.1.4-2.3-1.7-1.6 2.4-.3z" fill="currentColor"/>',
   goat:'<circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 5.5l1.9 4.8 5 .4-3.8 3.3 1.2 4.9L12 15.9l-4.3 2.9 1.2-4.9-3.8-3.3 5-.4z" fill="currentColor"/>',
+  iconswap:'<path d="M4 9a8 8 0 0114-4.9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 15a8 8 0 01-14 4.9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M18 3.6V7h-3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 20.4V17h3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   wcchamp:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
   goldenball:'<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 6.5l2.6 1.7-.8 3h-3.6l-.8-3z" fill="currentColor"/><path d="M12 6.5V4M8.2 8.2L6 6.7M15.8 8.2L18 6.7M10.2 11.2l-3.4 1M13.8 11.2l3.4 1" stroke="currentColor" stroke-width="1.1"/>',
   ggwm:'<path d="M6 12V6a2 2 0 014 0v3M10 9V5a2 2 0 014 0v4M14 9V6a2 2 0 014 0v6c0 4-3 7-7 7s-7-3-7-7v-2a2 2 0 014 0v1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
@@ -8766,6 +8507,7 @@ const PATTERN_FAMILY = {
   uclw:'psgpattern', uclw_mgr:'psgpattern', ballondor:'ballondorpattern', wm_mgr:'wmmgrpattern', prime:'primepattern',
   sigicon:'signaturepattern', eradef:'erapattern', sigseason:'sigseasonpattern',
   ogicon:'ogpattern', og_mgr:'ogpattern',
+  iconswap:'iconswappattern',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
@@ -10512,8 +10254,7 @@ function renderClub(view){
         <h2>Mein Verein</h2>
         <p>${collection.length} Spieler im Besitz. RAP (Recent Average Price) zeigt den gesch\u00e4tzten Marktwert jeder Karte \u2014 verkaufen kannst du nur noch \u00fcber den Transfermarkt.</p>
         <p class="hint" style="margin:6px 0 0;">Anzeigename beim Online-Spielen: <b style="color:var(--chalk);">${profile.displayName||profile.userId}</b>
-          <button class="action-btn secondary" id="rename-club" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button>
-          <button class="action-btn secondary" id="view-update-log" style="width:auto;padding:4px 10px;font-size:11px;margin-left:6px;">Update-Verlauf</button></p>
+          <button class="action-btn secondary" id="rename-club" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button></p>
       </div>
     </div>
     <div class="toolbar">
@@ -10545,7 +10286,6 @@ function renderClub(view){
       renderClub(document.getElementById('view'));
     }, 24);
   });
-  document.getElementById('view-update-log').addEventListener('click', showUpdateLogHistory);
   document.getElementById('club-pos').value = clubFilter.pos;
   document.getElementById('club-sort').value = clubFilter.sort;
   document.getElementById('club-search').addEventListener('input', e=>{ clubFilter.q=e.target.value; drawClubGrid(); });
@@ -10655,13 +10395,24 @@ function squadRating(){
     if(info && info.rankIndex===0) exactCount++;
     effSum += chemPlayers[idx].chemOv + posBonus;
   });
-  if(filled===0) return {rating:0, filled:0};
+  if(filled===0) return {rating:0, filled:0, preciseRating:0};
   const base = effSum/filled;
   const bonus = (exactCount/11)*2;
   // 999 is effectively "uncapped" for anything achievable in practice (even a maxed-out card +
   // chemistry + manager boost lands nowhere close) - kept as a sanity ceiling only, not a real limit.
-  const rating = Math.min(999, Math.round(base+bonus));
-  return {rating, filled};
+  const preciseRating = Math.min(999, base+bonus);
+  const rating = Math.round(preciseRating);
+  return {rating, filled, preciseRating};
+}
+// small trailing decimal shown after the big rounded rating, e.g. "116" + ".45" reads as 116.45.
+// Rounding can push the big number past the precise value (113.99 rounds up to 114), so the
+// remainder can go negative - shown as ".-01" (114 - 0.01 = 113.99). Odd-looking but unambiguous.
+function ratingDecimalSuffix(preciseRating){
+  const big = Math.round(preciseRating);
+  const remainder = preciseRating - big;
+  const frac = Math.round(Math.abs(remainder)*100).toString().padStart(2,'0');
+  const sign = (remainder < 0 && frac!=='00') ? '-' : ''; // avoid a confusing "-00" at the rounding boundary
+  return `.${sign}${frac}`;
 }
 function getSquadChemistryDetail(){
   const form = FORMATIONS[squad.formation];
@@ -10859,14 +10610,14 @@ function posGroup2(label){
 }
 function renderSquad(view){
   const form = FORMATIONS[squad.formation];
-  const {rating, filled} = squadRating();
+  const {rating, filled, preciseRating} = squadRating();
   const mgr = getAssignedManager();
   view.innerHTML = `
     <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position tats\u00e4chlich spielen k\u00f6nnen, werden angeboten \u2014 Karten mit mehreren Positionen bekommen auf ihrer 1. bzw. 2. gelisteten Position einen Rating-Bonus (++/+). F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></div>
     <div class="squad-layout">
       <div class="pitch" id="pitch"></div>
       <div class="side-panel">
-        <div class="rating-hero"><div class="num">${rating||'--'}</div><div><div class="lbl">Team-Rating</div><div class="lbl">${filled}/11 besetzt</div></div></div>
+        <div class="rating-hero"><div class="num" style="display:flex;align-items:baseline;">${rating||'--'}<span class="mono" style="font-size:15px;font-weight:400;color:var(--muted);margin-left:1px;">${filled?ratingDecimalSuffix(preciseRating):''}</span></div><div><div class="lbl">Team-Rating</div><div class="lbl">${filled}/11 besetzt</div></div></div>
         <div class="chem-meter" id="chem-meter"></div>
         <div><div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Formation</div>
         <div class="formation-select" id="form-select">
@@ -11151,11 +10902,14 @@ function publishSquad(){
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle zuerst alle 11 Positionen.'); return; }
   const doPublish = async ()=>{
+    // store the real card id (not a flattened snapshot) so viewers can resolve full card data -
+    // stats, variant styling, nat/club/league - via BY_ID, instead of a stale partial copy
     const players = form.slots.map(slot=>{
       const card = ownedCard(squad.slots[slot.id]);
-      return {n:card.n, pos:slot.label, ov:card.ov, img:card.img, variant:card.variant};
+      return {pos:slot.label, cardId:card.id, variant:card.variant};
     });
-    const payload = {owner:profile.displayName, userId:profile.userId, rating, formation:form.label, players, updatedAt:Date.now()};
+    const mgr = getAssignedManager();
+    const payload = {owner:profile.displayName, userId:profile.userId, rating, formation:squad.formation, players, managerId: mgr?mgr.id:null, updatedAt:Date.now()};
     await fbReady;
     if(fb){
       try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); invalidateReadCache('squad-leaderboard'); toast('Kader online ver\u00f6ffentlicht!'); return; }
@@ -12802,7 +12556,7 @@ function challengeLeaderboardSquad(squadData){
 }
 async function runLeaderboardChallenge(squadData, friendly){
   const {rating} = squadRating();
-  const opp = {owner: squadData.owner||'Unbenannter Verein', rating: squadData.rating, players: squadData.players||[], isBot:false};
+  const opp = {owner: squadData.owner||'Unbenannter Verein', rating: squadData.rating, players: resolveSquadDataPlayers(squadData).filter(Boolean), isBot:false};
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
@@ -12813,6 +12567,49 @@ async function runLeaderboardChallenge(squadData, friendly){
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly});
 }
+// ===== Icon Swap: limited-time event, redeem tokens earned from real-match wins for an exclusive card =====
+function showIconSwapModal(){
+  const tiers = [...new Set(ICONSWAP_CARDS.map(c=>c.swapCost))].sort((a,b)=>a-b);
+  const tierHtml = tiers.map(cost=>{
+    const cards = ICONSWAP_CARDS.filter(c=>c.swapCost===cost);
+    const cardsHtml = cards.map(c=>{
+      const redeemed = (profile.iconSwapRedeemed||[]).includes(c.id);
+      const canAfford = (profile.iconSwapTokens||0) >= c.swapCost;
+      const disabled = redeemed || !canAfford;
+      return `<div class="iconswap-card-wrap">
+        ${cardEl(c,'mini').outerHTML}
+        <button class="action-btn ${disabled?'secondary':''}" data-cid="${c.id}" style="width:100%;padding:7px 0;font-size:11.5px;" ${disabled?'disabled':''}>
+          ${redeemed ? 'Eingelöst' : `<span class="token-dot"></span>${c.swapCost} Token`}
+        </button>
+      </div>`;
+    }).join('');
+    return `<div class="iconswap-tier"><h4><span class="token-dot"></span>${cost} Token</h4><div class="iconswap-grid">${cardsHtml}</div></div>`;
+  }).join('');
+  openModal(`
+    <h2 style="margin-bottom:2px;">Icon Swap</h2>
+    <p class="hint" style="margin:0 0 6px;">Exklusive Karten, nur über dieses Event erhältlich — endet Donnerstag 00:00 Uhr. Dein Guthaben: <b style="color:var(--gold);"><span class="token-dot"></span>${profile.iconSwapTokens||0} Token</b>.</p>
+    <p class="hint" style="margin:0 0 16px;">Jede Karte kannst du nur einmal einlösen. Nicht verbrauchte Token verfallen, wenn das Event endet.</p>
+    ${tierHtml}
+    <button class="modal-close" id="iconswap-close" style="width:100%;margin-top:4px;">Schließen</button>
+  `);
+  document.getElementById('iconswap-close').addEventListener('click', closeModal);
+  document.querySelectorAll('#modal-root [data-cid]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const card = BY_ID.get(Number(btn.dataset.cid));
+      if(!card) return;
+      if((profile.iconSwapRedeemed||[]).includes(card.id)){ toast('Diese Karte hast du schon eingelöst.'); return; }
+      if(!iconSwapEventActive()){ toast('Das Icon-Swap-Event ist vorbei.'); closeModal(); renderView('play'); return; }
+      if((profile.iconSwapTokens||0) < card.swapCost){ toast('Nicht genug Token.'); return; }
+      profile.iconSwapTokens -= card.swapCost;
+      profile.iconSwapRedeemed = [...(profile.iconSwapRedeemed||[]), card.id];
+      collection.push({uid:genId(), cardId:card.id});
+      await sSet('profile', profile);
+      await sSet('collection', collection);
+      toast(`${card.n} eingelöst!`);
+      showIconSwapModal();
+    });
+  });
+}
 // ===== Ballon d'Or Challenge: the single hardest one-off match in the game =====
 function renderPlay(view){
   const history = (profile.matchHistory||[]).slice().reverse().slice(0,10);
@@ -12820,6 +12617,17 @@ function renderPlay(view){
   view.innerHTML = `
     <div class="view-head"><h2>Online spielen</h2><p>Reih dich in die Warteschlange ein, um einen echten Gegner zu finden. Ist niemand da, spielst du stattdessen gegen eine CPU-Elf.
       <span class="mono" id="backend-badge" style="color:var(--muted);">\u00b7 Backend wird gepr\u00fcft\u2026</span></p></div>
+    ${iconSwapEventActive() ? `
+    <div class="icon-swap-banner" id="icon-swap-banner">
+      <div>
+        <div class="lbl" style="font-family:'Anton';font-size:15px;letter-spacing:.02em;">Icon Swap \u2014 limitiertes Event</div>
+        <div class="hint" style="margin:3px 0 0;">Endet Donnerstag 00:00 Uhr \u00b7 Ein Match gegen einen echten Gegner online = 1 Token pro erzieltem Tor (max. 5)</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+        <div class="mono" style="color:var(--gold);font-size:16px;white-space:nowrap;"><span class="token-dot"></span>${profile.iconSwapTokens||0} Token</div>
+        <button class="action-btn secondary" id="icon-swap-open" style="width:auto;padding:9px 18px;white-space:nowrap;">Einl\u00f6sen</button>
+      </div>
+    </div>` : ''}
     <div class="stat-row">
       <div class="stat-box"><div class="n" id="stat-wins">${profile.wins}</div><div class="l">Siege</div></div>
       <div class="stat-box"><div class="n" id="stat-losses">${profile.losses}</div><div class="l">Niederlagen</div></div>
@@ -12888,6 +12696,8 @@ function renderPlay(view){
     </div>`;
   document.getElementById('host-tournament-btn').addEventListener('click', hostTournamentPrompt);
   document.getElementById('find-opp').addEventListener('click', joinQueue);
+  const iconSwapOpenBtn = document.getElementById('icon-swap-open');
+  if(iconSwapOpenBtn) iconSwapOpenBtn.addEventListener('click', showIconSwapModal);
   if(inMatch){
     const findBtn = document.getElementById('find-opp');
     if(findBtn){ findBtn.disabled = true; findBtn.style.opacity = '.5'; }
@@ -12995,38 +12805,60 @@ async function loadLeaderboard(){
     box.appendChild(row);
   });
 }
-function cardElLite(player){
-  const r = rarityInfo(player.ov);
-  const div = document.createElement('div');
-  div.className = `pcard mini ${r.cls}`;
-  div.style.height = '150px';
-  div.innerHTML = `
-    <div class="photo-frame" style="height:100px;">
-      <div class="avatar">${initialsOf(player.n)}</div>
-      <img class="face-photo" src="${proxyImg(player.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-      <div class="photo-tint"></div>
-    </div>
-    <div class="top">
-      <div><div class="ov">${player.ov}</div><div class="ov-underline"></div></div>
-      <div class="pos-label"><div class="pt">${posDE(player.pos)}</div><div class="pu"></div></div>
-    </div>
-    <div class="card-body" style="margin-top:-8px;">
-      <div class="name">${player.n}</div>
-    </div>`;
-  return div;
+// squads are published as {pos, cardId, variant} per slot (see publishSquad) - resolve back to
+// full real card objects via BY_ID so viewers get real stats/variant styling, not a stale snapshot.
+// Keeps null entries in place (alignment with FORMATIONS[...].slots matters for rendering).
+function resolveSquadDataPlayers(squadData){
+  return (squadData.players||[]).map(p=>{
+    const card = p && p.cardId!=null ? BY_ID.get(p.cardId) : null;
+    return card ? {...card, pos:p.pos} : null;
+  });
 }
 function showSquadModal(s){
+  const form = FORMATIONS[s.formation];
+  const players = resolveSquadDataPlayers(s);
+  const mgr = s.managerId!=null ? MGR_BY_ID.get(s.managerId) : null;
+  const validEntries = players.map((p,i)=>({p,i})).filter(x=>x.p);
+  const chemResults = computeChemistry(validEntries.map(x=>({ov:x.p.ov, club:x.p.club, nat:x.p.nat, lg:x.p.lg, variant:x.p.variant})), mgr?mgr.nat:null);
+  const chemByIndex = {};
+  validEntries.forEach((x,vi)=>{ chemByIndex[x.i] = chemResults[vi].chem; });
   openModal(`
     <h2 style="margin-bottom:2px;">${s.owner || 'Unbenannter Verein'}</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">${s.formation || ''} \u00b7 Team-Rating ${s.rating} OVR</p>
-    <div class="reveal-strip" id="squad-view-grid"></div>
-    <div style="display:flex;gap:10px;margin-top:16px;">
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">${form?form.label:(s.formation||'')} \u00b7 Team-Rating ${s.rating} OVR</p>
+    ${mgr ? `<div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(mgr,'mini').outerHTML}</div>` : ''}
+    <div class="pitch" id="squad-view-pitch" style="margin-bottom:16px;"></div>
+    <div style="display:flex;gap:10px;">
       <button class="modal-close" id="squad-view-close" style="flex:1;margin:0;">Schlie\u00dfen</button>
       <button class="action-btn" id="squad-view-challenge" style="flex:1;">Herausfordern</button>
     </div>
   `);
-  const grid = document.getElementById('squad-view-grid');
-  (s.players||[]).forEach(p=>grid.appendChild(cardElLite(p)));
+  const pitch = document.getElementById('squad-view-pitch');
+  if(pitch && form){
+    form.slots.forEach((slot,idx)=>{
+      const card = players[idx];
+      const el = document.createElement('div');
+      el.className = 'pitch-slot';
+      el.style.left = slot.x+'%'; el.style.top = slot.y+'%';
+      el.style.cursor = 'default';
+      if(card){
+        const cardNode = cardEl(card, 'xs', null, slot.label);
+        const chem = chemByIndex[idx];
+        if(chem!==undefined){
+          cardNode.style.position = 'relative';
+          const ring = document.createElement('div');
+          ring.className = 'chem-ring chem-'+chem;
+          ring.textContent = chem;
+          cardNode.appendChild(ring);
+        }
+        el.appendChild(cardNode);
+      } else {
+        el.innerHTML = `<div class="empty-slot-inner">${posDE(slot.label)}</div>`;
+      }
+      pitch.appendChild(el);
+    });
+  } else if(pitch){
+    pitch.outerHTML = `<p class="hint" style="text-align:center;">Unbekannte Formation \u2014 dieser Kader kann nicht angezeigt werden.</p>`;
+  }
   document.getElementById('squad-view-close').addEventListener('click', closeModal);
   document.getElementById('squad-view-challenge').addEventListener('click', ()=>{ closeModal(); challengeLeaderboardSquad(s); });
 }
@@ -13741,6 +13573,16 @@ async function enterSyncedMatch(matchDoc){
     winnerSide = myGoalsFinal>oppGoalsFinal ? 'me' : 'opp';
   }
   await applyMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers);
+  // Icon Swap event: any real head-to-head match (this function) counts, win or not - 1 token per
+  // goal scored against the real opponent, capped at 5, only while the event window is still open
+  if(iconSwapEventActive()){
+    const tokensEarned = Math.min(5, myGoalsFinal);
+    if(tokensEarned>0){
+      profile.iconSwapTokens = (profile.iconSwapTokens||0) + tokensEarned;
+      await sSet('profile', profile);
+      toast(`+${tokensEarned} Icon-Swap-Token${tokensEarned===1?'':'s'}!`);
+    }
+  }
   const myPlayersForRating = getMySquadPlayers();
   const matchRatings = computeMatchRatings(myPlayersForRating, myGoalsFinal, oppGoalsFinal, final.myScorers, incidents, winnerSide);
   const resultArea = document.getElementById('result-area');
