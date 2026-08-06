@@ -522,12 +522,13 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .chem-dist-chip.chem-2{color:#e8c468;border-color:#e8c468;}
 .chem-dist-chip.chem-1{color:#e8834a;border-color:#e8834a;}
 .chem-dist-chip.chem-0{color:var(--danger);border-color:var(--danger);}
-.chem-ring{position:absolute;top:1px;right:1px;width:20px;height:20px;border-radius:50%;box-shadow:0 0 0 1.5px rgba(0,0,0,.55);z-index:6;
-  display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono';font-weight:700;font-size:10px;color:#0a0d12;cursor:pointer;}
-.chem-ring.chem-0{background:var(--danger);}
-.chem-ring.chem-1{background:#e8834a;}
-.chem-ring.chem-2{background:#e8c468;}
-.chem-ring.chem-3{background:var(--turf-bright);}
+.chem-stars{position:absolute;bottom:6px;left:6px;z-index:6;font-size:10px;letter-spacing:1px;
+  font-family:'JetBrains Mono';font-weight:700;background:rgba(6,8,12,.72);border-radius:20px;padding:3px 7px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.4);cursor:pointer;}
+.chem-stars.chem-0{color:var(--danger);}
+.chem-stars.chem-1{color:#e8834a;}
+.chem-stars.chem-2{color:#e8c468;}
+.chem-stars.chem-3{color:var(--turf-bright);}
 .formation-select{display:flex;gap:6px;flex-wrap:wrap;}
 .chip{padding:7px 11px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);font-size:12px;color:var(--muted);}
 .crest-shape-chip{cursor:pointer;}
@@ -10594,7 +10595,7 @@ function showChemistryInfoModal(){
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
       ${[0,1,2,3].map(star=>{
         const range = star===0 ? '0\u20132' : star===1 ? '3\u20136' : star===2 ? '7\u201313' : '14+';
-        return `<div class="leader-row"><span class="chem-ring chem-${star}" style="position:static;cursor:default;">${star}</span><span style="flex:1;margin-left:10px;">${range} Punkte</span><span class="mono">+${star} Rating</span></div>`;
+        return `<div class="leader-row"><span class="chem-stars chem-${star}" style="position:static;cursor:default;">${'★'.repeat(star)}${'☆'.repeat(3-star)}</span><span style="flex:1;margin-left:10px;">${range} Punkte</span><span class="mono">+${star} Rating</span></div>`;
       }).join('')}
     </div>
     <p class="hint" style="margin:0;">Tipp: Tippe im Kader-Editor auf den farbigen Punkt an einer Karte, um die genaue Punkte-Aufschl\u00fcsselung f\u00fcr diesen Spieler zu sehen.</p>
@@ -10697,12 +10698,12 @@ function renderSquad(view){
       const chem = chemDetail.bySlot[slot.id];
       if(chem!==undefined){
         cardNode.style.position = 'relative';
-        const ring = document.createElement('div');
-        ring.className = 'chem-ring chem-'+chem;
-        ring.textContent = chem;
-        ring.title = chemBreakdownText(chemDetail.breakdownBySlot[slot.id]); // hover bonus on desktop
-        ring.addEventListener('click', (e)=>{ e.stopPropagation(); showPlayerChemistryModal(card, chem, chemDetail.breakdownBySlot[slot.id]); });
-        cardNode.appendChild(ring);
+        const stars = document.createElement('div');
+        stars.className = 'chem-stars chem-'+chem;
+        stars.textContent = '★'.repeat(chem) + '☆'.repeat(3-chem);
+        stars.title = chemBreakdownText(chemDetail.breakdownBySlot[slot.id]); // hover bonus on desktop
+        stars.addEventListener('click', (e)=>{ e.stopPropagation(); showPlayerChemistryModal(card, chem, chemDetail.breakdownBySlot[slot.id]); });
+        cardNode.appendChild(stars);
       }
       el.appendChild(cardNode);
     } else {
@@ -12845,10 +12846,10 @@ function showSquadModal(s){
         const chem = chemByIndex[idx];
         if(chem!==undefined){
           cardNode.style.position = 'relative';
-          const ring = document.createElement('div');
-          ring.className = 'chem-ring chem-'+chem;
-          ring.textContent = chem;
-          cardNode.appendChild(ring);
+          const stars = document.createElement('div');
+          stars.className = 'chem-stars chem-'+chem;
+          stars.textContent = '★'.repeat(chem) + '☆'.repeat(3-chem);
+          cardNode.appendChild(stars);
         }
         el.appendChild(cardNode);
       } else {
