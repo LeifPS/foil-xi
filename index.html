@@ -8112,6 +8112,49 @@ function allSquadNames(excludeSlotKey){ // name -> uid, across the starting XI, 
 }
 
 
+// ===== single-device session lock =====
+// Prevents the same club account being played on two devices/tabs at once, which causes save
+// conflicts (last write wins, so simultaneous play silently drops progress on one side). Whoever
+// signs in writes {id, ts} to the 'session' key and refreshes ts on a heartbeat; a second device
+// signing in sees a fresh, different id and is blocked. If a session goes stale (tab closed/crashed,
+// no heartbeat for a while) it's considered abandoned and the next sign-in is allowed to take over.
+const mySessionId = (crypto.randomUUID ? crypto.randomUUID() : 'sess-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+const SESSION_STALE_MS = 90000;
+const SESSION_HEARTBEAT_MS = 40000;
+let sessionHeartbeatTimer = null;
+async function claimSession(){
+  const existing = await sGet('session');
+  const now = Date.now();
+  if(existing && existing.id && existing.id!==mySessionId && (now-existing.ts) < SESSION_STALE_MS) return false;
+  await sSet('session', {id:mySessionId, ts:now});
+  return true;
+}
+function startSessionHeartbeat(){
+  if(sessionHeartbeatTimer) clearInterval(sessionHeartbeatTimer);
+  sessionHeartbeatTimer = setInterval(()=>{ sSet('session', {id:mySessionId, ts:Date.now()}); }, SESSION_HEARTBEAT_MS);
+}
+function releaseSession(){
+  if(sessionHeartbeatTimer){ clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
+  if(clubId) sSet('session', {id:null, ts:0});
+}
+function showSessionBlockedModal(id){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:380px;text-align:center;">
+        <h2 style="margin-bottom:8px;color:var(--danger);">Bereits aktiv</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">"${id}" ist gerade auf einem anderen Gerät angemeldet. Um Speicherfehler durch gleichzeitiges Spielen zu vermeiden, ist das Einloggen hier erst wieder möglich, sobald die andere Sitzung beendet wurde oder nach kurzer Inaktivität automatisch abläuft.</p>
+        <button class="action-btn" id="blocked-retry" style="width:100%;">Erneut versuchen</button>
+        <button class="action-btn secondary" id="blocked-back" style="width:100%;margin-top:8px;">Anderen Verein wählen</button>
+      </div>
+    </div>`;
+  document.getElementById('blocked-retry').addEventListener('click', ()=>showSignInModal(id));
+  document.getElementById('blocked-back').addEventListener('click', ()=>showEntryGate(id));
+}
+// best-effort release on tab close, so closing a tab frees the lock right away instead of making
+// the next device wait out the full staleness window - not guaranteed to fire, hence the timeout too
+window.addEventListener('pagehide', ()=>{ if(sessionHeartbeatTimer) releaseSession(); });
+
 // ===== storage helpers =====
 let clubId = null; // Firestore doc id for this player's save, chosen via the entry gate
 const memoryStore = {}; // last-resort in-memory fallback (session only)
@@ -8296,6 +8339,12 @@ function showSetPasswordModal(id){
     e.target.disabled = true;
     try{
       await fb.createUserWithEmailAndPassword(fb.auth, clubAuthEmail(id), p1);
+      if(!(await claimSession())){
+        try{ await fb.signOut(fb.auth); }catch(e2){}
+        showSessionBlockedModal(id);
+        return;
+      }
+      startSessionHeartbeat();
       document.getElementById('modal-root').innerHTML = '';
       await init();
       profile.hasPassword = true;
@@ -8334,6 +8383,12 @@ function showSignInModal(id){
     e.target.disabled = true;
     try{
       await fb.signInWithEmailAndPassword(fb.auth, clubAuthEmail(id), pw);
+      if(!(await claimSession())){
+        try{ await fb.signOut(fb.auth); }catch(e2){}
+        showSessionBlockedModal(id);
+        return;
+      }
+      startSessionHeartbeat();
       document.getElementById('modal-root').innerHTML = '';
       await init();
       // self-heal: if an earlier registry write failed (e.g. the rule wasn't live yet), fix it now that we're authenticated
@@ -8349,6 +8404,7 @@ function showSignInModal(id){
   document.getElementById('pw-input').focus();
 }
 function switchClub(){
+  releaseSession();
   profile = null; collection = []; squad = null; clubId = null;
   try{ if(fb && fb.auth) fb.signOut(fb.auth); }catch(e){}
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
