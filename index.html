@@ -227,10 +227,10 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   animation:primeBorderShift 3.2s linear infinite, primeBreathe 1.5s ease-in-out infinite, primeGlow 2.4s ease-in-out infinite;
 }
 .pcard.theme-prime::before{animation:autoShine 1.1s ease-in-out infinite;}
-.pcard.theme-prime .var-tag{
+.pcard.theme-prime .name.name-variant{
   background:linear-gradient(90deg,#ff2e63,#ffd76a,#7ad9ff,#c9a8ff,#3ddc84,#ff2e63);
-  background-size:300% 100%; animation:primeBorderShift 3.2s linear infinite;
-  color:#0a0510; font-weight:800; text-shadow:none;
+  background-size:300% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:primeBorderShift 3.2s linear infinite; text-shadow:none;
 }
 @keyframes primeBorderShift{
   0%{background-position:0% 0%,0% 0%,0% 50%;}
@@ -308,12 +308,12 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   repeating-linear-gradient(-60deg, rgba(165,243,252,.06) 0 3px, transparent 3px 16px);
   animation:primeSparkle 2.4s ease-in-out infinite;}
 
-.pcard .variant-badge{position:absolute;bottom:6px;right:6px;width:26px;height:26px;border-radius:8px;
-  background:rgba(6,8,12,.72);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;z-index:2;}
+.pcard .variant-badge{position:absolute;top:150px;right:6px;width:26px;height:26px;border-radius:8px;
+  background:rgba(6,8,12,.72);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;z-index:3;}
 .pcard .variant-badge svg{width:15px;height:15px;color:var(--acc);}
-.pcard.mini .variant-badge{width:20px;height:20px;bottom:4px;right:4px;border-radius:6px;}
+.pcard.mini .variant-badge{width:20px;height:20px;top:110px;right:4px;border-radius:6px;}
 .pcard.mini .variant-badge svg{width:11px;height:11px;}
-.pcard.xs .variant-badge{width:16px;height:16px;bottom:3px;right:3px;border-radius:5px;}
+.pcard.xs .variant-badge{width:16px;height:16px;top:48px;right:3px;border-radius:5px;}
 .pcard.xs .variant-badge svg{width:9px;height:9px;}
 
 .pcard .photo-frame{position:relative;z-index:0;width:100%;height:160px;flex-shrink:0;overflow:hidden;}
@@ -338,12 +338,17 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard .pos-label .pu{width:18px;height:2.5px;background:var(--acc);border-radius:2px;margin:3px 0 0 auto;}
 .pcard .pos-label .pos-bonus{font-size:11px;font-weight:700;color:var(--gold);font-family:'JetBrains Mono';margin-top:2px;min-height:13px;}
 
-.pcard .var-tag{align-self:center;background:var(--acc);color:#0a0d12;font-family:'JetBrains Mono';font-weight:700;
-  font-size:7.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 9px;border-radius:100px;
-  position:relative;z-index:2;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);margin:0 auto;}
-
-.pcard .card-body{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;padding:0 11px 10px;margin-top:-14px;}
+.pcard .card-body{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;padding:0 11px 10px;margin-top:-6px;}
 .pcard .name{font-family:'Anton';font-size:14px;text-align:center;letter-spacing:.01em;line-height:1.1;}
+.pcard .name.name-variant{
+  background:linear-gradient(100deg, var(--acc) 30%, #fff 50%, var(--acc) 70%);
+  background-size:300% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:nameVariantShimmer 3s linear infinite;
+}
+@keyframes nameVariantShimmer{
+  0%{background-position:100% 0%;}
+  100%{background-position:-100% 0%;}
+}
 .pcard .nat-club-icons{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:3px;height:16px;}
 .pcard .nc-flag{width:20px;height:14px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.15);}
 .pcard .nc-flag-mono{width:20px;height:14px;border-radius:2px;background:rgba(255,255,255,.12);color:var(--muted);
@@ -373,8 +378,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.mini .pos-label .pu{width:14px;}
 .pcard.mini .pos-label .pos-bonus{font-size:9px;min-height:11px;}
 .pcard.mini .avatar{font-size:28px;}
-.pcard.mini .var-tag{font-size:6.5px;padding:1.5px 7px;}
-.pcard.mini .card-body{margin-top:-10px;padding:0 8px 7px;}
+.pcard.mini .card-body{margin-top:-4px;padding:0 8px 7px;}
 .pcard.mini .name{font-size:11px;}
 .pcard.mini .nat-club-icons{height:13px;gap:4px;}
 .pcard.mini .nc-flag{width:16px;height:11px;}
@@ -387,9 +391,8 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.xs .photo-frame{height:60px;margin:2px 0 3px;}
 .pcard.xs .ov{font-size:17px;}
 .pcard.xs .ov-underline{width:14px;}
-.pcard.xs .var-tag{font-size:6px;padding:1.5px 6px;}
 .pcard.xs .avatar{font-size:20px;}
-.pcard.xs .card-body{margin-top:-8px;padding:0 6px 6px;}
+.pcard.xs .card-body{margin-top:-3px;padding:0 6px 6px;}
 .pcard.xs .name{font-size:9.5px;}
 .pcard.xs .ov-preview{font-size:7.5px;min-height:9px;}
 .pcard.xs .pos-label .pt{font-size:8.5px;}
@@ -8584,7 +8587,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
   const boostText = card.isManager ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue}`) : '';
-  const varTag = card.isManager ? `<div class="var-tag">${card.variant==='meistertrainer' ? 'Meistertrainer' : (card.variant==='uclw_mgr'||card.variant==='wm_mgr'||card.variant==='og_mgr'||card.variant==='legende_mgr') ? card.variantLabel : card.tier+'-Trainer'}</div>` : (hasVariant ? `<div class="var-tag">${card.variantLabel}</div>` : '');
+  const nameClass = (hasVariant || card.isManager) ? ' name-variant' : '';
   const badge = hasVariant && VARIANT_ICON[card.theme] ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON[card.theme]}</svg></div>` : (card.isManager ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON.manager}</svg></div>` : '');
   const photoInner = card.isManager
     ? `<div class="avatar">${initialsOf(card.n)}</div>`
@@ -8619,12 +8622,10 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
     ${clubLogoUrl ? `<img class="nc-club" src="${clubLogoUrl}" alt="" title="${card.club}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-club-mono" title="${card.club}">${initialsOf2(card.club)}</div>`}
   </div>`;
   const bodyInner = card.isManager
-    ? `${varTag}
-       <div class="name">${card.n}</div>
+    ? `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
        <div class="mgr-boost">Team-Rating ${card.boostType==='percent'?`${boostText}`:`${boostText} Punkte`}</div>`
-    : `${varTag}
-       <div class="name">${card.n}</div>
+    : `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
        <div class="stats">
          ${statBar(STAT_DE.PAC,card.pac)}${statBar(STAT_DE.DRI,card.dri)}
@@ -8636,8 +8637,8 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
-      ${badge}
     </div>
+    ${badge}
     <div class="top">
       ${topInner}
     </div>
