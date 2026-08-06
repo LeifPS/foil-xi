@@ -8423,7 +8423,7 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, limitedEventStartDate:localDateStr(new Date()), limitedEventClaimedDays:0, limitedEventLastClaimDate:null, pendingLimitedEventPacks:[], iconSwapTokens:0, iconSwapRedeemed:[]};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, limitedEventStartDate:localDateStr(new Date()), limitedEventClaimedDays:0, limitedEventLastClaimDate:null, pendingLimitedEventPacks:[], iconSwapTokens:0, iconSwapRedeemed:[]};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -8437,6 +8437,7 @@ async function init(){
     if(!profile.friends) profile.friends = [];
     if(!profile.matchHistory) profile.matchHistory = [];
     if(!profile.scorerStats) profile.scorerStats = {};
+    if(!profile.rivalries) profile.rivalries = {};
     if(profile.soundOn===undefined) profile.soundOn = true;
     if(profile.tournament===undefined) profile.tournament = null;
     if(profile.oreiStreak===undefined) profile.oreiStreak = 0;
@@ -12886,7 +12887,10 @@ function renderPlay(view){
   (profile.friends||[]).forEach(friend=>{
     const row = document.createElement('div');
     row.className = 'leader-row';
-    row.innerHTML = `<span style="flex:1;">${friend.name}</span>`;
+    const riv = (profile.rivalries||{})[friend.userId];
+    const rivColor = !riv ? 'var(--muted)' : riv.wins>riv.losses ? 'var(--turf-bright)' : riv.wins<riv.losses ? 'var(--danger)' : 'var(--muted)';
+    const rivalryHTML = riv ? `<span class="mono" style="font-size:10.5px;color:${rivColor};margin-left:8px;" title="Deine Bilanz gegen ${friend.name}">${riv.wins}S – ${riv.losses}N</span>` : '';
+    row.innerHTML = `<span style="flex:1;">${friend.name}${rivalryHTML}</span>`;
     const btns = document.createElement('div');
     btns.style.cssText = 'display:flex;gap:6px;';
     const challengeBtn = document.createElement('button'); challengeBtn.className='action-btn'; challengeBtn.style.cssText='width:auto;padding:5px 10px;font-size:11px;'; challengeBtn.textContent='Herausfordern';
@@ -13558,7 +13562,7 @@ async function playFullMatch(md, myName, oppName){
   return {myGoals: myTally, oppGoals: oppTally, myScorers};
 }
 const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
-async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers, friendly=false){
+async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers, friendly=false, oppUserId=null){
   const result = winnerSide==='me' ? 'WIN' : 'LOSS';
   const reward = friendly ? 0 : (result==='WIN' ? 900 : 250);
   let suffix = '';
@@ -13578,13 +13582,22 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
 
   await fbReady;
 
-  // compute the new history/scorer state locally first
+  // compute the new history/scorer/rivalry state locally first
   let newHistory = profile.matchHistory ? profile.matchHistory.slice() : [];
   let newScorerStats = profile.scorerStats ? {...profile.scorerStats} : {};
+  let newRivalries = profile.rivalries ? {...profile.rivalries} : {};
   if(oppName){
     newHistory.push({opponent: oppName, myGoals, oppGoals, result, suffix, timestamp: Date.now()});
     if(newHistory.length>20) newHistory = newHistory.slice(-20);
     (myScorers||[]).forEach(name=>{ newScorerStats[name] = (newScorerStats[name]||0)+1; });
+  }
+  // only real synced matches (online queue + friend duels) carry a stable opponent id - bot and
+  // local/friendly matches don't, since there's no persistent identity to track a rivalry against
+  if(oppUserId){
+    const r = newRivalries[oppUserId] ? {...newRivalries[oppUserId]} : {name: oppName, wins:0, losses:0};
+    r.name = oppName; // keep the displayed name fresh if they've since renamed
+    if(result==='WIN') r.wins++; else r.losses++;
+    newRivalries[oppUserId] = r;
   }
 
   // write everything in ONE network round-trip so an early tab-close can't lose part of it
@@ -13593,21 +13606,25 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
       const payload = { 'profile.coins': fb.increment(reward) };
       payload[result==='WIN' ? 'profile.wins' : 'profile.losses'] = fb.increment(1);
       if(oppName){ payload['profile.matchHistory'] = newHistory; payload['profile.scorerStats'] = newScorerStats; }
+      if(oppUserId) payload['profile.rivalries'] = newRivalries;
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
       profile.coins += reward;
       if(result==='WIN') profile.wins++; else profile.losses++;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
+      if(oppUserId) profile.rivalries = newRivalries;
     }catch(e){
       console.warn('atomic match-result update failed, falling back', e);
       if(result==='WIN') profile.wins++; else profile.losses++;
       profile.coins += reward;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
+      if(oppUserId) profile.rivalries = newRivalries;
       await sSet('profile', profile);
     }
   } else {
     if(result==='WIN') profile.wins++; else profile.losses++;
     profile.coins += reward;
     if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
+    if(oppUserId) profile.rivalries = newRivalries;
     await sSet('profile', profile);
   }
   updateCoinDisplay();
@@ -13799,7 +13816,7 @@ async function enterSyncedMatch(matchDoc){
   } else {
     winnerSide = myGoalsFinal>oppGoalsFinal ? 'me' : 'opp';
   }
-  await applyMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers);
+  await applyMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers, false, oppSide.userId);
   // Icon Swap event: any real head-to-head match (this function) counts, win or not - 1 token per
   // goal scored against the real opponent, capped at 5, only while the event window is still open
   if(iconSwapEventActive()){
