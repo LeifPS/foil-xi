@@ -552,6 +552,13 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .iconswap-tier h4{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;}
 .iconswap-grid{display:flex;gap:14px;flex-wrap:wrap;}
 .iconswap-card-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;width:128px;}
+.iconswap-card-slot{position:relative;}
+.iconswap-card-wrap.iconswap-locked .iconswap-card-slot > *:not(.iconswap-lock-overlay){filter:grayscale(.85) brightness(.4);}
+.iconswap-lock-overlay{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  background:rgba(6,8,12,.42);border-radius:14px;text-align:center;padding:8px;}
+.iconswap-lock-overlay .lock-ic{font-size:22px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6));}
+.iconswap-lock-overlay .lock-day{font-family:'JetBrains Mono';font-size:10px;font-weight:700;letter-spacing:.03em;color:#eef3ea;
+  background:rgba(6,8,12,.75);border:1px solid #22d3ee;border-radius:100px;padding:3px 9px;white-space:nowrap;}
 .stat-row{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
 .stat-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px;flex:1;min-width:100px;text-align:center;}
 .stat-box .n{font-family:'Anton';font-size:24px;}
@@ -4895,12 +4902,24 @@ const PLAYERS_PRIME = [
 // Icon Swap: one-time limited event (see ICON_SWAP_EVENT_END). Exclusive cards, only obtainable by
 // redeeming tokens earned from real online-match wins - never appear in any pack.
 const PLAYERS_ICONSWAP = [
-  {id:9990001,n:'F. Dimarco',pos:'LB, LM',ov:92,pot:92,nat:'Italy',lg:'Serie A',club:'Inter',pac:89,sho:87,pas:92,dri:90,defn:88,phy:86,foot:'Left',img:'https://cdn.sofifa.net/players/226/268/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:226268,swapCost:8},
-  {id:9990002,n:'H. Çalhanoğlu',pos:'CDM, CM',ov:92,pot:92,nat:'Türkiye',lg:'Serie A',club:'Inter',pac:81,sho:89,pas:94,dri:90,defn:89,phy:82,foot:'Right',img:'https://cdn.sofifa.net/players/208/128/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:208128,swapCost:8},
-  {id:9990003,n:'N. Barella',pos:'CM',ov:97,pot:97,nat:'Italy',lg:'Serie A',club:'Inter',pac:88,sho:86,pas:92,dri:93,defn:89,phy:85,foot:'Right',img:'https://cdn.sofifa.net/players/224/232/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:224232,swapCost:20},
-  {id:9990004,n:'T. Alexander-Arnold',pos:'RB, RM',ov:97,pot:97,nat:'England',lg:'La Liga',club:'Real Madrid',pac:85,sho:82,pas:97,dri:89,defn:88,phy:83,foot:'Right',img:'https://cdn.sofifa.net/players/231/281/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:231281,swapCost:20},
-  {id:9990005,n:'A. Mac Allister',pos:'CM, CDM',ov:102,pot:102,nat:'Argentina',lg:'Premier League',club:'Liverpool',pac:78,sho:93,pas:96,dri:95,defn:87,phy:85,foot:'Right',img:'https://cdn.sofifa.net/players/239/837/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:239837,swapCost:50},
-  {id:9990006,n:'J. Alvarez',pos:'ST',ov:102,pot:102,nat:'Argentina',lg:'La Liga',club:'Atlético Madrid',pac:94,sho:97,pas:91,dri:96,defn:66,phy:88,foot:'Right',img:'https://cdn.sofifa.net/players/246/191/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:246191,swapCost:50},
+  // 8-Token-Stufe: +1 OVR pro Freischaltungstag (Tag 0-4)
+  {id:9990001,n:'F. Dimarco',pos:'LB, LM',ov:92,pot:92,nat:'Italy',lg:'Serie A',club:'Inter',pac:89,sho:87,pas:92,dri:90,defn:88,phy:86,foot:'Left',img:'https://cdn.sofifa.net/players/226/268/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:226268,swapCost:8,unlockDay:0},
+  {id:9990002,n:'H. Çalhanoğlu',pos:'CDM, CM',ov:93,pot:93,nat:'Türkiye',lg:'Serie A',club:'Inter',pac:81,sho:89,pas:94,dri:90,defn:89,phy:82,foot:'Right',img:'https://cdn.sofifa.net/players/208/128/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:208128,swapCost:8,unlockDay:1},
+  {id:9990007,n:'A. Bastoni',pos:'CB',ov:94,pot:94,nat:'Italy',lg:'Serie A',club:'Inter',pac:83,sho:55,pas:84,dri:85,defn:97,phy:91,foot:'Left',img:'https://cdn.sofifa.net/players/237/383/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:237383,swapCost:8,unlockDay:2},
+  {id:9990008,n:'Nuno Mendes',pos:'LB, LM',ov:95,pot:95,nat:'Portugal',lg:'Ligue 1',club:'Paris Saint-Germain',pac:99,sho:74,pas:85,dri:91,defn:89,phy:86,foot:'Left',img:'https://cdn.sofifa.net/players/252/145/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:252145,swapCost:8,unlockDay:3},
+  {id:9990009,n:'M. Caicedo',pos:'CDM, CM',ov:96,pot:96,nat:'Ecuador',lg:'Premier League',club:'Chelsea',pac:80,sho:73,pas:87,dri:90,defn:93,phy:91,foot:'Right',img:'https://cdn.sofifa.net/players/256/079/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:256079,swapCost:8,unlockDay:4},
+  // 20-Token-Stufe
+  {id:9990003,n:'N. Barella',pos:'CM',ov:97,pot:97,nat:'Italy',lg:'Serie A',club:'Inter',pac:88,sho:86,pas:92,dri:93,defn:89,phy:85,foot:'Right',img:'https://cdn.sofifa.net/players/224/232/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:224232,swapCost:20,unlockDay:0},
+  {id:9990004,n:'T. Alexander-Arnold',pos:'RB, RM',ov:98,pot:98,nat:'England',lg:'La Liga',club:'Real Madrid',pac:85,sho:82,pas:97,dri:89,defn:88,phy:83,foot:'Right',img:'https://cdn.sofifa.net/players/231/281/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:231281,swapCost:20,unlockDay:1},
+  {id:9990010,n:'J. Koundé',pos:'RB, CB, RM',ov:99,pot:99,nat:'France',lg:'La Liga',club:'FC Barcelona',pac:93,sho:56,pas:83,dri:88,defn:95,phy:93,foot:'Right',img:'https://cdn.sofifa.net/players/241/486/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:241486,swapCost:20,unlockDay:2},
+  {id:9990011,n:'S. Tonali',pos:'CDM, CM',ov:100,pot:100,nat:'Italy',lg:'Premier League',club:'Newcastle United',pac:88,sho:83,pas:91,dri:89,defn:90,phy:92,foot:'Right',img:'https://cdn.sofifa.net/players/241/096/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:241096,swapCost:20,unlockDay:3},
+  {id:9990012,n:'Bruno Guimarães',pos:'CM, CDM',ov:101,pot:101,nat:'Brazil',lg:'Premier League',club:'Newcastle United',pac:75,sho:84,pas:93,dri:93,defn:88,phy:90,foot:'Right',img:'https://cdn.sofifa.net/players/247/851/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:247851,swapCost:20,unlockDay:4},
+  // 50-Token-Stufe
+  {id:9990005,n:'A. Mac Allister',pos:'CM, CDM',ov:102,pot:102,nat:'Argentina',lg:'Premier League',club:'Liverpool',pac:78,sho:93,pas:96,dri:95,defn:87,phy:85,foot:'Right',img:'https://cdn.sofifa.net/players/239/837/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:239837,swapCost:50,unlockDay:0},
+  {id:9990006,n:'J. Alvarez',pos:'ST',ov:103,pot:103,nat:'Argentina',lg:'La Liga',club:'Atlético Madrid',pac:94,sho:97,pas:91,dri:96,defn:66,phy:88,foot:'Right',img:'https://cdn.sofifa.net/players/246/191/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:246191,swapCost:50,unlockDay:1},
+  {id:9990013,n:'A. Hakimi',pos:'RB, RM',ov:104,pot:104,nat:'Morocco',lg:'Ligue 1',club:'Paris Saint-Germain',pac:99,sho:88,pas:91,dri:92,defn:91,phy:88,foot:'Right',img:'https://cdn.sofifa.net/players/235/212/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:235212,swapCost:50,unlockDay:2},
+  {id:9990014,n:'Vitinha',pos:'CM, CDM, CAM',ov:105,pot:105,nat:'Portugal',lg:'Ligue 1',club:'Paris Saint-Germain',pac:81,sho:89,pas:95,dri:99,defn:84,phy:79,foot:'Right',img:'https://cdn.sofifa.net/players/255/253/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:255253,swapCost:50,unlockDay:3},
+  {id:9990015,n:'T. Reijnders',pos:'CM, CDM, CAM',ov:106,pot:106,nat:'Netherlands',lg:'Premier League',club:'Manchester City',pac:88,sho:88,pas:91,dri:94,defn:86,phy:86,foot:'Right',img:'https://cdn.sofifa.net/players/240/638/26_120.png',gk:false,variant:'iconswap',variantLabel:'Icon Swap',theme:'iconswap',baseId:240638,swapCost:50,unlockDay:4},
 ];
 const PLAYERS_SIGNATURE_SEASON = [
   {id:9800400,n:'G. Buffon',pos:'GK',ov:100,pot:100,nat:'Italy',lg:'Serie A',club:'Juventus',pac:54,sho:98,pas:88,dri:94,defn:99,phy:92,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67110043.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=e71a2890d50f5f377e03a2dbbbb17ce8',gk:true,variant:'signature_icon',variantLabel:'Signature Icon',theme:'sigicon',season:'2006'},
@@ -5681,7 +5700,10 @@ const ICONSWAP_CARDS = PLAYERS_ICONSWAP;
 ICONSWAP_CARDS.forEach(p=>BY_ID.set(p.id,p));
 // one-time event, local time - after this, earning/redeeming both close down (see icon-swap UI)
 const ICON_SWAP_EVENT_END = new Date('2026-08-13T00:00:00').getTime();
+const ICON_SWAP_EVENT_START = ICON_SWAP_EVENT_END - 7*24*60*60*1000;
 function iconSwapEventActive(){ return Date.now() < ICON_SWAP_EVENT_END; }
+function iconSwapUnlockTime(unlockDay){ return ICON_SWAP_EVENT_START + (unlockDay||0)*24*60*60*1000; }
+function iconSwapCardUnlocked(card){ return Date.now() >= iconSwapUnlockTime(card.unlockDay); }
 const SIGNATURE_SEASON_CARDS = PLAYERS_SIGNATURE_SEASON;
 SIGNATURE_SEASON_CARDS.forEach(p=>BY_ID.set(p.id,p));
 const OGICON_CARDS = PLAYERS_OGICONS.filter(c=>c.variant!=='og_mgr');
@@ -12603,18 +12625,31 @@ async function runLeaderboardChallenge(squadData, friendly){
   await runLocalMatch(rating, opp, {friendly});
 }
 // ===== Icon Swap: limited-time event, redeem tokens earned from real-match wins for an exclusive card =====
+function iconSwapUnlockLabel(unlockDay){
+  const t = iconSwapUnlockTime(unlockDay);
+  const weekday = new Date(t).toLocaleDateString('de-DE', {weekday:'long'});
+  return `${weekday} 00:00`;
+}
 function showIconSwapModal(){
   const tiers = [...new Set(ICONSWAP_CARDS.map(c=>c.swapCost))].sort((a,b)=>a-b);
   const tierHtml = tiers.map(cost=>{
-    const cards = ICONSWAP_CARDS.filter(c=>c.swapCost===cost);
+    const cards = ICONSWAP_CARDS.filter(c=>c.swapCost===cost).slice().sort((a,b)=>a.unlockDay-b.unlockDay);
     const cardsHtml = cards.map(c=>{
+      const unlocked = iconSwapCardUnlocked(c);
       const redeemed = (profile.iconSwapRedeemed||[]).includes(c.id);
       const canAfford = (profile.iconSwapTokens||0) >= c.swapCost;
-      const disabled = redeemed || !canAfford;
-      return `<div class="iconswap-card-wrap">
-        ${cardEl(c,'mini').outerHTML}
+      const disabled = !unlocked || redeemed || !canAfford;
+      let btnLabel;
+      if(!unlocked) btnLabel = `🔒 ab ${iconSwapUnlockLabel(c.unlockDay)}`;
+      else if(redeemed) btnLabel = 'Eingelöst';
+      else btnLabel = `<span class="token-dot"></span>${c.swapCost} Token`;
+      return `<div class="iconswap-card-wrap${unlocked?'':' iconswap-locked'}">
+        <div class="iconswap-card-slot">
+          ${cardEl(c,'mini').outerHTML}
+          ${unlocked ? '' : `<div class="iconswap-lock-overlay"><div class="lock-ic">🔒</div><div class="lock-day">${iconSwapUnlockLabel(c.unlockDay)}</div></div>`}
+        </div>
         <button class="action-btn ${disabled?'secondary':''}" data-cid="${c.id}" style="width:100%;padding:7px 0;font-size:11.5px;" ${disabled?'disabled':''}>
-          ${redeemed ? 'Eingelöst' : `<span class="token-dot"></span>${c.swapCost} Token`}
+          ${btnLabel}
         </button>
       </div>`;
     }).join('');
@@ -12623,7 +12658,7 @@ function showIconSwapModal(){
   openModal(`
     <h2 style="margin-bottom:2px;">Icon Swap</h2>
     <p class="hint" style="margin:0 0 6px;">Exklusive Karten, nur über dieses Event erhältlich — endet Donnerstag 00:00 Uhr. Dein Guthaben: <b style="color:var(--gold);"><span class="token-dot"></span>${profile.iconSwapTokens||0} Token</b>.</p>
-    <p class="hint" style="margin:0 0 16px;">Jede Karte kannst du nur einmal einlösen. Nicht verbrauchte Token verfallen, wenn das Event endet.</p>
+    <p class="hint" style="margin:0 0 16px;">Pro Seltenheitsstufe wird jeden Tag eine weitere Karte freigeschaltet (+1 OVR gegenüber dem Vortag, gleicher Preis). Jede Karte kannst du nur einmal einlösen. Nicht verbrauchte Token verfallen, wenn das Event endet.</p>
     ${tierHtml}
     <button class="modal-close" id="iconswap-close" style="width:100%;margin-top:4px;">Schließen</button>
   `);
@@ -12632,6 +12667,7 @@ function showIconSwapModal(){
     btn.addEventListener('click', async ()=>{
       const card = BY_ID.get(Number(btn.dataset.cid));
       if(!card) return;
+      if(!iconSwapCardUnlocked(card)){ toast(`Diese Karte schaltet erst ${iconSwapUnlockLabel(card.unlockDay)} frei.`); return; }
       if((profile.iconSwapRedeemed||[]).includes(card.id)){ toast('Diese Karte hast du schon eingelöst.'); return; }
       if(!iconSwapEventActive()){ toast('Das Icon-Swap-Event ist vorbei.'); closeModal(); renderView('play'); return; }
       if((profile.iconSwapTokens||0) < card.swapCost){ toast('Nicht genug Token.'); return; }
