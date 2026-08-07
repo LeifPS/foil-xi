@@ -8122,8 +8122,8 @@ function allSquadNames(excludeSlotKey){ // name -> uid, across the starting XI, 
 // signing in sees a fresh, different id and is blocked. If a session goes stale (tab closed/crashed,
 // no heartbeat for a while) it's considered abandoned and the next sign-in is allowed to take over.
 const mySessionId = (crypto.randomUUID ? crypto.randomUUID() : 'sess-'+Date.now()+'-'+Math.random().toString(36).slice(2));
-const SESSION_STALE_MS = 90000;
-const SESSION_HEARTBEAT_MS = 40000;
+const SESSION_STALE_MS = 180000;
+const SESSION_HEARTBEAT_MS = 75000;
 let sessionHeartbeatTimer = null;
 async function claimSession(){
   const existing = await sGet('session');
@@ -8136,9 +8136,9 @@ function startSessionHeartbeat(){
   if(sessionHeartbeatTimer) clearInterval(sessionHeartbeatTimer);
   sessionHeartbeatTimer = setInterval(()=>{ sSet('session', {id:mySessionId, ts:Date.now()}); }, SESSION_HEARTBEAT_MS);
 }
-function releaseSession(){
+async function releaseSession(){
   if(sessionHeartbeatTimer){ clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
-  if(clubId) sSet('session', {id:null, ts:0});
+  if(clubId) await sSet('session', {id:null, ts:0});
 }
 function showSessionBlockedModal(id){
   const root = document.getElementById('modal-root');
@@ -8406,8 +8406,8 @@ function showSignInModal(id){
   document.getElementById('pw-input').addEventListener('keydown', e=>{ if(e.key==='Enter') submit({target:document.getElementById('pw-submit')}); });
   document.getElementById('pw-input').focus();
 }
-function switchClub(){
-  releaseSession();
+async function switchClub(){
+  await releaseSession();
   profile = null; collection = []; squad = null; clubId = null;
   try{ if(fb && fb.auth) fb.signOut(fb.auth); }catch(e){}
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
@@ -8768,6 +8768,14 @@ function tickPositionCycle(){
   });
 }
 setInterval(tickPositionCycle, 2500);
+// refresh the open-tournaments list right away when the tab regains focus, so the longer
+// TOURNAMENT_REFRESH_MS interval (paused while hidden) doesn't feel stale on return
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && tournamentLiveRefreshTimer && currentTab==='play'){
+    invalidateReadCache('open-tournaments');
+    loadOpenTournaments();
+  }
+});
 
 // ===== nav & routing =====
 const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen']];
@@ -11157,6 +11165,12 @@ let autorollEnabled = false;
 let queueTimer = null;
 let inMatch = false; // true for the entire duration of an actual match (not just searching), prevents any overlap
 let tournamentLiveRefreshTimer = null;
+// was 12000ms - that plus a background tab left open on the Play view (the default/most-visited
+// tab) was the single biggest source of wasted Firestore reads, running around the clock whether
+// anyone was actually looking or not. Longer interval + pausing while hidden (see the
+// visibilitychange listener near tickPositionCycle below) cuts that dramatically with no real UX
+// cost, since an immediate refresh still fires the moment the tab becomes visible again.
+const TOURNAMENT_REFRESH_MS = 25000;
 
 // ===== FRIENDS & DUELS =====
 async function addFriend(rawName){
@@ -12043,7 +12057,7 @@ async function loadOpenTournaments(){
   await fbReady;
   if(!fb){ box.innerHTML = '<p class="hint">Ben\u00f6tigt das Online-Backend.</p>'; return; }
   try{
-    const list = await cachedRead('open-tournaments', 20000, async ()=>{
+    const list = await cachedRead('open-tournaments', TOURNAMENT_REFRESH_MS, async ()=>{
       const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','in',['registering','running']), fb.limit(20)));
       return snap.docs.map(d=>normalizeTournamentDoc(d.data()));
     });
@@ -12915,9 +12929,10 @@ function renderPlay(view){
   loadMyTournamentResults();
   if(tournamentLiveRefreshTimer) clearInterval(tournamentLiveRefreshTimer);
   tournamentLiveRefreshTimer = setInterval(()=>{
-    if(currentTab==='play') loadOpenTournaments();
-    else { clearInterval(tournamentLiveRefreshTimer); tournamentLiveRefreshTimer = null; }
-  }, 12000);
+    if(currentTab!=='play'){ clearInterval(tournamentLiveRefreshTimer); tournamentLiveRefreshTimer = null; return; }
+    if(document.hidden) return; // tab backgrounded - don't burn reads while nobody's looking
+    loadOpenTournaments();
+  }, TOURNAMENT_REFRESH_MS);
 }
 function countPrimeCards(players){
   return (players||[]).filter(p=>p.variant==='prime').length;
