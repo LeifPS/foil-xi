@@ -6129,7 +6129,7 @@ async function updateMyNetWorthEntry(){
     });
   }catch(e){ console.warn('net worth update failed', e); }
 }
-const LEADERBOARD_EXCLUDED_USERS = new Set(['leifps','tst']);
+const LEADERBOARD_EXCLUDED_USERS = new Set(['leifps','tst','test']);
 // Temporary, admin-controlled leaderboard bans - distinct from a full account ban (profile.banned
 // blocks login entirely). A leaderboard ban leaves the account fully playable; it just hides that
 // account from the public leaderboards until the ban expires or an admin lifts it early. Useful for
@@ -13983,7 +13983,9 @@ function renderMatchRatingsHTML(matchRatings){
     </div>`;
 }
 async function runLocalMatch(myRating, opp, opts={}){
-  if(inMatch){ toast('Es l\u00e4uft bereits ein anderes Match \u2014 bitte kurz warten und erneut versuchen.'); return; }
+  // opts.alreadyLocked: the caller (e.g. startBotMatch) already claimed `inMatch` itself before
+  // running its own pre-match intro cutscene, so this isn't a real conflict - don't re-toast/bail
+  if(inMatch && !opts.alreadyLocked){ toast('Es l\u00e4uft bereits ein anderes Match \u2014 bitte kurz warten und erneut versuchen.'); return; }
   inMatch = true;
   try{
     const myPlayers = opts.overridePlayers || getMySquadPlayers();
@@ -14027,21 +14029,52 @@ function pickRealisticOpponent(targetRating){
   const sorted = clubs.slice().sort((a,b)=>Math.abs(a.avgOv-targetRating)-Math.abs(b.avgOv-targetRating));
   const pool = sorted.slice(0, Math.min(8, sorted.length));
   const chosen = pool[Math.floor(Math.random()*pool.length)];
-  const players = chosen.xi.map(p=>({n:p.n, pos:mainPos(p.pos), ov:p.ov, img:p.img}));
-  return {owner:chosen.club, rating:chosen.avgOv, players, isBot:true};
+  // build a real, position-balanced 4-3-3 XI from the club's full roster (not just top-11 by raw
+  // OV, which could accidentally end up all-attackers) - this also gives real card ids, so the CPU
+  // gets the same intro-cutscene lineup reveal as a real opponent instead of a placeholder
+  const clubPool = ALL_BASE.filter(p=>p.club===chosen.club);
+  const slots = FORMATIONS['433'].slots;
+  const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
+  clubPool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
+  Object.values(byGroup).forEach(arr=>arr.sort((a,b)=>b.ov-a.ov));
+  const used = new Set();
+  const xi = slots.map(slot=>{
+    const group = posGroup2(slot.label);
+    const candidates = (byGroup[group].length ? byGroup[group] : clubPool).filter(c=>!used.has(c.id));
+    const fallback = clubPool.filter(c=>!used.has(c.id));
+    const picked = candidates[0] || fallback[0] || clubPool[0];
+    if(picked) used.add(picked.id);
+    return picked;
+  });
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:p.ov, img:p.img}));
+  const cardRefs = xi.map((p,i)=>({id:p.id, pos:slots[i].label}));
+  const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
+  return {owner:chosen.club, rating, players, cardRefs, formation:'433', isBot:true};
 }
-function startBotMatch(rating){
+async function startBotMatch(rating){
   if(inMatch) return;
-  const opp = pickRealisticOpponent(rating);
-  const area = document.getElementById('match-area');
-  if(area) area.innerHTML = `
-    <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
-      <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (Simulation)</div></div>
-    </div>
-    <div id="result-area"></div>`;
-  runLocalMatch(rating, opp);
+  // claim the lock for the whole flow (intro cutscene + match), not just the match itself - otherwise
+  // "Gegner suchen" would look re-enabled while the CPU intro is still playing
+  inMatch = true;
+  try{
+    const opp = pickRealisticOpponent(rating);
+    const area = document.getElementById('match-area');
+    const meSide = {name: profile.displayName||'Dein Verein', rating, crest: profile.crest};
+    const oppSide = {name: opp.owner+' (Simulation)', rating: opp.rating,
+      crest: {shape:'shield', primary:'#ffb84d', secondary:'#0a0d12', letter:(opp.owner||'?')[0].toUpperCase()},
+      formation: opp.formation};
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.cardRefs);
+    if(area) area.innerHTML = `
+      <div class="vs-teams">
+        <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+        <div class="vs-x">VS</div>
+        <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (Simulation)</div></div>
+      </div>
+      <div id="result-area"></div>`;
+    await runLocalMatch(rating, opp, {alreadyLocked:true});
+  } finally {
+    inMatch = false;
+  }
 }
 function matchIdFor(myId, myJoined, otherId, otherJoined){
   const a = myId+'@'+Math.floor(myJoined), b = otherId+'@'+Math.floor(otherJoined);
