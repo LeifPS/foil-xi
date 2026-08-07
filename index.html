@@ -81,6 +81,15 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .view-head p{color:var(--muted);font-size:13.5px;margin-top:4px;max-width:640px;line-height:1.5;}
 
 /* ---- pack grid ---- */
+.pack-tier-section{margin-bottom:28px;}
+.pack-tier-section:last-child{margin-bottom:0;}
+.pack-tier-heading{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;}
+.pack-tier-heading::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--turf-bright);box-shadow:0 0 8px var(--turf-bright);}
+.pack-tier-heading.premium{color:#c78bf5;}
+.pack-tier-heading.premium::before{background:#c78bf5;box-shadow:0 0 8px #c78bf5;}
+.pack-tier-heading.ultimate{color:#ffd76a;}
+.pack-tier-heading.ultimate::before{background:#ffd76a;box-shadow:0 0 8px #ffd76a;}
 .pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;}
 .daily-banner{background:linear-gradient(155deg,#171d12,#10130c 70%);border:1px solid var(--gold-dim);border-radius:14px;
   padding:16px 18px;margin-bottom:20px;}
@@ -109,20 +118,29 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   border:1px solid var(--line);color:var(--muted);}
 .pack-card.premium .pack-tier-ribbon{border-color:#c78bf5;color:#c78bf5;}
 .pack-card.ultimate .pack-tier-ribbon{border-color:#ffd76a;color:#ffd76a;}
-.pack-glyph{width:100%;height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  font-family:'Anton';font-size:34px;color:var(--chalk);position:relative;overflow:hidden;
+.pack-glyph{width:100%;height:158px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Anton';font-size:38px;color:var(--chalk);position:relative;overflow:hidden;
   background:repeating-linear-gradient(135deg, rgba(255,255,255,.04) 0 3px, transparent 3px 15px), linear-gradient(180deg,#1b2116,#12150d 85%);
   border-bottom:1px solid var(--line);}
+.pack-glyph::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+  background:linear-gradient(75deg, transparent 42%, rgba(255,255,255,.14) 50%, transparent 58%);
+  background-size:220% 220%;background-position:130% 0%;animation:autoShine 4.5s ease-in-out infinite;}
+.pack-glyph{transition:transform .3s;}
+.pack-card:hover .pack-glyph{transform:scale(1.02);}
 .pack-card.premium .pack-glyph{background:repeating-linear-gradient(135deg, rgba(199,139,245,.08) 0 3px, transparent 3px 15px), linear-gradient(180deg,#1f1830,#140f1d 85%);}
 .pack-card.ultimate .pack-glyph{background:repeating-conic-gradient(from 0deg at 50% 0%, rgba(255,215,106,.09) 0deg 4deg, transparent 4deg 13deg), linear-gradient(180deg,#241a0c,#150f1d 85%);}
 .pack-glyph .pv-lbl{font-family:'JetBrains Mono';font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:1px;}
-.pack-card-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;flex:1;}
+.pack-glyph.has-img{padding:0;}
+.pack-glyph.has-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;}
+.pack-glyph.has-img .pv-count-badge{position:relative;z-index:2;background:rgba(6,8,12,.72);border-radius:100px;
+  padding:3px 10px;font-family:'JetBrains Mono';font-size:11px;font-weight:700;letter-spacing:.03em;}
+.pack-card-body{padding:15px 16px 16px;display:flex;flex-direction:column;gap:9px;flex:1;}
 .odds-link{background:none;border:none;color:var(--teal);font-size:11px;text-decoration:underline;
   cursor:pointer;padding:0;text-align:left;width:fit-content;margin-top:-4px;}
 .odds-link:hover{color:var(--gold);}
-.pack-card h3{font-size:15.5px;letter-spacing:.01em;}
+.pack-card h3{font-size:16px;letter-spacing:.01em;}
 .pack-card .desc{font-size:11.8px;color:var(--muted);line-height:1.5;min-height:34px;}
-.pack-card .buyrow{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);}
+.pack-card .buyrow{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:9px;border-top:1px solid rgba(255,255,255,.06);}
 .price-pill{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;color:var(--gold);}
 .price-pill .pdot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px var(--gold);}
 .token-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22d3ee;box-shadow:0 0 7px #22d3ee;vertical-align:middle;margin-right:5px;}
@@ -307,6 +325,16 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   repeating-linear-gradient(60deg, rgba(165,243,252,.08) 0 3px, transparent 3px 16px),
   repeating-linear-gradient(-60deg, rgba(165,243,252,.06) 0 3px, transparent 3px 16px);
   animation:primeSparkle 2.4s ease-in-out infinite;}
+.pcard.theme-poet{--acc:#b06cff;border:1.5px solid transparent;background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,.06) 0 2px, transparent 2px 11px) padding-box,
+    linear-gradient(160deg,#1c1030 0%,#0d0816 68%) padding-box,
+    linear-gradient(90deg,#b06cff,#e0c3ff,#b06cff) border-box;
+  background-size:100% 100%,100% 100%,240% 240%;
+  animation:primeBorderShift 4.4s linear infinite;box-shadow:0 10px 26px rgba(0,0,0,.58), 0 0 30px -5px #b06cff;}
+.pcard.pattern-poetpattern .pattern-layer{background:
+  radial-gradient(circle at 50% 12%, rgba(176,108,255,.36), transparent 58%),
+  repeating-linear-gradient(70deg, rgba(224,195,255,.08) 0 2px, transparent 2px 18px);
+  animation:primeSparkle 2.8s ease-in-out infinite;}
 
 .pcard .variant-badge{position:absolute;top:150px;right:6px;width:26px;height:26px;border-radius:8px;
   background:rgba(6,8,12,.72);border:1px solid var(--acc);display:flex;align-items:center;justify-content:center;z-index:3;}
@@ -625,22 +653,39 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .modal-overlay{position:fixed;inset:0;background:rgba(4,5,8,.86);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
 .modal-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:960px;width:100%;max-height:88vh;overflow:auto;}
 .reveal-strip{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;padding:20px 0;}
-.pack-visual-wrap{display:flex;justify-content:center;padding:14px 0 10px;}
-.pack-visual{width:200px;height:270px;border-radius:16px;position:relative;cursor:pointer;overflow:hidden;
+.pack-visual-wrap{display:flex;justify-content:center;padding:18px 0 14px;position:relative;}
+.pack-visual{width:240px;height:324px;border-radius:18px;position:relative;cursor:pointer;overflow:hidden;
   background:linear-gradient(160deg,#1c2116,#10130c 60%);border:1px solid var(--gold-dim);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-  box-shadow:0 0 46px -8px var(--gold);animation:packFloat 3s ease-in-out infinite;transition:transform .3s, opacity .3s;}
-.pack-visual::before{content:"";position:absolute;inset:0;pointer-events:none;
+  box-shadow:0 0 58px -8px var(--gold);animation:packFloat 3s ease-in-out infinite;transition:transform .3s, opacity .3s;}
+.pack-visual::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
   background:repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 10px);}
-.pack-visual .pv-count{font-family:'Anton';font-size:42px;color:var(--chalk);position:relative;z-index:1;}
-.pack-visual .pv-label{font-family:'JetBrains Mono';font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);position:relative;z-index:1;}
-.pack-visual .pv-tap{font-size:11px;color:var(--gold);position:relative;z-index:1;letter-spacing:.05em;font-weight:700;}
+.pack-visual .pv-shine{position:absolute;inset:0;pointer-events:none;z-index:1;
+  background:linear-gradient(75deg, transparent 42%, rgba(255,255,255,.22) 50%, transparent 58%);
+  background-size:220% 220%;background-position:130% 0%;animation:autoShine 4s ease-in-out infinite;}
+.pack-visual .pv-count{font-family:'Anton';font-size:50px;color:var(--chalk);position:relative;z-index:2;}
+.pack-visual .pv-label{font-family:'JetBrains Mono';font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);position:relative;z-index:2;}
+.pack-visual .pv-tap{font-size:12px;color:var(--gold);position:relative;z-index:2;letter-spacing:.05em;font-weight:700;}
+.pack-visual.has-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;z-index:0;}
+.pack-visual.has-img::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(to bottom, transparent 45%, rgba(6,8,12,.88) 100%);}
 @keyframes packFloat{0%,100%{transform:translateY(0) rotate(0);}50%{transform:translateY(-8px) rotate(-1deg);}}
-.pack-visual.premium{border-color:#c78bf5;box-shadow:0 0 46px -8px #c78bf5;}
+.pack-visual.premium{border-color:#c78bf5;box-shadow:0 0 58px -8px #c78bf5;}
 .pack-visual.ultimate{border:1.5px solid transparent;
   background:linear-gradient(160deg,#1c2116,#10130c 60%) padding-box, var(--r-ultimate) border-box;
-  box-shadow:0 0 56px -6px #ffd76a;}
+  box-shadow:0 0 68px -6px #ffd76a;}
 .pack-visual.opening{animation:none;transform:scale(1.35);opacity:0;}
+.pack-tap-burst{position:absolute;inset:0;z-index:5;pointer-events:none;border-radius:18px;overflow:hidden;}
+.pack-slice-line{position:absolute;left:-10px;right:-10px;top:50%;height:3px;z-index:6;pointer-events:none;
+  background:linear-gradient(90deg, transparent, #fff 15%, #fff 85%, transparent);
+  box-shadow:0 0 16px 3px rgba(255,255,255,.85), 0 0 34px 8px var(--gold);
+  opacity:0;transition:opacity .15s ease;}
+.pack-slice-line.active{opacity:1;}
+.pv-half{position:absolute;overflow:hidden;transition:transform .5s cubic-bezier(.3,.75,.4,1), opacity .5s ease;pointer-events:none;}
+.pv-half.top{clip-path:inset(0 0 50% 0);}
+.pv-half.bottom{clip-path:inset(50% 0 0 0);}
+.pv-half.slice-open.top{transform:translateY(-170px) rotate(-9deg);opacity:0;}
+.pv-half.slice-open.bottom{transform:translateY(170px) rotate(9deg);opacity:0;}
 
 .spotlight-stage{display:flex;justify-content:center;align-items:flex-start;min-height:264px;position:relative;perspective:800px;}
 .spotlight-card{animation:spotlightIn .5s cubic-bezier(.2,.7,.3,1);}
@@ -5735,6 +5780,20 @@ function iconSwapUnlockTime(unlockDay){ return ICON_SWAP_EVENT_START + (unlockDa
 function iconSwapCardUnlocked(card){ return Date.now() >= iconSwapUnlockTime(card.unlockDay); }
 const SIGNATURE_SEASON_CARDS = PLAYERS_SIGNATURE_SEASON;
 SIGNATURE_SEASON_CARDS.forEach(p=>BY_ID.set(p.id,p));
+// Fußball-Poeten: legendary playmakers/technicians across eras, exclusive to the Fußball-Poeten Pack.
+const PLAYERS_POETEN = [
+  {id:9801000,n:'D. Bergkamp',pos:'CAM, ST',ov:100,pot:100,nat:'Netherlands',lg:'Premier League',club:'Arsenal',pac:78,sho:88,pas:93,dri:95,defn:45,phy:68,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p50570036.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=9cde5f80ddf594cabb66340e6f082d2f',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+  {id:9801001,n:'M. Özil',pos:'CAM, CM',ov:100,pot:100,nat:'Germany',lg:'La Liga',club:'Real Madrid',pac:72,sho:78,pas:96,dri:92,defn:40,phy:60,foot:'Right',img:'https://cdn.futbin.com/content/fifa21/img/players/p67285499.png?v=23',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+  {id:9801002,n:'Zico',pos:'CAM, ST',ov:101,pot:101,nat:'Brazil',lg:'Brasileirão',club:'Flamengo',pac:82,sho:90,pas:92,dri:91,defn:45,phy:65,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67275555.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=6b3f40f41e004115fd1339fd881f943f',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+  {id:9801003,n:'R. Baggio',pos:'CAM, ST, LW',ov:103,pot:103,nat:'Italy',lg:'Serie A',club:'Juventus',pac:80,sho:90,pas:88,dri:94,defn:35,phy:62,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p83887194.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=b5e1919024667132eaa06da157c72eb7',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+  {id:9801004,n:'A. Pirlo',pos:'CM, CDM',ov:103,pot:103,nat:'Italy',lg:'Serie A',club:'AC Milan',pac:65,sho:82,pas:97,dri:88,defn:68,phy:65,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p50339411.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=a0785c09e2deb28fdd4b36e663548a0d',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+  {id:9801005,n:'Rivaldo',pos:'LW, CAM, ST',ov:104,pot:104,nat:'Brazil',lg:'La Liga',club:'FC Barcelona',pac:82,sho:92,pas:89,dri:93,defn:40,phy:70,foot:'Left',img:'https://cdn3.futbin.com/content/fifa26/img/players/p83890311.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=adbd52b9d638df8fedbe22fa1efcbe95',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+  {id:9801006,n:'M. Platini',pos:'CAM, CM',ov:106,pot:106,nat:'France',lg:'Serie A',club:'Juventus',pac:78,sho:90,pas:94,dri:92,defn:55,phy:72,foot:'Right',img:'https://fussball-legende.de/wp-content/uploads/2025/03/Platini.png',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+  {id:9801007,n:'J. R. Riquelme',pos:'CAM, CM',ov:107,pot:107,nat:'Argentina',lg:'Primera División',club:'Boca Juniors',pac:60,sho:85,pas:96,dri:93,defn:45,phy:68,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67132038.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=e40968349162a97cd522d7358c80b720',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+  {id:9801008,n:'Garrincha',pos:'RW, RM',ov:108,pot:108,nat:'Brazil',lg:'Brasileirão',club:'Botafogo',pac:92,sho:84,pas:82,dri:99,defn:30,phy:70,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67356417.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=06f606335c990415589abc6cbf2d48b7',gk:false,variant:'poet',variantLabel:'Fußball-Poet',theme:'poet'},
+];
+const POETEN_CARDS = PLAYERS_POETEN;
+POETEN_CARDS.forEach(p=>BY_ID.set(p.id,p));
 const OGICON_CARDS = PLAYERS_OGICONS.filter(c=>c.variant!=='og_mgr');
 OGICON_CARDS.forEach(p=>BY_ID.set(p.id,p));
 const OG_PELE = OGICON_CARDS.find(p=>p.n==='Pel\u00e9');
@@ -5890,7 +5949,7 @@ const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8
   derbyicon:'#ff4d4d',underdog:'#4dd0e1',
   uclw:'#0a1e4d',uclw_mgr:'#e8003c', ballondor:'#f2c14e', wm_mgr:'#aa151b', prime:'#ffd76a',
   sigicon:'#7ad9ff', eradef:'#ffcf5c', sigseason:'#ff6fb1',
-  ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00', iconswap:'#22d3ee'};
+  ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00', iconswap:'#22d3ee', poet:'#b06cff'};
 function cardAccent(card){
   if(card.variant==='meistertrainer') return '#ff8a3d';
   if(card.variant==='uclw_mgr') return THEME_ACC.uclw_mgr;
@@ -6235,6 +6294,28 @@ const PACKS = [
         if(r<(acc+=P.sigSeason)) return pick(sigSeason);
         if(r<(acc+=P.eraDefiner)) return pick(eraDefiner);
         if(r<(acc+=P.sigIcon)) return pick(sigIcon);
+        if(r<(acc+=P.rare)) return pick(rare);
+        if(r<(acc+=P.good)) return pick(good);
+        return pick(common);
+      });
+    }},
+  {id:'poeten',name:'Fußball-Poeten Pack',cost:30000,tier:'ultimate',count:5,
+    desc:'5 Karten, meistens Rating 80-99. Sehr selten erscheint eine 100+ Karte legendärer Spielmacher und Techniker aus verschiedenen Epochen des Fußballs — von Zico und Bergkamp bis Platini, Riquelme und Garrincha. Keine Fußballgötter-, GOAT-, WM- oder Blackout-Karten enthalten.',
+    draw(){
+      const pool = ALL_BASE.concat(ALL_SPECIAL).filter(c=>!c.isManager);
+      const common = pool.filter(c=>c.ov>=80 && c.ov<90);
+      const good = pool.filter(c=>c.ov>=90 && c.ov<95);
+      const rare = pool.filter(c=>c.ov>=95 && c.ov<100);
+      const poetIcon = POETEN_CARDS.filter(c=>c.ov<102);
+      const poetEra = POETEN_CARDS.filter(c=>c.ov>=102 && c.ov<106);
+      const poetLegend = POETEN_CARDS.filter(c=>c.ov>=106);
+      const P = {poetLegend:0.0035, poetEra:0.013, poetIcon:0.04, rare:0.11, good:0.27};
+      return Array.from({length:5}, ()=>{
+        const r = Math.random();
+        let acc = 0;
+        if(r<(acc+=P.poetLegend)) return pick(poetLegend);
+        if(r<(acc+=P.poetEra)) return pick(poetEra);
+        if(r<(acc+=P.poetIcon)) return pick(poetIcon);
         if(r<(acc+=P.rare)) return pick(rare);
         if(r<(acc+=P.good)) return pick(good);
         return pick(common);
@@ -8633,6 +8714,7 @@ const VARIANT_ICON = {
   sigseason:'<path d="M4 17c4-9 12-9 16-14-1 8-7 14-16 14z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 17c3-1 7-4 11-10" stroke="currentColor" stroke-width="1.3"/><path d="M5 20h14" stroke="currentColor" stroke-width="1.6"/>',
   ogicon:'<path d="M12 3l2.2 4.6 5 .5-3.7 3.4.9 5-4.4-2.5-4.4 2.5.9-5-3.7-3.4 5-.5z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M12 6.5l1.3 2.7 3 .3-2.2 2 .5 3-2.6-1.5-2.6 1.5.5-3-2.2-2 3-.3z" fill="currentColor"/>',
   og_mgr:'<path d="M12 3l2.2 4.6 5 .5-3.7 3.4.9 5-4.4-2.5-4.4 2.5.9-5-3.7-3.4 5-.5z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M12 6.5l1.3 2.7 3 .3-2.2 2 .5 3-2.6-1.5-2.6 1.5.5-3-2.2-2 3-.3z" fill="currentColor"/>',
+  poet:'<path d="M20 4c-6 0-13 4-15 12l-1 4 4-1C16 17 20 10 20 4z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 15l6-6" stroke="currentColor" stroke-width="1.4"/>',
 };
 const PATTERN_FAMILY = {
   fs:'attack', gb:'attack', phenom:'attack', sd:'attack', gal:'attack',
@@ -8653,6 +8735,7 @@ const PATTERN_FAMILY = {
   sigicon:'signaturepattern', eradef:'erapattern', sigseason:'sigseasonpattern',
   ogicon:'ogpattern', og_mgr:'ogpattern',
   iconswap:'iconswappattern',
+  poet:'poetpattern',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
@@ -9147,34 +9230,47 @@ function renderStore(view){
       <input id="redeem-input" placeholder="Code einl\u00f6sen..." style="max-width:220px;">
       <button class="action-btn secondary" id="redeem-btn" style="width:auto;padding:9px 16px;">Einl\u00f6sen</button>
     </div>
-    <div class="pack-grid" id="pack-grid"></div>`;
+    <div id="pack-sections"></div>`;
   const claimBtn = document.getElementById('daily-claim');
   if(claimBtn && !claimBtn.disabled) claimBtn.addEventListener('click', (e)=>{ e.target.disabled=true; claimDailyReward(); });
   const limitedEventBtn = document.getElementById('limited-event-claim');
   if(limitedEventBtn && !limitedEventBtn.disabled) limitedEventBtn.addEventListener('click', (e)=>{ e.target.disabled=true; claimLimitedEventReward(); });
-  const grid = document.getElementById('pack-grid');
+  const sectionsEl = document.getElementById('pack-sections');
   const TIER_LABEL = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
+  const TIER_ORDER = ['', 'premium', 'ultimate'];
   const wmExpired = Date.now() >= WM_WINNERS_DEADLINE;
-  PACKS.filter(pack=>(!pack.hidden || (pack.id==='legendpack' && profile.ogPackUnlocked)) && !(pack.id==='wmwinners' && wmExpired)).forEach(pack=>{
-    const isWM = pack.id==='wmwinners';
-    const card = document.createElement('div');
-    card.className = `pack-card ${pack.tier}`;
-    card.innerHTML = `
-      <div class="pack-tier-ribbon">${TIER_LABEL[pack.tier]}</div>
-      <div class="pack-glyph"><div>${pack.count}</div><div class="pv-lbl">Karten</div></div>
-      <div class="pack-card-body">
-        <h3>${pack.name}</h3>
-        <div class="desc">${pack.desc}</div>
-        ${isWM ? `<div class="mono" id="wm-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur dieses Wochenende verf\u00fcgbar</div>` : ''}
-        <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
-        <div class="buyrow">
-          <div class="price-pill"><div class="pdot"></div>${formatCoins(pack.cost)}</div>
-          <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
+  const visiblePacks = PACKS.filter(pack=>(!pack.hidden || (pack.id==='legendpack' && profile.ogPackUnlocked)) && !(pack.id==='wmwinners' && wmExpired));
+  TIER_ORDER.forEach(tier=>{
+    const packsInTier = visiblePacks.filter(p=>(p.tier||'')===tier);
+    if(!packsInTier.length) return;
+    const section = document.createElement('div');
+    section.className = 'pack-tier-section';
+    section.innerHTML = `<h3 class="pack-tier-heading ${tier}">${TIER_LABEL[tier]}</h3><div class="pack-grid"></div>`;
+    const grid = section.querySelector('.pack-grid');
+    packsInTier.forEach(pack=>{
+      const isWM = pack.id==='wmwinners';
+      const card = document.createElement('div');
+      card.className = `pack-card ${pack.tier}`;
+      card.innerHTML = `
+        <div class="pack-tier-ribbon">${TIER_LABEL[pack.tier]}</div>
+        <div class="pack-glyph${pack.img?' has-img':''}">
+          ${pack.img ? `<img src="${pack.img}" alt="" loading="lazy"><div class="pv-count-badge">${pack.count} Karten</div>` : `<div>${pack.count}</div><div class="pv-lbl">Karten</div>`}
         </div>
-      </div>`;
-    card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
-    card.querySelector('.odds-link').addEventListener('click', ()=>showPackOdds(pack));
-    grid.appendChild(card);
+        <div class="pack-card-body">
+          <h3>${pack.name}</h3>
+          <div class="desc">${pack.desc}</div>
+          ${isWM ? `<div class="mono" id="wm-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur dieses Wochenende verf\u00fcgbar</div>` : ''}
+          <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
+          <div class="buyrow">
+            <div class="price-pill"><div class="pdot"></div>${formatCoins(pack.cost)}</div>
+            <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
+          </div>
+        </div>`;
+      card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
+      card.querySelector('.odds-link').addEventListener('click', ()=>showPackOdds(pack));
+      grid.appendChild(card);
+    });
+    sectionsEl.appendChild(section);
   });
   if(!wmExpired && PACKS.some(p=>p.id==='wmwinners')){
     const updateCountdown = ()=>{
@@ -9231,27 +9327,96 @@ function showPackOpening(pack, drawn){
   });
   openModal(`
     <h2 style="text-align:center;margin-bottom:2px;">${pack.name}</h2>
-    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">Tippe auf das Pack, um zu starten</p>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">\u00dcber das Pack wischen, um es aufzuschlitzen</p>
     <div class="pack-visual-wrap" id="pack-visual-wrap">
-      <div class="pack-visual ${pack.tier}" id="pack-visual">
-        <div class="pv-count">${pack.count}</div><div class="pv-label">Spieler</div><div class="pv-tap">ANTIPPEN ZUM \u00d6FFNEN</div>
+      <div class="pack-visual ${pack.tier}${pack.img?' has-img':''}" id="pack-visual">
+        ${pack.img ? `<img src="${pack.img}" alt="">` : ''}
+        <div class="pv-shine"></div>
+        <div class="pv-count">${pack.count}</div><div class="pv-label">Spieler</div><div class="pv-tap">WISCHEN ZUM AUFSCHLITZEN</div>
       </div>
+      <div class="pack-slice-line" id="pack-slice-line"></div>
     </div>
     <div class="spotlight-stage" id="spotlight-stage"></div>
     <div class="pack-progress" id="pack-progress"></div>
     <div class="collected-tray" id="collected-tray"></div>
     <button class="modal-close" id="modal-close-btn" style="display:none;">Weiter</button>
   `);
-  document.getElementById('pack-visual').addEventListener('click', function handler(){
-    this.classList.add('opening');
-    playSfx('packOpen');
+  initPackSliceGesture(document.getElementById('pack-visual'), ()=>openPack());
+  function openPack(){
+    const wrapEl = document.getElementById('pack-visual-wrap');
+    const visual = document.getElementById('pack-visual');
     const sub = document.getElementById('pack-sub'); if(sub) sub.textContent = '';
+    playSfx('packOpen');
+    if(wrapEl && visual){
+      const rect = visual.getBoundingClientRect();
+      const wrapRect = wrapEl.getBoundingClientRect();
+      const top = rect.top - wrapRect.top, left = rect.left - wrapRect.left;
+      const inner = visual.innerHTML;
+      const cls = visual.className;
+      ['top','bottom'].forEach(half=>{
+        const piece = document.createElement('div');
+        piece.className = `${cls} pv-half ${half}`;
+        piece.style.cssText = `position:absolute;top:${top}px;left:${left}px;width:${rect.width}px;height:${rect.height}px;animation:none;`;
+        piece.innerHTML = inner;
+        wrapEl.appendChild(piece);
+      });
+      visual.style.visibility = 'hidden';
+      const burst = document.createElement('div');
+      burst.className = 'pack-tap-burst';
+      burst.innerHTML = '<div class="cs-burst"></div>';
+      wrapEl.appendChild(burst);
+      requestAnimationFrame(()=>{
+        wrapEl.querySelectorAll('.pv-half').forEach(p=>p.classList.add('slice-open'));
+      });
+    }
     setTimeout(()=>{
       const wrap = document.getElementById('pack-visual-wrap');
       if(wrap) wrap.remove();
       revealQueue(ordered, 0, pack);
-    }, 420);
-  }, {once:true});
+    }, 480);
+  }
+}
+// swipe-to-slice: a left-right (or right-left) drag past the threshold "cuts" the pack open,
+// with a glowing blade-line tracking the pointer while dragging so it reads as an actual slice
+function initPackSliceGesture(el, onOpen){
+  if(!el) return;
+  const line = document.getElementById('pack-slice-line');
+  const THRESHOLD = 70;
+  let dragging = false, startX = 0, startY = 0, opened = false;
+  const setLineY = clientY=>{
+    if(!line) return;
+    const wrap = el.closest('.pack-visual-wrap');
+    if(!wrap) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const minY = elRect.top - wrapRect.top + 6;
+    const maxY = elRect.bottom - wrapRect.top - 6;
+    line.style.top = clamp(clientY - wrapRect.top, minY, maxY)+'px';
+  };
+  const onDown = e=>{
+    if(opened) return;
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    if(line){ line.classList.add('active'); setLineY(e.clientY); }
+    el.setPointerCapture && el.setPointerCapture(e.pointerId);
+  };
+  const onMove = e=>{
+    if(!dragging || opened) return;
+    setLineY(e.clientY);
+    if(Math.abs(e.clientX-startX) > THRESHOLD){
+      opened = true; dragging = false;
+      if(line) line.classList.remove('active');
+      onOpen();
+    }
+  };
+  const onUp = ()=>{
+    dragging = false;
+    if(line && !opened) line.classList.remove('active');
+  };
+  el.addEventListener('pointerdown', onDown);
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
 }
 function updatePackProgress(i, total){
   const el = document.getElementById('pack-progress');
