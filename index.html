@@ -601,6 +601,47 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .team-blob .t{font-size:11px;color:var(--muted);margin-top:2px;word-break:break-word;}
 .vs-x{font-family:'Anton';color:var(--muted);font-size:18px;}
 .score{font-family:'Anton';font-size:52px;letter-spacing:.05em;margin:10px 0;}
+
+/* ---- pre-match intro cutscene ---- */
+.match-intro{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:10px 0;}
+.match-intro-vs{display:flex;align-items:center;justify-content:center;gap:26px;animation:matchIntroFadeIn .5s ease;}
+.match-intro-side{display:flex;flex-direction:column;align-items:center;gap:6px;width:130px;animation:matchIntroPop .5s cubic-bezier(.3,.8,.4,1);}
+.match-intro-side:last-child{animation-delay:.25s;animation-fill-mode:backwards;}
+.match-intro-name{font-size:13px;font-weight:700;text-align:center;word-break:break-word;}
+.match-intro-rating{font-family:'Anton';font-size:26px;color:var(--gold);}
+.match-intro-x{font-family:'Anton';color:var(--muted);font-size:20px;}
+@keyframes matchIntroFadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes matchIntroPop{from{opacity:0;transform:scale(.6);}to{opacity:1;transform:scale(1);}}
+.match-intro-lineup{width:100%;flex-direction:column;align-items:center;gap:12px;animation:matchIntroFadeIn .35s ease;}
+.match-intro-line-label{font-family:'JetBrains Mono';font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+.match-intro-line-cols{width:100%;display:flex;justify-content:center;align-items:flex-start;gap:22px;flex-wrap:wrap;}
+.match-intro-col{flex:1;min-width:110px;max-width:280px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;}
+.match-intro-col:first-child{justify-content:flex-end;}
+.match-intro-col:last-child{justify-content:flex-start;}
+.match-intro-total{font-family:'Anton';font-size:44px;color:var(--chalk);}
+.match-intro-total.lead{color:var(--turf-bright);text-shadow:0 0 16px -2px var(--turf-bright);}
+.match-intro-kickoff{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:'Anton';font-size:34px;letter-spacing:.04em;color:var(--gold);background:rgba(6,8,12,.7);
+  animation:matchIntroKickoff .65s cubic-bezier(.3,.8,.4,1);}
+@keyframes matchIntroKickoff{0%{opacity:0;transform:scale(.5);}30%{opacity:1;transform:scale(1.15);}100%{opacity:0;transform:scale(1.3);}}
+.match-intro-pitch{position:relative;width:100%;max-width:360px;aspect-ratio:2/3;margin:0 auto;border-radius:10px;
+  background:repeating-linear-gradient(180deg,#173a20 0 22px,#123018 22px 44px);border:1px solid rgba(255,255,255,.18);
+  overflow:hidden;animation:matchIntroFadeIn .35s ease;}
+.match-intro-pitch::before{content:"";position:absolute;inset:6px;border:1.5px solid rgba(255,255,255,.25);border-radius:6px;pointer-events:none;}
+.mi-pitch-halfline{position:absolute;left:6px;right:6px;top:50%;height:1.5px;background:rgba(255,255,255,.28);}
+.mi-pitch-circle{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border:1.5px solid rgba(255,255,255,.28);border-radius:50%;}
+.mi-pitch-chip{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;
+  width:44px;animation:matchIntroPop .4s cubic-bezier(.3,.8,.4,1) backwards;}
+.mi-pitch-photo{width:30px;height:30px;border-radius:50%;overflow:hidden;position:relative;background:var(--panel2);
+  box-shadow:0 0 0 2px rgba(6,8,12,.8);}
+.mi-pitch-chip.mine .mi-pitch-photo{box-shadow:0 0 0 2px var(--turf-bright);}
+.mi-pitch-chip.opp .mi-pitch-photo{box-shadow:0 0 0 2px var(--danger);}
+.mi-pitch-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.mi-pitch-avatar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:10px;color:var(--chalk);}
+.mi-pitch-ov{font-family:'JetBrains Mono';font-size:9px;font-weight:700;color:var(--gold);margin-top:1px;
+  background:rgba(6,8,12,.75);border-radius:100px;padding:0 4px;line-height:1.4;}
+.mi-pitch-name{font-size:8px;color:var(--chalk);text-align:center;line-height:1.15;margin-top:1px;
+  max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.8);}
 .winprob-row{margin:10px 0 14px;}
 .winprob-bar{height:8px;border-radius:4px;background:var(--danger);overflow:hidden;position:relative;}
 .winprob-fill{height:100%;background:var(--turf-bright);transition:width .4s ease;}
@@ -9310,15 +9351,27 @@ async function buyPack(pack){
 }
 async function addCardsToCollection(cards){
   let touchedPlayers=false, touchedManagers=false;
+  const added = []; // [{uid, card}], in the same order as `cards` - lets callers later identify
+                     // exactly which collection entry a given draw became (e.g. to prune unpicked
+                     // cards from a "pick X of Y" pack without touching same-identity duplicates)
   cards.forEach(c=>{
-    if(c.isManager){ managerCollection.push({uid:genId(), mgrId:c.id}); touchedManagers=true; }
-    else { collection.push({uid:genId(), cardId:c.id}); touchedPlayers=true; }
+    const uid = genId();
+    if(c.isManager){ managerCollection.push({uid, mgrId:c.id}); touchedManagers=true; }
+    else { collection.push({uid, cardId:c.id}); touchedPlayers=true; }
+    added.push({uid, card:c});
   });
+  // the pushes above already happened synchronously - the collection is correct in memory the
+  // instant this function is called, even before the awaits below (and even if the caller never
+  // awaits this promise at all). Only the network persistence is actually asynchronous.
   if(touchedPlayers) await sSet('collection', collection);
   if(touchedManagers) await sSet('managerCollection', managerCollection);
+  return added;
 }
 
 function showPackOpening(pack, drawn){
+  // grant immediately, before any animation/modal exists - closing the pack-opening modal early
+  // (or anything else interrupting the reveal) must never cost the player the pack they paid for
+  const addedPromise = addCardsToCollection(drawn);
   const ultraRareManager = c => c.isManager && (c.variant==='wm_mgr' || c.variant==='uclw_mgr');
   const ordered = drawn.slice().sort((a,b)=>{
     const aKey = a.ov + (ultraRareManager(a) ? 1000 : 0);
@@ -9372,7 +9425,7 @@ function showPackOpening(pack, drawn){
     setTimeout(()=>{
       const wrap = document.getElementById('pack-visual-wrap');
       if(wrap) wrap.remove();
-      revealQueue(ordered, 0, pack);
+      revealQueue(ordered, 0, pack, addedPromise);
     }, 480);
   }
 }
@@ -9429,15 +9482,14 @@ function addToTray(c){
   el.classList.add('tray-thumb');
   tray.appendChild(el);
 }
-function revealQueue(cards, i, pack){
+function revealQueue(cards, i, pack, addedPromise){
   const stage = document.getElementById('spotlight-stage');
-  if(!stage) return; // modal closed early
+  if(!stage) return; // modal closed early - fine, the cards were already granted up front
   if(i>=cards.length){
     stage.innerHTML = `<p class="hint" style="text-align:center;width:100%;">Pack komplett!</p>`;
     if(pack.pickCount && pack.pickCount < cards.length){
-      showPickScreen(cards, pack.pickCount);
+      showPickScreen(cards, pack.pickCount, addedPromise);
     } else {
-      addCardsToCollection(cards);
       const btn = document.getElementById('modal-close-btn');
       if(btn){ btn.style.display='block'; btn.addEventListener('click', closeModal); }
     }
@@ -9449,7 +9501,7 @@ function revealQueue(cards, i, pack){
     revealFn(c, ()=>{
       addToTray(c);
       updatePackProgress(i+1, cards.length);
-      revealQueue(cards, i+1, pack);
+      revealQueue(cards, i+1, pack, addedPromise);
     });
   } else {
     stage.innerHTML = '';
@@ -9466,7 +9518,7 @@ function revealQueue(cards, i, pack){
       big.classList.add('leaving');
       setTimeout(()=>{
         addToTray(c);
-        revealQueue(cards, i+1, pack);
+        revealQueue(cards, i+1, pack, addedPromise);
       }, 320);
     };
     stage.style.cursor = 'pointer';
@@ -9474,7 +9526,7 @@ function revealQueue(cards, i, pack){
     leaveTimer = setTimeout(advance, 850);
   }
 }
-function showPickScreen(cards, pickCount){
+function showPickScreen(cards, pickCount, addedPromise){
   const container = document.createElement('div');
   container.innerHTML = `
     <div style="text-align:center;margin:18px 0 6px;">
@@ -9488,6 +9540,31 @@ function showPickScreen(cards, pickCount){
     <div class="reveal-strip" id="pick-grid"></div>
     <button class="modal-close" id="pick-confirm" disabled style="opacity:.4;">Best\u00e4tigen</button>`;
   document.querySelector('.modal-box').appendChild(container);
+  // keeps exactly the entries in `keepUids`, pruning the rest from the collection - shared by both
+  // the confirm button (keeps what was picked) and the abandonment fallback below (keeps a random pickCount)
+  async function pruneToKept(keepUids){
+    const added = await addedPromise;
+    let touchedPlayers=false, touchedManagers=false;
+    added.forEach(({uid,card})=>{
+      if(keepUids.has(uid)) return;
+      if(card.isManager){ managerCollection = managerCollection.filter(m=>m.uid!==uid); touchedManagers=true; }
+      else { collection = collection.filter(x=>x.uid!==uid); touchedPlayers=true; }
+    });
+    if(touchedPlayers) await sSet('collection', collection);
+    if(touchedManagers) await sSet('managerCollection', managerCollection);
+  }
+  let resolved = false;
+  // if the player closes this screen without confirming a pick, don't punish them with nothing -
+  // but don't hand them everything either (that would trivialize "pick X of Y"). Keep a random
+  // pickCount of what was drawn, same as if they'd confirmed a pick, just not their own choice.
+  const abandonToRandom = async ()=>{
+    if(resolved) return; resolved = true;
+    const added = await addedPromise;
+    const shuffled = added.slice().sort(()=>Math.random()-0.5);
+    await pruneToKept(new Set(shuffled.slice(0, pickCount).map(x=>x.uid)));
+  };
+  const overlay = document.getElementById('modal-overlay');
+  if(overlay) overlay.addEventListener('click', e=>{ if(e.target.id==='modal-overlay') abandonToRandom(); });
   const grid = container.querySelector('#pick-grid');
   const wraps = [];
   cards.forEach((c,idx)=>{
@@ -9524,10 +9601,22 @@ function showPickScreen(cards, pickCount){
     else { btn.disabled=true; btn.style.opacity='.4'; }
   }
   container.querySelector('#pick-confirm').addEventListener('click', async ()=>{
+    resolved = true; // stop the overlay's abandonment fallback from also firing
     const kept = cards.filter((_,idx)=>selected.has(idx));
-    await addCardsToCollection(kept);
+    // all `cards` were already granted up front (see showPackOpening) so closing this screen
+    // early never loses the pack - confirming here just prunes the ones NOT chosen to keep.
+    // Matched by uid (not card identity) so duplicate pulls of the same player are handled correctly.
+    const added = await addedPromise;
+    const keepCounts = new Map();
+    kept.forEach(c=>keepCounts.set(c, (keepCounts.get(c)||0)+1));
+    const keepUids = new Set();
+    added.forEach(({uid,card})=>{
+      const remaining = keepCounts.get(card)||0;
+      if(remaining>0){ keepCounts.set(card, remaining-1); keepUids.add(uid); }
+    });
+    await pruneToKept(keepUids);
     closeModal();
-    toast(`${kept.length} Karte${kept.length>1?'n':''} zu deinem Verein hinzugef\u00fcgt.`);
+    toast(`${kept.length} Karte${kept.length>1?'n':''} behalten.`);
   });
 }
 const POS_PITCH_XY = {
@@ -12349,7 +12438,7 @@ async function challengeFriend(friend){
   const duelId = genId();
   const duel = {
     id: duelId, fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
-    fromRating: rating, fromPlayers: myPlayers,
+    fromRating: rating, fromPlayers: myPlayers, fromCrest: profile.crest, fromCardRefs: getMySquadCardRefs(),
     toUserId: friend.userId, toName: friend.name,
     status:'pending', createdAt: Date.now()
   };
@@ -12442,13 +12531,14 @@ async function loadIncomingDuels(){
         const matchId = genId();
         const matchDoc = {
           mid: matchId,
-          p1:{userId:duel.fromUserId, name:duel.fromName, rating:duel.fromRating},
-          p2:{userId:profile.userId, name:profile.displayName||profile.userId, rating},
+          p1:{userId:duel.fromUserId, name:duel.fromName, rating:duel.fromRating, crest:duel.fromCrest},
+          p2:{userId:profile.userId, name:profile.displayName||profile.userId, rating, crest:profile.crest},
+          p1CardRefs: duel.fromCardRefs, p2CardRefs: getMySquadCardRefs(),
           p1Goals: md.oppGoals, p2Goals: md.myGoals,
           events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
           p1Profile: md.oppProfile, p2Profile: md.myProfile,
           incidents, p1RedMinute: md.oppRedMinute, p2RedMinute: md.myRedMinute,
-          startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
+          startedAt: Date.now()+9000, durationMs: MATCH_DURATION_MS
         };
         try{
           await fb.setDoc(fb.doc(fb.db,'matches',matchId), stripUndefined(matchDoc));
@@ -13268,6 +13358,28 @@ function getMySquadPlayers(){
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
 }
+// lightweight refs (card id + assigned slot position) for transmitting a squad's real lineup to an
+// opponent over the wire - cheap to store/send since the receiving client resolves each id against
+// its own local BY_ID map (the full card database is static and identical for every client) rather
+// than needing the full card payload (photo, stats, etc.) shipped along with the match doc
+function getMySquadCardRefs(){
+  const form = FORMATIONS[squad.formation];
+  const refs = [];
+  form.slots.forEach(slot=>{
+    const uid = squad.slots[slot.id];
+    const card = uid ? ownedCard(uid) : null;
+    if(card) refs.push({id:card.id, pos:slot.label});
+  });
+  return refs;
+}
+function resolveCardRefs(refs){
+  return (refs||[]).map(r=>({card:BY_ID.get(r.id), pos:r.pos})).filter(x=>x.card);
+}
+function groupCardRefsByLine(resolved){
+  const groups = {GK:[], DEF:[], MID:[], FWD:[]};
+  resolved.forEach(x=>{ const g = posGroup(x.pos); if(groups[g]) groups[g].push(x); });
+  return groups;
+}
 let FALLBACK_SCORER_POOL = null;
 function fallbackScorerPool(){
   if(FALLBACK_SCORER_POOL) return FALLBACK_SCORER_POOL;
@@ -13950,6 +14062,104 @@ async function leaveQueue(){
   toast('Warteschlange verlassen. Autoroll gestoppt.');
 }
 let lastEnteredMatchId = null;
+// maps a formation slot's own POS_PITCH_XY (designed for one team attacking upward, GK at the
+// bottom) into a shared two-team pitch: "mine" occupies the bottom half attacking toward the
+// halfway line, "theirs" occupies the mirrored top half attacking toward the same halfway line -
+// exactly the classic "both lineups facing each other" matchup-screen layout.
+function pitchXY(pos, mine){
+  const [x,y] = POS_PITCH_XY[pos] || [50,50];
+  return {x, y: mine ? 50 + (y/100)*47 : 50 - (y/100)*47};
+}
+function pitchChipHTML(card, pos, mine){
+  const {x,y} = pitchXY(pos, mine);
+  const initials = initialsOf(card.n||'??');
+  const photo = card.img
+    ? `<img src="${proxyImg(card.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"><div class="mi-pitch-avatar" style="display:none;">${initials}</div>`
+    : `<div class="mi-pitch-avatar">${initials}</div>`;
+  return `<div class="mi-pitch-chip ${mine?'mine':'opp'}" style="left:${x}%;top:${y}%;">
+    <div class="mi-pitch-photo">${photo}</div>
+    <div class="mi-pitch-ov">${card.ov}</div>
+    <div class="mi-pitch-name">${card.n}</div>
+  </div>`;
+}
+// pre-match intro: crest/name/rating for both sides, then the full formation on a shared pitch -
+// all 22 players at once, positioned exactly where they line up, using the real equipped cards
+// (not a generic placeholder) - then a quick overall-rating beat and kickoff. Runs inside
+// `container` (the shared #match-area) and resolves once done, so callers just `await` it.
+function showMatchIntroCutscene(container, meSide, oppSide, meCardRefs, oppCardRefs){
+  return new Promise(resolve=>{
+    if(!container){ resolve(); return; }
+    const meResolved = resolveCardRefs(meCardRefs);
+    const oppResolved = resolveCardRefs(oppCardRefs);
+    const avgOf = (resolved, fallback) => resolved.length ? Math.round(resolved.reduce((s,x)=>s+x.card.ov,0)/resolved.length) : fallback;
+    const meAvg = avgOf(meResolved, meSide.rating);
+    const oppAvg = avgOf(oppResolved, oppSide.rating);
+    const pitchChips = meResolved.map(x=>pitchChipHTML(x.card,x.pos,true)).join('')
+      + oppResolved.map(x=>pitchChipHTML(x.card,x.pos,false)).join('');
+    const wrap = document.createElement('div');
+    wrap.className = 'match-intro';
+    wrap.innerHTML = `
+      <div class="match-intro-vs" id="mi-vs">
+        <div class="match-intro-side">
+          ${renderCrestSVG(meSide.crest, 72)}
+          <div class="match-intro-name">${meSide.name}</div>
+          <div class="match-intro-rating">${meSide.rating}</div>
+        </div>
+        <div class="match-intro-x">VS</div>
+        <div class="match-intro-side">
+          ${renderCrestSVG(oppSide.crest, 72)}
+          <div class="match-intro-name">${oppSide.name}</div>
+          <div class="match-intro-rating">${oppSide.rating}</div>
+        </div>
+      </div>
+      <div class="match-intro-pitch" id="mi-pitch" style="display:none;">
+        <div class="mi-pitch-halfline"></div>
+        <div class="mi-pitch-circle"></div>
+        ${pitchChips}
+      </div>
+      <div class="match-intro-lineup" id="mi-lineup" style="display:none;">
+        <div class="match-intro-line-label">Gesamt</div>
+        <div class="match-intro-line-cols">
+          <div class="match-intro-col"><div class="match-intro-total ${meAvg>=oppAvg?'lead':''}">${meAvg}</div></div>
+          <div class="match-intro-col"><div class="match-intro-total ${oppAvg>meAvg?'lead':''}">${oppAvg}</div></div>
+        </div>
+      </div>`;
+    container.innerHTML = '';
+    container.appendChild(wrap);
+    let done = false;
+    const finish = ()=>{
+      if(done) return; done = true;
+      if(wrap.parentNode) wrap.remove();
+      resolve();
+    };
+    const stillMounted = ()=> document.body.contains(wrap);
+    const kickoff = ()=>{
+      if(!stillMounted()){ finish(); return; }
+      const flash = document.createElement('div');
+      flash.className = 'match-intro-kickoff';
+      flash.textContent = 'ANPFIFF!';
+      wrap.appendChild(flash);
+      setTimeout(finish, 650);
+    };
+    const showTotal = ()=>{
+      if(!stillMounted()){ finish(); return; }
+      const pitch = document.getElementById('mi-pitch');
+      const lineup = document.getElementById('mi-lineup');
+      if(pitch) pitch.style.display = 'none';
+      if(lineup) lineup.style.display = 'flex';
+      setTimeout(kickoff, 1300);
+    };
+    const showPitch = ()=>{
+      if(!stillMounted()){ finish(); return; }
+      const vs = document.getElementById('mi-vs');
+      const pitch = document.getElementById('mi-pitch');
+      if(vs) vs.style.display = 'none';
+      if(pitch) pitch.style.display = 'block';
+      setTimeout(showTotal, 4200);
+    };
+    setTimeout(showPitch, 2200); // let the crest/name/rating reveal breathe before moving on
+  });
+}
 async function enterSyncedMatch(matchDoc){
   if(inMatch) return;
   if(matchDoc.mid && matchDoc.mid===lastEnteredMatchId) return; // already entered this exact match once
@@ -13974,6 +14184,9 @@ async function enterSyncedMatch(matchDoc){
     };
   }
   const area = document.getElementById('match-area');
+  const meCardRefs = amP1 ? matchDoc.p1CardRefs : matchDoc.p2CardRefs;
+  const oppCardRefs = amP1 ? matchDoc.p2CardRefs : matchDoc.p1CardRefs;
+  await showMatchIntroCutscene(area, meSide, oppSide, meCardRefs, oppCardRefs);
   if(area) area.innerHTML = `
     <div class="vs-teams">
       <div class="team-blob"><div class="r">${meSide.rating}</div><div class="t">${meSide.name}</div></div>
@@ -14037,7 +14250,8 @@ async function joinQueue(){
   const startTime = Date.now();
   try{
     await fb.setDoc(fb.doc(fb.db,'queue',profile.userId), {
-      userId: profile.userId, name: profile.displayName || profile.userId, rating, players: myPlayers, joinedAt: startTime
+      userId: profile.userId, name: profile.displayName || profile.userId, rating, players: myPlayers,
+      crest: profile.crest, cardRefs: getMySquadCardRefs(), joinedAt: startTime
     });
   }catch(e){
     console.warn('queue join failed', e);
@@ -14131,13 +14345,16 @@ async function joinQueue(){
             } : null;
             const matchDoc = {
               mid,
-              p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating},
-              p2:{userId:other.userId, name:other.name, rating:other.rating},
+              p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating, crest:profile.crest},
+              p2:{userId:other.userId, name:other.name, rating:other.rating, crest:other.crest},
+              p1CardRefs: getMySquadCardRefs(), p2CardRefs: other.cardRefs,
               p1Goals: md.myGoals, p2Goals: md.oppGoals,
               events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
               p1Profile: md.myProfile, p2Profile: md.oppProfile,
               incidents, p1RedMinute: md.myRedMinute, p2RedMinute: md.oppRedMinute,
-              startedAt: Date.now()+3000, durationMs: MATCH_DURATION_MS
+              // long enough for the pre-match intro cutscene (crest/lineup reveal) to play out in
+              // sync on both clients before the live match itself needs to begin
+              startedAt: Date.now()+9000, durationMs: MATCH_DURATION_MS
             };
             if(!queueActive) return; // cancelled right before we'd have created the match - back out cleanly
             await fb.setDoc(fb.doc(fb.db,'matches',mid), stripUndefined(matchDoc));
