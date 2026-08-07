@@ -624,24 +624,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   font-family:'Anton';font-size:34px;letter-spacing:.04em;color:var(--gold);background:rgba(6,8,12,.7);
   animation:matchIntroKickoff .65s cubic-bezier(.3,.8,.4,1);}
 @keyframes matchIntroKickoff{0%{opacity:0;transform:scale(.5);}30%{opacity:1;transform:scale(1.15);}100%{opacity:0;transform:scale(1.3);}}
-.match-intro-pitch{position:relative;width:100%;max-width:360px;aspect-ratio:2/3;margin:0 auto;border-radius:10px;
-  background:repeating-linear-gradient(180deg,#173a20 0 22px,#123018 22px 44px);border:1px solid rgba(255,255,255,.18);
-  overflow:hidden;animation:matchIntroFadeIn .35s ease;}
-.match-intro-pitch::before{content:"";position:absolute;inset:6px;border:1.5px solid rgba(255,255,255,.25);border-radius:6px;pointer-events:none;}
-.mi-pitch-halfline{position:absolute;left:6px;right:6px;top:50%;height:1.5px;background:rgba(255,255,255,.28);}
-.mi-pitch-circle{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border:1.5px solid rgba(255,255,255,.28);border-radius:50%;}
-.mi-pitch-chip{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;
-  width:44px;animation:matchIntroPop .4s cubic-bezier(.3,.8,.4,1) backwards;}
-.mi-pitch-photo{width:30px;height:30px;border-radius:50%;overflow:hidden;position:relative;background:var(--panel2);
-  box-shadow:0 0 0 2px rgba(6,8,12,.8);}
-.mi-pitch-chip.mine .mi-pitch-photo{box-shadow:0 0 0 2px var(--turf-bright);}
-.mi-pitch-chip.opp .mi-pitch-photo{box-shadow:0 0 0 2px var(--danger);}
-.mi-pitch-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-.mi-pitch-avatar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:10px;color:var(--chalk);}
-.mi-pitch-ov{font-family:'JetBrains Mono';font-size:9px;font-weight:700;color:var(--gold);margin-top:1px;
-  background:rgba(6,8,12,.75);border-radius:100px;padding:0 4px;line-height:1.4;}
-.mi-pitch-name{font-size:8px;color:var(--chalk);text-align:center;line-height:1.15;margin-top:1px;
-  max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.8);}
+.match-intro-lines{width:100%;flex-direction:column;align-items:center;gap:10px;animation:matchIntroFadeIn .35s ease;}
+.match-intro-lines-title{font-family:'JetBrains Mono';font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+.match-intro-lines-stack{width:100%;display:flex;flex-direction:column;align-items:center;gap:10px;}
+.match-intro-line-row{display:flex;justify-content:center;align-items:flex-start;gap:8px;flex-wrap:wrap;animation:matchIntroLineIn .4s cubic-bezier(.3,.8,.4,1);}
+@keyframes matchIntroLineIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
 .winprob-row{margin:10px 0 14px;}
 .winprob-bar{height:8px;border-radius:4px;background:var(--danger);overflow:hidden;position:relative;}
 .winprob-fill{height:100%;background:var(--turf-bright);transition:width .4s ease;}
@@ -12438,7 +12425,7 @@ async function challengeFriend(friend){
   const duelId = genId();
   const duel = {
     id: duelId, fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
-    fromRating: rating, fromPlayers: myPlayers, fromCrest: profile.crest, fromCardRefs: getMySquadCardRefs(),
+    fromRating: rating, fromPlayers: myPlayers, fromCrest: profile.crest, fromCardRefs: getMySquadCardRefs(), fromFormation: squad.formation,
     toUserId: friend.userId, toName: friend.name,
     status:'pending', createdAt: Date.now()
   };
@@ -12531,8 +12518,8 @@ async function loadIncomingDuels(){
         const matchId = genId();
         const matchDoc = {
           mid: matchId,
-          p1:{userId:duel.fromUserId, name:duel.fromName, rating:duel.fromRating, crest:duel.fromCrest},
-          p2:{userId:profile.userId, name:profile.displayName||profile.userId, rating, crest:profile.crest},
+          p1:{userId:duel.fromUserId, name:duel.fromName, rating:duel.fromRating, crest:duel.fromCrest, formation:duel.fromFormation},
+          p2:{userId:profile.userId, name:profile.displayName||profile.userId, rating, crest:profile.crest, formation:squad.formation},
           p1CardRefs: duel.fromCardRefs, p2CardRefs: getMySquadCardRefs(),
           p1Goals: md.oppGoals, p2Goals: md.myGoals,
           events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
@@ -13375,10 +13362,23 @@ function getMySquadCardRefs(){
 function resolveCardRefs(refs){
   return (refs||[]).map(r=>({card:BY_ID.get(r.id), pos:r.pos})).filter(x=>x.card);
 }
-function groupCardRefsByLine(resolved){
-  const groups = {GK:[], DEF:[], MID:[], FWD:[]};
-  resolved.forEach(x=>{ const g = posGroup(x.pos); if(groups[g]) groups[g].push(x); });
-  return groups;
+// splits a formation's outfield count into its real tactical lines, e.g. "4-2-3-1" -> [4,2,3,1] -
+// read straight off the formation label rather than a generic GK/DEF/MID/FWD bucket, so a 4-2-3-1's
+// double pivot and its 3-man attacking midfield line show up as two distinct rows, not one blob
+function formationLineChunks(formationKey){
+  const form = FORMATIONS[formationKey];
+  const m = form && form.label.match(/^[\d-]+/);
+  return m ? m[0].split('-').map(Number).filter(n=>n>0) : [4,3,3];
+}
+// groups an already slot-ordered, resolved lineup (GK first, then outfielders in the formation's own
+// authored defense-to-attack order - exactly the order getMySquadCardRefs produces) into line rows:
+// [[GK], [back line], [next line], ...]
+function groupCardRefsIntoLines(resolved, formationKey){
+  const chunks = formationLineChunks(formationKey);
+  const lines = [resolved.slice(0,1)];
+  let idx = 1;
+  chunks.forEach(n=>{ if(idx<resolved.length) lines.push(resolved.slice(idx, idx+n)); idx += n; });
+  return lines.filter(l=>l.length);
 }
 let FALLBACK_SCORER_POOL = null;
 function fallbackScorerPool(){
@@ -14062,40 +14062,17 @@ async function leaveQueue(){
   toast('Warteschlange verlassen. Autoroll gestoppt.');
 }
 let lastEnteredMatchId = null;
-// maps a formation slot's own POS_PITCH_XY (designed for one team attacking upward, GK at the
-// bottom) into a shared two-team pitch: "mine" occupies the bottom half attacking toward the
-// halfway line, "theirs" occupies the mirrored top half attacking toward the same halfway line -
-// exactly the classic "both lineups facing each other" matchup-screen layout.
-function pitchXY(pos, mine){
-  const [x,y] = POS_PITCH_XY[pos] || [50,50];
-  return {x, y: mine ? 50 + (y/100)*47 : 50 - (y/100)*47};
-}
-function pitchChipHTML(card, pos, mine){
-  const {x,y} = pitchXY(pos, mine);
-  const initials = initialsOf(card.n||'??');
-  const photo = card.img
-    ? `<img src="${proxyImg(card.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"><div class="mi-pitch-avatar" style="display:none;">${initials}</div>`
-    : `<div class="mi-pitch-avatar">${initials}</div>`;
-  return `<div class="mi-pitch-chip ${mine?'mine':'opp'}" style="left:${x}%;top:${y}%;">
-    <div class="mi-pitch-photo">${photo}</div>
-    <div class="mi-pitch-ov">${card.ov}</div>
-    <div class="mi-pitch-name">${card.n}</div>
-  </div>`;
-}
-// pre-match intro: crest/name/rating for both sides, then the full formation on a shared pitch -
-// all 22 players at once, positioned exactly where they line up, using the real equipped cards
-// (not a generic placeholder) - then a quick overall-rating beat and kickoff. Runs inside
-// `container` (the shared #match-area) and resolves once done, so callers just `await` it.
-function showMatchIntroCutscene(container, meSide, oppSide, meCardRefs, oppCardRefs){
+// pre-match intro: crest/name/rating for both sides, then the OPPONENT's real lineup revealed one
+// tactical line at a time (goalkeeper, then each line front-to-back exactly as their formation
+// splits it, e.g. 4-2-3-1 -> 4, 2, 3, 1) using their actual equipped cards in full - your own side
+// isn't shown again here, you already know your squad. Ends on a quick rating comparison (using the
+// same rating already shown in the crest step, not a recomputed average) and a kickoff flash. Runs
+// inside `container` (the shared #match-area) and resolves once done, so callers just `await` it.
+function showMatchIntroCutscene(container, meSide, oppSide, oppCardRefs){
   return new Promise(resolve=>{
     if(!container){ resolve(); return; }
-    const meResolved = resolveCardRefs(meCardRefs);
     const oppResolved = resolveCardRefs(oppCardRefs);
-    const avgOf = (resolved, fallback) => resolved.length ? Math.round(resolved.reduce((s,x)=>s+x.card.ov,0)/resolved.length) : fallback;
-    const meAvg = avgOf(meResolved, meSide.rating);
-    const oppAvg = avgOf(oppResolved, oppSide.rating);
-    const pitchChips = meResolved.map(x=>pitchChipHTML(x.card,x.pos,true)).join('')
-      + oppResolved.map(x=>pitchChipHTML(x.card,x.pos,false)).join('');
+    const lines = groupCardRefsIntoLines(oppResolved, oppSide.formation);
     const wrap = document.createElement('div');
     wrap.className = 'match-intro';
     wrap.innerHTML = `
@@ -14112,16 +14089,15 @@ function showMatchIntroCutscene(container, meSide, oppSide, meCardRefs, oppCardR
           <div class="match-intro-rating">${oppSide.rating}</div>
         </div>
       </div>
-      <div class="match-intro-pitch" id="mi-pitch" style="display:none;">
-        <div class="mi-pitch-halfline"></div>
-        <div class="mi-pitch-circle"></div>
-        ${pitchChips}
+      <div class="match-intro-lines" id="mi-lines" style="display:none;">
+        <div class="match-intro-lines-title">Gegnerische Aufstellung</div>
+        <div class="match-intro-lines-stack" id="mi-lines-stack"></div>
       </div>
       <div class="match-intro-lineup" id="mi-lineup" style="display:none;">
         <div class="match-intro-line-label">Gesamt</div>
         <div class="match-intro-line-cols">
-          <div class="match-intro-col"><div class="match-intro-total ${meAvg>=oppAvg?'lead':''}">${meAvg}</div></div>
-          <div class="match-intro-col"><div class="match-intro-total ${oppAvg>meAvg?'lead':''}">${oppAvg}</div></div>
+          <div class="match-intro-col"><div class="match-intro-total ${meSide.rating>=oppSide.rating?'lead':''}">${meSide.rating}</div></div>
+          <div class="match-intro-col"><div class="match-intro-total ${oppSide.rating>meSide.rating?'lead':''}">${oppSide.rating}</div></div>
         </div>
       </div>`;
     container.innerHTML = '';
@@ -14143,21 +14119,35 @@ function showMatchIntroCutscene(container, meSide, oppSide, meCardRefs, oppCardR
     };
     const showTotal = ()=>{
       if(!stillMounted()){ finish(); return; }
-      const pitch = document.getElementById('mi-pitch');
+      const lines_ = document.getElementById('mi-lines');
       const lineup = document.getElementById('mi-lineup');
-      if(pitch) pitch.style.display = 'none';
+      if(lines_) lines_.style.display = 'none';
       if(lineup) lineup.style.display = 'flex';
       setTimeout(kickoff, 1300);
     };
-    const showPitch = ()=>{
+    let lineIdx = -1;
+    const showNextLine = ()=>{
+      if(!stillMounted()){ finish(); return; }
+      lineIdx++;
+      if(lineIdx>=lines.length){ setTimeout(showTotal, 500); return; }
+      const stack = document.getElementById('mi-lines-stack');
+      if(stack){
+        const row = document.createElement('div');
+        row.className = 'match-intro-line-row';
+        lines[lineIdx].forEach(x=>row.appendChild(cardEl(x.card,'xs',null,x.pos)));
+        stack.appendChild(row);
+      }
+      setTimeout(showNextLine, 900 + lines[lineIdx].length*220);
+    };
+    const showLines = ()=>{
       if(!stillMounted()){ finish(); return; }
       const vs = document.getElementById('mi-vs');
-      const pitch = document.getElementById('mi-pitch');
+      const lines_ = document.getElementById('mi-lines');
       if(vs) vs.style.display = 'none';
-      if(pitch) pitch.style.display = 'block';
-      setTimeout(showTotal, 4200);
+      if(lines_) lines_.style.display = 'flex';
+      showNextLine();
     };
-    setTimeout(showPitch, 2200); // let the crest/name/rating reveal breathe before moving on
+    setTimeout(showLines, 2200); // let the crest/name/rating reveal breathe before moving on
   });
 }
 async function enterSyncedMatch(matchDoc){
@@ -14184,9 +14174,8 @@ async function enterSyncedMatch(matchDoc){
     };
   }
   const area = document.getElementById('match-area');
-  const meCardRefs = amP1 ? matchDoc.p1CardRefs : matchDoc.p2CardRefs;
   const oppCardRefs = amP1 ? matchDoc.p2CardRefs : matchDoc.p1CardRefs;
-  await showMatchIntroCutscene(area, meSide, oppSide, meCardRefs, oppCardRefs);
+  await showMatchIntroCutscene(area, meSide, oppSide, oppCardRefs);
   if(area) area.innerHTML = `
     <div class="vs-teams">
       <div class="team-blob"><div class="r">${meSide.rating}</div><div class="t">${meSide.name}</div></div>
@@ -14251,7 +14240,7 @@ async function joinQueue(){
   try{
     await fb.setDoc(fb.doc(fb.db,'queue',profile.userId), {
       userId: profile.userId, name: profile.displayName || profile.userId, rating, players: myPlayers,
-      crest: profile.crest, cardRefs: getMySquadCardRefs(), joinedAt: startTime
+      crest: profile.crest, cardRefs: getMySquadCardRefs(), formation: squad.formation, joinedAt: startTime
     });
   }catch(e){
     console.warn('queue join failed', e);
@@ -14345,8 +14334,8 @@ async function joinQueue(){
             } : null;
             const matchDoc = {
               mid,
-              p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating, crest:profile.crest},
-              p2:{userId:other.userId, name:other.name, rating:other.rating, crest:other.crest},
+              p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating, crest:profile.crest, formation:squad.formation},
+              p2:{userId:other.userId, name:other.name, rating:other.rating, crest:other.crest, formation:other.formation},
               p1CardRefs: getMySquadCardRefs(), p2CardRefs: other.cardRefs,
               p1Goals: md.myGoals, p2Goals: md.oppGoals,
               events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
