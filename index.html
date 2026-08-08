@@ -625,6 +625,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .vs-teams{display:flex;align-items:center;justify-content:center;gap:20px;margin:18px 0;}
 .team-blob{width:100px;}
 .team-blob .r{font-family:'Anton';font-size:34px;}
+.team-blob .tb-crest{display:flex;justify-content:center;margin-top:4px;}
 .team-blob .t{font-size:11px;color:var(--muted);margin-top:2px;word-break:break-word;}
 .vs-x{font-family:'Anton';color:var(--muted);font-size:18px;}
 .score{font-family:'Anton';font-size:52px;letter-spacing:.05em;margin:10px 0;}
@@ -663,6 +664,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';}
+.leader-crest{display:inline-flex;flex-shrink:0;margin-right:2px;}
 .live-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#ff6b57;text-transform:uppercase;letter-spacing:.04em;margin-right:2px;}
 .live-badge .live-dot{width:7px;height:7px;border-radius:50%;background:#ff6b57;box-shadow:0 0 6px #ff6b57;animation:live-pulse 1.4s ease-in-out infinite;}
 @keyframes live-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.7);}}
@@ -6203,7 +6205,7 @@ async function updateMyNetWorthEntry(){
   if(!fb || !clubId) return;
   try{
     await fb.setDoc(fb.doc(fb.db,'networth', clubId), {
-      userId: profile.userId, name: profile.displayName||profile.userId,
+      userId: profile.userId, name: profile.displayName||profile.userId, crest: profile.crest,
       netWorth: computeMyNetWorth(), updatedAt: Date.now()
     });
   }catch(e){ console.warn('net worth update failed', e); }
@@ -6250,7 +6252,7 @@ async function loadNetWorthLeaderboard(){
     const row = document.createElement('div');
     row.className = 'leader-row';
     const mine = e.userId===profile.userId;
-    row.innerHTML = `<span class="rk">${i+1}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">${formatCoins((e.netWorth||0))}</span>`;
+    row.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(e.crest, 20)}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">${formatCoins((e.netWorth||0))}</span>`;
     box.appendChild(row);
   });
 }
@@ -6738,9 +6740,9 @@ async function playDraftMatch(){
   const area = document.getElementById('draft-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${myRating}</div><div class="t">Draft-Elf</div></div>
+      ${teamBlobHTML(myRating, profile.crest, 'Draft-Elf')}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner}</div></div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), opp.owner)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -10357,6 +10359,20 @@ function renderCrestSVG(crest, size=64){
   }
   return fallbackSvg;
 }
+// best-effort crest for an opponent object that never went through the crest editor (CPU bots,
+// tournament/challenge opponents, ...) - if `owner` happens to be a real club name, show its real
+// logo (bots are built from real club rosters via pickRealisticOpponent), otherwise fall back to a
+// generic monogram shield like the pre-match cutscene already does
+function opponentCrest(opp){
+  if(!opp) return null;
+  if(opp.crest) return opp.crest;
+  if(opp.owner && CLUB_LOGO[opp.owner]) return {club: opp.owner};
+  const letter = (opp.owner || opp.name || '?')[0].toUpperCase();
+  return {shape:'shield', primary:'#ffb84d', secondary:'#0a0d12', letter};
+}
+function teamBlobHTML(rating, crest, nameHtml){
+  return `<div class="team-blob"><div class="r">${rating}</div><div class="tb-crest">${renderCrestSVG(crest, 26)}</div><div class="t">${nameHtml}</div></div>`;
+}
 function openCrestEditor(){
   const c = {...profile.crest};
   const palette = ['#3ddc84','#4da8ff','#ffb84d','#ff5fa8','#c78bf5','#ffd76a','#ff7a59','#5cc9ff','#e8c468','#ff4d4d'];
@@ -11431,7 +11447,7 @@ function publishSquad(){
       return {pos:slot.label, cardId:card.id, variant:card.variant};
     });
     const mgr = getAssignedManager();
-    const payload = {owner:profile.displayName, userId:profile.userId, rating, formation:squad.formation, players, managerId: mgr?mgr.id:null, updatedAt:Date.now()};
+    const payload = {owner:profile.displayName, userId:profile.userId, crest: profile.crest, rating, formation:squad.formation, players, managerId: mgr?mgr.id:null, updatedAt:Date.now()};
     await fbReady;
     if(fb){
       try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); invalidateReadCache('squad-leaderboard'); toast('Kader online ver\u00f6ffentlicht!'); return; }
@@ -12747,9 +12763,9 @@ async function playTournamentRound(){
   const area = document.getElementById('tournament-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (${round.name})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}</div></div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${round.name})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -12786,9 +12802,9 @@ async function playBallonDorChallenge(){
   const area = document.getElementById('ballondor-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (Ballon d'Or Herausforderung)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}</div></div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Ballon d'Or Herausforderung)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -12854,9 +12870,9 @@ async function playPrimeChallenge(ch){
   const area = document.getElementById(ch.matchAreaId);
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (PRIME ${ch.card.n})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}</div></div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (PRIME ${ch.card.n})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -12904,9 +12920,9 @@ async function playOReiChallenge(){
   const area = document.getElementById('orei-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (O Rei)</div></div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (O Rei)`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -12983,9 +12999,9 @@ async function playKontinentalpokal(){
   const area = document.getElementById('kontinental-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (Kontinentalpokal)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}</div></div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Kontinentalpokal)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -13021,9 +13037,9 @@ async function playWinStreakMatch(){
   const area = document.getElementById('streak-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (Serie: ${streak}/5)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}</div></div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Serie: ${streak}/5)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -13089,9 +13105,9 @@ async function runLeaderboardChallenge(squadData, friendly){
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner}${friendly?' (Freundschaftsspiel)':''}</div></div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner}${friendly?' (Freundschaftsspiel)':''}`)}
     </div>
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly});
@@ -13343,7 +13359,7 @@ async function loadLeaderboard(){
     row.style.flexWrap = 'wrap';
     const info = document.createElement('span');
     info.style.cssText = 'flex:1;cursor:pointer;display:flex;gap:8px;align-items:center;';
-    info.innerHTML = `<span class="rk">${i+1}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span>`;
+    info.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(s.crest, 20)}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span>`;
     info.addEventListener('click', ()=>showSquadModal(s));
     const challengeBtn = document.createElement('button');
     challengeBtn.className = 'action-btn secondary';
@@ -13372,8 +13388,9 @@ function showSquadModal(s){
   const chemByIndex = {};
   validEntries.forEach((x,vi)=>{ chemByIndex[x.i] = chemResults[vi].chem; });
   openModal(`
-    <h2 style="margin-bottom:2px;">${s.owner || 'Unbenannter Verein'}</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">${form?form.label:(s.formation||'')} \u00b7 Team-Rating ${s.rating} OVR</p>
+    <div style="display:flex;justify-content:center;margin-bottom:8px;">${renderCrestSVG(s.crest, 56)}</div>
+    <h2 style="margin-bottom:2px;text-align:center;">${s.owner || 'Unbenannter Verein'}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;text-align:center;">${form?form.label:(s.formation||'')} \u00b7 Team-Rating ${s.rating} OVR</p>
     ${mgr ? `<div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(mgr,'mini').outerHTML}</div>` : ''}
     <div class="pitch" id="squad-view-pitch" style="margin-bottom:16px;"></div>
     <div style="display:flex;gap:10px;">
@@ -14229,9 +14246,9 @@ async function startBotMatch(rating){
     await showMatchIntroCutscene(area, meSide, oppSide, opp.cardRefs);
     if(area) area.innerHTML = `
       <div class="vs-teams">
-        <div class="team-blob"><div class="r">${rating}</div><div class="t">${profile.displayName||'Dein Verein'}</div></div>
+        ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
         <div class="vs-x">VS</div>
-        <div class="team-blob"><div class="r">${opp.rating}</div><div class="t">${opp.owner} (Simulation)</div></div>
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Simulation)`)}
       </div>
       <div id="result-area"></div>`;
     await runLocalMatch(rating, opp, {alreadyLocked:true});
@@ -14376,9 +14393,9 @@ async function enterSyncedMatch(matchDoc){
   await showMatchIntroCutscene(area, meSide, oppSide, oppCardRefs);
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      <div class="team-blob"><div class="r">${meSide.rating}</div><div class="t">${meSide.name}</div></div>
+      ${teamBlobHTML(meSide.rating, meSide.crest, meSide.name)}
       <div class="vs-x">VS</div>
-      <div class="team-blob"><div class="r">${oppSide.rating}</div><div class="t">${oppSide.name}</div></div>
+      ${teamBlobHTML(oppSide.rating, oppSide.crest, oppSide.name)}
     </div>
     <p class="hint" style="text-align:center;">Live-Spiel gegen einen echten Gegner \u2014 ihr seht beide dasselbe Spiel.</p>
     <div id="result-area"></div>`;
