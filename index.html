@@ -10350,7 +10350,7 @@ function renderCrestSVG(crest, size=64){
   </svg>`;
   if(c.club && CLUB_LOGO[c.club]){
     return `<span style="display:inline-flex;width:${size}px;height:${size}px;">
-      <img src="${proxyImg(CLUB_LOGO[c.club])}" alt="${c.club}" title="${c.club}" loading="lazy" referrerpolicy="no-referrer"
+      <img src="${CLUB_LOGO[c.club]}" alt="${c.club}" title="${c.club}" loading="lazy" referrerpolicy="no-referrer"
         style="width:${size}px;height:${size}px;object-fit:contain;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
       ${fallbackSvg}
     </span>`;
@@ -10392,7 +10392,7 @@ function openCrestEditor(){
     const matches = Object.keys(CLUB_LOGO).filter(name=>name.toLowerCase().includes(q)).slice(0,24);
     logoResults.innerHTML = matches.map(name=>`
       <div class="crest-logo-thumb ${name===c.club?'active':''}" data-club="${name}" title="${name}">
-        <img src="${proxyImg(CLUB_LOGO[name])}" alt="" loading="lazy" referrerpolicy="no-referrer">
+        <img src="${CLUB_LOGO[name]}" alt="" loading="lazy" referrerpolicy="no-referrer">
       </div>`).join('') || '<p class="hint" style="margin:4px 0;">Kein Verein gefunden.</p>';
     logoResults.querySelectorAll('.crest-logo-thumb').forEach(thumb=>{
       thumb.addEventListener('click', ()=>{
