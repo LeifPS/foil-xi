@@ -218,6 +218,49 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ff7a1a;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #ffb347;}
 }
+/* Kronjuwelen: Saphir (entry), Rubin (mid), Diamant (ceiling, most spectacular) */
+.pcard.theme-saph{--acc:#3d8bff;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#0c1830 0%,#08101f 45%,#0a1426 100%) padding-box,
+    linear-gradient(160deg,#12305c,#3d8bff,#bfe0ff,#3d8bff,#12305c) border-box !important;
+  animation: saphGlow 3s ease-in-out infinite, ultimateBreathe 2.6s ease-in-out infinite;}
+.pcard.theme-saph::before{animation:autoShine 1.7s ease-in-out infinite;}
+.pcard.theme-saph .name{color:#cfe6ff;text-shadow:0 0 8px rgba(61,139,255,.5);}
+@keyframes saphGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #3d8bff;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #bfe0ff;}
+}
+.pcard.theme-rub{--acc:#ff3d5c;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#2a0a10 0%,#1a070b 45%,#210810 100%) padding-box,
+    linear-gradient(160deg,#701e2c,#ff3d5c,#ffc2cc,#ff3d5c,#701e2c) border-box !important;
+  animation: rubGlow 2.8s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-rub::before{animation:autoShine 1.6s ease-in-out infinite;}
+.pcard.theme-rub .name{color:#ffd6dd;text-shadow:0 0 8px rgba(255,61,92,.55);}
+@keyframes rubGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ff3d5c;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 44px 1px #ffc2cc;}
+}
+/* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
+.pcard.theme-dia{border:2.5px solid transparent;
+  background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,.12) 0 2px, transparent 2px 8px) padding-box,
+    linear-gradient(160deg,#0e1620,#050709 55%) padding-box,
+    linear-gradient(90deg,#eafcff,#7ad9ff,#c9a8ff,#fff,#7ad9ff,#eafcff) border-box;
+  background-size:100% 100%,100% 100%,320% 320%;
+  animation:diaBorderShift 3.4s linear infinite, diaBreathe 1.6s ease-in-out infinite, diaGlow 2.2s ease-in-out infinite;}
+.pcard.theme-dia::before{animation:autoShine 1s ease-in-out infinite;}
+.pcard.theme-dia .name.name-variant{
+  background:linear-gradient(90deg,#eafcff,#7ad9ff,#c9a8ff,#fff,#7ad9ff,#eafcff);
+  background-size:320% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:diaBorderShift 3.4s linear infinite; text-shadow:none;
+}
+@keyframes diaBorderShift{0%{background-position:0% 0%,0% 0%,0% 50%;}100%{background-position:0% 0%,0% 0%,320% 50%;}}
+@keyframes diaBreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.035);}}
+@keyframes diaGlow{
+  0%,100%{box-shadow:0 18px 40px rgba(0,0,0,.7), 0 0 30px -2px #7ad9ff;}
+  50%{box-shadow:0 18px 40px rgba(0,0,0,.7), 0 0 54px 2px #eafcff;}
+}
 
 .pcard .pattern-layer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.65;}
 .pcard.pattern-attack .pattern-layer{background:repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 3px, transparent 3px 15px);}
@@ -246,6 +289,24 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     animation:bhSwirlRev 6s linear infinite;transform-origin:50% 42%;}
 @keyframes bhSwirl{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 @keyframes bhSwirlRev{from{transform:rotate(360deg);}to{transform:rotate(0deg);}}
+.pcard.pattern-saph .pattern-layer{background:
+    repeating-linear-gradient(60deg, rgba(61,139,255,.16) 0 2px, transparent 2px 14px),
+    repeating-linear-gradient(-60deg, rgba(61,139,255,.12) 0 2px, transparent 2px 14px),
+    repeating-linear-gradient(0deg, rgba(191,224,255,.09) 0 1.5px, transparent 1.5px 14px),
+    radial-gradient(circle at 50% 10%, rgba(61,139,255,.3), transparent 55%);
+    animation:gemSparkle 2.6s ease-in-out infinite;}
+.pcard.pattern-rub .pattern-layer{background:
+    repeating-linear-gradient(60deg, rgba(255,61,92,.18) 0 2px, transparent 2px 14px),
+    repeating-linear-gradient(-60deg, rgba(255,61,92,.13) 0 2px, transparent 2px 14px),
+    repeating-linear-gradient(0deg, rgba(255,194,204,.09) 0 1.5px, transparent 1.5px 14px),
+    radial-gradient(circle at 50% 10%, rgba(255,61,92,.32), transparent 55%);
+    animation:gemSparkle 2.4s ease-in-out infinite;}
+@keyframes gemSparkle{0%,100%{opacity:.72;}50%{opacity:1;}}
+.pcard.pattern-dia .pattern-layer{background:
+    radial-gradient(circle at 50% 12%, rgba(234,252,255,.5), transparent 58%),
+    repeating-conic-gradient(from 0deg at 50% 12%, rgba(255,255,255,.16) 0deg 3deg, transparent 3deg 9deg);
+    animation:diaSparkle 2s ease-in-out infinite;}
+@keyframes diaSparkle{0%,100%{opacity:.7;}50%{opacity:1;}}
 .pcard.pattern-tactics .pattern-layer{background:
   repeating-linear-gradient(0deg, rgba(255,255,255,.055) 0 1px, transparent 1px 20px),
   repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 1px, transparent 1px 20px);}
@@ -5905,6 +5966,57 @@ const POETEN_CARDS = PLAYERS_POETEN;
 POETEN_CARDS.forEach(p=>BY_ID.set(p.id,p));
 const OGICON_CARDS = PLAYERS_OGICONS.filter(c=>c.variant!=='og_mgr');
 OGICON_CARDS.forEach(p=>BY_ID.set(p.id,p));
+// ===== Kronjuwelen (Crown Jewels): roster chosen by a specific real individual award per tier -
+// Saphir = Golden Boot (top scorer), Rubin = Weltfu\u00dfballer des Jahres, Diamant = Ballon d'Or.
+// Sourced from whichever pool already has real stats/artwork for that player (base roster for
+// still-active pros, the icon/legend pools for retired greats) and boosted from there.
+function findBaseCard(sourceId){
+  return ALL_BASE.find(c=>c.id===sourceId)
+    || ALL_SPECIAL.find(c=>c.id===sourceId)
+    || SIGNATURE_SEASON_CARDS.find(c=>c.id===sourceId)
+    || POETEN_CARDS.find(c=>c.id===sourceId)
+    || OGICON_CARDS.find(c=>c.id===sourceId);
+}
+function boostBaseToOv(base, targetOv, id, variant, variantLabel, theme){
+  const withStats = distributeStatGain(base, targetOv-base.ov, BLACK_HOLE_STAT_KEYS);
+  return {...withStats, id, ov:targetOv, pot:targetOv, variant, variantLabel, theme, baseId:base.baseId||base.id};
+}
+const KRONJUWELEN_ROSTER = [
+  {baseId:232293, ov:101, tier:'saph'}, // V. Osimhen - Serie A Torsch\u00fctzenk\u00f6nig 2023
+  {baseId:188567, ov:102, tier:'saph'}, // P. Aubameyang - Premier League Golden Boot 2019
+  {baseId:192387, ov:103, tier:'saph'}, // C. Immobile - Serie A Torsch\u00fctzenk\u00f6nig / Europ\u00e4ischer Goldener Schuh 2020
+  {baseId:215441, ov:104, tier:'saph'}, // S. Guirassy - Bundesliga Torj\u00e4ger
+  {baseId:9800407, ov:105, tier:'rub'}, // Kak\u00e1 - Weltfu\u00dfballer des Jahres 2007
+  {baseId:9800306, ov:106, tier:'rub'}, // Ronaldo Naz\u00e1rio - Weltfu\u00dfballer 1996/1997/2002
+  {baseId:9800412, ov:107, tier:'rub'}, // Ronaldinho - Weltfu\u00dfballer 2004/2005
+  {baseId:9800302, ov:109, tier:'rub'}, // Zinedine Zidane - Weltfu\u00dfballer 1998/2000/2003
+  {baseId:165153, ov:110, tier:'dia'},  // K. Benzema - Ballon d'Or 2022
+  {baseId:20801, ov:111, tier:'dia'},   // Cristiano Ronaldo - 5x Ballon d'Or
+  {baseId:158023, ov:113, tier:'dia'},  // Lionel Messi - 8x Ballon d'Or
+];
+const KRONJUWELEN_LABEL = {saph:'Saphir', rub:'Rubin', dia:'Diamant'};
+const KRONJUWELEN_IMG_OVERRIDE = {
+  232293: 'https://cdn3.futbin.com/content/fifa26/img/players/p100895589.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=d58c34495434feb5fb8b41c6c0e6b066', // V. Osimhen
+  188567: 'https://cdn3.futbin.com/content/fifa26/img/players/p67297431.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=71738327f7d4814acb2dd03c75e72958', // P. Aubameyang
+  192387: 'https://cdn3.futbin.com/content/fifa26/img/players/p67301251.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=82a301ce21317826f57ddda11c3e18b0', // C. Immobile
+  215441: 'https://cdn3.futbin.com/content/fifa26/img/players/p100878737.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=75df892a33c22af1ff77b4e9a8e4f23f', // S. Guirassy
+  9800407: 'https://cdn3.futbin.com/content/fifa25/img/players/p67247313.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=395a703ec42179f388dc8acfc07db18b', // Kaká
+  9800306: 'https://cdn3.futbin.com/content/fifa26/img/players/p67146440.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=72e042fb97627d23852b34c659106361', // Ronaldo Nazário
+  9800412: 'https://cdn3.futbin.com/content/fifa25/img/players/p50359778.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=9f9d99a67ee45b851afa1226c89a8cbf', // Ronaldinho
+  9800302: 'https://cdn3.futbin.com/content/fifa26/img/players/p117441909.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=51f0383b2b64dc1ffb6736a4373f0d88', // Zinedine Zidane
+  165153: 'https://cdn3.futbin.com/content/fifa25/img/players/p84051233.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=33e678e0c1e97dabf025183bfba35e55', // K. Benzema
+  20801: 'https://cdn3.futbin.com/content/fifa26/img/players/p50352449.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=8f1136aeb1af335069f9847cb345bd36', // Cristiano Ronaldo
+  158023: 'https://cdn3.futbin.com/content/fifa26/img/players/p117598535.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=20cfe71d374c4e0a14c830e25455eb0f', // Lionel Messi
+};
+const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
+  const base = findBaseCard(r.baseId);
+  if(!base) return null;
+  const card = boostBaseToOv(base, r.ov, 9760000+i, r.tier, KRONJUWELEN_LABEL[r.tier], r.tier);
+  if(KRONJUWELEN_IMG_OVERRIDE[r.baseId]) card.img = KRONJUWELEN_IMG_OVERRIDE[r.baseId];
+  return card;
+}).filter(Boolean);
+KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme===tier); }
 const OG_PELE = OGICON_CARDS.find(p=>p.n==='Pel\u00e9');
 const OG_MARADONA = OGICON_CARDS.find(p=>p.n==='Diego Maradona');
 const OG_ZIDANE = OGICON_CARDS.find(p=>p.n==='Zinedine Zidane');
@@ -5957,7 +6069,7 @@ const VARIANT_LABEL_DE = {
   phenom:'Aufstrebendes Talent', setpiece:'Standard-Spezialist', derby:'Derbytag',
   tots:'Team der Saison', flash:'R\u00fcckblende', sd:'Duell', iron:'Eiserner Vorhang', wonder:'Wunderkind',
   icon:'Ikone', cent:'Zenturio', hof:'Ruhmeshalle', gal:'Gal\u00e1ctico', gg:'Goldener Handschuh',
-  wc:'WM-Moment', blk:'Blackout', bh:'Black Hole',
+  wc:'WM-Moment', blk:'Blackout', bh:'Black Hole', saph:'Saphir', rub:'Rubin', dia:'Diamant',
 };
 ALL_SPECIAL.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
 EXCLUSIVE_SPECIALS.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
@@ -6052,7 +6164,7 @@ function rarityInfo(ov){
 const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8fb4d1',
   tots:'#f5d76e',flash:'#ff7a59',sd:'#ff5fa8',icon:'#c78bf5',cent:'#ffd76a',
   phenom:'#6ee7d8',setpiece:'#ffcf5c',derby:'#ff8f6b',iron:'#7d94ad',wonder:'#8ee6a3',
-  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',goat:'#ff2e63',
+  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',goat:'#ff2e63',
   wcchamp:'#ffd23f',goldenball:'#ffcc00',ggwm:'#4fd1c5',youngplayer:'#7ee787',
   semifinalist:'#ff9d5c',quarterfinalist:'#9fb4c7',
   derbyicon:'#ff4d4d',underdog:'#4dd0e1',
@@ -6093,7 +6205,7 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 //    than a fragile per-pack normalization that was hard to calibrate precisely.
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
 const VARIANT_SPECIALTY_MULT = {
-  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, goat:5.8,
+  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, goat:5.8,
   signature_icon:3.6, era_definer:4.1, signature_season:4.8,
   wcchamp:2, goldenball:5, ggwm:4, youngplayer:4, semifinalist:1.3, quarterfinalist:1.15,
   derbyicon:1.4, underdog:1.55, meistertrainer:1,
@@ -6472,10 +6584,25 @@ const PACKS = [
   {id:'jackpot',name:'Jackpot Pack',cost:35000,tier:'ultimate',count:1,
     desc:'1 Karte, garantiert Rating 90 oder h\u00f6her \u2014 die reine H\u00f6chstwert-Lotterie.',
     draw(){ const pool=poolByRange(90,99,true); return [pick(pool)]; }},
-  {id:'supernova',name:'Supernova Pack',cost:80000,tier:'ultimate',count:2,
-    desc:'2 Karten, jede garantiert WM-Moment oder Blackout (Rating 97+). Bei jeder Karte einzeln eine stark erh\u00f6hte Chance (ca. 20%) auf die Black Hole-Variante statt Blackout \u2014 bis Rating 110. Das teuerste und st\u00e4rkste Pack im Spiel.',
+  {id:'kronjuwelen',name:'Kronjuwelen Pack',cost:50000,tier:'ultimate',count:5,
+    desc:'5 Karten, meistens Rating 80-96. Sehr selten erscheint eine Karte aus einem eigenen Kader bekannter Spieler, ausgew\u00e4hlt nach einer echten individuellen Auszeichnung: Saphir (101-104, Torsch\u00fctzenk\u00f6nig), Rubin (105-109, Weltfu\u00dfballer des Jahres) und, kaum erreichbar, Diamant (110-113, Ballon d\'Or) \u2014 die h\u00f6chsten Karten im Spiel. Teurer und deutlich seltener als das Zeitgeist Pack.',
     draw(){
-      return Array.from({length:2}, ()=> Math.random()<0.20 ? pickBlackHoleCard() : pick(EXCLUSIVE_SPECIALS));
+      const pool = ALL_BASE.concat(ALL_SPECIAL).filter(c=>!c.isManager);
+      const common = pool.filter(c=>c.ov>=80 && c.ov<90);
+      const good = pool.filter(c=>c.ov>=90 && c.ov<95);
+      const rare = pool.filter(c=>c.ov>=95 && c.ov<=96);
+      const saph = kronjuwelenByTier('saph'), rub = kronjuwelenByTier('rub'), dia = kronjuwelenByTier('dia');
+      const P = {dia:0.0008, rub:0.005, saph:0.018, rare:0.07, good:0.18};
+      return Array.from({length:5}, ()=>{
+        const r = Math.random();
+        let acc = 0;
+        if(r<(acc+=P.dia)) return pick(dia);
+        if(r<(acc+=P.rub)) return pick(rub);
+        if(r<(acc+=P.saph)) return pick(saph);
+        if(r<(acc+=P.rare)) return pick(rare);
+        if(r<(acc+=P.good)) return pick(good);
+        return pick(common);
+      });
     }},
 ];
 
@@ -6650,7 +6777,7 @@ const SBC_DEFS = [
            req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`) ]},
   {id:'legenden_elf', name:'Legenden-Elf', reward:'hof', size:11, tier:'Fortgeschritten',
     desc:'Alle 11 Spieler m\u00fcssen Top-Varianten sein (Icon, Centurion, Hall of Fame, Galactico, Golden Glove, World Cup Moment, Blackout oder GOAT).',
-    reqs:[ req('Alle 11 sind Top-Varianten', c=>c.every(x=>['icon','cent','hof','gal','gg','wc','blk','bh','goat'].includes(x.theme)), c=>`${c.filter(x=>['icon','cent','hof','gal','gg','wc','blk','bh','goat'].includes(x.theme)).length} / 11`) ]},
+    reqs:[ req('Alle 11 sind Top-Varianten', c=>c.every(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','goat'].includes(x.theme)), c=>`${c.filter(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','goat'].includes(x.theme)).length} / 11`) ]},
   {id:'chef_trainer', name:'Der Chef-Trainer', reward:'blackout', size:10, tier:'Fortgeschritten',
     desc:'Erstmals gefragt: Spieler UND Trainer zusammen. 10 Spieler, Durchschnittsrating 90+, plus ein Trainer der Stufe Legend\u00e4r \u2014 beides wird verbraucht.',
     managerReq:{minTier:'Legend\u00e4r'},
@@ -8789,6 +8916,9 @@ function askTextModal(title, placeholder, callback, maxLen=30){
 
 // ===== card rendering =====
 const VARIANT_ICON = {
+  saph:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
+  rub:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
+  dia:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   fs:'<path d="M12 3l2.4 5.3 5.6.6-4.2 3.9 1.2 5.6L12 15.9 6.9 18.4l1.2-5.6L3.9 8.9l5.6-.6z" fill="currentColor"/>',
   otw:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/>',
   pm:'<path d="M22 2L2 9.5l7 3 2 7.5 3-4.5 5 3z" fill="currentColor"/>',
@@ -8841,7 +8971,7 @@ const PATTERN_FAMILY = {
   icon:'legacy', cent:'legacy',
   gg:'keeper',
   flash:'retro',
-  wc:'wc', blk:'blk', bh:'bh',
+  wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia',
   manager:'tactics',
   meistertrainer:'legacy',
   goat:'goatpattern',
@@ -14230,6 +14360,18 @@ function pickRealisticOpponent(targetRating){
   function buildForCardTarget(cardTarget){
     const used = new Set();
     const xi = slots.map(slot=>{
+      // small independent chance, at high enough ratings, for a bot to field one of the rarest cards
+      // in the game regardless of club - keeps e.g. Kronjuwelen cards reachable even when the real
+      // club is too small a roster to ever get chosen (Messi at Inter Miami) or has a club-name
+      // mismatch, rather than depending entirely on the club draw lining up by coincidence
+      if(cardTarget>=97 && Math.random()<0.01){
+        const kjCandidates = KRONJUWELEN_SPECIALS.filter(c=>!used.has(c.id) && positionEligibility(c, slot.label));
+        if(kjCandidates.length){
+          const picked = pick(kjCandidates);
+          used.add(picked.id);
+          return picked;
+        }
+      }
       const group = posGroup2(slot.label);
       let candidates = (byGroup[group].length ? byGroup[group] : clubCards).filter(c=>!used.has(c.id) && positionEligibility(c, slot.label));
       if(!candidates.length) candidates = clubCards.filter(c=>!used.has(c.id));
