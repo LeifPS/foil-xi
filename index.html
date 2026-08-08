@@ -625,6 +625,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .match-intro-side{display:flex;flex-direction:column;align-items:center;gap:6px;width:130px;animation:matchIntroPop .5s cubic-bezier(.3,.8,.4,1);}
 .match-intro-side:last-child{animation-delay:.25s;animation-fill-mode:backwards;}
 .match-intro-name{font-size:13px;font-weight:700;text-align:center;word-break:break-word;}
+.match-intro-manager{font-size:10.5px;color:var(--muted);text-align:center;}
 .match-intro-rating{font-family:'Anton';font-size:26px;color:var(--gold);}
 .match-intro-x{font-family:'Anton';color:var(--muted);font-size:20px;}
 @keyframes matchIntroFadeIn{from{opacity:0;}to{opacity:1;}}
@@ -5286,6 +5287,14 @@ function toBlackHole(card){
     theme:'bh', img: BLACKHOLE_IMG_OVERRIDE[card.baseId] || card.img};
 }
 const BLACK_HOLE_SPECIALS = EXCLUSIVE_SPECIALS.filter(c=>c.theme==='blk').map(toBlackHole);
+// within a Black Hole pull, keep the overall "did I get one at all" chance intact but weight which
+// one - 108+ should land noticeably less often than the lower 106 tier, not at the same rate
+const BLACK_HOLE_TIER106 = BLACK_HOLE_SPECIALS.filter(c=>c.ov===106);
+const BLACK_HOLE_TIER108PLUS = BLACK_HOLE_SPECIALS.filter(c=>c.ov>=108);
+function pickBlackHoleCard(){
+  const pool = Math.random()<0.3 ? BLACK_HOLE_TIER108PLUS : BLACK_HOLE_TIER106;
+  return pick(pool.length ? pool : BLACK_HOLE_SPECIALS);
+}
 BLACK_HOLE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 const MGR_TIER_ORDER = {Bronze:0, Silber:1, Gold:2, Elite:3, 'Legend\u00e4r':4};
 function managerDisplayOv(tier){
@@ -6297,7 +6306,7 @@ const PACKS = [
   {id:'blackout',name:'Blackout Pack',cost:40000,tier:'ultimate',count:1,
     desc:'1 Spieler, garantiert WM-Moment oder Blackout \u2014 Rating 97-99. Die seltensten Karten im Spiel, sonst nirgends erh\u00e4ltlich. Selten (etwa 7%) erscheint zus\u00e4tzlich die noch st\u00e4rkere Black Hole-Variante \u2014 dann bekommst du 2 Karten statt 1, zuerst die normale, danach die Black Hole.',
     draw(){
-      if(Math.random()<0.07) return [pick(EXCLUSIVE_SPECIALS), pick(BLACK_HOLE_SPECIALS)];
+      if(Math.random()<0.07) return [pick(EXCLUSIVE_SPECIALS), pickBlackHoleCard()];
       return [pick(EXCLUSIVE_SPECIALS)];
     }},
   {id:'trainer',name:'Trainer Pack',cost:3500,tier:'premium',count:1,
@@ -14136,30 +14145,63 @@ function buildClubIndex(){
 function pickRealisticOpponent(targetRating){
   const clubs = buildClubIndex();
   if(!clubs.length) return {owner:'CPU XI', rating:targetRating, players:[], isBot:true};
+  // wide, weighted pool of candidate clubs: nearer to the target rating is more likely, but a much
+  // weaker or stronger club is still possible (rank-weighted, not just "closest wins") - this is what
+  // makes the opponent's real club identity variable even when the resulting XI rating stays on target
   const sorted = clubs.slice().sort((a,b)=>Math.abs(a.avgOv-targetRating)-Math.abs(b.avgOv-targetRating));
-  const pool = sorted.slice(0, Math.min(8, sorted.length));
-  const chosen = pool[Math.floor(Math.random()*pool.length)];
-  // build a real, position-balanced 4-3-3 XI from the club's full roster (not just top-11 by raw
-  // OV, which could accidentally end up all-attackers) - this also gives real card ids, so the CPU
-  // gets the same intro-cutscene lineup reveal as a real opponent instead of a placeholder
-  const clubPool = ALL_BASE.filter(p=>p.club===chosen.club);
+  const pool = sorted.slice(0, Math.min(25, sorted.length));
+  const weights = pool.map((_,i)=>1/(i+1));
+  const totalW = weights.reduce((a,b)=>a+b,0);
+  let r = Math.random()*totalW, chosenIdx = 0;
+  for(let i=0;i<weights.length;i++){ r -= weights[i]; if(r<=0){ chosenIdx = i; break; } }
+  const chosen = pool[chosenIdx];
+  // the FULL card universe for this club - every tier that exists in the game (base, special,
+  // exclusive, Black Hole, signature seasons, ...) via BY_ID, not just the plain base roster. A club
+  // whose real players happen to have elite cards can field them, same as a real opponent could.
+  const clubCards = [];
+  BY_ID.forEach(c=>{ if(!c.isManager && c.club===chosen.club) clubCards.push(c); });
   const slots = FORMATIONS['433'].slots;
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
-  clubPool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
-  Object.values(byGroup).forEach(arr=>arr.sort((a,b)=>b.ov-a.ov));
-  const used = new Set();
-  const xi = slots.map(slot=>{
-    const group = posGroup2(slot.label);
-    const candidates = (byGroup[group].length ? byGroup[group] : clubPool).filter(c=>!used.has(c.id));
-    const fallback = clubPool.filter(c=>!used.has(c.id));
-    const picked = candidates[0] || fallback[0] || clubPool[0];
-    if(picked) used.add(picked.id);
-    return picked;
-  });
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:p.ov, img:p.img}));
+  clubCards.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
+  // real clubs can have a real manager too - same boost mechanics as a player's own assigned manager
+  const mgrPool = MANAGERS.filter(m=>m.club===chosen.club);
+  const mgr = mgrPool.length ? pick(mgrPool) : null;
+  // per slot, pick whichever eligible card's raw OV lands closest to `cardTarget`, then apply the
+  // same manager/position/chemistry bonuses a real squad gets, exactly like getMySquadPlayers()/
+  // squadRating() do for the player's own XI
+  function buildForCardTarget(cardTarget){
+    const used = new Set();
+    const xi = slots.map(slot=>{
+      const group = posGroup2(slot.label);
+      let candidates = (byGroup[group].length ? byGroup[group] : clubCards).filter(c=>!used.has(c.id) && positionEligibility(c, slot.label));
+      if(!candidates.length) candidates = clubCards.filter(c=>!used.has(c.id));
+      if(!candidates.length) return null;
+      candidates = candidates.slice().sort((a,b)=>Math.abs(a.ov-cardTarget)-Math.abs(b.ov-cardTarget));
+      const picked = candidates[0];
+      used.add(picked.id);
+      return picked;
+    }).filter(Boolean);
+    while(xi.length<11 && clubCards.length) xi.push(clubCards[xi.length % clubCards.length]);
+    const boostedCards = xi.map((c,i)=>{
+      let ov = c.ov;
+      if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
+      const info = positionEligibility(c, slots[i].label);
+      if(info) ov += info.bonus;
+      return {ov: Math.round(ov), club:c.club, nat:c.nat, lg:c.lg, variant:c.variant};
+    });
+    const chemPlayers = computeChemistry(boostedCards, mgr?mgr.nat:null);
+    const rating = Math.round(chemPlayers.reduce((s,p)=>s+p.chemOv,0)/chemPlayers.length);
+    return {xi, chemPlayers, rating};
+  }
+  // manager/position/chemistry bonuses are all additive on top of raw card OV, so aiming the card
+  // search straight at targetRating systematically overshoots. Run it once, measure the overshoot,
+  // then redo the search aimed lower by exactly that amount - lands much closer to the real target.
+  const draft = buildForCardTarget(targetRating);
+  const final = buildForCardTarget(targetRating - (draft.rating-targetRating));
+  const {xi, chemPlayers, rating} = final;
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img}));
   const cardRefs = xi.map((p,i)=>({id:p.id, pos:slots[i].label}));
-  const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
-  return {owner:chosen.club, rating, players, cardRefs, formation:'433', isBot:true};
+  return {owner:chosen.club, rating, players, cardRefs, formation:'433', isBot:true, managerName: mgr?mgr.n:null};
 }
 async function startBotMatch(rating){
   if(inMatch) return;
@@ -14169,8 +14211,9 @@ async function startBotMatch(rating){
   try{
     const opp = pickRealisticOpponent(rating);
     const area = document.getElementById('match-area');
-    const meSide = {name: profile.displayName||'Dein Verein', rating, crest: profile.crest};
-    const oppSide = {name: opp.owner+' (Simulation)', rating: opp.rating,
+    const myMgr = getAssignedManager();
+    const meSide = {name: profile.displayName||'Dein Verein', rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
+    const oppSide = {name: opp.owner+' (Simulation)', rating: opp.rating, managerName: opp.managerName,
       crest: {shape:'shield', primary:'#ffb84d', secondary:'#0a0d12', letter:(opp.owner||'?')[0].toUpperCase()},
       formation: opp.formation};
     await showMatchIntroCutscene(area, meSide, oppSide, opp.cardRefs);
@@ -14223,12 +14266,14 @@ function showMatchIntroCutscene(container, meSide, oppSide, oppCardRefs){
         <div class="match-intro-side">
           ${renderCrestSVG(meSide.crest, 72)}
           <div class="match-intro-name">${meSide.name}</div>
+          ${meSide.managerName ? `<div class="match-intro-manager">Trainer: ${meSide.managerName}</div>` : ''}
           <div class="match-intro-rating">${meSide.rating}</div>
         </div>
         <div class="match-intro-x">VS</div>
         <div class="match-intro-side">
           ${renderCrestSVG(oppSide.crest, 72)}
           <div class="match-intro-name">${oppSide.name}</div>
+          ${oppSide.managerName ? `<div class="match-intro-manager">Trainer: ${oppSide.managerName}</div>` : ''}
           <div class="match-intro-rating">${oppSide.rating}</div>
         </div>
       </div>
