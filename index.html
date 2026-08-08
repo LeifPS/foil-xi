@@ -10466,10 +10466,26 @@ function openCrestEditor(){
   document.getElementById('crest-save').addEventListener('click', async ()=>{
     profile.crest = c;
     await sSet('profile', profile);
+    await syncCrestToLeaderboards();
     closeModal();
     toast('Vereinswappen gespeichert.');
     if(currentTab==='club') renderClub(document.getElementById('view'));
   });
+}
+// picking a new crest only saves the profile doc - an already-published leaderboard entry (squad
+// rating, net worth) is a separate Firestore doc that otherwise wouldn't pick up the change until
+// the next full re-publish / net-worth refresh. Patch the crest field onto both immediately instead.
+async function syncCrestToLeaderboards(){
+  await fbReady;
+  if(!fb || !clubId) return;
+  try{
+    const ref = fb.doc(fb.db,'squads', profile.userId);
+    const snap = await fb.getDoc(ref);
+    if(snap.exists()) await fb.setDoc(ref, {crest: profile.crest}, {merge:true});
+  }catch(e){ console.warn('crest sync to squad leaderboard failed', e); }
+  invalidateReadCache('squad-leaderboard');
+  try{ await updateMyNetWorthEntry(); }catch(e){}
+  invalidateReadCache('networth-board');
 }
 function monogramBadgeSVG(name, shape){
   const letters = initialsOf2(name);
