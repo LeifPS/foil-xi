@@ -6472,6 +6472,11 @@ const PACKS = [
   {id:'jackpot',name:'Jackpot Pack',cost:35000,tier:'ultimate',count:1,
     desc:'1 Karte, garantiert Rating 90 oder h\u00f6her \u2014 die reine H\u00f6chstwert-Lotterie.',
     draw(){ const pool=poolByRange(90,99,true); return [pick(pool)]; }},
+  {id:'supernova',name:'Supernova Pack',cost:80000,tier:'ultimate',count:2,
+    desc:'2 Karten, jede garantiert WM-Moment oder Blackout (Rating 97+). Bei jeder Karte einzeln eine stark erh\u00f6hte Chance (ca. 20%) auf die Black Hole-Variante statt Blackout \u2014 bis Rating 110. Das teuerste und st\u00e4rkste Pack im Spiel.',
+    draw(){
+      return Array.from({length:2}, ()=> Math.random()<0.20 ? pickBlackHoleCard() : pick(EXCLUSIVE_SPECIALS));
+    }},
 ];
 
 function sbcReqScore(sbc, cards){
