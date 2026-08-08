@@ -208,12 +208,15 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.theme-blk{--acc:#c9a8ff;background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.04) 0 2px, transparent 2px 9px),
     linear-gradient(160deg,#120a1c 0%,#07050c 70%) !important;box-shadow:0 10px 26px rgba(0,0,0,.6), 0 0 30px -4px #c9a8ff;}
-.pcard.theme-bh{--acc:#ff7a1a;background:
-    radial-gradient(circle at 50% 40%, #000000 0%, #050302 40%, #170a05 62%, #200f08 80%, #030203 100%) !important;
-    animation: bhGlow 3s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-bh{--acc:#ff7a1a;border:2px solid transparent;
+  background:
+    radial-gradient(circle at 50% 38%, #0c0603 0%, #050302 32%, #150a06 55%, #1a0d07 76%, #030203 100%) padding-box,
+    linear-gradient(160deg,#5c1400,#ff7a1a,#ffe3b0,#ff7a1a,#5c1400) border-box !important;
+  animation: bhGlow 3.2s ease-in-out infinite, ultimateBreathe 2.6s ease-in-out infinite;}
+.pcard.theme-bh .name{color:#ffddb0;text-shadow:0 0 8px rgba(255,150,50,.55);}
 @keyframes bhGlow{
-  0%,100%{box-shadow:0 10px 28px rgba(0,0,0,.7), 0 0 26px -2px #ff7a1a;}
-  50%{box-shadow:0 10px 28px rgba(0,0,0,.7), 0 0 46px 2px #ffb347;}
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ff7a1a;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #ffb347;}
 }
 
 .pcard .pattern-layer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.65;}
@@ -233,9 +236,16 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   repeating-conic-gradient(from 0deg at 50% 8%, rgba(255,255,255,.06) 0deg 5deg, transparent 5deg 16deg);}
 .pcard.pattern-blk .pattern-layer{background:radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);background-size:6px 6px;opacity:.8;}
 .pcard.pattern-bh .pattern-layer{background:
-    radial-gradient(circle at 50% 42%, transparent 0 16%, rgba(255,122,26,.55) 17% 20%, transparent 21% 100%),
-    conic-gradient(from 0deg at 50% 42%, rgba(255,179,71,.25), transparent 25%, rgba(255,122,26,.3) 55%, transparent 85%);
-    opacity:.9;}
+    radial-gradient(circle at 50% 42%, rgba(255,190,120,.4) 0 7%, transparent 13%),
+    radial-gradient(circle at 50% 42%, transparent 0 15%, rgba(255,122,26,.55) 15.5% 17%, transparent 17.5% 100%),
+    radial-gradient(circle at 50% 42%, transparent 0 22%, rgba(255,122,26,.25) 22.5% 24%, transparent 24.5% 100%),
+    radial-gradient(circle at 50% 25%, rgba(255,240,210,.9) 0 2.5%, transparent 4%);
+    opacity:.9;animation:bhSwirl 9s linear infinite;transform-origin:50% 42%;}
+.pcard.pattern-bh .pattern-layer::after{content:"";position:absolute;inset:0;
+    background:radial-gradient(circle at 50% 59%, rgba(255,240,210,.75) 0 2%, transparent 3.2%);
+    animation:bhSwirlRev 6s linear infinite;transform-origin:50% 42%;}
+@keyframes bhSwirl{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+@keyframes bhSwirlRev{from{transform:rotate(360deg);}to{transform:rotate(0deg);}}
 .pcard.pattern-tactics .pattern-layer{background:
   repeating-linear-gradient(0deg, rgba(255,255,255,.055) 0 1px, transparent 1px 20px),
   repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 1px, transparent 1px 20px);}
