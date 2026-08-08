@@ -261,6 +261,26 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 18px 40px rgba(0,0,0,.7), 0 0 30px -2px #7ad9ff;}
   50%{box-shadow:0 18px 40px rgba(0,0,0,.7), 0 0 54px 2px #eafcff;}
 }
+/* Wochen-MVP: the Wochen Pass exclusive - never sold, never packed, only earned by grinding to
+   level 15. Trophy gold-on-black with a rotating laurel shimmer, distinct from every purchasable
+   theme in the game. */
+.pcard.theme-wpmvp{border:2.5px solid transparent;
+  background:
+    radial-gradient(circle at 50% 28%, #241c0a 0%, #140f06 40%, #060502 78%, #030201 100%) padding-box,
+    linear-gradient(160deg,#4a3a10,#ffd76a,#fff3c4,#ffb347,#ffd76a,#4a3a10) border-box !important;
+  background-size:100% 100%, 260% 260%;
+  animation: mvpGlow 2.6s ease-in-out infinite, mvpBorderShift 5s linear infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-wpmvp::before{animation:autoShine 1.3s ease-in-out infinite;}
+.pcard.theme-wpmvp .name.name-variant{
+  background:linear-gradient(90deg,#ffd76a,#fff3c4,#ffb347,#ffd76a);
+  background-size:260% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:mvpBorderShift 5s linear infinite; text-shadow:none;
+}
+@keyframes mvpBorderShift{0%{background-position:0% 0%,0% 50%;}100%{background-position:0% 0%,260% 50%;}}
+@keyframes mvpGlow{
+  0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 24px -2px #ffd76a;}
+  50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 50px 3px #fff3c4;}
+}
 
 .pcard .pattern-layer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.65;}
 .pcard.pattern-attack .pattern-layer{background:repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 3px, transparent 3px 15px);}
@@ -307,6 +327,12 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     repeating-conic-gradient(from 0deg at 50% 12%, rgba(255,255,255,.16) 0deg 3deg, transparent 3deg 9deg);
     animation:diaSparkle 2s ease-in-out infinite;}
 @keyframes diaSparkle{0%,100%{opacity:.7;}50%{opacity:1;}}
+.pcard.pattern-wpmvp .pattern-layer{background:
+    radial-gradient(circle at 50% 8%, rgba(255,215,106,.4), transparent 55%),
+    repeating-conic-gradient(from -20deg at 18% 50%, rgba(255,215,106,.14) 0deg 6deg, transparent 6deg 22deg),
+    repeating-conic-gradient(from 200deg at 82% 50%, rgba(255,215,106,.14) 0deg 6deg, transparent 6deg 22deg);
+    animation:mvpSparkle 2.2s ease-in-out infinite;}
+@keyframes mvpSparkle{0%,100%{opacity:.75;}50%{opacity:1;}}
 .pcard.pattern-tactics .pattern-layer{background:
   repeating-linear-gradient(0deg, rgba(255,255,255,.055) 0 1px, transparent 1px 20px),
   repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 1px, transparent 1px 20px);}
@@ -726,6 +752,24 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';}
 .leader-crest{display:inline-flex;flex-shrink:0;margin-right:2px;}
+/* ---- Wochen Pass ---- */
+.wp-header{text-align:center;margin-bottom:18px;}
+.wp-badge{width:64px;height:64px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;
+  font-family:'Anton';font-size:26px;color:#1a1408;
+  background:radial-gradient(circle at 35% 30%, #fff3c4, #ffd76a 60%, #b8933a 100%);
+  box-shadow:0 0 24px -4px #ffd76a, 0 4px 10px rgba(0,0,0,.5);}
+.wp-track{display:flex;gap:10px;overflow-x:auto;padding:6px 4px 18px;-webkit-overflow-scrolling:touch;}
+.wp-tile{flex-shrink:0;width:96px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 8px 8px;text-align:center;position:relative;transition:border-color .2s, box-shadow .2s;}
+.wp-tile.current{border-color:#ffd76a;box-shadow:0 0 16px -4px #ffd76a;}
+.wp-tile.claimed{opacity:.55;}
+.wp-tile.locked{opacity:.4;}
+.wp-tile-max{border-color:#ffd76a;background:radial-gradient(circle at 50% 20%, rgba(255,215,106,.14), var(--panel) 70%);}
+.wp-tile .wp-lv{font-family:'Anton';font-size:12px;color:var(--muted);}
+.wp-tile .wp-icon{font-size:22px;margin:6px 0 4px;}
+.wp-tile .wp-label{font-size:9.5px;color:var(--chalk);line-height:1.3;min-height:26px;}
+.wp-tile .wp-claim{width:100%;margin-top:7px;padding:4px 0;font-size:9.5px;border-radius:7px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;}
+.wp-tile .wp-check{margin-top:7px;font-size:13px;color:var(--turf-bright);}
+.wp-tile .wp-lockicon{margin-top:7px;font-size:12px;opacity:.7;}
 .live-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#ff6b57;text-transform:uppercase;letter-spacing:.04em;margin-right:2px;}
 .live-badge .live-dot{width:7px;height:7px;border-radius:50%;background:#ff6b57;box-shadow:0 0 6px #ff6b57;animation:live-pulse 1.4s ease-in-out infinite;}
 @keyframes live-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.7);}}
@@ -5947,6 +5991,95 @@ const ICON_SWAP_EVENT_END = new Date('2026-08-13T00:00:00').getTime();
 const ICON_SWAP_EVENT_START = ICON_SWAP_EVENT_END - 7*24*60*60*1000;
 function iconSwapEventActive(){ return Date.now() < ICON_SWAP_EVENT_END; }
 function iconSwapUnlockTime(unlockDay){ return ICON_SWAP_EVENT_START + (unlockDay||0)*24*60*60*1000; }
+// ===== Wochen Pass: 7-day XP track from real matches, single reward line (no paid tier) - just an
+// incentive to grind, capped off by one card that only exists as this reward (see WEEK_PASS_CARD).
+// WEEK_PASS_ID changes when a new week starts (bump the date below), resetting everyone's progress
+// via the boot() default-init check.
+const WEEK_PASS_START = new Date('2026-08-08T00:00:00').getTime();
+const WEEK_PASS_END = WEEK_PASS_START + 7*24*60*60*1000;
+const WEEK_PASS_ID = 'wp-'+WEEK_PASS_START;
+const WEEK_PASS_MAX_LEVEL = 15;
+const WEEK_PASS_XP_PER_LEVEL = 250;
+const WEEK_PASS_XP_WIN = 100;
+const WEEK_PASS_XP_LOSS = 40;
+function weekPassActive(){ return Date.now() < WEEK_PASS_END; }
+function weekPassLevel(xp){ return Math.min(WEEK_PASS_MAX_LEVEL, Math.floor((xp||0)/WEEK_PASS_XP_PER_LEVEL)); }
+function weekPassReward(level){
+  if(level===WEEK_PASS_MAX_LEVEL) return {type:'card', cardId:9770001};
+  if(level%3===0) return {type:'pack', packId: level<9?'gold':(level<13?'sevenof88':'zeitgeist')};
+  return {type:'coins', amount: 900 + level*80};
+}
+function weekPassRewardIcon(reward){
+  if(reward.type==='card') return '🏆';
+  if(reward.type==='pack') return '🎁';
+  return '🪙';
+}
+function weekPassRewardLabel(reward){
+  if(reward.type==='coins') return `${formatCoins(reward.amount)} Coins`;
+  if(reward.type==='card'){ const card = BY_ID.get(reward.cardId); return card ? `${card.n} (${card.variantLabel})` : 'Exklusive Karte'; }
+  const pack = PACKS.find(p=>p.id===reward.packId);
+  return pack ? pack.name : 'Pack';
+}
+async function claimWeekPassReward(level){
+  const wp = profile.weekPass;
+  if(wp.claimed.includes(level)) return;
+  if(weekPassLevel(wp.xp) < level) return;
+  const reward = weekPassReward(level);
+  const newWp = {...wp, claimed:[...wp.claimed, level]};
+  if(reward.type==='coins'){
+    await atomicCoinChange(reward.amount, {weekPass:newWp});
+    toast(`+${formatCoins(reward.amount)} Coins!`);
+  } else if(reward.type==='card'){
+    profile.weekPass = newWp;
+    const card = BY_ID.get(reward.cardId);
+    if(card){ collection.push({uid:genId(), cardId:card.id}); await sSet('collection', collection); }
+    await sSet('profile', profile);
+    toast(`🏆 ${card ? card.n : 'Exklusive Karte'} freigeschaltet!`);
+    if(card) showCutscene(card, ()=>{});
+  } else {
+    profile.weekPass = newWp;
+    await sSet('profile', profile);
+    const pack = PACKS.find(p=>p.id===reward.packId);
+    if(pack) showPackOpening(pack, pack.draw());
+  }
+  if(currentTab==='week') renderWeekPass(document.getElementById('view'));
+}
+function renderWeekPass(view){
+  const wp = profile.weekPass;
+  const level = weekPassLevel(wp.xp);
+  const xpIntoLevel = wp.xp - level*WEEK_PASS_XP_PER_LEVEL;
+  const xpForNext = level>=WEEK_PASS_MAX_LEVEL ? 0 : WEEK_PASS_XP_PER_LEVEL;
+  const pct = level>=WEEK_PASS_MAX_LEVEL ? 100 : Math.round(xpIntoLevel/xpForNext*100);
+  const daysLeft = Math.max(0, Math.ceil((WEEK_PASS_END-Date.now())/(24*60*60*1000)));
+  const active = weekPassActive();
+  const tiles = Array.from({length:WEEK_PASS_MAX_LEVEL}, (_,i)=>i+1).map(lv=>{
+    const unlocked = level>=lv;
+    const claimed = wp.claimed.includes(lv);
+    const reward = weekPassReward(lv);
+    const isMax = lv===WEEK_PASS_MAX_LEVEL;
+    const state = claimed ? 'claimed' : (lv===level+1 && active ? 'current' : (unlocked ? '' : 'locked'));
+    const btn = claimed
+      ? `<div class="wp-check">✓</div>`
+      : (unlocked && active ? `<button class="wp-claim" data-level="${lv}">Holen</button>` : `<div class="wp-lockicon">🔒</div>`);
+    return `<div class="wp-tile ${state} ${isMax?'wp-tile-max':''}">
+      <div class="wp-lv">${lv}</div>
+      <div class="wp-icon">${weekPassRewardIcon(reward)}</div>
+      <div class="wp-label">${weekPassRewardLabel(reward)}</div>
+      ${btn}
+    </div>`;
+  }).join('');
+  view.innerHTML = `
+    <div class="view-head"><h2>Wochen Pass</h2><p class="hint">${active ? `Noch ${daysLeft} Tag${daysLeft===1?'':'e'} · ${WEEK_PASS_XP_WIN} XP pro Sieg, ${WEEK_PASS_XP_LOSS} XP pro Niederlage (nur echte Spiele)` : 'Dieser Wochen Pass ist beendet.'}</p></div>
+    <div class="wp-header">
+      <div class="wp-badge">${level}</div>
+      <div class="chem-bar" style="max-width:320px;margin:10px auto 0;"><i style="width:${pct}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
+      <p class="hint" style="margin-top:6px;">${level>=WEEK_PASS_MAX_LEVEL ? 'Maximale Stufe erreicht' : `${xpIntoLevel} / ${xpForNext} XP bis Stufe ${level+1}`}</p>
+    </div>
+    <div class="wp-track">${tiles}</div>`;
+  view.querySelectorAll('.wp-claim').forEach(btn=>{
+    btn.addEventListener('click', ()=>claimWeekPassReward(Number(btn.dataset.level)));
+  });
+}
 function iconSwapCardUnlocked(card){ return Date.now() >= iconSwapUnlockTime(card.unlockDay); }
 const SIGNATURE_SEASON_CARDS = PLAYERS_SIGNATURE_SEASON;
 SIGNATURE_SEASON_CARDS.forEach(p=>BY_ID.set(p.id,p));
@@ -6017,6 +6150,11 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme===tier); }
+// ===== Wochen Pass exclusive card: the actual grind incentive, not another pack/coin payout - this
+// one specific card only exists as the Wochen Pass level-15 reward, nowhere else, ever.
+const WEEK_PASS_CARD_BASE = findBaseCard(257534); // C. Palmer
+const WEEK_PASS_CARD = WEEK_PASS_CARD_BASE ? boostBaseToOv(WEEK_PASS_CARD_BASE, 106, 9770001, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
+if(WEEK_PASS_CARD) BY_ID.set(WEEK_PASS_CARD.id, WEEK_PASS_CARD);
 const OG_PELE = OGICON_CARDS.find(p=>p.n==='Pel\u00e9');
 const OG_MARADONA = OGICON_CARDS.find(p=>p.n==='Diego Maradona');
 const OG_ZIDANE = OGICON_CARDS.find(p=>p.n==='Zinedine Zidane');
@@ -6069,7 +6207,7 @@ const VARIANT_LABEL_DE = {
   phenom:'Aufstrebendes Talent', setpiece:'Standard-Spezialist', derby:'Derbytag',
   tots:'Team der Saison', flash:'R\u00fcckblende', sd:'Duell', iron:'Eiserner Vorhang', wonder:'Wunderkind',
   icon:'Ikone', cent:'Zenturio', hof:'Ruhmeshalle', gal:'Gal\u00e1ctico', gg:'Goldener Handschuh',
-  wc:'WM-Moment', blk:'Blackout', bh:'Black Hole', saph:'Saphir', rub:'Rubin', dia:'Diamant',
+  wc:'WM-Moment', blk:'Blackout', bh:'Black Hole', saph:'Saphir', rub:'Rubin', dia:'Diamant', wpmvp:'Wochen-MVP',
 };
 ALL_SPECIAL.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
 EXCLUSIVE_SPECIALS.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
@@ -6164,7 +6302,7 @@ function rarityInfo(ov){
 const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8fb4d1',
   tots:'#f5d76e',flash:'#ff7a59',sd:'#ff5fa8',icon:'#c78bf5',cent:'#ffd76a',
   phenom:'#6ee7d8',setpiece:'#ffcf5c',derby:'#ff8f6b',iron:'#7d94ad',wonder:'#8ee6a3',
-  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',goat:'#ff2e63',
+  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',wpmvp:'#ffd76a',goat:'#ff2e63',
   wcchamp:'#ffd23f',goldenball:'#ffcc00',ggwm:'#4fd1c5',youngplayer:'#7ee787',
   semifinalist:'#ff9d5c',quarterfinalist:'#9fb4c7',
   derbyicon:'#ff4d4d',underdog:'#4dd0e1',
@@ -6205,7 +6343,7 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 //    than a fragile per-pack normalization that was hard to calibrate precisely.
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
 const VARIANT_SPECIALTY_MULT = {
-  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, goat:5.8,
+  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, goat:5.8,
   signature_icon:3.6, era_definer:4.1, signature_season:4.8,
   wcchamp:2, goldenball:5, ggwm:4, youngplayer:4, semifinalist:1.3, quarterfinalist:1.15,
   derbyicon:1.4, underdog:1.55, meistertrainer:1,
@@ -6777,7 +6915,7 @@ const SBC_DEFS = [
            req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`) ]},
   {id:'legenden_elf', name:'Legenden-Elf', reward:'hof', size:11, tier:'Fortgeschritten',
     desc:'Alle 11 Spieler m\u00fcssen Top-Varianten sein (Icon, Centurion, Hall of Fame, Galactico, Golden Glove, World Cup Moment, Blackout oder GOAT).',
-    reqs:[ req('Alle 11 sind Top-Varianten', c=>c.every(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','goat'].includes(x.theme)), c=>`${c.filter(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','goat'].includes(x.theme)).length} / 11`) ]},
+    reqs:[ req('Alle 11 sind Top-Varianten', c=>c.every(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','wpmvp','goat'].includes(x.theme)), c=>`${c.filter(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','wpmvp','goat'].includes(x.theme)).length} / 11`) ]},
   {id:'chef_trainer', name:'Der Chef-Trainer', reward:'blackout', size:10, tier:'Fortgeschritten',
     desc:'Erstmals gefragt: Spieler UND Trainer zusammen. 10 Spieler, Durchschnittsrating 90+, plus ein Trainer der Stufe Legend\u00e4r \u2014 beides wird verbraucht.',
     managerReq:{minTier:'Legend\u00e4r'},
@@ -8777,6 +8915,7 @@ async function init(){
     if(!profile.crest) profile.crest = {shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(profile.displayName||'?')[0].toUpperCase()};
     if(profile.iconSwapTokens===undefined) profile.iconSwapTokens = 0;
     if(!profile.iconSwapRedeemed) profile.iconSwapRedeemed = [];
+    if(!profile.weekPass || profile.weekPass.weekId!==WEEK_PASS_ID) profile.weekPass = {weekId: WEEK_PASS_ID, xp:0, claimed:[]};
   }
   if(profile.banned && !isAdmin()){
     document.getElementById('modal-root').innerHTML = `
@@ -8916,6 +9055,7 @@ function askTextModal(title, placeholder, callback, maxLen=30){
 
 // ===== card rendering =====
 const VARIANT_ICON = {
+  wpmvp:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
   saph:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   rub:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   dia:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
@@ -8971,7 +9111,7 @@ const PATTERN_FAMILY = {
   icon:'legacy', cent:'legacy',
   gg:'keeper',
   flash:'retro',
-  wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia',
+  wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia', wpmvp:'wpmvp',
   manager:'tactics',
   meistertrainer:'legacy',
   goat:'goatpattern',
@@ -9108,7 +9248,7 @@ document.addEventListener('visibilitychange', ()=>{
 });
 
 // ===== nav & routing =====
-const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen']];
+const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['week','Wochen Pass']];
 const ADMIN_USERS = new Set(['leifps','test']);
 function isAdmin(){ return clubId && ADMIN_USERS.has(clubId); }
 function renderNav(){
@@ -9128,6 +9268,7 @@ function renderView(tab){
   if(tab==='sbc') return renderSBCList(view);
   if(tab==='trade') return renderTrade(view);
   if(tab==='play') return renderPlay(view);
+  if(tab==='week') return renderWeekPass(view);
   if(tab==='admin') return isAdmin() ? renderAdminPanel(view) : renderPlay(view);
 }
 
@@ -14167,6 +14308,7 @@ const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
 async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers, friendly=false, oppUserId=null){
   const result = winnerSide==='me' ? 'WIN' : 'LOSS';
   const reward = friendly ? 0 : (result==='WIN' ? 900 : 250);
+  const spXp = (!friendly && weekPassActive()) ? (result==='WIN' ? WEEK_PASS_XP_WIN : WEEK_PASS_XP_LOSS) : 0;
   let suffix = '';
   if(wentToPK) suffix = ' (n.E.)';
   else if(wentToET) suffix = ' (n.V.)';
@@ -14209,17 +14351,20 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
       payload[result==='WIN' ? 'profile.wins' : 'profile.losses'] = fb.increment(1);
       if(oppName){ payload['profile.matchHistory'] = newHistory; payload['profile.scorerStats'] = newScorerStats; }
       if(oppUserId) payload['profile.rivalries'] = newRivalries;
+      if(spXp) payload['profile.weekPass.xp'] = fb.increment(spXp);
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
       profile.coins += reward;
       if(result==='WIN') profile.wins++; else profile.losses++;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
       if(oppUserId) profile.rivalries = newRivalries;
+      if(spXp) profile.weekPass.xp += spXp;
     }catch(e){
       console.warn('atomic match-result update failed, falling back', e);
       if(result==='WIN') profile.wins++; else profile.losses++;
       profile.coins += reward;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
       if(oppUserId) profile.rivalries = newRivalries;
+      if(spXp) profile.weekPass.xp += spXp;
       await sSet('profile', profile);
     }
   } else {
@@ -14227,6 +14372,7 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
     profile.coins += reward;
     if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
     if(oppUserId) profile.rivalries = newRivalries;
+    if(spXp) profile.weekPass.xp += spXp;
     await sSet('profile', profile);
   }
   updateCoinDisplay();
