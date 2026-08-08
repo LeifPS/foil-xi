@@ -6252,7 +6252,7 @@ async function loadNetWorthLeaderboard(){
     const row = document.createElement('div');
     row.className = 'leader-row';
     const mine = e.userId===profile.userId;
-    row.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(e.crest, 20)}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">${formatCoins((e.netWorth||0))}</span>`;
+    row.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(e.crest || fallbackCrestFor(e.name), 20)}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">${formatCoins((e.netWorth||0))}</span>`;
     box.appendChild(row);
   });
 }
@@ -10337,6 +10337,16 @@ const CLUB_LOGO = {
   'Fenerbahçe SK': 'https://assets.football-logos.cc/logos/turkey/1500x1500/fenerbahce.865697ea.png',
   'Galatasaray SK': 'https://assets.football-logos.cc/logos/turkey/1500x1500/galatasaray.a30b6ee6.png',
 };
+const CREST_PALETTE = ['#3ddc84','#4da8ff','#ffb84d','#ff5fa8','#c78bf5','#ffd76a','#ff7a59','#5cc9ff','#e8c468','#ff4d4d'];
+// a deterministic, name-derived monogram - used wherever we only have a bare name and no saved
+// crest (old leaderboard entries published before crests existed, etc.) so at least every entry
+// looks visually distinct instead of an identical generic green "?" placeholder
+function fallbackCrestFor(name){
+  const n = (name||'?').trim() || '?';
+  let hash = 0;
+  for(let i=0;i<n.length;i++) hash = (hash*31 + n.charCodeAt(i))>>>0;
+  return {shape:'shield', primary:CREST_PALETTE[hash%CREST_PALETTE.length], secondary:'#0a0d12', letter:n[0].toUpperCase()};
+}
 const CREST_SHAPES = {
   shield: 'M50 4l38 15v28c0 26-16 44-38 49C28 91 12 73 12 47V19z',
   hex: 'M50 3l40 20v54L50 97 10 77V23z',
@@ -10375,7 +10385,7 @@ function teamBlobHTML(rating, crest, nameHtml){
 }
 function openCrestEditor(){
   const c = {...profile.crest};
-  const palette = ['#3ddc84','#4da8ff','#ffb84d','#ff5fa8','#c78bf5','#ffd76a','#ff7a59','#5cc9ff','#e8c468','#ff4d4d'];
+  const palette = CREST_PALETTE;
   openModal(`
     <h2 style="margin-bottom:4px;">Vereinswappen anpassen</h2>
     <p class="hint" style="margin-top:0;margin-bottom:14px;">Dein eigenes Wappen \u2014 wird in deinem Verein angezeigt.</p>
@@ -13359,7 +13369,7 @@ async function loadLeaderboard(){
     row.style.flexWrap = 'wrap';
     const info = document.createElement('span');
     info.style.cssText = 'flex:1;cursor:pointer;display:flex;gap:8px;align-items:center;';
-    info.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(s.crest, 20)}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span>`;
+    info.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(s.crest || fallbackCrestFor(s.owner), 20)}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span>`;
     info.addEventListener('click', ()=>showSquadModal(s));
     const challengeBtn = document.createElement('button');
     challengeBtn.className = 'action-btn secondary';
@@ -13388,7 +13398,7 @@ function showSquadModal(s){
   const chemByIndex = {};
   validEntries.forEach((x,vi)=>{ chemByIndex[x.i] = chemResults[vi].chem; });
   openModal(`
-    <div style="display:flex;justify-content:center;margin-bottom:8px;">${renderCrestSVG(s.crest, 56)}</div>
+    <div style="display:flex;justify-content:center;margin-bottom:8px;">${renderCrestSVG(s.crest || fallbackCrestFor(s.owner), 56)}</div>
     <h2 style="margin-bottom:2px;text-align:center;">${s.owner || 'Unbenannter Verein'}</h2>
     <p class="hint" style="margin-top:0;margin-bottom:16px;text-align:center;">${form?form.label:(s.formation||'')} \u00b7 Team-Rating ${s.rating} OVR</p>
     ${mgr ? `<div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(mgr,'mini').outerHTML}</div>` : ''}
