@@ -281,6 +281,32 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 24px -2px #ffd76a;}
   50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 50px 3px #fff3c4;}
 }
+/* Kontrahent: bot-only, never a real collectible - a plain steel/tactical AI look on purpose, not
+   meant to look as special as anything a player can actually own. */
+/* Kontrahent: bot-only, one look per position group instead of a single flat design for the whole
+   XI - still deliberately more "tactical readout" than "real collectible", but with real character. */
+.pcard.theme-kontra_gk{--acc:#a78bfa;border:1.5px solid transparent;background:
+    radial-gradient(circle at 50% 30%, #221c3a 0%, #150f28 50%, #0a0714 100%) padding-box,
+    linear-gradient(160deg,#4a3a80,#a78bfa,#d8cdfb,#a78bfa,#4a3a80) border-box !important;}
+.pcard.theme-kontra_gk .name{color:#d8cdfb;text-shadow:0 0 6px rgba(167,139,250,.4);}
+.pcard.theme-kontra_def{--acc:#5c9db8;border:1.5px solid transparent;background:
+    radial-gradient(circle at 50% 30%, #12262c 0%, #0d1c20 50%, #071214 100%) padding-box,
+    linear-gradient(160deg,#255468,#5c9db8,#bfe3ee,#5c9db8,#255468) border-box !important;}
+.pcard.theme-kontra_def .name{color:#bfe3ee;text-shadow:0 0 6px rgba(92,157,184,.4);}
+.pcard.theme-kontra_mid{--acc:#d6a94a;border:1.5px solid transparent;background:
+    radial-gradient(circle at 50% 30%, #2c2110 0%, #20180c 50%, #120d06 100%) padding-box,
+    linear-gradient(160deg,#7a5c1f,#d6a94a,#f0d99e,#d6a94a,#7a5c1f) border-box !important;}
+.pcard.theme-kontra_mid .name{color:#f0d99e;text-shadow:0 0 6px rgba(214,169,74,.4);}
+.pcard.theme-kontra_fwd{--acc:#e14b4b;border:1.5px solid transparent;background:
+    radial-gradient(circle at 50% 30%, #301414 0%, #220e0e 50%, #130808 100%) padding-box,
+    linear-gradient(160deg,#8c2c2c,#e14b4b,#f5c2c2,#e14b4b,#8c2c2c) border-box !important;}
+.pcard.theme-kontra_fwd .name{color:#f5c2c2;text-shadow:0 0 6px rgba(225,75,75,.4);}
+.pcard.theme-kontra_gk, .pcard.theme-kontra_def, .pcard.theme-kontra_mid, .pcard.theme-kontra_fwd{
+  animation: kontraGlow 3s ease-in-out infinite;}
+@keyframes kontraGlow{
+  0%,100%{box-shadow:0 10px 24px rgba(0,0,0,.55), 0 0 14px -6px var(--acc);}
+  50%{box-shadow:0 10px 24px rgba(0,0,0,.55), 0 0 26px -3px var(--acc);}
+}
 
 .pcard .pattern-layer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.65;}
 .pcard.pattern-attack .pattern-layer{background:repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 3px, transparent 3px 15px);}
@@ -333,6 +359,10 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     repeating-conic-gradient(from 200deg at 82% 50%, rgba(255,215,106,.14) 0deg 6deg, transparent 6deg 22deg);
     animation:mvpSparkle 2.2s ease-in-out infinite;}
 @keyframes mvpSparkle{0%,100%{opacity:.75;}50%{opacity:1;}}
+.pcard.pattern-kontra .pattern-layer{background:
+    repeating-linear-gradient(0deg, rgba(143,163,184,.08) 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(90deg, rgba(143,163,184,.08) 0 1px, transparent 1px 18px);
+    opacity:.5;}
 .pcard.pattern-tactics .pattern-layer{background:
   repeating-linear-gradient(0deg, rgba(255,255,255,.055) 0 1px, transparent 1px 20px),
   repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 1px, transparent 1px 20px);}
@@ -5385,6 +5415,21 @@ const BLACKHOLE_IMG_OVERRIDE = {
 const BLACK_HOLE_STAT_KEYS = ['pac','sho','pas','dri','defn','phy'];
 function distributeStatGain(base, gain, keys){
   const out = {...base};
+  if(gain<0){
+    // symmetric reduction - same round-robin spread, just subtracting instead of adding, so a
+    // weakened card's substats still add up to something consistent with its lowered OV
+    let remaining = -gain, guard = 0;
+    while(remaining>0 && guard<200){
+      guard++;
+      let progressed = false;
+      for(const k of keys){
+        if(remaining<=0) break;
+        if(typeof out[k]==='number' && out[k]>1){ out[k]--; remaining--; progressed = true; }
+      }
+      if(!progressed) break;
+    }
+    return out;
+  }
   let remaining = gain, guard = 0;
   while(remaining>0 && guard<200){
     guard++;
@@ -6208,6 +6253,7 @@ const VARIANT_LABEL_DE = {
   tots:'Team der Saison', flash:'R\u00fcckblende', sd:'Duell', iron:'Eiserner Vorhang', wonder:'Wunderkind',
   icon:'Ikone', cent:'Zenturio', hof:'Ruhmeshalle', gal:'Gal\u00e1ctico', gg:'Goldener Handschuh',
   wc:'WM-Moment', blk:'Blackout', bh:'Black Hole', saph:'Saphir', rub:'Rubin', dia:'Diamant', wpmvp:'Wochen-MVP',
+  kontra_gk:'Kontrahent · Tor', kontra_def:'Kontrahent · Abwehr', kontra_mid:'Kontrahent · Mittelfeld', kontra_fwd:'Kontrahent · Sturm',
 };
 ALL_SPECIAL.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
 EXCLUSIVE_SPECIALS.forEach(p=>{ p.variantLabel = VARIANT_LABEL_DE[p.theme] || p.variantLabel; });
@@ -6302,7 +6348,8 @@ function rarityInfo(ov){
 const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8fb4d1',
   tots:'#f5d76e',flash:'#ff7a59',sd:'#ff5fa8',icon:'#c78bf5',cent:'#ffd76a',
   phenom:'#6ee7d8',setpiece:'#ffcf5c',derby:'#ff8f6b',iron:'#7d94ad',wonder:'#8ee6a3',
-  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',wpmvp:'#ffd76a',goat:'#ff2e63',
+  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',wpmvp:'#ffd76a',
+  kontra_gk:'#a78bfa',kontra_def:'#5c9db8',kontra_mid:'#d6a94a',kontra_fwd:'#e14b4b',goat:'#ff2e63',
   wcchamp:'#ffd23f',goldenball:'#ffcc00',ggwm:'#4fd1c5',youngplayer:'#7ee787',
   semifinalist:'#ff9d5c',quarterfinalist:'#9fb4c7',
   derbyicon:'#ff4d4d',underdog:'#4dd0e1',
@@ -6343,7 +6390,8 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 //    than a fragile per-pack normalization that was hard to calibrate precisely.
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
 const VARIANT_SPECIALTY_MULT = {
-  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, goat:5.8,
+  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20,
+  kontra_gk:1.5, kontra_def:1.5, kontra_mid:1.5, kontra_fwd:1.5, goat:5.8,
   signature_icon:3.6, era_definer:4.1, signature_season:4.8,
   wcchamp:2, goldenball:5, ggwm:4, youngplayer:4, semifinalist:1.3, quarterfinalist:1.15,
   derbyicon:1.4, underdog:1.55, meistertrainer:1,
@@ -6449,6 +6497,106 @@ function computeMyNetWorth(){
   collection.forEach(c=>{ const card = BY_ID.get(c.cardId); if(card) total += computeRAP(card); });
   managerCollection.forEach(m=>{ const mgr = MGR_BY_ID.get(m.mgrId); if(mgr) total += computeRAP(mgr); });
   return Math.round(total);
+}
+// ===== playtime-fairness: players who can simply play far more end up with a permanently bigger
+// coin/card lead. Two levers, both applied to match rewards (coins + Wochen Pass XP): a soft daily
+// cap that flattens pure volume, and a catch-up bonus that actively narrows the gap to the current
+// net-worth leader - so someone who plays a lot less can still close in per match played.
+function dailyRewardMultiplier(countSoFar){
+  if(countSoFar<8) return 1;
+  if(countSoFar<15) return 0.4;
+  return 0.15;
+}
+async function catchUpBonusPct(){
+  try{
+    await fbReady;
+    if(!fb) return 0;
+    const raw = await cachedRead('networth-top1', 45000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(1)));
+      return snap.docs.map(d=>d.data());
+    });
+    if(!raw.length) return 0;
+    const topNetWorth = raw[0].netWorth||0;
+    if(topNetWorth<=0) return 0;
+    const myNetWorth = computeMyNetWorth();
+    const ratio = Math.min(1, myNetWorth/topNetWorth);
+    return Math.round((1-ratio)*75); // 0% at the top, up to +75% the further behind you are
+  }catch(e){ return 0; }
+}
+// ===== Great Reset: admin flips one global switch, every client applies it to its own save the
+// next time it loads (never a cross-user write, so it works under normal per-user security rules).
+// Progress is never just erased - it converts into a permanent Prestige rank (status only, no
+// gameplay bonus, so the next run stays just as fair) before the wipe.
+async function checkGreatReset(){
+  await fbReady;
+  if(!fb) return;
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'config','resetEvent'));
+    if(!snap.exists()) return;
+    const data = snap.data();
+    if(!data.resetId || data.resetId===profile.lastResetId) return;
+    showGreatResetModal(data.resetId);
+  }catch(e){ console.warn('great reset check failed', e); }
+}
+function showGreatResetModal(resetId){
+  openModal(`
+    <h2 style="margin-bottom:4px;text-align:center;">🏆 Great Reset</h2>
+    <p class="hint" style="margin-top:0;text-align:center;">Ein Administrator hat einen gemeinsamen Neustart ausgelöst. Dein bisheriger Fortschritt wird als dauerhafter Prestige-Rang gewürdigt — danach starten alle wieder zusammen bei null.</p>
+    <div style="text-align:center;margin:18px 0;">
+      <div style="font-family:'Anton';font-size:42px;color:var(--gold);">★ Prestige ${(profile.prestige||0)+1}</div>
+      <p class="hint" style="margin-top:4px;">Bleibt dir für immer, egal wie oft zurückgesetzt wird.</p>
+    </div>
+    <button class="action-btn" id="great-reset-confirm" style="width:100%;">Neu starten</button>
+  `);
+  document.getElementById('great-reset-confirm').addEventListener('click', ()=>applyGreatReset(resetId));
+}
+async function applyGreatReset(resetId){
+  const btn = document.getElementById('great-reset-confirm');
+  if(btn){ btn.disabled = true; btn.textContent = 'Wird zurückgesetzt…'; }
+  const starterPool = poolByRange(70,78,false);
+  collection = [];
+  for(let i=0;i<15;i++) collection.push({uid:genId(), cardId:pick(starterPool).id});
+  managerCollection = [];
+  squad = {formation:'433', slots:{}, managerUid:null, tactics:{...DEFAULT_TACTICS}};
+  squadPresets = [];
+  profile.coins = 30000;
+  profile.wins = 0; profile.losses = 0;
+  profile.matchHistory = []; profile.scorerStats = {}; profile.rivalries = {};
+  profile.winStreak = 0; profile.oreiStreak = 0;
+  profile.oreiFirstWinClaimed = false; profile.oreiSecondWinClaimed = false;
+  profile.tournament = null;
+  profile.weekPass = {weekId: WEEK_PASS_ID, xp:0, claimed:[]};
+  profile.dailyRewardTracker = {date:'', count:0};
+  profile.prestige = (profile.prestige||0)+1;
+  profile.lastResetId = resetId;
+  await sSet('collection', collection);
+  await sSet('managerCollection', managerCollection);
+  await sSet('squad', squad);
+  await sSet('squadPresets', squadPresets);
+  await sSet('profile', profile);
+  closeModal();
+  toast(`★ Prestige ${profile.prestige} erreicht — neu gestartet!`);
+  renderNav();
+  renderView(currentTab||'club');
+  updateCoinDisplay();
+}
+async function triggerGreatReset(){
+  openModal(`
+    <h2 style="margin-bottom:10px;color:#ff5f5f;">⚠ Great Reset auslösen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Jeder Spieler bekommt beim nächsten Öffnen des Spiels einen dauerhaften Prestige-Rang und startet danach komplett neu (Coins, Karten, Kader, Statistiken). Das betrifft ALLE Spieler, nicht nur dich.</p>
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="great-reset-cancel" style="flex:1;">Abbrechen</button>
+      <button class="action-btn" id="great-reset-trigger" style="flex:1;background:#ff5f5f;">Auslösen</button>
+    </div>`);
+  document.getElementById('great-reset-cancel').addEventListener('click', closeModal);
+  document.getElementById('great-reset-trigger').addEventListener('click', async ()=>{
+    await fbReady;
+    if(!fb){ toast('Benötigt das Online-Backend.'); closeModal(); return; }
+    const resetId = 'reset-'+Date.now();
+    await fb.setDoc(fb.doc(fb.db,'config','resetEvent'), {resetId, triggeredBy:clubId, triggeredAt:Date.now()});
+    closeModal();
+    toast('Great Reset ausgelöst — alle Spieler starten beim nächsten Login neu.');
+  });
 }
 async function updateMyNetWorthEntry(){
   await fbReady;
@@ -8889,7 +9037,7 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, limitedEventStartDate:localDateStr(new Date()), limitedEventClaimedDays:0, limitedEventLastClaimDate:null, pendingLimitedEventPacks:[], iconSwapTokens:0, iconSwapRedeemed:[]};
+    profile = {coins:30000, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, limitedEventStartDate:localDateStr(new Date()), limitedEventClaimedDays:0, limitedEventLastClaimDate:null, pendingLimitedEventPacks:[], iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -8916,6 +9064,9 @@ async function init(){
     if(profile.iconSwapTokens===undefined) profile.iconSwapTokens = 0;
     if(!profile.iconSwapRedeemed) profile.iconSwapRedeemed = [];
     if(!profile.weekPass || profile.weekPass.weekId!==WEEK_PASS_ID) profile.weekPass = {weekId: WEEK_PASS_ID, xp:0, claimed:[]};
+    if(!profile.dailyRewardTracker) profile.dailyRewardTracker = {date:'', count:0};
+    if(profile.prestige===undefined) profile.prestige = 0;
+    if(profile.lastResetId===undefined) profile.lastResetId = null;
   }
   if(profile.banned && !isAdmin()){
     document.getElementById('modal-root').innerHTML = `
@@ -8960,6 +9111,8 @@ async function init(){
       <p style="background:var(--panel2);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:16px;">${warningMsg}</p>
       <button class="action-btn" id="warning-ok" style="width:100%;">Verstanden</button>`);
     document.getElementById('warning-ok').addEventListener('click', closeModal);
+  } else {
+    checkGreatReset();
   }
   const switchBtn = document.getElementById('switch-club-btn');
   if(switchBtn) switchBtn.onclick = switchClub;
@@ -9112,6 +9265,7 @@ const PATTERN_FAMILY = {
   gg:'keeper',
   flash:'retro',
   wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia', wpmvp:'wpmvp',
+  kontra_gk:'keeper', kontra_def:'defense', kontra_mid:'creative', kontra_fwd:'attack',
   manager:'tactics',
   meistertrainer:'legacy',
   goat:'goatpattern',
@@ -10857,6 +11011,11 @@ async function renderAdminPanel(view){
         <button class="action-btn secondary" id="admin-add-card" style="width:auto;">Karte direkt hinzuf\u00fcgen</button>
       </div>
     </div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Great Reset</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Setzt ALLE Spieler zurück (Coins, Karten, Kader, Statistiken) — jeder bekommt vorher einen dauerhaften Prestige-Rang, der über Resets hinweg erhalten bleibt.</p>
+      <button class="action-btn secondary" id="admin-great-reset" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Great Reset auslösen</button>
+    </div>
     <div class="vs-panel" style="border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Nutzer verwalten</h3>
       <div style="display:flex;gap:8px;margin-bottom:14px;">
@@ -10865,6 +11024,7 @@ async function renderAdminPanel(view){
       </div>
       <div id="admin-user-content"></div>
     </div>`;
+  document.getElementById('admin-great-reset').addEventListener('click', triggerGreatReset);
   document.getElementById('admin-add-coins').addEventListener('click', async ()=>{
     await atomicCoinChange(100000);
     toast('100.000 Coins hinzugef\u00fcgt.');
@@ -11090,7 +11250,7 @@ function renderClub(view){
     <div class="view-head" style="display:flex;align-items:center;gap:16px;">
       <div id="club-crest-display" style="cursor:pointer;flex-shrink:0;"></div>
       <div style="flex:1;">
-        <h2>Mein Verein</h2>
+        <h2>Mein Verein${profile.prestige ? ` <span style="color:var(--gold);font-size:14px;vertical-align:middle;">\u2605 Prestige ${profile.prestige}</span>` : ''}</h2>
         <p>${collection.length} Spieler im Besitz. RAP (Recent Average Price) zeigt den gesch\u00e4tzten Marktwert jeder Karte \u2014 verkaufen kannst du nur noch \u00fcber den Transfermarkt.</p>
         <p class="hint" style="margin:6px 0 0;">Anzeigename beim Online-Spielen: <b style="color:var(--chalk);">${profile.displayName||profile.userId}</b>
           <button class="action-btn secondary" id="rename-club" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button></p>
@@ -14326,6 +14486,17 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
 
   await fbReady;
 
+  // playtime-fairness: shrink today's Nth+ match reward, and boost it back up if this player is
+  // well behind the current net-worth leader (see dailyRewardMultiplier/catchUpBonusPct above)
+  const today = localDateStr(new Date());
+  const priorTracker = (profile.dailyRewardTracker && profile.dailyRewardTracker.date===today) ? profile.dailyRewardTracker : {date:today, count:0};
+  const dailyMult = dailyRewardMultiplier(priorTracker.count);
+  const catchUpPct = await catchUpBonusPct();
+  const totalMult = dailyMult * (1+catchUpPct/100);
+  const finalReward = Math.round(reward*totalMult);
+  const finalSpXp = Math.round(spXp*totalMult);
+  const newTracker = {date:today, count:priorTracker.count+1};
+
   // compute the new history/scorer/rivalry state locally first
   let newHistory = profile.matchHistory ? profile.matchHistory.slice() : [];
   let newScorerStats = profile.scorerStats ? {...profile.scorerStats} : {};
@@ -14347,32 +14518,35 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   // write everything in ONE network round-trip so an early tab-close can't lose part of it
   if(fb && clubId && fb.updateDoc && fb.increment){
     try{
-      const payload = { 'profile.coins': fb.increment(reward) };
+      const payload = { 'profile.coins': fb.increment(finalReward), 'profile.dailyRewardTracker': newTracker };
       payload[result==='WIN' ? 'profile.wins' : 'profile.losses'] = fb.increment(1);
       if(oppName){ payload['profile.matchHistory'] = newHistory; payload['profile.scorerStats'] = newScorerStats; }
       if(oppUserId) payload['profile.rivalries'] = newRivalries;
-      if(spXp) payload['profile.weekPass.xp'] = fb.increment(spXp);
+      if(finalSpXp) payload['profile.weekPass.xp'] = fb.increment(finalSpXp);
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
-      profile.coins += reward;
+      profile.coins += finalReward;
+      profile.dailyRewardTracker = newTracker;
       if(result==='WIN') profile.wins++; else profile.losses++;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
       if(oppUserId) profile.rivalries = newRivalries;
-      if(spXp) profile.weekPass.xp += spXp;
+      if(finalSpXp) profile.weekPass.xp += finalSpXp;
     }catch(e){
       console.warn('atomic match-result update failed, falling back', e);
       if(result==='WIN') profile.wins++; else profile.losses++;
-      profile.coins += reward;
+      profile.coins += finalReward;
+      profile.dailyRewardTracker = newTracker;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
       if(oppUserId) profile.rivalries = newRivalries;
-      if(spXp) profile.weekPass.xp += spXp;
+      if(finalSpXp) profile.weekPass.xp += finalSpXp;
       await sSet('profile', profile);
     }
   } else {
     if(result==='WIN') profile.wins++; else profile.losses++;
-    profile.coins += reward;
+    profile.coins += finalReward;
+    profile.dailyRewardTracker = newTracker;
     if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
     if(oppUserId) profile.rivalries = newRivalries;
-    if(spXp) profile.weekPass.xp += spXp;
+    if(finalSpXp) profile.weekPass.xp += finalSpXp;
     await sSet('profile', profile);
   }
   updateCoinDisplay();
@@ -14384,8 +14558,10 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   if(winrateEl) winrateEl.textContent = `${(profile.wins+profile.losses)?Math.round(profile.wins/(profile.wins+profile.losses)*100):0}%`;
   const area = document.getElementById('result-area');
   if(area){
+    const rewardNote = catchUpPct>0 ? `<div class="hint" style="margin-top:2px;color:var(--turf-bright);">+${catchUpPct}% Aufhol-Bonus</div>`
+      : (dailyMult<1 ? `<div class="hint" style="margin-top:2px;">Tageslimit erreicht \u2014 reduzierte Belohnung</div>` : '');
     area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':'var(--danger)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}${suffix}</div>
-      <div class="mono" style="color:var(--gold);margin-top:6px;">+${reward} Coins</div>`;
+      <div class="mono" style="color:var(--gold);margin-top:6px;">+${finalReward} Coins</div>${rewardNote}`;
   }
   if(autorollEnabled){
     if(area){
@@ -14476,6 +14652,37 @@ function buildClubIndex(){
   CLUB_INDEX = clubs;
   return clubs;
 }
+// ===== Kontrahent: a bot-only variant, never dropped by any pack, never ownable by a player - it
+// exists purely so a bot representing a real club whose actual roster tops out well below the
+// target rating can still field something believable, instead of being permanently capped by
+// whatever real specials happen to exist for that club. Generated lazily per club (cached) the
+// first time that club is chosen as an opponent, at three boost tiers so the closest-to-target
+// selection in buildForCardTarget can reach for exactly as much boost as it actually needs.
+const KONTRAHENT_TIERS = [6, 14, 24];
+const KONTRAHENT_CACHE = new Map();
+// one visual identity per position group, not one theme for the whole bot XI
+const KONTRAHENT_THEME_BY_GROUP = {GK:'kontra_gk', DEF:'kontra_def', MID:'kontra_mid', FWD:'kontra_fwd'};
+const KONTRAHENT_LABEL_BY_GROUP = {GK:'Kontrahent · Tor', DEF:'Kontrahent · Abwehr', MID:'Kontrahent · Mittelfeld', FWD:'Kontrahent · Sturm'};
+function getKontrahentRoster(club){
+  if(KONTRAHENT_CACHE.has(club)) return KONTRAHENT_CACHE.get(club);
+  const clubBase = ALL_BASE.filter(c=>c.club===club);
+  const boosted = [];
+  clubBase.forEach(base=>{
+    const group = posGroup2(mainPos(base.pos));
+    const theme = KONTRAHENT_THEME_BY_GROUP[group] || 'kontra_mid';
+    const label = KONTRAHENT_LABEL_BY_GROUP[group] || 'Kontrahent';
+    KONTRAHENT_TIERS.forEach((delta,ti)=>{
+      const targetOv = Math.min(115, base.ov+delta);
+      if(targetOv<=base.ov) return;
+      const withStats = distributeStatGain(base, targetOv-base.ov, BLACK_HOLE_STAT_KEYS);
+      boosted.push({...withStats, id: 20000000+base.id*10+ti, ov:targetOv, pot:targetOv,
+        variant:'kontrahent', variantLabel:label, theme, baseId:base.id});
+    });
+  });
+  boosted.forEach(c=>BY_ID.set(c.id, c));
+  KONTRAHENT_CACHE.set(club, boosted);
+  return boosted;
+}
 function pickRealisticOpponent(targetRating){
   const clubs = buildClubIndex();
   if(!clubs.length) return {owner:'CPU XI', rating:targetRating, players:[], isBot:true};
@@ -14494,11 +14701,15 @@ function pickRealisticOpponent(targetRating){
   // whose real players happen to have elite cards can field them, same as a real opponent could.
   const clubCards = [];
   BY_ID.forEach(c=>{ if(!c.isManager && c.club===chosen.club) clubCards.push(c); });
+  clubCards.push(...getKontrahentRoster(chosen.club));
   const slots = FORMATIONS['433'].slots;
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   clubCards.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
   // real clubs can have a real manager too - same boost mechanics as a player's own assigned manager
-  const mgrPool = MANAGERS.filter(m=>m.club===chosen.club);
+  // a real club's actual roster floor sits around 70-71 OV in this dataset - well above what a
+  // genuinely weak target rating asks for. Layering a manager boost on top there only makes the
+  // unavoidable overshoot worse, and a team that weak wouldn't have a boost-worthy manager anyway.
+  const mgrPool = targetRating>=80 ? MANAGERS.filter(m=>m.club===chosen.club) : [];
   const mgr = mgrPool.length ? pick(mgrPool) : null;
   // per slot, pick whichever eligible card's raw OV lands closest to `cardTarget`, then apply the
   // same manager/position/chemistry bonuses a real squad gets, exactly like getMySquadPlayers()/
@@ -14540,11 +14751,44 @@ function pickRealisticOpponent(targetRating){
     return {xi, chemPlayers, rating};
   }
   // manager/position/chemistry bonuses are all additive on top of raw card OV, so aiming the card
-  // search straight at targetRating systematically overshoots. Run it once, measure the overshoot,
-  // then redo the search aimed lower by exactly that amount - lands much closer to the real target.
-  const draft = buildForCardTarget(targetRating);
-  const final = buildForCardTarget(targetRating - (draft.rating-targetRating));
-  const {xi, chemPlayers, rating} = final;
+  // search straight at targetRating systematically overshoots - and a single correction pass isn't
+  // enough at low ratings, where the candidate pool is thin/skewed (few weak players exist even for
+  // weak clubs), so re-aiming once still lands high. Iterate until it actually converges instead.
+  let cardTarget = targetRating;
+  let attempt = buildForCardTarget(cardTarget);
+  for(let iter=0; iter<4; iter++){
+    const diff = attempt.rating - targetRating;
+    if(Math.abs(diff)<1) break;
+    cardTarget -= diff;
+    attempt = buildForCardTarget(cardTarget);
+  }
+  // real club rosters have a hard floor around 70-71 OV in this dataset - below that, no amount of
+  // re-aiming finds a weaker real player to pick, so a low enough target still lands high. When that
+  // happens, synthetically weaken the whole XI by the leftover gap - the same distributeStatGain
+  // mechanism used to boost cards elsewhere in this file, just run in reverse.
+  if(attempt.rating - targetRating > 3){
+    const weakenBy = attempt.rating - targetRating;
+    const weakenedBase = attempt.xi.map(c=>{
+      const newOv = Math.max(40, c.ov - weakenBy);
+      // give it its own id (offset, same scheme as Kontrahent) so BY_ID resolves to this weakened
+      // version specifically - reusing the original card's id would make the pre-match cutscene show
+      // the unweakened card while the match itself simulates with the weaker stats
+      const weakened = {...distributeStatGain(c, newOv-c.ov, BLACK_HOLE_STAT_KEYS), id: 30000000+c.id, ov:newOv, pot:newOv};
+      BY_ID.set(weakened.id, weakened);
+      return weakened;
+    });
+    const weakenedBoosted = weakenedBase.map((c,i)=>{
+      let ov = c.ov;
+      if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
+      const info = positionEligibility(c, slots[i].label);
+      if(info) ov += info.bonus;
+      return {ov: Math.round(ov), club:c.club, nat:c.nat, lg:c.lg, variant:c.variant};
+    });
+    const weakenedChem = computeChemistry(weakenedBoosted, mgr?mgr.nat:null);
+    const weakenedRating = Math.round(weakenedChem.reduce((s,p)=>s+p.chemOv,0)/weakenedChem.length);
+    attempt = {xi: weakenedBase, chemPlayers: weakenedChem, rating: weakenedRating};
+  }
+  const {xi, chemPlayers, rating} = attempt;
   const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img}));
   const cardRefs = xi.map((p,i)=>({id:p.id, pos:slots[i].label}));
   return {owner:chosen.club, rating, players, cardRefs, formation:'433', isBot:true, managerName: mgr?mgr.n:null};
