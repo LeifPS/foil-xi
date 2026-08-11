@@ -9089,17 +9089,13 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, limitedEventStartDate:localDateStr(new Date()), limitedEventClaimedDays:0, limitedEventLastClaimDate:null, pendingLimitedEventPacks:[], iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null};
+    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
     if(!profile.completedSBCs) profile.completedSBCs = [];
     if(profile.dailyStreak===undefined) profile.dailyStreak = 0;
     if(profile.lastClaimDate===undefined) profile.lastClaimDate = null;
-    if(profile.limitedEventStartDate===undefined) profile.limitedEventStartDate = localDateStr(new Date());
-    if(profile.limitedEventClaimedDays===undefined) profile.limitedEventClaimedDays = 0;
-    if(profile.limitedEventLastClaimDate===undefined) profile.limitedEventLastClaimDate = null;
-    if(!profile.pendingLimitedEventPacks) profile.pendingLimitedEventPacks = [];
     if(!profile.friends) profile.friends = [];
     if(!profile.matchHistory) profile.matchHistory = [];
     if(!profile.scorerStats) profile.scorerStats = {};
@@ -9539,104 +9535,6 @@ function renderDailyBanner(){
       <button class="action-btn" id="daily-claim" ${canClaim?'':'disabled'} style="${canClaim?'':'opacity:.45;'}">${canClaim?`Tag ${day} abholen`:'Schon abgeholt \u2014 komm morgen wieder'}</button>
     </div>`;
 }
-function getLimitedEventPremiumPackPool(){
-  return PACKS.filter(pack => pack.tier === 'premium' && !pack.hidden && pack.id !== 'wmwinners');
-}
-function getLimitedEventDeadline(){
-  const d = new Date();
-  d.setHours(0,0,0,0);
-  const day = d.getDay();
-  let daysUntilTuesday = (2 - day + 7) % 7;
-  if(day === 2){
-    const now = new Date();
-    if(now.getHours() > 0 || now.getMinutes() > 0 || now.getSeconds() > 0 || now.getMilliseconds() > 0){
-      daysUntilTuesday = 7;
-    } else {
-      daysUntilTuesday = 0;
-    }
-  }
-  const deadline = new Date(d);
-  deadline.setDate(deadline.getDate() + daysUntilTuesday);
-  deadline.setHours(0,0,0,0);
-  return deadline;
-}
-function formatLimitedEventCountdown(deadline){
-  const diff = deadline.getTime() - Date.now();
-  if(diff <= 0) return 'abgelaufen';
-  const totalHours = Math.floor(diff / 3600000);
-  const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
-  if(days > 0) return `${days} Tag${days===1?'':'e'}${hours>0 ? ` • ${hours} Std.` : ''}`;
-  return `${hours} Std.`;
-}
-function computeLimitedEventState(){
-  if(!profile){ return {canClaim:false, daysToClaim:0, claimedDays:0, todayStr:localDateStr(new Date()), progressText:'0 / 7 Tage', countdownText:'abgelaufen'}; }
-  const today = new Date();
-  const todayStr = localDateStr(today);
-  const claimedDays = Math.max(0, Math.min(7, profile.limitedEventClaimedDays || 0));
-  const startDate = profile.limitedEventStartDate ? new Date(`${profile.limitedEventStartDate}T00:00:00`) : new Date();
-  const deadline = getLimitedEventDeadline();
-  const countdownText = formatLimitedEventCountdown(deadline);
-  const elapsedDays = Math.max(0, Math.min(7, Math.floor((today - startDate)/86400000) + 1));
-  const pendingDays = Math.max(0, Math.min(3, elapsedDays - claimedDays));
-  const canClaim = claimedDays < 7 && pendingDays > 0 && deadline.getTime() > today.getTime();
-  return {canClaim, daysToClaim: pendingDays, claimedDays, todayStr, progressText:`${claimedDays} / 7 Tage`, countdownText};
-}
-function renderLimitedEventBanner(){
-  const state = computeLimitedEventState();
-  const dotMarkup = Array.from({length:7}, (_,i)=>{
-    const done = i < state.claimedDays;
-    const active = i === Math.min(6, state.claimedDays) && state.canClaim;
-    return `<div class="daily-dot ${done?'done':''} ${active?'active':''}">${i+1}</div>`;
-  }).join('');
-  const actionLabel = state.canClaim ? `Jetzt abholen (${state.daysToClaim} Tag${state.daysToClaim===1?'':'e'})` : (state.claimedDays >= 7 ? 'Event abgeschlossen' : 'Nichts offen');
-  return `
-    <div class="daily-banner" style="background:linear-gradient(155deg,#21162e,#120f1a 70%);border-color:#c78bf5;margin-bottom:16px;">
-      <div class="daily-head"><h3>Limited Event • 7 Tage</h3><span class="mono" style="color:var(--muted);">${state.progressText}</span></div>
-      <div class="hint" style="margin-bottom:10px;line-height:1.5;">Jeden Tag gibt es 1 Claim. Wenn du aussetzt, kannst du die letzten Tage später nachholen — maximal 3 Tage pro Claim.</div>
-      <div class="hint" style="margin-bottom:10px;color:var(--gold);">Läuft bis Dienstag 00:00 • noch ${state.countdownText}</div>
-      <div class="daily-dots">${dotMarkup}</div>
-      <button class="action-btn" id="limited-event-claim" ${state.canClaim?'':'disabled'} style="${state.canClaim?'':'opacity:.45;'}">${actionLabel}</button>
-    </div>`;
-}
-async function claimLimitedEventReward(){
-  const state = computeLimitedEventState();
-  if(!state.canClaim){
-    toast(state.claimedDays >= 7 ? 'Das Limited Event ist bereits abgeschlossen.' : 'Noch keine neue Event-Belohnung verfügbar.');
-    return;
-  }
-  const remainingSlots = 7 - (profile.limitedEventClaimedDays || 0);
-  const daysToClaim = Math.min(3, remainingSlots, state.daysToClaim);
-  const packPool = getLimitedEventPremiumPackPool();
-  const packIds = Array.from({length: daysToClaim}, ()=>pick(packPool).id);
-  const pending = [...(profile.pendingLimitedEventPacks || []), ...packIds];
-  await atomicCoinChange(daysToClaim * 20000, {
-    limitedEventClaimedDays: Math.min(7, (profile.limitedEventClaimedDays || 0) + daysToClaim),
-    pendingLimitedEventPacks: pending
-  });
-  playSfx('coin');
-  renderStore(document.getElementById('view'));
-  toast(`Limited Event: +${formatCoins((daysToClaim * 20000))} Coins und ${daysToClaim} Premium Pack${daysToClaim===1?'':'s'} erhalten.`);
-  openPendingLimitedEventPacks();
-}
-function openPendingLimitedEventPacks(){
-  const pending = profile.pendingLimitedEventPacks || [];
-  if(!pending.length) return;
-  const nextPackId = pending.shift();
-  const pack = PACKS.find(p => p.id === nextPackId);
-  profile.pendingLimitedEventPacks = pending;
-  void sSet('profile', profile);
-  if(!pack) return;
-  const drawn = pack.draw();
-  showPackOpening(pack, drawn);
-  const btn = document.getElementById('modal-close-btn');
-  if(btn){
-    btn.addEventListener('click', ()=>{
-      closeModal();
-      if((profile.pendingLimitedEventPacks || []).length) openPendingLimitedEventPacks();
-    }, {once:true});
-  }
-}
 // ===== pack odds (Monte Carlo simulation using the real draw() logic) =====
 const TIER_ORDER_ODDS = ['gold','goldrare','elite','icon','ultimate'];
 const TIER_LABEL_ODDS = {gold:'Gold (70\u201379)', goldrare:'Gold Rare (80\u201384)', elite:'Elite (85\u201389)', icon:'Icon (90\u201394)', ultimate:'Ultimate (95+)'};
@@ -9817,7 +9715,6 @@ function renderStore(view){
   if(storeCountdownTimer){ clearInterval(storeCountdownTimer); storeCountdownTimer = null; }
   view.innerHTML = `
     <div class="view-head"><h2>Kartenladen</h2><p>\u00d6ffne Packs, um Spieler zu deinem Verein hinzuzuf\u00fcgen. Die angegebenen Werte sind garantierte Mindestwerte \u2014 jedes Pack kann auch mehr liefern.</p></div>
-    ${renderLimitedEventBanner()}
     ${renderDailyBanner()}
     <div class="toolbar" style="margin-bottom:18px;">
       <input id="redeem-input" placeholder="Code einl\u00f6sen..." style="max-width:220px;">
@@ -9826,8 +9723,6 @@ function renderStore(view){
     <div id="pack-sections"></div>`;
   const claimBtn = document.getElementById('daily-claim');
   if(claimBtn && !claimBtn.disabled) claimBtn.addEventListener('click', (e)=>{ e.target.disabled=true; claimDailyReward(); });
-  const limitedEventBtn = document.getElementById('limited-event-claim');
-  if(limitedEventBtn && !limitedEventBtn.disabled) limitedEventBtn.addEventListener('click', (e)=>{ e.target.disabled=true; claimLimitedEventReward(); });
   const sectionsEl = document.getElementById('pack-sections');
   const TIER_LABEL = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
   const TIER_ORDER = ['', 'premium', 'ultimate'];
