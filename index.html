@@ -6105,9 +6105,14 @@ function iconSwapEventActive(){ return Date.now() < ICON_SWAP_EVENT_END; }
 function iconSwapUnlockTime(unlockDay){ return ICON_SWAP_EVENT_START + (unlockDay||0)*24*60*60*1000; }
 // ===== Wochen Pass: 7-day XP track from real matches, single reward line (no paid tier) - just an
 // incentive to grind, capped off by one card that only exists as this reward (see WEEK_PASS_CARD).
-// WEEK_PASS_ID changes when a new week starts (bump the date below), resetting everyone's progress
-// via the boot() default-init check.
-const WEEK_PASS_START = new Date('2026-08-08T00:00:00').getTime();
+// WEEK_PASS_ID changes whenever a new week starts, resetting everyone's progress via the boot()
+// default-init check. The start is always computed as "the most recent Monday 00:00" rather than a
+// hardcoded date, so the pass reliably resets every Monday with no manual date bump required.
+function mostRecentMonday(d){
+  const diffToMonday = (d.getDay()+6)%7; // Mon->0, Tue->1, ..., Sun->6
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()-diffToMonday, 0,0,0,0).getTime();
+}
+const WEEK_PASS_START = mostRecentMonday(new Date());
 const WEEK_PASS_END = WEEK_PASS_START + 7*24*60*60*1000;
 const WEEK_PASS_ID = 'wp-'+WEEK_PASS_START;
 const WEEK_PASS_MAX_LEVEL = 15;
