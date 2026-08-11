@@ -14684,6 +14684,7 @@ const KONTRAHENT_TIERS = [6, 14, 24];
 const KONTRAHENT_CACHE = new Map();
 // one visual identity per position group, not one theme for the whole bot XI
 const KONTRAHENT_THEME_BY_GROUP = {GK:'kontra_gk', DEF:'kontra_def', MID:'kontra_mid', FWD:'kontra_fwd'};
+const KONTRAHENT_GROUP_BY_THEME = {kontra_gk:'GK', kontra_def:'DEF', kontra_mid:'MID', kontra_fwd:'FWD'};
 const KONTRAHENT_LABEL_BY_GROUP = {GK:'Kontrahent · Tor', DEF:'Kontrahent · Abwehr', MID:'Kontrahent · Mittelfeld', FWD:'Kontrahent · Sturm'};
 function getKontrahentRoster(club){
   if(KONTRAHENT_CACHE.has(club)) return KONTRAHENT_CACHE.get(club);
@@ -14738,6 +14739,9 @@ function pickRealisticOpponent(targetRating){
   // squadRating() do for the player's own XI
   function buildForCardTarget(cardTarget){
     const used = new Set();
+    // bots can only ever field one Kontrahent (bot-only) card per position group (Tor/Abwehr/
+    // Mittelfeld/Sturm) - otherwise a whole back line of boosted Kontrahent cards could stack up
+    const usedKontrahentGroups = new Set();
     const xi = slots.map(slot=>{
       // small independent chance, at high enough ratings, for a bot to field one of the rarest cards
       // in the game regardless of club - keeps e.g. Kronjuwelen cards reachable even when the real
@@ -14754,10 +14758,13 @@ function pickRealisticOpponent(targetRating){
       const group = posGroup2(slot.label);
       let candidates = (byGroup[group].length ? byGroup[group] : clubCards).filter(c=>!used.has(c.id) && positionEligibility(c, slot.label));
       if(!candidates.length) candidates = clubCards.filter(c=>!used.has(c.id));
+      const nonRepeatKontrahent = candidates.filter(c=>!(c.variant==='kontrahent' && usedKontrahentGroups.has(KONTRAHENT_GROUP_BY_THEME[c.theme])));
+      if(nonRepeatKontrahent.length) candidates = nonRepeatKontrahent;
       if(!candidates.length) return null;
       candidates = candidates.slice().sort((a,b)=>Math.abs(a.ov-cardTarget)-Math.abs(b.ov-cardTarget));
       const picked = candidates[0];
       used.add(picked.id);
+      if(picked.variant==='kontrahent') usedKontrahentGroups.add(KONTRAHENT_GROUP_BY_THEME[picked.theme]);
       return picked;
     }).filter(Boolean);
     while(xi.length<11 && clubCards.length) xi.push(clubCards[xi.length % clubCards.length]);
