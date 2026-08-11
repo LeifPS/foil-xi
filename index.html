@@ -307,6 +307,39 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 10px 24px rgba(0,0,0,.55), 0 0 14px -6px var(--acc);}
   50%{box-shadow:0 10px 24px rgba(0,0,0,.55), 0 0 26px -3px var(--acc);}
 }
+/* Deutsche Legenden: three tiers, each recognizable at a glance by silhouette alone. All three share
+   the black/red/gold flag palette but in a distinct, bold shape - a sharp gold ring for Ikone, a
+   solid tricolor flag band + a row of stars for WM-Legende, a thick solid flag edge for National. */
+.pcard.theme-legikone{--acc:#ffce00;border:2px solid transparent;
+  background:
+    radial-gradient(circle at 50% 29%, #3a2f08 0%, #17140a 42%, #050403 72%) padding-box,
+    linear-gradient(160deg,#4a3a00,#ffce00,#fff3b0,#ffce00,#4a3a00) border-box !important;
+  animation: legikoneGlow 3s ease-in-out infinite, ultimateBreathe 2.6s ease-in-out infinite;}
+.pcard.theme-legikone .name{color:#ffe9a0;text-shadow:0 0 8px rgba(255,206,0,.5);}
+@keyframes legikoneGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.7), 0 0 22px -2px #ffce00;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.7), 0 0 44px 1px #fff3b0;}
+}
+/* WM-Legende and National-Legende: the flag graphics stay inside the photo area (top ~58% of the
+   card) on purpose, so they never sit underneath the name or stat rows below. */
+.pcard.theme-legwm{--acc:#d4a017;border:2px solid #d4a017;
+  background:#0c0a06 !important;
+  box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 18px -4px #d4a017;}
+.pcard.theme-legwm .name{color:#f5d97a;text-shadow:0 0 6px rgba(212,160,23,.5);}
+.pcard.pattern-legwmpattern .pattern-layer{background:
+    linear-gradient(180deg, transparent 0 49%, #000 49% 52%, #dd0000 52% 55%, #ffce00 55% 58%, transparent 58% 100%),
+    radial-gradient(circle at 27% 6%, #ffce00 0 5px, transparent 5.5px),
+    radial-gradient(circle at 41% 3%, #ffce00 0 5px, transparent 5.5px),
+    radial-gradient(circle at 59% 3%, #ffce00 0 5px, transparent 5.5px),
+    radial-gradient(circle at 73% 6%, #ffce00 0 5px, transparent 5.5px);
+    opacity:1;}
+.pcard.theme-legnat{--acc:#dd0000;background:#14120a !important;
+  border:1.5px solid #3a3226;
+  box-shadow:0 10px 24px rgba(0,0,0,.6), 0 0 10px -4px #dd0000;}
+.pcard.theme-legnat .name{color:#e8d9b8;}
+.pcard.pattern-legnatpattern .pattern-layer{background:
+    linear-gradient(90deg, #000 0 5%, #dd0000 5% 7%, #ffce00 7% 9%, transparent 9% 100%);
+    opacity:1;}
 
 .pcard .pattern-layer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.65;}
 .pcard.pattern-attack .pattern-layer{background:repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 3px, transparent 3px 15px);}
@@ -9283,6 +9316,7 @@ const PATTERN_FAMILY = {
   flash:'retro',
   wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia', wpmvp:'wpmvp',
   kontra_gk:'keeper', kontra_def:'defense', kontra_mid:'creative', kontra_fwd:'attack',
+  legikone:'legikonepattern', legwm:'legwmpattern', legnat:'legnatpattern',
   manager:'tactics',
   meistertrainer:'legacy',
   goat:'goatpattern',
