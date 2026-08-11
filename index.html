@@ -6727,6 +6727,9 @@ async function updateMyNetWorthEntry(){
 async function updateMyLegacyEntry(){
   await fbReady;
   if(!fb || !clubId) return;
+  // nobody with prestige 0 (never survived a Great Reset) belongs on this board at all - don't even
+  // write a doc for them, so the 'legacy' collection only ever contains real prestige earners
+  if(!(profile.prestige>0)) return;
   try{
     await fb.setDoc(fb.doc(fb.db,'legacy', clubId), {
       userId: profile.userId, name: profile.displayName||profile.userId, crest: profile.crest,
