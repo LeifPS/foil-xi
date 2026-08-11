@@ -848,6 +848,16 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .goal-row img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
 .goal-row .gname{font-size:12px;color:var(--chalk);font-weight:600;flex:1;}
 .goal-row .gteam{font-size:9.5px;color:var(--muted);}
+.goal-flash-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:40;text-align:center;padding:20px 12px;
+  background:radial-gradient(circle at 50% 42%, rgba(10,13,18,.72), rgba(6,8,11,.92) 72%);
+  opacity:0;animation:goalFlashIn .35s ease-out forwards, goalFlashOut .45s ease-in forwards 2.05s;}
+.goal-flash-overlay .gf-label{font-family:'Anton';font-size:28px;letter-spacing:.05em;color:var(--gold);text-shadow:0 0 16px rgba(255,206,0,.55);}
+.goal-flash-overlay .gf-label.opp{color:var(--danger);text-shadow:0 0 16px rgba(255,90,90,.5);}
+.goal-flash-overlay .gf-card-slot{filter:drop-shadow(0 10px 22px rgba(0,0,0,.6));}
+.goal-flash-overlay .gf-meta{font-size:13px;color:var(--chalk);line-height:1.4;}
+.goal-flash-overlay .gf-meta b{color:var(--gold);font-size:15px;}
+@keyframes goalFlashIn{from{opacity:0;transform:scale(.82);}to{opacity:1;transform:scale(1);}}
+@keyframes goalFlashOut{to{opacity:0;}}
 
 /* ---- penalty shootout ---- */
 .pk-teams-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin:6px 0 2px;}
@@ -13120,7 +13130,7 @@ function buildEliteOpponentXI(minOv, maxOv, opts={}){
   });
   const NAMES = ['Weltauswahl','All-Stars XI','Legenden-Elf','Superstar United','Elite FC'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:p.ov, img:p.img}));
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:p.ov, img:p.img, id:p.id}));
   // computer opponents no longer get trainers by default (only if explicitly forced via opts.forceManager)
   let mgr = null;
   if(opts.forceManager) mgr = opts.forceManager;
@@ -13309,7 +13319,7 @@ function buildFixedRatingOpponent(targetOv){
     const candidates = byGroup[group].length ? byGroup[group] : pool;
     return pick(candidates);
   });
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:targetOv, img:p.img})); // every player forced to exactly targetOv
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:targetOv, img:p.img, id:p.id})); // every player forced to exactly targetOv
   const NAMES = ['Legenden-Auswahl 115','Unschlagbare Elf','Die Unm\u00f6glichen','Weltauswahl Prime'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
   return {owner, rating:targetOv, players, isBot:true};
@@ -13894,7 +13904,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -13951,7 +13961,7 @@ function pickScorer(players){
   if(!players || !players.length){
     const pool = fallbackScorerPool();
     const p = pool[Math.floor(Math.random()*pool.length)];
-    return {n:p.n, img:p.img};
+    return {n:p.n, img:p.img, id:p.id};
   }
   const weighted = [];
   players.forEach(p=>{
@@ -13965,9 +13975,9 @@ function pickScorer(players){
     for(let i=0;i<reps;i++) weighted.push(p);
   });
   const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
-  return {n:chosen.n, img:chosen.img};
+  return {n:chosen.n, img:chosen.img, id:chosen.id};
 }
-function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0){
+function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, myRedMinute=null, oppRedMinute=null, mySentOff=null, oppSentOff=null){
   const used = new Set();
   function uniqueMinute(){
     let m; let tries=0;
@@ -13975,8 +13985,14 @@ function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90
     used.add(m); return m;
   }
   const events = [];
-  for(let i=0;i<myGoals;i++) events.push({minute:uniqueMinute()+minuteOffset, side:'me', scorer:pickScorer(myPlayers)});
-  for(let i=0;i<oppGoals;i++) events.push({minute:uniqueMinute()+minuteOffset, side:'opp', scorer:pickScorer(oppPlayers)});
+  for(let i=0;i<myGoals;i++){
+    const minute = uniqueMinute()+minuteOffset;
+    events.push({minute, side:'me', scorer:pickScorer(scorerPoolExcluding(myPlayers, myRedMinute, mySentOff, minute))});
+  }
+  for(let i=0;i<oppGoals;i++){
+    const minute = uniqueMinute()+minuteOffset;
+    events.push({minute, side:'opp', scorer:pickScorer(scorerPoolExcluding(oppPlayers, oppRedMinute, oppSentOff, minute))});
+  }
   events.sort((a,b)=>a.minute-b.minute);
   return events;
 }
@@ -13997,23 +14013,26 @@ function kickCouldDecideShootout(myScore, oppScore, myTaken, oppTaken, side, pan
   const decidedIfMissed = shootoutPanelDecided(myScore, oppScore, myTakenAfter, oppTakenAfter, panelLen);
   return decidedIfMade || decidedIfMissed;
 }
-function simulateShootout(myRating, oppRating, myPlayers, oppPlayers){
+function simulateShootout(myRating, oppRating, myPlayers, oppPlayers, mySentOff=null, oppSentOff=null){
   const diff = myRating-oppRating;
   const myProb = clamp(0.72+diff/300, 0.55, 0.9);
   const oppProb = clamp(0.72-diff/300, 0.55, 0.9);
+  // a player sent off in the match can't step up as a shootout kicker either
+  const myPool = mySentOff && myPlayers && myPlayers.length>1 ? (myPlayers.filter(p=>p.n!==mySentOff.n).length ? myPlayers.filter(p=>p.n!==mySentOff.n) : myPlayers) : myPlayers;
+  const oppPool = oppSentOff && oppPlayers && oppPlayers.length>1 ? (oppPlayers.filter(p=>p.n!==oppSentOff.n).length ? oppPlayers.filter(p=>p.n!==oppSentOff.n) : oppPlayers) : oppPlayers;
   const myKicks=[], oppKicks=[];
   let myScore=0, oppScore=0;
   for(let round=0; round<5; round++){
     if(shootoutPanelDecided(myScore, oppScore, myKicks.length, oppKicks.length)) break;
-    const mk = Math.random()<myProb; myKicks.push({scorer:pickScorer(myPlayers), made:mk}); if(mk) myScore++;
+    const mk = Math.random()<myProb; myKicks.push({scorer:pickScorer(myPool), made:mk}); if(mk) myScore++;
     if(shootoutPanelDecided(myScore, oppScore, myKicks.length, oppKicks.length)) break;
-    const ok = Math.random()<oppProb; oppKicks.push({scorer:pickScorer(oppPlayers), made:ok}); if(ok) oppScore++;
+    const ok = Math.random()<oppProb; oppKicks.push({scorer:pickScorer(oppPool), made:ok}); if(ok) oppScore++;
   }
   // sudden death has no round cap in real football - it runs until someone actually settles it,
   // which is virtually always within a handful of rounds given both probabilities are <1
   while(myScore===oppScore){
-    const mk = Math.random()<myProb; myKicks.push({scorer:pickScorer(myPlayers), made:mk}); if(mk) myScore++;
-    const ok = Math.random()<oppProb; oppKicks.push({scorer:pickScorer(oppPlayers), made:ok}); if(ok) oppScore++;
+    const mk = Math.random()<myProb; myKicks.push({scorer:pickScorer(myPool), made:mk}); if(mk) myScore++;
+    const ok = Math.random()<oppProb; oppKicks.push({scorer:pickScorer(oppPool), made:ok}); if(ok) oppScore++;
   }
   const winner = myScore>oppScore ? 'me' : 'opp';
   return {myKicks, oppKicks, myScore, oppScore, winner, myProb, oppProb};
@@ -14059,22 +14078,44 @@ function pickCardRecipient(players){
 function planCardsAndPenalties(cardMult=1, players=[]){
   const cards = [];
   const numYellows = Math.min(3, poissonGoals(0.5*cardMult)); // ~0.5 yellow cards per team per match on average - a card should feel notable, not routine
-  for(let i=0;i<numYellows;i++) cards.push({minute:1+Math.floor(Math.random()*90), type:'yellow', player:pickCardRecipient(players)});
-  let redMinute = null;
-  if(Math.random() < 0.012*cardMult){ // ~1.2% chance of a red card per team per match at normal pressing
+  const yellowCounts = new Map();
+  let redMinute = null, sentOffPlayer = null;
+  for(let i=0;i<numYellows;i++){
+    if(redMinute!=null) break; // already sent off - no further cards possible
+    const minute = 1+Math.floor(Math.random()*90);
+    const player = pickCardRecipient(players);
+    const count = (yellowCounts.get(player.n)||0)+1;
+    yellowCounts.set(player.n, count);
+    if(count>=2){
+      // a second yellow for the same player IS a red card - sent off, same as a straight red
+      cards.push({minute, type:'red2', player});
+      redMinute = minute; sentOffPlayer = player;
+    } else {
+      cards.push({minute, type:'yellow', player});
+    }
+  }
+  if(redMinute==null && Math.random() < 0.012*cardMult){ // ~1.2% chance of a straight red card per team per match at normal pressing
     redMinute = 1+Math.floor(Math.random()*90);
-    cards.push({minute:redMinute, type:'red', player:pickCardRecipient(players)});
+    sentOffPlayer = pickCardRecipient(players);
+    cards.push({minute:redMinute, type:'red', player:sentOffPlayer});
   }
   cards.sort((a,b)=>a.minute-b.minute);
   let penalty = null;
   if(Math.random() < 0.08){ // ~8% chance of a penalty being awarded per team per match
     penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<0.78}; // ~78% real-world conversion rate
   }
-  return {cards, redMinute, penalty};
+  return {cards, redMinute, sentOffPlayer, penalty};
 }
 function liveRedCardAdjustment(minute, redMinute){
   // a sent-off team plays the rest of the match a man down - meaningfully weaker from that point on
   return (redMinute!=null && minute>=redMinute) ? -6 : 0;
+}
+// a player who has been sent off (straight red or second yellow) cannot score again after that
+// minute - filters them out of the scorer pool for any goal/penalty-kick occurring from then on
+function scorerPoolExcluding(players, redMinute, sentOffPlayer, atMinute){
+  if(redMinute==null || !sentOffPlayer || atMinute<redMinute || !players || players.length<2) return players;
+  const filtered = players.filter(p=>p.n!==sentOffPlayer.n);
+  return filtered.length ? filtered : players;
 }
 
 function computeTeamProfile(players, fallbackOv){
@@ -14165,15 +14206,17 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   const myExp = computeLambda(myProfileForLambda.attack, oppProfileForLambda.defense);
   const oppExp = computeLambda(oppProfileForLambda.attack, myProfileForLambda.defense);
   let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
-  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0);
+  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
 
   // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count
   if(myIncidents.penalty && myIncidents.penalty.scored){
-    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myPlayers), isPenalty:true});
+    const myPkPool = scorerPoolExcluding(myPlayers, myIncidents.redMinute, myIncidents.sentOffPlayer, myIncidents.penalty.minute);
+    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myPkPool), isPenalty:true});
     myGoals++;
   }
   if(oppIncidents.penalty && oppIncidents.penalty.scored){
-    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppPlayers), isPenalty:true});
+    const oppPkPool = scorerPoolExcluding(oppPlayers, oppIncidents.redMinute, oppIncidents.sentOffPlayer, oppIncidents.penalty.minute);
+    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppPkPool), isPenalty:true});
     oppGoals++;
   }
   events90.sort((a,b)=>a.minute-b.minute);
@@ -14192,11 +14235,11 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
     const myExpET = clamp(myExp*(30/90), 0.05, 2);
     const oppExpET = clamp(oppExp*(30/90), 0.05, 2);
     const myETGoals = simGoals(myExpET), oppETGoals = simGoals(oppExpET);
-    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90);
+    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
     myGoals += myETGoals; oppGoals += oppETGoals;
     if(myGoals===oppGoals){
       wentToPK = true;
-      shootout = simulateShootout(myRating, oppRating, myPlayers, oppPlayers);
+      shootout = simulateShootout(myRating, oppRating, myPlayers, oppPlayers, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
     }
   }
   const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':'opp');
@@ -14215,6 +14258,38 @@ function goalRowHTML(minute, scorer, teamName, side){
       <span class="gname">${scorer.n}</span>
       <span class="gteam">${teamName}</span>
     </div>`;
+}
+let goalFlashQueue = [];
+let goalFlashBusy = false;
+function queueGoalCardFlash(scorer, side, teamName, isPenalty){
+  goalFlashQueue.push({scorer, side, teamName, isPenalty});
+  processGoalFlashQueue();
+}
+function processGoalFlashQueue(){
+  if(goalFlashBusy) return;
+  const next = goalFlashQueue.shift();
+  if(!next) return;
+  goalFlashBusy = true;
+  showGoalCardFlash(next.scorer, next.side, next.teamName, next.isPenalty).then(()=>{
+    goalFlashBusy = false;
+    processGoalFlashQueue();
+  });
+}
+function showGoalCardFlash(scorer, side, teamName, isPenalty){
+  return new Promise(resolve=>{
+    const host = document.getElementById('live-match');
+    if(!host){ resolve(); return; }
+    const card = scorer.id!=null ? BY_ID.get(scorer.id) : null;
+    const overlay = document.createElement('div');
+    overlay.className = 'goal-flash-overlay';
+    overlay.innerHTML = `
+      <div class="gf-label ${side==='opp'?'opp':''}">${isPenalty?'ELFMETER!':'TOR!'}</div>
+      <div class="gf-card-slot"></div>
+      <div class="gf-meta"><b>${scorer.n}</b><br>${teamName}</div>`;
+    if(card) overlay.querySelector('.gf-card-slot').appendChild(cardEl(card,'mini'));
+    host.appendChild(overlay);
+    setTimeout(()=>{ overlay.remove(); resolve(); }, 2500);
+  });
 }
 function pkRowHTML(round, kick, teamName, side){
   const initials = initialsOf(kick.scorer.n || '??');
@@ -14235,13 +14310,13 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
       opp: {attack: oppProfile.attack+oppAdj, defense: oppProfile.defense+oppAdj},
     };
   };
-  const INCIDENT_ICON = {yellow:'\ud83d\udfe8', red:'\ud83d\udfe5', penalty_miss:'\u274c \u26bd'};
-  const INCIDENT_LABEL = {yellow:'Gelbe Karte', red:'Rote Karte', penalty_miss:'Elfmeter versch\u00f6ssen'};
+  const INCIDENT_ICON = {yellow:'\ud83d\udfe8', red:'\ud83d\udfe5', red2:'\ud83d\udfe8\ud83d\udfe5', penalty_miss:'\u274c \u26bd'};
+  const INCIDENT_LABEL = {yellow:'Gelbe Karte', red:'Rote Karte', red2:'Gelb-Rot (2. Verwarnung)', penalty_miss:'Elfmeter versch\u00f6ssen'};
   return new Promise(resolve=>{
     const area = document.getElementById('match-area');
     let live = document.getElementById('live-match');
     if(!live && area){
-      live = document.createElement('div'); live.id='live-match'; area.appendChild(live);
+      live = document.createElement('div'); live.id='live-match'; live.style.position='relative'; area.appendChild(live);
       const p0 = liveProfileAt(minuteStart);
       live.innerHTML = `
         <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
@@ -14269,6 +14344,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
               row.innerHTML = goalRowHTML(m, e.scorer, (e.side==='me'?myName:oppName)+(e.isPenalty?' (Elfmeter)':''), e.side);
               logEl.prepend(row.firstElementChild);
             }
+            queueGoalCardFlash(e.scorer, e.side, e.side==='me'?myName:oppName, e.isPenalty);
           });
           incidents.filter(inc=>inc.minute===m).forEach(inc=>{
             if(inc.type==='yellow') playSfx('notification');
@@ -14531,7 +14607,7 @@ function computeMatchRatings(myPlayers, myGoals, oppGoals, myScorers, incidents,
     const goals = scorerCounts[p.n] || 0;
     if(goals>0) r += Math.min(2.8, goals*1.6); // diminishing per extra goal, capped
     const card = myCards.find(inc=>inc.player && inc.player.n===p.n);
-    if(card){ r += card.type==='red' ? -2.2 : (card.type==='yellow' ? -0.7 : 0); }
+    if(card){ r += (card.type==='red'||card.type==='red2') ? -2.2 : (card.type==='yellow' ? -0.7 : 0); }
     r += (Math.random()-0.5)*0.7; // small natural variance
     r = Math.max(2.5, Math.min(10, r));
     return {n:p.n, pos:p.pos, rating: Math.round(r*10)/10, goals};
@@ -14735,7 +14811,7 @@ function pickRealisticOpponent(targetRating){
     attempt = {xi: weakenedBase, chemPlayers: weakenedChem, rating: weakenedRating};
   }
   const {xi, chemPlayers, rating} = attempt;
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img}));
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img, id:p.id}));
   const cardRefs = xi.map((p,i)=>({id:p.id, pos:slots[i].label}));
   return {owner:chosen.club, rating, players, cardRefs, formation:'433', isBot:true, managerName: mgr?mgr.n:null};
 }
