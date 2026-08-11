@@ -6684,6 +6684,7 @@ async function applyGreatReset(resetId){
   await sSet('squad', squad);
   await sSet('squadPresets', squadPresets);
   await sSet('profile', profile);
+  await updateMyLegacyEntry();
   closeModal();
   toast(`★ Prestige ${profile.prestige} erreicht — neu gestartet!`);
   renderNav();
@@ -6693,7 +6694,7 @@ async function applyGreatReset(resetId){
 async function triggerGreatReset(){
   openModal(`
     <h2 style="margin-bottom:10px;color:#ff5f5f;">⚠ Great Reset auslösen</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Jeder Spieler bekommt beim nächsten Öffnen des Spiels einen dauerhaften Prestige-Rang und startet danach komplett neu (Coins, Karten, Kader, Statistiken). Das betrifft ALLE Spieler, nicht nur dich.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Jeder Spieler bekommt beim nächsten Öffnen des Spiels einen dauerhaften Prestige-Rang und startet danach komplett neu (Coins, Karten, Kader, Statistiken). Das betrifft ALLE Spieler, nicht nur dich — dein eigener Account wird sofort zurückgesetzt, ohne auf den nächsten Login zu warten.</p>
     <div style="display:flex;gap:10px;">
       <button class="action-btn secondary" id="great-reset-cancel" style="flex:1;">Abbrechen</button>
       <button class="action-btn" id="great-reset-trigger" style="flex:1;background:#ff5f5f;">Auslösen</button>
@@ -6704,8 +6705,10 @@ async function triggerGreatReset(){
     if(!fb){ toast('Benötigt das Online-Backend.'); closeModal(); return; }
     const resetId = 'reset-'+Date.now();
     await fb.setDoc(fb.doc(fb.db,'config','resetEvent'), {resetId, triggeredBy:clubId, triggeredAt:Date.now()});
-    closeModal();
-    toast('Great Reset ausgelöst — alle Spieler starten beim nächsten Login neu.');
+    // the admin doesn't have to wait for their own next login like everyone else - apply it to
+    // their own account right away, same end state applyGreatReset() gives every other player
+    // (applyGreatReset shows its own "★ Prestige erreicht" toast, so nothing further needed here)
+    await applyGreatReset(resetId);
   });
 }
 async function updateMyNetWorthEntry(){
@@ -6717,6 +6720,46 @@ async function updateMyNetWorthEntry(){
       netWorth: computeMyNetWorth(), updatedAt: Date.now()
     });
   }catch(e){ console.warn('net worth update failed', e); }
+}
+// ===== Legacy Leaderboard: ranks by Prestige (Great Reset count) first, then lifetime career wins
+// as a tiebreak - the only leaderboard that survives a Great Reset, since both fields are exactly
+// the stats a reset deliberately preserves instead of wiping.
+async function updateMyLegacyEntry(){
+  await fbReady;
+  if(!fb || !clubId) return;
+  try{
+    await fb.setDoc(fb.doc(fb.db,'legacy', clubId), {
+      userId: profile.userId, name: profile.displayName||profile.userId, crest: profile.crest,
+      prestige: profile.prestige||0, careerWins: profile.careerWins||0, updatedAt: Date.now()
+    });
+  }catch(e){ console.warn('legacy leaderboard update failed', e); }
+}
+async function loadLegacyLeaderboard(){
+  const box = document.getElementById('legacy-list');
+  if(!box) return;
+  await fbReady;
+  if(!fb){ box.innerHTML = `<p class="hint">Benötigt das Online-Backend.</p>`; return; }
+  const bannedIds = await getLeaderboardBannedUserIds();
+  let entries = [];
+  try{
+    const raw = await cachedRead('legacy-board', 45000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'legacy'), fb.orderBy('prestige','desc'), fb.limit(30)));
+      return snap.docs.map(d=>d.data());
+    });
+    entries = raw.filter(e=>!LEADERBOARD_EXCLUDED_USERS.has(e.userId) && !bannedIds.has(e.userId))
+      .sort((a,b)=> (b.prestige||0)-(a.prestige||0) || (b.careerWins||0)-(a.careerWins||0))
+      .slice(0,8);
+  }catch(e){ console.warn('legacy leaderboard read failed', e); }
+  if(!box) return;
+  if(!entries.length || !entries.some(e=>(e.prestige||0)>0)){ box.innerHTML = `<p class="hint">Noch niemand hat einen Great Reset überstanden — der erste Prestige-Rang macht hier Geschichte.</p>`; return; }
+  box.innerHTML = '';
+  entries.filter(e=>(e.prestige||0)>0).forEach((e,i)=>{
+    const row = document.createElement('div');
+    row.className = 'leader-row';
+    const mine = e.userId===profile.userId;
+    row.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(e.crest || fallbackCrestFor(e.name), 20)}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">★ ${e.prestige} <span style="color:var(--muted);">· ${e.careerWins||0}S</span></span>`;
+    box.appendChild(row);
+  });
 }
 const LEADERBOARD_EXCLUDED_USERS = new Set(['leifps','tst','test']);
 // Temporary, admin-controlled leaderboard bans - distinct from a full account ban (profile.banned
@@ -9159,7 +9202,7 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null};
+    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -9185,6 +9228,9 @@ async function init(){
     if(!profile.dailyRewardTracker) profile.dailyRewardTracker = {date:'', count:0};
     if(profile.prestige===undefined) profile.prestige = 0;
     if(profile.lastResetId===undefined) profile.lastResetId = null;
+    // legacy stat - never wiped by a Great Reset, unlike profile.wins. Seeded from the current win
+    // count for accounts that already existed before this field did, so nobody's legacy starts at 0.
+    if(profile.careerWins===undefined) profile.careerWins = profile.wins||0;
   }
   if(profile.banned && !isAdmin()){
     document.getElementById('modal-root').innerHTML = `
@@ -11312,6 +11358,7 @@ function renderClub(view){
   loadSalesHistory().then(()=>{
     if(currentTab==='club'){ drawClubGrid(); if(managerCollection.length) drawManagerClubGrid(); }
     updateMyNetWorthEntry();
+    updateMyLegacyEntry();
   });
 }
 function drawManagerClubGrid(){
@@ -13691,7 +13738,10 @@ function renderPlay(view){
         <div class="leader-list" id="leader-list" style="margin-bottom:22px;"><p class="hint">L\u00e4dt...</p></div>
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Vereinswert-Bestenliste</h3>
         <p class="hint" style="margin-top:0;margin-bottom:10px;">Coins + gesch\u00e4tzter RAP-Wert aller Karten und Trainer.</p>
-        <div class="leader-list" id="networth-list"><p class="hint">L\u00e4dt...</p></div>
+        <div class="leader-list" id="networth-list" style="margin-bottom:22px;"><p class="hint">L\u00e4dt...</p></div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Legacy-Bestenliste</h3>
+        <p class="hint" style="margin-top:0;margin-bottom:10px;">Prestige-Rang (Great Resets \u00fcberstanden) \u00b7 Karriere-Siege, die auch einen Reset \u00fcberleben.</p>
+        <div class="leader-list" id="legacy-list"><p class="hint">L\u00e4dt...</p></div>
       </div>
     </div>
     <div class="play-grid" style="margin-top:22px;">
@@ -13791,6 +13841,7 @@ function renderPlay(view){
   loadLeaderboard();
   loadIncomingDuels();
   loadSalesHistory().then(async ()=>{ await updateMyNetWorthEntry(); loadNetWorthLeaderboard(); });
+  updateMyLegacyEntry().then(loadLegacyLeaderboard);
   loadOpenTournaments();
   loadMyTournamentResults();
   if(tournamentLiveRefreshTimer) clearInterval(tournamentLiveRefreshTimer);
@@ -14603,19 +14654,20 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
     try{
       const payload = { 'profile.coins': fb.increment(finalReward), 'profile.dailyRewardTracker': newTracker };
       payload[result==='WIN' ? 'profile.wins' : 'profile.losses'] = fb.increment(1);
+      if(result==='WIN') payload['profile.careerWins'] = fb.increment(1);
       if(oppName){ payload['profile.matchHistory'] = newHistory; payload['profile.scorerStats'] = newScorerStats; }
       if(oppUserId) payload['profile.rivalries'] = newRivalries;
       if(finalSpXp) payload['profile.weekPass.xp'] = fb.increment(finalSpXp);
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
       profile.coins += finalReward;
       profile.dailyRewardTracker = newTracker;
-      if(result==='WIN') profile.wins++; else profile.losses++;
+      if(result==='WIN'){ profile.wins++; profile.careerWins = (profile.careerWins||0)+1; } else profile.losses++;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
       if(oppUserId) profile.rivalries = newRivalries;
       if(finalSpXp) profile.weekPass.xp += finalSpXp;
     }catch(e){
       console.warn('atomic match-result update failed, falling back', e);
-      if(result==='WIN') profile.wins++; else profile.losses++;
+      if(result==='WIN'){ profile.wins++; profile.careerWins = (profile.careerWins||0)+1; } else profile.losses++;
       profile.coins += finalReward;
       profile.dailyRewardTracker = newTracker;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
@@ -14624,7 +14676,7 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
       await sSet('profile', profile);
     }
   } else {
-    if(result==='WIN') profile.wins++; else profile.losses++;
+    if(result==='WIN'){ profile.wins++; profile.careerWins = (profile.careerWins||0)+1; } else profile.losses++;
     profile.coins += finalReward;
     profile.dailyRewardTracker = newTracker;
     if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
