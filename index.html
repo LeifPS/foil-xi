@@ -281,6 +281,25 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 24px -2px #ffd76a;}
   50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 50px 3px #fff3c4;}
 }
+/* Mystery Elite Pack's rare tier: the pack's whole appeal is unpredictability, so this uses an
+   unstable, shifting violet/magenta foil - visually distinct from every other 100+ theme in the game. */
+.pcard.theme-mysteryrare{border:2.5px solid transparent;
+  background:
+    radial-gradient(circle at 50% 30%, #241030 0%, #150a1c 45%, #0a0510 100%) padding-box,
+    linear-gradient(160deg,#3a1050,#a33dff,#ff5ce0,#a33dff,#3a1050) border-box !important;
+  background-size:100% 100%, 260% 260%;
+  animation: mysteryGlow 2.4s ease-in-out infinite, mysteryBorderShift 4.2s linear infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-mysteryrare::before{animation:autoShine 1.2s ease-in-out infinite;}
+.pcard.theme-mysteryrare .name.name-variant{
+  background:linear-gradient(90deg,#c9a8ff,#ff9cf0,#a33dff,#c9a8ff);
+  background-size:260% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:mysteryBorderShift 4.2s linear infinite; text-shadow:none;
+}
+@keyframes mysteryBorderShift{0%{background-position:0% 0%,0% 50%;}100%{background-position:0% 0%,260% 50%;}}
+@keyframes mysteryGlow{
+  0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 22px -2px #a33dff;}
+  50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 48px 2px #ff5ce0;}
+}
 /* Kontrahent: bot-only, never a real collectible - a plain steel/tactical AI look on purpose, not
    meant to look as special as anything a player can actually own. */
 /* Kontrahent: bot-only, one look per position group instead of a single flat design for the whole
@@ -392,6 +411,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     repeating-conic-gradient(from 200deg at 82% 50%, rgba(255,215,106,.14) 0deg 6deg, transparent 6deg 22deg);
     animation:mvpSparkle 2.2s ease-in-out infinite;}
 @keyframes mvpSparkle{0%,100%{opacity:.75;}50%{opacity:1;}}
+.pcard.pattern-mysteryrare .pattern-layer{background:
+    radial-gradient(circle at 50% 10%, rgba(163,61,255,.4), transparent 55%),
+    repeating-conic-gradient(from 0deg at 50% 10%, rgba(255,92,224,.15) 0deg 4deg, transparent 4deg 13deg);
+    animation:mysterySparkle 2.3s ease-in-out infinite;}
+@keyframes mysterySparkle{0%,100%{opacity:.7;}50%{opacity:1;}}
 .pcard.pattern-kontra .pattern-layer{background:
     repeating-linear-gradient(0deg, rgba(143,163,184,.08) 0 1px, transparent 1px 18px),
     repeating-linear-gradient(90deg, rgba(143,163,184,.08) 0 1px, transparent 1px 18px);
@@ -6243,6 +6267,25 @@ function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme=
 const WEEK_PASS_CARD_BASE = findBaseCard(257534); // C. Palmer
 const WEEK_PASS_CARD = WEEK_PASS_CARD_BASE ? boostBaseToOv(WEEK_PASS_CARD_BASE, 106, 9770001, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
 if(WEEK_PASS_CARD) BY_ID.set(WEEK_PASS_CARD.id, WEEK_PASS_CARD);
+// ===== Mystery Elite Pack's rare tier: 5 real standout players (best of each position group, plus
+// the single highest-rated outfield player overall) boosted into the 104-108 "105 range" - the pack's
+// normal pool tops out at 99, so these are the rare exception that occasionally punches above that.
+const MYSTERY_RARE_ROSTER = (function(){
+  const byGroupBest = {GK:null, DEF:null, MID:null, FWD:null};
+  ALL_BASE.forEach(c=>{
+    const g = posGroup2(mainPos(c.pos));
+    if(byGroupBest[g]!==undefined && (!byGroupBest[g] || c.ov>byGroupBest[g].ov)) byGroupBest[g] = c;
+  });
+  const picks = [byGroupBest.FWD, byGroupBest.MID, byGroupBest.DEF, byGroupBest.GK].filter(Boolean);
+  // 5th slot: the next-highest-rated outfield player not already picked above (a real standout in
+  // their own right, distinct from the 4 group bests)
+  const sortedOutfield = ALL_BASE.filter(c=>!c.gk).slice().sort((a,b)=>b.ov-a.ov);
+  const fifthPick = sortedOutfield.find(c=>!picks.some(p=>p.id===c.id));
+  if(fifthPick) picks.push(fifthPick);
+  const targets = [104,105,106,107,108];
+  return picks.slice(0,5).map((base,i)=>boostBaseToOv(base, targets[i], 9780000+i, 'mysteryrare', 'Mystery Elite', 'mysteryrare'));
+})();
+MYSTERY_RARE_ROSTER.forEach(c=>BY_ID.set(c.id,c));
 const OG_PELE = OGICON_CARDS.find(p=>p.n==='Pel\u00e9');
 const OG_MARADONA = OGICON_CARDS.find(p=>p.n==='Diego Maradona');
 const OG_ZIDANE = OGICON_CARDS.find(p=>p.n==='Zinedine Zidane');
@@ -6391,7 +6434,7 @@ function rarityInfo(ov){
 const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8fb4d1',
   tots:'#f5d76e',flash:'#ff7a59',sd:'#ff5fa8',icon:'#c78bf5',cent:'#ffd76a',
   phenom:'#6ee7d8',setpiece:'#ffcf5c',derby:'#ff8f6b',iron:'#7d94ad',wonder:'#8ee6a3',
-  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',wpmvp:'#ffd76a',
+  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',wpmvp:'#ffd76a',mysteryrare:'#a33dff',
   kontra_gk:'#a78bfa',kontra_def:'#5c9db8',kontra_mid:'#d6a94a',kontra_fwd:'#e14b4b',goat:'#ff2e63',
   wcchamp:'#ffd23f',goldenball:'#ffcc00',ggwm:'#4fd1c5',youngplayer:'#7ee787',
   semifinalist:'#ff9d5c',quarterfinalist:'#9fb4c7',
@@ -6454,7 +6497,7 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 //    than a fragile per-pack normalization that was hard to calibrate precisely.
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
 const VARIANT_SPECIALTY_MULT = {
-  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20,
+  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, mysteryrare:5,
   kontra_gk:1.5, kontra_def:1.5, kontra_mid:1.5, kontra_fwd:1.5, goat:5.8,
   signature_icon:3.6, era_definer:4.1, signature_season:4.8,
   wcchamp:2, goldenball:5, ggwm:4, youngplayer:4, semifinalist:1.3, quarterfinalist:1.15,
@@ -6767,8 +6810,20 @@ const PACKS = [
     desc:'6 Spieler, Rating 82-90 (inkl. Chance auf Sonderkarten). W\u00e4hle 3 davon zum Behalten.',
     draw(){ const pool=poolByRange(82,90,true); return Array.from({length:6},()=>pick(pool)); }},
   {id:'mystery',name:'Mystery Elite Pack',cost:30000,tier:'ultimate',count:3,
-    desc:'3 Spieler, Rating 75-99 \u2014 h\u00f6chste Schwankungsbreite aller Packs. Alles von Gold Rare bis Blackout ist m\u00f6glich.',
-    draw(){ const pool=poolByRange(75,99,true); return Array.from({length:3},()=>pick(pool)); }},
+    desc:'3 Spieler, Rating 75-99 \u2014 h\u00f6chste Schwankungsbreite aller Packs. Alles von Gold Rare bis Blackout ist m\u00f6glich. Sehr selten (insgesamt ca. 2% pro Karte) sprengt eine Karte diese Grenze komplett: eine von 5 besonderen \u201eMystery Elite\u201c-Karten im Rating-Bereich 104-108.',
+    draw(){
+      const pool=poolByRange(75,99,true);
+      const P_RARE = [0.006, 0.005, 0.004, 0.003, 0.002]; // one entry per MYSTERY_RARE_ROSTER card, sums to ~2%
+      return Array.from({length:3},()=>{
+        const r = Math.random();
+        let acc = 0;
+        for(let i=0;i<MYSTERY_RARE_ROSTER.length;i++){
+          acc += P_RARE[i];
+          if(r<acc) return MYSTERY_RARE_ROSTER[i];
+        }
+        return pick(pool);
+      });
+    }},
   {id:'doubletrainer',name:'Double Trainer Pack',cost:7000,tier:'premium',count:2,
     desc:'2 Trainer garantiert, zuf\u00e4llig aus allen Vereinen.',
     draw(){ return [pick(MANAGERS), pick(MANAGERS)]; }},
@@ -9265,6 +9320,7 @@ function askTextModal(title, placeholder, callback, maxLen=30){
 // ===== card rendering =====
 const VARIANT_ICON = {
   wpmvp:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
+  mysteryrare:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 9a3 3 0 115.2 2c-.9.7-1.7 1.2-1.7 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/>',
   saph:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   rub:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   dia:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
@@ -9320,7 +9376,7 @@ const PATTERN_FAMILY = {
   icon:'legacy', cent:'legacy',
   gg:'keeper',
   flash:'retro',
-  wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia', wpmvp:'wpmvp',
+  wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia', wpmvp:'wpmvp', mysteryrare:'mysteryrare',
   kontra_gk:'keeper', kontra_def:'defense', kontra_mid:'creative', kontra_fwd:'attack',
   legikone:'legikonepattern', legwm:'legwmpattern', legnat:'legnatpattern',
   manager:'tactics',
