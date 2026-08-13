@@ -300,6 +300,26 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 22px -2px #a33dff;}
   50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 48px 2px #ff5ce0;}
 }
+/* SBC-exclusive reward cards: cold platinum/white foil, distinct from every other 100+ theme - these
+   are one-time-only rewards, so the look should read as "the rarest kind of prize", not just another
+   pull-chance rare. */
+.pcard.theme-sbcx{border:2.5px solid transparent;
+  background:
+    radial-gradient(circle at 50% 28%, #1c2226 0%, #0e1214 45%, #060808 100%) padding-box,
+    linear-gradient(160deg,#4a5458,#d9eef2,#ffffff,#a8c4c9,#4a5458) border-box !important;
+  background-size:100% 100%, 260% 260%;
+  animation: sbcxGlow 2.6s ease-in-out infinite, sbcxBorderShift 4.6s linear infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-sbcx::before{animation:autoShine 1.3s ease-in-out infinite;}
+.pcard.theme-sbcx .name.name-variant{
+  background:linear-gradient(90deg,#d9eef2,#ffffff,#a8c4c9,#d9eef2);
+  background-size:260% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:sbcxBorderShift 4.6s linear infinite; text-shadow:none;
+}
+@keyframes sbcxBorderShift{0%{background-position:0% 0%,0% 50%;}100%{background-position:0% 0%,260% 50%;}}
+@keyframes sbcxGlow{
+  0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 20px -2px #a8c4c9;}
+  50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 46px 2px #ffffff;}
+}
 /* Kontrahent: bot-only, never a real collectible - a plain steel/tactical AI look on purpose, not
    meant to look as special as anything a player can actually own. */
 /* Kontrahent: bot-only, one look per position group instead of a single flat design for the whole
@@ -416,6 +436,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     repeating-conic-gradient(from 0deg at 50% 10%, rgba(255,92,224,.15) 0deg 4deg, transparent 4deg 13deg);
     animation:mysterySparkle 2.3s ease-in-out infinite;}
 @keyframes mysterySparkle{0%,100%{opacity:.7;}50%{opacity:1;}}
+.pcard.pattern-sbcx .pattern-layer{background:
+    radial-gradient(circle at 50% 10%, rgba(216,238,242,.45), transparent 55%),
+    repeating-conic-gradient(from 0deg at 50% 10%, rgba(255,255,255,.16) 0deg 4deg, transparent 4deg 13deg);
+    animation:sbcxSparkle 2.5s ease-in-out infinite;}
+@keyframes sbcxSparkle{0%,100%{opacity:.7;}50%{opacity:1;}}
 .pcard.pattern-kontra .pattern-layer{background:
     repeating-linear-gradient(0deg, rgba(143,163,184,.08) 0 1px, transparent 1px 18px),
     repeating-linear-gradient(90deg, rgba(143,163,184,.08) 0 1px, transparent 1px 18px);
@@ -861,6 +886,28 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .wp-quest{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;transition:opacity .2s;}
 .wp-quest .wp-quest-label{font-size:12.5px;color:var(--chalk);line-height:1.35;min-height:32px;}
 .wp-quest .wp-claim{padding:5px 12px;font-size:10.5px;border-radius:7px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;}
+/* SBC redesign: each tier gets its own left-accent color + subtle background tint, replacing the
+   generic reused .pack-card look so SBCs read as their own thing at a glance. */
+.sbc-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:14px;}
+.sbc-card{position:relative;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:7px;transition:transform .15s, box-shadow .15s;}
+.sbc-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.35);}
+.sbc-card.tier-entry{border-left-color:var(--turf-bright);}
+.sbc-card.tier-mid{border-left-color:#4da8ff;}
+.sbc-card.tier-advanced{border-left-color:#c78bf5;background:radial-gradient(circle at 0% 0%, rgba(199,139,245,.07), var(--panel) 65%);}
+.sbc-card.tier-quest{border-left-color:#ff5f5f;background:radial-gradient(circle at 0% 0%, rgba(255,95,95,.08), var(--panel) 65%);}
+.sbc-card.tier-exclusive{border-left-color:#d9eef2;background:radial-gradient(circle at 0% 0%, rgba(217,238,242,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #d9eef2;}
+.sbc-card-head{display:flex;justify-content:space-between;align-items:center;}
+.sbc-tier-pill, .sbc-size-pill{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-family:'JetBrains Mono';}
+.sbc-card .sbc-name{font-family:'Anton';font-size:16px;letter-spacing:.01em;margin:0;font-weight:400;}
+.sbc-card .sbc-desc{font-size:11.5px;color:var(--muted);line-height:1.4;}
+.sbc-reward-row{display:flex;align-items:center;gap:8px;margin-top:2px;}
+.sbc-reward-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px -1px currentColor;}
+.sbc-reward-label{font-size:12px;color:var(--chalk);font-weight:600;}
+.sbc-progress-dots{display:flex;gap:5px;margin-top:1px;}
+.sbc-dot{width:9px;height:9px;border-radius:50%;background:var(--line);}
+.sbc-dot.filled{background:var(--turf-bright);box-shadow:0 0 5px -1px var(--turf-bright);}
+.sbc-build-btn{margin-top:5px;padding:9px 0;border-radius:9px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;font-size:13px;cursor:pointer;transition:opacity .15s;}
+.sbc-build-btn:disabled{background:var(--panel2);color:var(--muted);cursor:default;opacity:.6;}
 .live-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#ff6b57;text-transform:uppercase;letter-spacing:.04em;margin-right:2px;}
 .live-badge .live-dot{width:7px;height:7px;border-radius:50%;background:#ff6b57;box-shadow:0 0 6px #ff6b57;animation:live-pulse 1.4s ease-in-out infinite;}
 @keyframes live-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.7);}}
@@ -6566,7 +6613,7 @@ function rarityInfo(ov){
 const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8fb4d1',
   tots:'#f5d76e',flash:'#ff7a59',sd:'#ff5fa8',icon:'#c78bf5',cent:'#ffd76a',
   phenom:'#6ee7d8',setpiece:'#ffcf5c',derby:'#ff8f6b',iron:'#7d94ad',wonder:'#8ee6a3',
-  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',wpmvp:'#ffd76a',mysteryrare:'#a33dff',
+  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',wpmvp:'#ffd76a',mysteryrare:'#a33dff',sbcx:'#d9eef2',
   kontra_gk:'#a78bfa',kontra_def:'#5c9db8',kontra_mid:'#d6a94a',kontra_fwd:'#e14b4b',goat:'#ff2e63',
   wcchamp:'#ffd23f',goldenball:'#ffcc00',ggwm:'#4fd1c5',youngplayer:'#7ee787',
   semifinalist:'#ff9d5c',quarterfinalist:'#9fb4c7',
@@ -6629,7 +6676,7 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 //    than a fragile per-pack normalization that was hard to calibrate precisely.
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
 const VARIANT_SPECIALTY_MULT = {
-  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, mysteryrare:5,
+  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, mysteryrare:5, sbcx:25,
   kontra_gk:1.5, kontra_def:1.5, kontra_mid:1.5, kontra_fwd:1.5, goat:5.8,
   signature_icon:3.6, era_definer:4.1, signature_season:4.8,
   wcchamp:2, goldenball:5, ggwm:4, youngplayer:4, semifinalist:1.3, quarterfinalist:1.15,
@@ -6788,7 +6835,7 @@ function greatResetProfilePatch(base, resetId){
 // OG-Pack progress from their pre-reset run. This lets an admin catch a specific account up on just
 // those fields, without touching coins/cards/prestige/anything else that was already reset correctly.
 function missedResetFieldsPatch(){
-  return { completedSBCs: [], ogPackUnlocked: false };
+  return { completedSBCs: {}, ogPackUnlocked: false };
 }
 async function checkGreatReset(){
   await fbReady;
@@ -7282,6 +7329,34 @@ function sbcFeasibility(sbc, poolFree, poolWithSquad){
 // ===== SBCs (Squad Building Challenges) =====
 function avgOv(cards){ return Math.round(cards.reduce((s,c)=>s+c.ov,0)/cards.length); }
 function req(label, check, progress){ return {label, check, progress}; }
+// ===== 3 exclusive-reward SBCs: each gives exactly ONE guaranteed, truly unique real-player card -
+// never obtainable any other way, and unlike every other SBC (see SBC_DEFAULT_MAX_COMPLETIONS below)
+// these are one-time-only (maxCompletions:1), since repeating them would undermine "unique". Bases
+// are picked programmatically (best real player per position bucket, excluding anyone already used
+// as an exclusive-card base elsewhere) so this never needs a hardcoded, possibly-wrong id.
+const SBC_EXCLUSIVE_USED_IDS = new Set([
+  WEEK_PASS_CARD_BASE && WEEK_PASS_CARD_BASE.id,
+  WEEK_PASS_CARD2_BASE && WEEK_PASS_CARD2_BASE.id,
+  ...MYSTERY_RARE_ROSTER.map(c=>c.baseId),
+].filter(Boolean));
+function pickSbcExclusiveBase(filterFn){
+  return ALL_BASE.filter(c=>!SBC_EXCLUSIVE_USED_IDS.has(c.id) && filterFn(c)).sort((a,b)=>b.ov-a.ov)[0];
+}
+const SBC_STRIKER_BASE = pickSbcExclusiveBase(c=>posGroup2(mainPos(c.pos))==='FWD');
+if(SBC_STRIKER_BASE) SBC_EXCLUSIVE_USED_IDS.add(SBC_STRIKER_BASE.id);
+const SBC_DEFENDER_BASE = pickSbcExclusiveBase(c=>posGroup2(mainPos(c.pos))==='DEF');
+if(SBC_DEFENDER_BASE) SBC_EXCLUSIVE_USED_IDS.add(SBC_DEFENDER_BASE.id);
+const SBC_GK_BASE = pickSbcExclusiveBase(c=>posGroup2(mainPos(c.pos))==='GK');
+if(SBC_GK_BASE) SBC_EXCLUSIVE_USED_IDS.add(SBC_GK_BASE.id);
+const SBC_STRIKER_CARD = SBC_STRIKER_BASE ? boostBaseToOv(SBC_STRIKER_BASE, 108, 9790001, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
+const SBC_DEFENDER_CARD = SBC_DEFENDER_BASE ? boostBaseToOv(SBC_DEFENDER_BASE, 107, 9790002, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
+const SBC_GK_CARD = SBC_GK_BASE ? boostBaseToOv(SBC_GK_BASE, 106, 9790003, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
+[SBC_STRIKER_CARD, SBC_DEFENDER_CARD, SBC_GK_CARD].forEach(c=>{ if(c) BY_ID.set(c.id, c); });
+// every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
+// exclusive-card ones above set maxCompletions:1) - see sbcCompletions()/sbcMaxCompletions() below.
+const SBC_DEFAULT_MAX_COMPLETIONS = 5;
+function sbcCompletions(id){ return (profile.completedSBCs && profile.completedSBCs[id]) || 0; }
+function sbcMaxCompletions(sbc){ return sbc.maxCompletions || SBC_DEFAULT_MAX_COMPLETIONS; }
 const SBC_DEFS = [
   // --- entry level (3-4 players) ---
   {id:'first_kit', name:'Erster Kader', reward:'bronze', size:3, tier:'Einsteiger',
@@ -7383,6 +7458,27 @@ const SBC_DEFS = [
     reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
            req('Kein Spieler unter 96 OVR', c=>c.every(x=>x.ov>=96), c=>`${c.filter(x=>x.ov<96).length} unter 96`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  // --- exclusive (one-time only, each gives exactly one unique real-player card) - deliberately
+  // near the game's hardest tier (goat_quest), since the reward is a card that literally cannot be
+  // obtained any other way, not just a rare pack pull.
+  {id:'sbc_sturmfuehrer', name:'Sturmf\u00fchrer-Elite', directCardId: SBC_STRIKER_CARD?.id, size:11, tier:'Einzigartig', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 95+, niemand unter 90 OVR, mindestens 4 St\u00fcrmer und 5 Sonderkarten. Einmalige Belohnung: eine einzigartige Sturm-Ikone, sonst nirgends erh\u00e4ltlich.',
+    reqs:[ req('Durchschnittsrating 95+', c=>avgOv(c)>=95, c=>`${avgOv(c)} / 95`),
+           req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
+           req('4+ St\u00fcrmer', c=>c.filter(x=>posGroup(x.pos)==='FWD').length>=4, c=>`${c.filter(x=>posGroup(x.pos)==='FWD').length} / 4`),
+           req('5+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=5, c=>`${c.filter(x=>x.variant!=='base').length} / 5 Sonderkarten`) ]},
+  {id:'sbc_abwehrfestung', name:'Abwehrfestung-Elite', directCardId: SBC_DEFENDER_CARD?.id, size:11, tier:'Einzigartig', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 88 OVR, mindestens 6 Verteidiger und 4 Sonderkarten. Einmalige Belohnung: eine einzigartige Abwehr-Ikone, sonst nirgends erh\u00e4ltlich.',
+    reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
+           req('Kein Spieler unter 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} unter 88`),
+           req('6+ Verteidiger', c=>c.filter(x=>posGroup(x.pos)==='DEF').length>=6, c=>`${c.filter(x=>posGroup(x.pos)==='DEF').length} / 6`),
+           req('4+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=4, c=>`${c.filter(x=>x.variant!=='base').length} / 4 Sonderkarten`) ]},
+  {id:'sbc_weltklassetorwart', name:'Welttorh\u00fcter-Elite', directCardId: SBC_GK_CARD?.id, size:8, tier:'Einzigartig', maxCompletions:1,
+    desc:'8 Spieler, Durchschnittsrating 93+, niemand unter 88 OVR, mindestens 2 Torh\u00fcter und 3 Sonderkarten. Einmalige Belohnung: eine einzigartige Torh\u00fcter-Ikone, sonst nirgends erh\u00e4ltlich.',
+    reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
+           req('Kein Spieler unter 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} unter 88`),
+           req('2+ Torh\u00fcter', c=>c.filter(x=>posGroup(x.pos)==='GK').length>=2, c=>`${c.filter(x=>posGroup(x.pos)==='GK').length} / 2`),
+           req('3+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=3, c=>`${c.filter(x=>x.variant!=='base').length} / 3 Sonderkarten`) ]},
 ];
 let activeSBC = null;
 let ogPackTierPools = null;
@@ -7498,8 +7594,8 @@ async function claimDraftReward(maxed){
   draftState = null;
   renderDraftPanel();
 }
+const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive'};
 async function renderSBCList(view){
-  const completed = new Set(profile.completedSBCs||[]);
   view.innerHTML = `
     <div class="view-head"><h2>Herausforderungen</h2><p>Turnier und Ballon d'Or sind Match-Herausforderungen gegen harte Fantasie-Gegner. SBCs weiter unten verlangen stattdessen einen Kader aus deinem Verein, der die Anforderungen erf\u00fcllt.</p></div>
     <div class="vs-panel" id="tournament-panel" style="margin-bottom:22px;">
@@ -7539,7 +7635,8 @@ async function renderSBCList(view){
       <div id="streak-content"></div>
     </div>
     <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">SBCs (Squad Building Challenges)</h3>
-    <div class="pack-grid" id="sbc-grid"><p class="hint">Pr\u00fcfe Erf\u00fcllbarkeit\u2026</p></div>`;
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Die meisten SBCs sind bis zu ${SBC_DEFAULT_MAX_COMPLETIONS}\u00d7 wiederholbar. Die drei "Einzigartig"-SBCs geben eine echte Einzelkarte, die es sonst nirgends gibt \u2014 die gibt's nur einmal.</p>
+    <div class="sbc-grid" id="sbc-grid"><p class="hint">Pr\u00fcfe Erf\u00fcllbarkeit\u2026</p></div>`;
   renderTournamentPanel();
   renderDraftPanel();
   renderBallonDorPanel();
@@ -7560,33 +7657,46 @@ async function renderSBCList(view){
     none:{label:'Aktuell nicht erf\u00fcllbar', color:'var(--danger)'},
   };
   SBC_DEFS.forEach(sbc=>{
-    const done = completed.has(sbc.id);
-    const locked = sbc.requires && !completed.has(sbc.requires);
+    const completions = sbcCompletions(sbc.id);
+    const maxC = sbcMaxCompletions(sbc);
+    const done = completions>=maxC;
+    const locked = sbc.requires && sbcCompletions(sbc.requires)<=0;
     const rewardInfo = sbcRewardDisplay(sbc);
     const feas = (done||locked) ? null : sbcFeasibility(sbc, poolFree, poolWithSquad);
+    const tierSlug = SBC_TIER_SLUG[sbc.tier] || 'mid';
     const card = document.createElement('div');
-    card.className = `pack-card ${rewardInfo.tierClass}`;
-    if(locked) card.style.opacity = '.55';
+    card.className = `sbc-card tier-${tierSlug}`;
+    if(locked) card.style.opacity = '.5';
+    const progressHTML = maxC>1
+      ? `<div class="sbc-progress-dots" title="${completions} / ${maxC} abgeschlossen">${Array.from({length:maxC},(_,i)=>`<span class="sbc-dot ${i<completions?'filled':''}"></span>`).join('')}</div>`
+      : (completions>0 ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : '');
+    const btnLabel = done ? (maxC>1?'Maximal erreicht':'Abgeschlossen') : (completions>0?`Erneut bauen (${completions}/${maxC})`:'Bauen');
     card.innerHTML = `
-      <div class="pack-tier-ribbon">${sbc.tier}</div>
-      <div class="pack-glyph"><div>${sbc.size}</div><div class="pv-lbl">Spieler</div></div>
-      <div class="pack-card-body">
-        <h3>${sbc.name}</h3>
-        <div class="desc">${sbc.desc}</div>
-        ${locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">\ud83d\udd12 Erst nach "${SBC_DEFS.find(s=>s.id===sbc.requires).name}" freigeschaltet</div>` : ''}
-        ${(!done && !locked) ? `<div class="mono" style="font-size:10.5px;color:${FEAS_INFO[feas].color};">\u25CF ${FEAS_INFO[feas].label}</div>` : ''}
-        <div class="buyrow">
-          <div class="price-pill" style="font-size:11px;color:var(--chalk);"><div class="pdot" style="background:${rewardInfo.dotColor};box-shadow:none;"></div>${rewardInfo.label}</div>
-          <button class="buy-btn" ${done||locked||feas==='none'?'disabled':''}>${done?'Abgeschlossen':'Bauen'}</button>
-        </div>
-      </div>`;
-    if(!done && !locked && feas!=='none') card.querySelector('.buy-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
+      <div class="sbc-card-head">
+        <span class="sbc-tier-pill">${sbc.tier}</span>
+        <span class="sbc-size-pill">${sbc.size} Spieler</span>
+      </div>
+      <h3 class="sbc-name">${sbc.name}</h3>
+      <div class="sbc-desc">${sbc.desc}</div>
+      ${locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">\ud83d\udd12 Erst nach "${SBC_DEFS.find(s=>s.id===sbc.requires).name}" freigeschaltet</div>` : ''}
+      ${(!done && !locked) ? `<div class="mono" style="font-size:10.5px;color:${FEAS_INFO[feas].color};">\u25CF ${FEAS_INFO[feas].label}</div>` : ''}
+      <div class="sbc-reward-row">
+        <div class="sbc-reward-dot" style="background:${rewardInfo.dotColor};color:${rewardInfo.dotColor};"></div>
+        <span class="sbc-reward-label">${rewardInfo.label}</span>
+      </div>
+      ${progressHTML}
+      <button class="sbc-build-btn" ${done||locked||feas==='none'?'disabled':''}>${btnLabel}</button>`;
+    if(!done && !locked && feas!=='none') card.querySelector('.sbc-build-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
     grid.appendChild(card);
   });
 }
 function sbcRewardDisplay(sbc){
   if(sbc.directCard==='BALLONDOR_CARD'){
     return {label:`${BALLONDOR_CARD.n} (Ballon d'Or)`, dotColor:'#f2c14e', tierClass:'ultimate'};
+  }
+  if(sbc.directCardId){
+    const card = BY_ID.get(sbc.directCardId);
+    return {label: card ? `${card.n} (Einzigartig)` : 'Einzigartige Karte', dotColor:'#d9eef2', tierClass:'ultimate'};
   }
   if(sbc.coinReward){
     return {label:`${formatCoins(sbc.coinReward)} Coins`, dotColor:'var(--gold)', tierClass:'premium'};
@@ -7725,8 +7835,7 @@ function updateSBCState(){
   if(btn){ btn.disabled = !allOk; btn.style.opacity = allOk ? '1' : '.4'; }
 }
 async function submitSBC(){
-  const completed = new Set(profile.completedSBCs||[]);
-  if(completed.has(activeSBC.id)){ toast('Diese Herausforderung wurde bereits abgeschlossen.'); return; }
+  if(sbcCompletions(activeSBC.id)>=sbcMaxCompletions(activeSBC)){ toast('Diese Herausforderung wurde bereits maximal oft abgeschlossen.'); return; }
   const uids = [...sbcSelection];
   if(uids.length!==activeSBC.size || uids.some(uid=>!collection.some(c=>c.uid===uid))){
     toast('Deine Auswahl ist nicht mehr g\u00fcltig \u2014 bitte erneut ausw\u00e4hlen.');
@@ -7748,8 +7857,8 @@ async function submitSBC(){
     managerCollection = managerCollection.filter(m=>m.uid!==sbcManagerSelection);
     await sSet('managerCollection', managerCollection);
   }
-  profile.completedSBCs = profile.completedSBCs || [];
-  profile.completedSBCs.push(activeSBC.id);
+  profile.completedSBCs = profile.completedSBCs || {};
+  profile.completedSBCs[activeSBC.id] = (profile.completedSBCs[activeSBC.id]||0) + 1;
   await sSet('collection', collection);
   await sSet('profile', profile);
   currentTab = 'sbc';
@@ -7760,6 +7869,14 @@ async function submitSBC(){
     await sSet('collection', collection);
     toast('\ud83c\udfc6 Unglaublich! Du hast die Ballon d\u2019Or-Karte gewonnen!');
     showCutscene(BALLONDOR_CARD, ()=>{});
+  } else if(activeSBC.directCardId){
+    const card = BY_ID.get(activeSBC.directCardId);
+    if(card){
+      collection.push({uid:genId(), cardId:card.id});
+      await sSet('collection', collection);
+      toast(`\ud83c\udfc6 ${card.n} freigeschaltet \u2014 einzigartig, sonst nirgends erh\u00e4ltlich!`);
+      showCutscene(card, ()=>{});
+    }
   } else if(activeSBC.coinReward){
     await atomicCoinChange(activeSBC.coinReward);
     playSfx('coin');
@@ -9351,11 +9468,19 @@ function boot(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:[], dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0};
+    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
-    if(!profile.completedSBCs) profile.completedSBCs = [];
+    // migration: completedSBCs used to be a flat array of "done once" ids - now it's a
+    // {id: completionCount} map so SBCs can be completed multiple times. Each id that was in the
+    // old array counted as exactly 1 completion (the old system never allowed more than one anyway).
+    if(Array.isArray(profile.completedSBCs)){
+      const counts = {};
+      profile.completedSBCs.forEach(id=>{ counts[id] = (counts[id]||0)+1; });
+      profile.completedSBCs = counts;
+    }
+    if(!profile.completedSBCs || typeof profile.completedSBCs!=='object') profile.completedSBCs = {};
     if(profile.dailyStreak===undefined) profile.dailyStreak = 0;
     if(profile.lastClaimDate===undefined) profile.lastClaimDate = null;
     if(!profile.friends) profile.friends = [];
@@ -9522,6 +9647,7 @@ function askTextModal(title, placeholder, callback, maxLen=30){
 const VARIANT_ICON = {
   wpmvp:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
   mysteryrare:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 9a3 3 0 115.2 2c-.9.7-1.7 1.2-1.7 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/>',
+  sbcx:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/><circle cx="12" cy="8.2" r="2.1" fill="#0a0d12"/>',
   saph:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   rub:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   dia:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
@@ -9577,7 +9703,7 @@ const PATTERN_FAMILY = {
   icon:'legacy', cent:'legacy',
   gg:'keeper',
   flash:'retro',
-  wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia', wpmvp:'wpmvp', mysteryrare:'mysteryrare',
+  wc:'wc', blk:'blk', bh:'bh', saph:'saph', rub:'rub', dia:'dia', wpmvp:'wpmvp', mysteryrare:'mysteryrare', sbcx:'sbcx',
   kontra_gk:'keeper', kontra_def:'defense', kontra_mid:'creative', kontra_fwd:'attack',
   legikone:'legikonepattern', legwm:'legwmpattern', legnat:'legnatpattern',
   manager:'tactics',
