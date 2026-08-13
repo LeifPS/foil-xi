@@ -857,6 +857,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .wp-tile .wp-claim{width:100%;margin-top:7px;padding:4px 0;font-size:9.5px;border-radius:7px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;}
 .wp-tile .wp-check{margin-top:7px;font-size:13px;color:var(--turf-bright);}
 .wp-tile .wp-lockicon{margin-top:7px;font-size:12px;opacity:.7;}
+.wp-quest-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px;}
+.wp-quest{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;transition:opacity .2s;}
+.wp-quest.claimed{opacity:.5;}
+.wp-quest .wp-quest-label{font-size:12.5px;color:var(--chalk);line-height:1.35;min-height:32px;}
+.wp-quest .wp-claim{padding:5px 12px;font-size:10.5px;border-radius:7px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;}
 .live-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#ff6b57;text-transform:uppercase;letter-spacing:.04em;margin-right:2px;}
 .live-badge .live-dot{width:7px;height:7px;border-radius:50%;background:#ff6b57;box-shadow:0 0 6px #ff6b57;animation:live-pulse 1.4s ease-in-out infinite;}
 @keyframes live-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.7);}}
@@ -6115,15 +6120,40 @@ function mostRecentMonday(d){
 const WEEK_PASS_START = mostRecentMonday(new Date());
 const WEEK_PASS_END = WEEK_PASS_START + 7*24*60*60*1000;
 const WEEK_PASS_ID = 'wp-'+WEEK_PASS_START;
-const WEEK_PASS_MAX_LEVEL = 15;
-const WEEK_PASS_XP_PER_LEVEL = 250;
+// extended from 15 to 30 levels - levels 1-15 keep their exact original rewards (the level-15 card
+// check below is now hardcoded to 15 rather than tracking WEEK_PASS_MAX_LEVEL, specifically so it
+// can't silently drift onto the new max). No migration step needed: existing players' weekPass.xp
+// keeps accumulating uncapped even past the old level-15 threshold (weekPassLevel() only clamped the
+// *displayed* level, never the stored xp), so anyone already past 3750 xp this week simply appears
+// at their true, now-uncapped level the moment this loads - same {xp, claimed, weekId} shape throughout.
+const WEEK_PASS_MAX_LEVEL = 30;
+const WEEK_PASS_XP_PER_LEVEL = 250; // flat cost per level through 15, unchanged from before
 const WEEK_PASS_XP_WIN = 100;
 const WEEK_PASS_XP_LOSS = 40;
+// levels 1-15 still cost exactly 250 XP each (unchanged). From 16 on, each level costs noticeably
+// more than the last (+150 XP per level beyond 15) - climbing past 15 on match XP alone is
+// deliberately slow now. The daily quests below exist specifically to offset that with bonus XP.
+const WEEK_PASS_LEVEL_THRESHOLDS = (function(){
+  const arr = [0]; // arr[lv] = cumulative xp required to REACH level lv
+  for(let lv=1; lv<=WEEK_PASS_MAX_LEVEL; lv++){
+    const step = lv<=15 ? WEEK_PASS_XP_PER_LEVEL : WEEK_PASS_XP_PER_LEVEL + (lv-15)*150;
+    arr.push(arr[lv-1] + step);
+  }
+  return arr;
+})();
 function weekPassActive(){ return Date.now() < WEEK_PASS_END; }
-function weekPassLevel(xp){ return Math.min(WEEK_PASS_MAX_LEVEL, Math.floor((xp||0)/WEEK_PASS_XP_PER_LEVEL)); }
+function weekPassLevel(xp){
+  const x = xp||0;
+  let lv = 0;
+  while(lv<WEEK_PASS_MAX_LEVEL && x>=WEEK_PASS_LEVEL_THRESHOLDS[lv+1]) lv++;
+  return lv;
+}
+function weekPassXpIntoLevel(xp){ return (xp||0) - WEEK_PASS_LEVEL_THRESHOLDS[weekPassLevel(xp)]; }
+function weekPassXpForNextLevel(level){ return level>=WEEK_PASS_MAX_LEVEL ? 0 : WEEK_PASS_LEVEL_THRESHOLDS[level+1]-WEEK_PASS_LEVEL_THRESHOLDS[level]; }
 function weekPassReward(level){
-  if(level===WEEK_PASS_MAX_LEVEL) return {type:'card', cardId:9770001};
-  if(level%3===0) return {type:'pack', packId: level<9?'gold':(level<13?'sevenof88':'zeitgeist')};
+  if(level===15) return {type:'card', cardId:9770001};
+  if(level===WEEK_PASS_MAX_LEVEL) return {type:'card', cardId:9770002};
+  if(level%3===0) return {type:'pack', packId: level<9?'gold':(level<13?'sevenof88':(level<24?'zeitgeist':'kronjuwelen'))};
   return {type:'coins', amount: 900 + level*80};
 }
 function weekPassRewardIcon(reward){
@@ -6161,11 +6191,68 @@ async function claimWeekPassReward(level){
   }
   if(currentTab==='week') renderWeekPass(document.getElementById('view'));
 }
+// ===== Wochen Pass daily quests: reset every local calendar day, award bonus XP straight into the
+// pass. The intended lever for closing the much steeper 16-30 XP gap without pure match-grinding
+// alone taking forever - see WEEK_PASS_LEVEL_THRESHOLDS above.
+const WEEK_PASS_QUEST_DEFS = [
+  {id:'win5', type:'winMatches', target:5, xp:150, label:'Gewinne 5 Matches'},
+  {id:'win10', type:'winMatches', target:10, xp:280, label:'Gewinne 10 Matches'},
+  {id:'winUnderdog3', type:'winUnderdog', target:3, xp:180, label:'Gewinne 3 Matches mit einem Kader unter 80 Rating'},
+  {id:'winUnderdog5', type:'winUnderdog', target:5, xp:300, label:'Gewinne 5 Matches mit einer Bewertung unter 80'},
+  {id:'earn20k', type:'earnCoins', target:20000, xp:120, label:'Verdiene 20.000 Coins'},
+  {id:'earn40k', type:'earnCoins', target:40000, xp:220, label:'Verdiene 40.000 Coins'},
+  {id:'openGold', type:'openPack', packId:'gold', target:2, xp:100, label:'Öffne 2 Gold Rush Packs'},
+  {id:'openZeitgeist', type:'openPack', packId:'zeitgeist', target:1, xp:180, label:'Öffne 1 Zeitgeist Pack'},
+];
+function pickDailyWeekPassQuests(){
+  const pool = WEEK_PASS_QUEST_DEFS.slice();
+  const picked = [];
+  for(let i=0; i<3 && pool.length; i++) picked.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0].id);
+  return picked.map(id=>({id, progress:0, claimed:false}));
+}
+// called once at boot and lazily whenever the Wochen Pass view renders, so a day rollover mid-session
+// still refreshes the list without needing a reload. Returns true if it actually reset (caller persists).
+function ensureWeekPassQuestsFresh(){
+  const today = localDateStr(new Date());
+  if(!profile.weekPassQuests || profile.weekPassQuests.date!==today){
+    profile.weekPassQuests = {date: today, quests: pickDailyWeekPassQuests()};
+    return true;
+  }
+  return false;
+}
+// advances any of today's quests matching this event type (called from match-result, coin-gain, and
+// pack-purchase hook points below) - silently a no-op if the day's picks don't include that type, the
+// quest's already claimed, or the pass week itself has ended. Caller decides whether to persist/re-render.
+function bumpWeekPassQuest(type, amount, packId){
+  if(!weekPassActive() || !profile.weekPassQuests) return false;
+  let changed = false;
+  profile.weekPassQuests.quests.forEach(q=>{
+    if(q.claimed) return;
+    const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id);
+    if(!def || def.type!==type) return;
+    if(def.type==='openPack' && def.packId!==packId) return;
+    const next = Math.min(def.target, q.progress+amount);
+    if(next!==q.progress){ q.progress = next; changed = true; }
+  });
+  return changed;
+}
+async function claimWeekPassQuest(id){
+  const wq = profile.weekPassQuests;
+  const q = wq && wq.quests.find(x=>x.id===id);
+  const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===id);
+  if(!q || !def || q.claimed || q.progress<def.target) return;
+  q.claimed = true;
+  if(weekPassActive()) profile.weekPass.xp = (profile.weekPass.xp||0) + def.xp;
+  await sSet('profile', profile);
+  toast(`+${def.xp} Wochen-Pass-XP!`);
+  if(currentTab==='week') renderWeekPass(document.getElementById('view'));
+}
 function renderWeekPass(view){
+  if(ensureWeekPassQuestsFresh()) sSet('profile', profile);
   const wp = profile.weekPass;
   const level = weekPassLevel(wp.xp);
-  const xpIntoLevel = wp.xp - level*WEEK_PASS_XP_PER_LEVEL;
-  const xpForNext = level>=WEEK_PASS_MAX_LEVEL ? 0 : WEEK_PASS_XP_PER_LEVEL;
+  const xpIntoLevel = weekPassXpIntoLevel(wp.xp);
+  const xpForNext = weekPassXpForNextLevel(level);
   const pct = level>=WEEK_PASS_MAX_LEVEL ? 100 : Math.round(xpIntoLevel/xpForNext*100);
   const daysLeft = Math.max(0, Math.ceil((WEEK_PASS_END-Date.now())/(24*60*60*1000)));
   const active = weekPassActive();
@@ -6185,6 +6272,24 @@ function renderWeekPass(view){
       ${btn}
     </div>`;
   }).join('');
+  const quests = (profile.weekPassQuests && profile.weekPassQuests.quests) || [];
+  const questTiles = quests.map(q=>{
+    const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id);
+    if(!def) return '';
+    const done = q.progress>=def.target;
+    const pctQ = Math.min(100, Math.round(q.progress/def.target*100));
+    const btn = q.claimed
+      ? `<div class="wp-check">✓</div>`
+      : (done && active ? `<button class="wp-claim" data-quest="${q.id}">Holen</button>` : `<div class="mono" style="font-size:11px;color:var(--muted);">${q.progress} / ${def.target}</div>`);
+    return `<div class="wp-quest ${q.claimed?'claimed':''}">
+      <div class="wp-quest-label">${def.label}</div>
+      <div class="chem-bar" style="margin:6px 0;"><i style="width:${pctQ}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span class="mono" style="font-size:11px;color:var(--gold);">+${def.xp} XP</span>
+        ${btn}
+      </div>
+    </div>`;
+  }).join('');
   view.innerHTML = `
     <div class="view-head"><h2>Wochen Pass</h2><p class="hint">${active ? `Noch ${daysLeft} Tag${daysLeft===1?'':'e'} · ${WEEK_PASS_XP_WIN} XP pro Sieg, ${WEEK_PASS_XP_LOSS} XP pro Niederlage (nur echte Spiele)` : 'Dieser Wochen Pass ist beendet.'}</p></div>
     <div class="wp-header">
@@ -6192,9 +6297,15 @@ function renderWeekPass(view){
       <div class="chem-bar" style="max-width:320px;margin:10px auto 0;"><i style="width:${pct}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
       <p class="hint" style="margin-top:6px;">${level>=WEEK_PASS_MAX_LEVEL ? 'Maximale Stufe erreicht' : `${xpIntoLevel} / ${xpForNext} XP bis Stufe ${level+1}`}</p>
     </div>
-    <div class="wp-track">${tiles}</div>`;
-  view.querySelectorAll('.wp-claim').forEach(btn=>{
+    <h3 style="font-size:15px;margin:20px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Tagesquests</h3>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Reseten jeden Tag um Mitternacht. Bonus-XP fürs Level, direkt on top.</p>
+    <div class="wp-quest-grid">${questTiles}</div>
+    <div class="wp-track" style="margin-top:22px;">${tiles}</div>`;
+  view.querySelectorAll('.wp-claim[data-level]').forEach(btn=>{
     btn.addEventListener('click', ()=>claimWeekPassReward(Number(btn.dataset.level)));
+  });
+  view.querySelectorAll('.wp-claim[data-quest]').forEach(btn=>{
+    btn.addEventListener('click', ()=>claimWeekPassQuest(btn.dataset.quest));
   });
 }
 function iconSwapCardUnlocked(card){ return Date.now() >= iconSwapUnlockTime(card.unlockDay); }
@@ -6272,6 +6383,11 @@ function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme=
 const WEEK_PASS_CARD_BASE = findBaseCard(257534); // C. Palmer
 const WEEK_PASS_CARD = WEEK_PASS_CARD_BASE ? boostBaseToOv(WEEK_PASS_CARD_BASE, 106, 9770001, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
 if(WEEK_PASS_CARD) BY_ID.set(WEEK_PASS_CARD.id, WEEK_PASS_CARD);
+// level-30 reward, added when the pass was extended from 15 to 30 levels - the single highest-rated
+// real outfield player in the base game, picked programmatically so this never needs a hardcoded id.
+const WEEK_PASS_CARD2_BASE = ALL_BASE.filter(c=>!c.gk && c.id!==(WEEK_PASS_CARD_BASE&&WEEK_PASS_CARD_BASE.id)).slice().sort((a,b)=>b.ov-a.ov)[0];
+const WEEK_PASS_CARD2 = WEEK_PASS_CARD2_BASE ? boostBaseToOv(WEEK_PASS_CARD2_BASE, 108, 9770002, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
+if(WEEK_PASS_CARD2) BY_ID.set(WEEK_PASS_CARD2.id, WEEK_PASS_CARD2);
 // ===== Mystery Elite Pack's rare tier: 5 real standout players (best of each position group, plus
 // the single highest-rated outfield player overall) boosted into the 104-108 "105 range" - the pack's
 // normal pool tops out at 99, so these are the rare exception that occasionally punches above that.
@@ -8990,10 +9106,14 @@ async function sGet(key, shared=false){
 }
 async function atomicCoinChange(delta, extraSets={}){
   await fbReady;
+  // "Verdiene X Coins" Wochen Pass quest - any positive delta counts as earned, regardless of source
+  // (match reward, sale, quest/reward payout, admin grant, ...)
+  const questsChanged = delta>0 ? bumpWeekPassQuest('earnCoins', delta) : false;
   if(fb && clubId && fb.updateDoc && fb.increment){
     try{
       const payload = { 'profile.coins': fb.increment(delta) };
       Object.entries(extraSets).forEach(([k,v])=>{ payload[`profile.${k}`] = v; });
+      if(questsChanged) payload['profile.weekPassQuests'] = profile.weekPassQuests;
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
       profile.coins += delta;
       Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
@@ -9250,6 +9370,7 @@ async function init(){
     // count for accounts that already existed before this field did, so nobody's legacy starts at 0.
     if(profile.careerWins===undefined) profile.careerWins = profile.wins||0;
   }
+  if(ensureWeekPassQuestsFresh()) await sSet('profile', profile);
   if(profile.banned && !isAdmin()){
     document.getElementById('modal-root').innerHTML = `
       <div class="modal-overlay" style="cursor:default;">
@@ -9927,6 +10048,7 @@ async function redeemCode(){
 async function buyPack(pack){
   if(profile.coins < pack.cost){ toast("Nicht genug Coins."); return; }
   await atomicCoinChange(-pack.cost);
+  if(bumpWeekPassQuest('openPack', 1, pack.id)) await sSet('profile', profile);
   const drawn = pack.draw();
   showPackOpening(pack, drawn);
   renderStore(document.getElementById('view'));
@@ -14748,6 +14870,13 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
     if(oppUserId) profile.rivalries = newRivalries;
     if(finalSpXp) profile.weekPass.xp += finalSpXp;
     await sSet('profile', profile);
+  }
+  // Wochen Pass daily quests - same "real, non-friendly match" eligibility as spXp above. Separate
+  // write since the fast (fb.updateDoc) path above doesn't touch profile.weekPassQuests at all.
+  if(result==='WIN'){
+    let questsChanged = bumpWeekPassQuest('winMatches', 1);
+    if(squadRating().rating<80) questsChanged = bumpWeekPassQuest('winUnderdog', 1) || questsChanged;
+    if(questsChanged) await sSet('profile', profile);
   }
   updateCoinDisplay();
   playSfx('whistle');
