@@ -859,7 +859,6 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .wp-tile .wp-lockicon{margin-top:7px;font-size:12px;opacity:.7;}
 .wp-quest-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px;}
 .wp-quest{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;transition:opacity .2s;}
-.wp-quest.claimed{opacity:.5;}
 .wp-quest .wp-quest-label{font-size:12.5px;color:var(--chalk);line-height:1.35;min-height:32px;}
 .wp-quest .wp-claim{padding:5px 12px;font-size:10.5px;border-radius:7px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;}
 .live-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#ff6b57;text-transform:uppercase;letter-spacing:.04em;margin-right:2px;}
@@ -6204,30 +6203,40 @@ const WEEK_PASS_QUEST_DEFS = [
   {id:'openGold', type:'openPack', packId:'gold', target:2, xp:100, label:'Öffne 2 Gold Rush Packs'},
   {id:'openZeitgeist', type:'openPack', packId:'zeitgeist', target:1, xp:180, label:'Öffne 1 Zeitgeist Pack'},
 ];
-function pickDailyWeekPassQuests(){
-  const pool = WEEK_PASS_QUEST_DEFS.slice();
-  const picked = [];
-  for(let i=0; i<3 && pool.length; i++) picked.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0].id);
-  return picked.map(id=>({id, progress:0, claimed:false}));
+// picks one quest definition not already among the given active ids - falls back to the full pool
+// if every template is somehow already active (can't happen with 8 templates and only 3 active slots).
+function pickWeekPassQuest(excludeIds){
+  const pool = WEEK_PASS_QUEST_DEFS.filter(d=>!excludeIds.includes(d.id));
+  const candidates = pool.length ? pool : WEEK_PASS_QUEST_DEFS;
+  return candidates[Math.floor(Math.random()*candidates.length)];
 }
-// called once at boot and lazily whenever the Wochen Pass view renders, so a day rollover mid-session
-// still refreshes the list without needing a reload. Returns true if it actually reset (caller persists).
+// always exactly 3 active quests, no daily reset - completing and claiming one immediately replaces
+// it with a fresh one (see claimWeekPassQuest), so there's always something in progress. Called once
+// at boot and lazily whenever the Wochen Pass view renders. Returns true if it changed anything
+// (caller persists) - also doubles as the migration path off the old date-keyed/claimed-flag shape.
 function ensureWeekPassQuestsFresh(){
-  const today = localDateStr(new Date());
-  if(!profile.weekPassQuests || profile.weekPassQuests.date!==today){
-    profile.weekPassQuests = {date: today, quests: pickDailyWeekPassQuests()};
-    return true;
+  if(!profile.weekPassQuests || !Array.isArray(profile.weekPassQuests.quests)){
+    profile.weekPassQuests = {quests: []};
   }
-  return false;
+  const before = profile.weekPassQuests.quests.length;
+  // migration: the old version left claimed quests sitting in the list until a daily reset - drop
+  // any leftover claimed entries so this only ever holds currently-active quests going forward
+  profile.weekPassQuests.quests = profile.weekPassQuests.quests.filter(q=>!q.claimed);
+  let changed = profile.weekPassQuests.quests.length!==before;
+  while(profile.weekPassQuests.quests.length<3){
+    const def = pickWeekPassQuest(profile.weekPassQuests.quests.map(q=>q.id));
+    profile.weekPassQuests.quests.push({id:def.id, progress:0});
+    changed = true;
+  }
+  return changed;
 }
-// advances any of today's quests matching this event type (called from match-result, coin-gain, and
-// pack-purchase hook points below) - silently a no-op if the day's picks don't include that type, the
-// quest's already claimed, or the pass week itself has ended. Caller decides whether to persist/re-render.
+// advances any currently-active quest matching this event type (called from match-result, coin-gain,
+// and pack-purchase hook points below) - silently a no-op if none of the 3 active quests match, or
+// the pass week itself has ended. Caller decides whether to persist/re-render.
 function bumpWeekPassQuest(type, amount, packId){
   if(!weekPassActive() || !profile.weekPassQuests) return false;
   let changed = false;
   profile.weekPassQuests.quests.forEach(q=>{
-    if(q.claimed) return;
     const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id);
     if(!def || def.type!==type) return;
     if(def.type==='openPack' && def.packId!==packId) return;
@@ -6238,13 +6247,17 @@ function bumpWeekPassQuest(type, amount, packId){
 }
 async function claimWeekPassQuest(id){
   const wq = profile.weekPassQuests;
-  const q = wq && wq.quests.find(x=>x.id===id);
+  const idx = wq ? wq.quests.findIndex(x=>x.id===id) : -1;
+  if(idx<0) return;
+  const q = wq.quests[idx];
   const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===id);
-  if(!q || !def || q.claimed || q.progress<def.target) return;
-  q.claimed = true;
+  if(!def || q.progress<def.target) return;
   if(weekPassActive()) profile.weekPass.xp = (profile.weekPass.xp||0) + def.xp;
+  // replace immediately with a new quest, distinct from the other 2 still active
+  const newDef = pickWeekPassQuest(wq.quests.filter((_,i)=>i!==idx).map(x=>x.id));
+  wq.quests[idx] = {id:newDef.id, progress:0};
   await sSet('profile', profile);
-  toast(`+${def.xp} Wochen-Pass-XP!`);
+  toast(`+${def.xp} Wochen-Pass-XP! Neue Quest: ${newDef.label}`);
   if(currentTab==='week') renderWeekPass(document.getElementById('view'));
 }
 function renderWeekPass(view){
@@ -6278,10 +6291,8 @@ function renderWeekPass(view){
     if(!def) return '';
     const done = q.progress>=def.target;
     const pctQ = Math.min(100, Math.round(q.progress/def.target*100));
-    const btn = q.claimed
-      ? `<div class="wp-check">✓</div>`
-      : (done && active ? `<button class="wp-claim" data-quest="${q.id}">Holen</button>` : `<div class="mono" style="font-size:11px;color:var(--muted);">${q.progress} / ${def.target}</div>`);
-    return `<div class="wp-quest ${q.claimed?'claimed':''}">
+    const btn = (done && active) ? `<button class="wp-claim" data-quest="${q.id}">Holen</button>` : `<div class="mono" style="font-size:11px;color:var(--muted);">${q.progress} / ${def.target}</div>`;
+    return `<div class="wp-quest">
       <div class="wp-quest-label">${def.label}</div>
       <div class="chem-bar" style="margin:6px 0;"><i style="width:${pctQ}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -6297,8 +6308,8 @@ function renderWeekPass(view){
       <div class="chem-bar" style="max-width:320px;margin:10px auto 0;"><i style="width:${pct}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
       <p class="hint" style="margin-top:6px;">${level>=WEEK_PASS_MAX_LEVEL ? 'Maximale Stufe erreicht' : `${xpIntoLevel} / ${xpForNext} XP bis Stufe ${level+1}`}</p>
     </div>
-    <h3 style="font-size:15px;margin:20px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Tagesquests</h3>
-    <p class="hint" style="margin-top:0;margin-bottom:12px;">Reseten jeden Tag um Mitternacht. Bonus-XP fürs Level, direkt on top.</p>
+    <h3 style="font-size:15px;margin:20px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Quests</h3>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Immer 3 gleichzeitig aktiv. Schaffst du eine, gibt's sofort Bonus-XP fürs Level und eine neue Quest rückt nach.</p>
     <div class="wp-quest-grid">${questTiles}</div>
     <div class="wp-track" style="margin-top:22px;">${tiles}</div>`;
   view.querySelectorAll('.wp-claim[data-level]').forEach(btn=>{
