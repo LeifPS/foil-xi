@@ -7514,6 +7514,12 @@ const RUDIGER_QUEST_BASE = findBaseCard(205452);
 const RUDIGER_QUEST_CARD = RUDIGER_QUEST_BASE ? boostBaseToOv(RUDIGER_QUEST_BASE, 99, 9791005, 'promoquestreward', 'PROMO', 'promocard') : null;
 if(RUDIGER_QUEST_CARD) RUDIGER_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p50537100.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=ba7adb684300bfd4de6fc33c13b44d0b';
 if(RUDIGER_QUEST_CARD) BY_ID.set(RUDIGER_QUEST_CARD.id, RUDIGER_QUEST_CARD);
+// 5th PROMO-Sonderaufgaben limited event (see HAALAND_QUEST_DEADLINE): same pattern again, built from
+// Haaland's real base card (id 239085, 90 OV) boosted to exactly 99.
+const HAALAND_QUEST_BASE = findBaseCard(239085);
+const HAALAND_QUEST_CARD = HAALAND_QUEST_BASE ? boostBaseToOv(HAALAND_QUEST_BASE, 99, 9791006, 'promoquestreward', 'PROMO', 'promocard') : null;
+if(HAALAND_QUEST_CARD) HAALAND_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p218342893.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=fbc7029c0797f8e4c29326119912f773';
+if(HAALAND_QUEST_CARD) BY_ID.set(HAALAND_QUEST_CARD.id, HAALAND_QUEST_CARD);
 // every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
 // exclusive-card ones above set maxCompletions:1) - see sbcCompletions()/sbcMaxCompletions() below.
 const SBC_DEFAULT_MAX_COMPLETIONS = 5;
@@ -7729,6 +7735,29 @@ const SBC_DEFS = [
   {id:'rudiger_quest_nation', name:'Deutsche Elf', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, alle aus Deutschland (Rüdigers Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Deutschland', c=>c.every(x=>x.nat==='Germany'), c=>`${c.filter(x=>x.nat==='Germany').length} / 11 aus Deutschland`),
+           req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
+  // --- 5th PROMO-Sonderaufgaben limited event (see HAALAND_QUEST_DEADLINE) - same pattern again.
+  {id:'haaland_quest_sturm', name:'Sturmspitze', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.000 Coins.',
+    reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
+           req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
+           req('5+ Stürmer', c=>c.filter(x=>posGroup(x.pos)==='FWD').length>=5, c=>`${c.filter(x=>posGroup(x.pos)==='FWD').length} / 5`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'haaland_quest_knipser', name:'Knipser-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 6 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
+    reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
+           req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
+           req('6+ Stürmer', c=>c.filter(x=>posGroup(x.pos)==='FWD').length>=6, c=>`${c.filter(x=>posGroup(x.pos)==='FWD').length} / 6`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'haaland_quest_squad1', name:'91er Kader I', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'haaland_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'haaland_quest_nation', name:'Norge', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, alle aus Norwegen (Haalands Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
+    reqs:[ req('Alle aus Norwegen', c=>c.every(x=>x.nat==='Norway'), c=>`${c.filter(x=>x.nat==='Norway').length} / 11 aus Norwegen`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
@@ -8053,6 +8082,23 @@ function renderChallengeGrid(){
     tile.addEventListener('click', openRudigerQuestDetail);
     grid.appendChild(tile);
   }
+  if(haalandQuestActive()){
+    const doneCount = HAALAND_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + HAALAND_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
+    const claimed = profile.haalandQuestCardClaimed;
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = '#ff5a36';
+    tile.style.boxShadow = '0 0 18px -9px #ff5a36';
+    tile.style.cursor = 'pointer';
+    tile.innerHTML = challengeTileHTML(
+      {id:'haalandquest', name:'PROMO-Sonderaufgaben', pill:'Promo-Event', accent:'#ff5a36',
+        desc:`7 schwere Aufgaben für ${HAALAND_QUEST_CARD?HAALAND_QUEST_CARD.n:'Haaland'} (99 OVR).`},
+      `<div class="sbc-progress-dots" title="${doneCount} / 7 abgeschlossen">${Array.from({length:7},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+       ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
+    );
+    tile.addEventListener('click', openHaalandQuestDetail);
+    grid.appendChild(tile);
+  }
   CHALLENGE_DEFS.forEach(def=>{
     const done = challengeIsDone(def);
     const tile = document.createElement('div');
@@ -8080,7 +8126,7 @@ async function renderSBCList(view){
   const poolWithSquad = allCards;
   const grid = document.getElementById('sbc-grid');
   grid.innerHTML = '';
-  SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id)).forEach(sbc=>{
+  SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id)).forEach(sbc=>{
     grid.appendChild(buildSbcTile(sbc, poolFree, poolWithSquad));
   });
 }
@@ -14889,6 +14935,123 @@ function openRudigerQuestDetail(){
   };
   updateCountdown();
   rudigerQuestCountdownTimer = setInterval(updateCountdown, 30000);
+}
+// ===== 5th PROMO-Sonderaufgaben: same pattern again, 2 SBCs + 2 match quests, all available =====
+// ===== immediately, running for 2 weeks. =====
+const HAALAND_QUEST_START = new Date(2026, 7, 14, 0, 0, 0).getTime(); // Friday - available immediately
+const HAALAND_QUEST_DEADLINE = new Date(2026, 7, 28, 0, 0, 0).getTime(); // 2 weeks later
+function haalandQuestActive(){ const t = Date.now(); return t>=HAALAND_QUEST_START && t<HAALAND_QUEST_DEADLINE; }
+const HAALAND_QUEST_SBC_IDS = ['haaland_quest_sturm', 'haaland_quest_knipser', 'haaland_quest_squad1', 'haaland_quest_squad2', 'haaland_quest_nation'];
+const HAALAND_QUEST_MATCHES = [
+  {id:1, flag:'haalandQuestMatch1Won', label:'PROMO-Test', targetOv:107},
+  {id:2, flag:'haalandQuestMatch2Won', label:'PROMO-Endspiel', targetOv:112},
+];
+function haalandQuestSbcsDone(){ return HAALAND_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
+function haalandQuestMatchesDone(){ return HAALAND_QUEST_MATCHES.every(m=>profile[m.flag]); }
+function haalandQuestAllDone(){ return haalandQuestSbcsDone() && haalandQuestMatchesDone(); }
+let haalandQuestCountdownTimer = null;
+async function playHaalandQuestMatch(m){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(profile[m.flag]){ toast('Diese Herausforderung ist bereits gewonnen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const opp = buildFixedRatingOpponent(m.targetOv);
+  const area = document.getElementById(`haalandquest-match${m.id}-area`);
+  const btn = document.getElementById(`haalandquest-match${m.id}-btn`);
+  if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      profile[m.flag] = true;
+      await sSet('profile', profile);
+      toast(`🏆 ${m.label} gewonnen!`);
+    } else {
+      toast('Verloren — versuch es jederzeit erneut.');
+    }
+    renderHaalandQuestSubgrid();
+  }});
+}
+async function claimHaalandQuestReward(){
+  if(!haalandQuestAllDone() || profile.haalandQuestCardClaimed || !HAALAND_QUEST_CARD) return;
+  profile.haalandQuestCardClaimed = true;
+  collection.push({uid:genId(), cardId:HAALAND_QUEST_CARD.id});
+  await sSet('collection', collection);
+  await sSet('profile', profile);
+  toast(`🏆 ${HAALAND_QUEST_CARD.n} (99 OVR) freigeschaltet!`);
+  showCutscene(HAALAND_QUEST_CARD, ()=>{});
+  renderHaalandQuestSubgrid();
+}
+function renderHaalandQuestSubgrid(){
+  const grid = document.getElementById('haalandquest-subgrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const squadLocked = new Set(Object.values(squad.slots));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  HAALAND_QUEST_SBC_IDS.forEach(id=>{
+    grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+  });
+  HAALAND_QUEST_MATCHES.forEach(m=>{
+    const done = !!profile[m.flag];
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = '#ff5a36';
+    tile.style.gridColumn = '1 / -1'; // full width - a live match (teams/score/commentary) doesn't fit the compact SBC tile size
+    tile.innerHTML = `
+      <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
+      <h3 class="sbc-name">${m.label}</h3>
+      <div class="sbc-desc">${m.id===1?'Ein hartes Match':'Ein extrem hartes Match'} gegen einen Fantasie-Gegner.</div>
+      ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
+      <div id="haalandquest-match${m.id}-area" style="text-align:center;"></div>
+      <button class="sbc-build-btn" id="haalandquest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
+    if(!done) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playHaalandQuestMatch(m));
+    grid.appendChild(tile);
+  });
+  const claimBtn = document.getElementById('haalandquest-claim-btn');
+  if(claimBtn){
+    const allDone = haalandQuestAllDone();
+    const claimed = profile.haalandQuestCardClaimed;
+    claimBtn.disabled = !allDone || claimed;
+    claimBtn.textContent = claimed ? 'Bereits abgeholt' : 'Haaland (99 OVR) abholen';
+    claimBtn.onclick = (allDone && !claimed) ? claimHaalandQuestReward : null;
+  }
+}
+function openHaalandQuestDetail(){
+  if(haalandQuestCountdownTimer){ clearInterval(haalandQuestCountdownTimer); haalandQuestCountdownTimer = null; }
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>PROMO-Sonderaufgaben</h2><p>Schließe alle 7 Aufgaben ab und hol dir <b style="color:#ff5a36;">${HAALAND_QUEST_CARD?HAALAND_QUEST_CARD.n:'Haaland'} (99 OVR)</b> — sonst nirgends erhältlich.</p></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px;">
+      <div id="haalandquest-reward-card"></div>
+      ${profile.haalandQuestCardClaimed ? '' : '<div class="mono" style="font-size:10.5px;color:var(--muted);">Vorschau — erst nach Abschluss aller Aufgaben erhältlich</div>'}
+    </div>
+    <div class="toolbar"><button class="action-btn secondary" id="haalandquest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
+    <div id="haalandquest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
+    <div class="sbc-grid" id="haalandquest-subgrid" style="margin-bottom:18px;"></div>
+    <button class="action-btn" id="haalandquest-claim-btn" style="width:260px;"></button>`;
+  document.getElementById('haalandquest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const haalandRewardBox = document.getElementById('haalandquest-reward-card');
+  if(haalandRewardBox && HAALAND_QUEST_CARD){
+    const cardNode = cardEl(HAALAND_QUEST_CARD, 'mini');
+    if(!profile.haalandQuestCardClaimed) cardNode.style.opacity = '.8';
+    haalandRewardBox.appendChild(cardNode);
+  }
+  renderHaalandQuestSubgrid();
+  const updateCountdown = ()=>{
+    const el = document.getElementById('haalandquest-countdown');
+    if(!el){ if(haalandQuestCountdownTimer){ clearInterval(haalandQuestCountdownTimer); haalandQuestCountdownTimer=null; } return; }
+    if(!haalandQuestActive()){ currentTab='sbc'; renderNav(); renderView('sbc'); return; }
+    el.textContent = `⏳ Noch ${formatCountdown(HAALAND_QUEST_DEADLINE - Date.now())} verfügbar`;
+  };
+  updateCountdown();
+  haalandQuestCountdownTimer = setInterval(updateCountdown, 30000);
 }
 // ===== O Rei Herausforderung: the ultimate capstone challenge =====
 const OREI_ENTRY = {wins:200, rating:105, netWorth:500000};
