@@ -5578,38 +5578,18 @@ const BLACKHOLE_IMG_OVERRIDE = {
   256790: 'https://cdn3.futbin.com/content/fifa26/img/players/p67365654.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=10c0eeb9ba3698c6c00a53221c259229', // J. Musiala
 };
 const BLACK_HOLE_STAT_KEYS = ['pac','sho','pas','dri','defn','phy'];
+// every variant card's substats are the real base card's own DB values, each shifted by the exact same
+// flat amount as the OV gain over that base - not a pool of "gain points" spread thin across 6 stats
+// (the old round-robin approach only ever moved each stat by ~gain/6). E.g. base Messi 86 OV / 78 TEM /
+// 90 DRI boosted to a 108 OV variant (+22) becomes 100 TEM / 112 DRI (+22 each) - so a substat can and
+// often does end up above the card's own OV, matching how real special-card substats work. No upper cap
+// on the positive side (matches the hand-authored GOAT/WM/Legenden cards, which already exceed 99 on
+// several stats); the negative side floors at 1 so a heavily weakened stat never goes non-positive.
 function distributeStatGain(base, gain, keys){
   const out = {...base};
-  if(gain<0){
-    // symmetric reduction - same round-robin spread, just subtracting instead of adding, so a
-    // weakened card's substats still add up to something consistent with its lowered OV
-    let remaining = -gain, guard = 0;
-    while(remaining>0 && guard<200){
-      guard++;
-      let progressed = false;
-      for(const k of keys){
-        if(remaining<=0) break;
-        if(typeof out[k]==='number' && out[k]>1){ out[k]--; remaining--; progressed = true; }
-      }
-      if(!progressed) break;
-    }
-    return out;
-  }
-  // no upper cap here on purpose: a handful of the game's hardest-to-get cards (Diamant Kronjuwelen,
-  // GOAT, etc.) push individual substats past 99 - that's intended, not a bug, and matches the hand-
-  // authored GOAT/WM/Legenden cards which already do the same. Capping at 99 used to silently drop
-  // leftover gain once every stat hit the ceiling, under-crediting exactly the cards that deserved
-  // the biggest boost.
-  let remaining = gain, guard = 0;
-  while(remaining>0 && guard<200){
-    guard++;
-    let progressed = false;
-    for(const k of keys){
-      if(remaining<=0) break;
-      if(typeof out[k]==='number'){ out[k]++; remaining--; progressed = true; }
-    }
-    if(!progressed) break;
-  }
+  keys.forEach(k=>{
+    if(typeof out[k]==='number') out[k] = Math.max(1, out[k]+gain);
+  });
   return out;
 }
 function toBlackHole(card){
@@ -6517,6 +6497,51 @@ const MYSTERY_RARE_ROSTER = (function(){
   return picks.slice(0,5).map((base,i)=>boostBaseToOv(base, targets[i], 9780000+i, 'mysteryrare', 'Mystery Elite', 'mysteryrare'));
 })();
 MYSTERY_RARE_ROSTER.forEach(c=>BY_ID.set(c.id,c));
+// Recompute every special/variant card's substats from its real base card's own DB values plus a flat
+// OV gain, instead of trusting whatever was hand-typed when that card's row was authored - keeps every
+// variant's stats consistent with its own advertised OV bump. E.g. base Messi (86 OV / 78 TEM / 90 DRI)
+// boosted into a 108 OV variant (+22) becomes 100 TEM / 112 DRI (+22 each), not arbitrary hand-picked
+// numbers - a substat routinely ends up above the card's own OV as a result, same as real special cards.
+// Base cards (no baseId) are left untouched. Runs once, after every card array above is registered into
+// BY_ID; boostBaseToOv-built cards created AFTER this point (WEEK_PASS/SBC-exclusive/WM-quest cards
+// etc.) already use this same formula at construction time via distributeStatGain, so this pass never
+// needs to touch them.
+(function recalcAllVariantSubstats(){
+  const noBaseCards = [];
+  BY_ID.forEach(card=>{
+    if(card.isManager) return;
+    if(!card.baseId){ if(card.variant && card.variant!=='base') noBaseCards.push(card); return; }
+    const base = findBaseCard(card.baseId);
+    if(!base || base===card) return;
+    const gain = card.ov - base.ov;
+    BLACK_HOLE_STAT_KEYS.forEach(k=>{
+      if(typeof base[k]==='number') card[k] = Math.max(1, base[k]+gain);
+    });
+  });
+  // A handful of the game's rarest cards (Pelé, Maradona, Zidane, Beckenbauer, the PRIME legends, etc.)
+  // have no real base card to derive a gain from - they were hand-typed with plain, unboosted substats
+  // (e.g. a 108 OV Zidane topping out at 96 DRI) while every baseId-driven card at the same OV now runs
+  // substats well above it (a 108 OV Messi hits 112 DRI). That left these ultra-rare cards weaker than
+  // cards several tiers below them, which is backwards. Fix: measure the average (ov - avgSubstat) gap
+  // actually produced by the baseId formula above for elite (100+) cards, then apply that same gap to
+  // every no-base card so they're competitive with everything else at their rating instead of falling
+  // further and further behind as OV climbs.
+  let gapSum = 0, gapCount = 0;
+  BY_ID.forEach(card=>{
+    if(card.isManager || !card.baseId || card.ov<100) return;
+    const avg = BLACK_HOLE_STAT_KEYS.reduce((s,k)=>s+(card[k]||0),0)/BLACK_HOLE_STAT_KEYS.length;
+    gapSum += card.ov-avg; gapCount++;
+  });
+  const eliteGap = gapCount ? gapSum/gapCount : 12;
+  noBaseCards.forEach(card=>{
+    const avg = BLACK_HOLE_STAT_KEYS.reduce((s,k)=>s+(card[k]||0),0)/BLACK_HOLE_STAT_KEYS.length;
+    const gain = Math.round((card.ov-eliteGap) - avg);
+    if(gain<=0) return; // already at or above the target - don't weaken a card that's already fine
+    BLACK_HOLE_STAT_KEYS.forEach(k=>{
+      if(typeof card[k]==='number') card[k] = Math.max(1, card[k]+gain);
+    });
+  });
+})();
 const OG_PELE = OGICON_CARDS.find(p=>p.n==='Pel\u00e9');
 const OG_MARADONA = OGICON_CARDS.find(p=>p.n==='Diego Maradona');
 const OG_ZIDANE = OGICON_CARDS.find(p=>p.n==='Zinedine Zidane');
