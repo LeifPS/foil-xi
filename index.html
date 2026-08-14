@@ -897,6 +897,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .sbc-card.tier-quest{border-left-color:#ff5f5f;background:radial-gradient(circle at 0% 0%, rgba(255,95,95,.08), var(--panel) 65%);}
 .sbc-card.tier-exclusive{border-left-color:#d9eef2;background:radial-gradient(circle at 0% 0%, rgba(217,238,242,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #d9eef2;}
 .sbc-card.tier-wmquest{border-left-color:#ffcc00;background:radial-gradient(circle at 0% 0%, rgba(170,21,27,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #aa151b;}
+.sbc-card.tier-promoquest{border-left-color:#7ad9ff;background:radial-gradient(circle at 0% 0%, rgba(122,217,255,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #7ad9ff;}
 .sbc-card-head{display:flex;justify-content:space-between;align-items:center;}
 .sbc-tier-pill, .sbc-size-pill{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-family:'JetBrains Mono';}
 .sbc-card .sbc-name{font-family:'Anton';font-size:16px;letter-spacing:.01em;margin:0;font-weight:400;}
@@ -7375,6 +7376,18 @@ const WM_QUEST_MBAPPE_BASE = findBaseCard(231747);
 const WM_QUEST_MBAPPE_CARD = WM_QUEST_MBAPPE_BASE ? boostBaseToOv(WM_QUEST_MBAPPE_BASE, 100, 9791001, 'wmquestreward', 'WM-Elite', 'sbcx') : null;
 if(WM_QUEST_MBAPPE_CARD) WM_QUEST_MBAPPE_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p67340611.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=6dcd0ad869f2d76db5937265e0cf203f';
 if(WM_QUEST_MBAPPE_CARD) BY_ID.set(WM_QUEST_MBAPPE_CARD.id, WM_QUEST_MBAPPE_CARD);
+// PROMO-Sonderaufgaben limited event (see OLISE_QUEST_DEADLINE): same pattern as the WM quest above,
+// built from Olise's real base card (id 247827, 86 OV) boosted to exactly 99.
+const OLISE_QUEST_BASE = findBaseCard(247827);
+const OLISE_QUEST_CARD = OLISE_QUEST_BASE ? boostBaseToOv(OLISE_QUEST_BASE, 99, 9791002, 'promoquestreward', 'PROMO', 'sbcx') : null;
+if(OLISE_QUEST_CARD) OLISE_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p117688339.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=fe26eeb877a37e0db77ca41708401a68';
+if(OLISE_QUEST_CARD) BY_ID.set(OLISE_QUEST_CARD.id, OLISE_QUEST_CARD);
+// 2nd PROMO-Sonderaufgaben limited event (see ALISSON_QUEST_DEADLINE): same pattern again, built from
+// Alisson's real base card (id 212831, 89 OV) boosted to exactly 99.
+const ALISSON_QUEST_BASE = findBaseCard(212831);
+const ALISSON_QUEST_CARD = ALISSON_QUEST_BASE ? boostBaseToOv(ALISSON_QUEST_BASE, 99, 9791003, 'promoquestreward', 'PROMO', 'sbcx') : null;
+if(ALISSON_QUEST_CARD) ALISSON_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p67321695.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=20b746b33f020ff17c4aeab8f4b39628';
+if(ALISSON_QUEST_CARD) BY_ID.set(ALISSON_QUEST_CARD.id, ALISSON_QUEST_CARD);
 // every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
 // exclusive-card ones above set maxCompletions:1) - see sbcCompletions()/sbcMaxCompletions() below.
 const SBC_DEFAULT_MAX_COMPLETIONS = 5;
@@ -7497,6 +7510,54 @@ const SBC_DEFS = [
            req('Kein Spieler unter 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} unter 88`),
            req('4+ Mittelfeldspieler', c=>c.filter(x=>posGroup(x.pos)==='MID').length>=4, c=>`${c.filter(x=>posGroup(x.pos)==='MID').length} / 4`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  // --- PROMO-Sonderaufgaben limited event (see OLISE_QUEST_DEADLINE): 4 of the event's 6 quests.
+  // Each is one-time-only and grants coins directly (no intermediate pack, unlike the WM quest);
+  // completing all 4 plus the 2 match quests in OLISE_QUEST_MATCHES unlocks the OLISE_QUEST_CARD claim.
+  {id:'olise_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 5 Mittelfeldspieler und 6 Sonderkarten. Belohnung: 3.000 Coins.',
+    reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
+           req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
+           req('5+ Mittelfeldspieler', c=>c.filter(x=>posGroup(x.pos)==='MID').length>=5, c=>`${c.filter(x=>posGroup(x.pos)==='MID').length} / 5`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'olise_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
+    reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
+           req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
+           req('5+ Stürmer', c=>c.filter(x=>posGroup(x.pos)==='FWD').length>=5, c=>`${c.filter(x=>posGroup(x.pos)==='FWD').length} / 5`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'olise_quest_squad1', name:'91er Kader I', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'olise_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'olise_quest_nation', name:'Équipe de France', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 88+, alle aus Frankreich (Olises Heimatland). Belohnung: 2.000 Coins.',
+    reqs:[ req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`),
+           req('Alle aus Frankreich', c=>c.every(x=>x.nat==='France'), c=>`${c.filter(x=>x.nat==='France').length} / 11 aus Frankreich`) ]},
+  // --- 2nd PROMO-Sonderaufgaben limited event (see ALISSON_QUEST_DEADLINE) - same pattern again.
+  {id:'alisson_quest_abwehrkette', name:'Abwehrkette', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 6 Verteidiger und 6 Sonderkarten. Belohnung: 3.000 Coins.',
+    reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
+           req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
+           req('6+ Verteidiger', c=>c.filter(x=>posGroup(x.pos)==='DEF').length>=6, c=>`${c.filter(x=>posGroup(x.pos)==='DEF').length} / 6`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'alisson_quest_kastenwache', name:'Kastenwache', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 3 Torhüter und 6 Sonderkarten. Belohnung: 3.500 Coins.',
+    reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
+           req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
+           req('3+ Torhüter', c=>c.filter(x=>posGroup(x.pos)==='GK').length>=3, c=>`${c.filter(x=>posGroup(x.pos)==='GK').length} / 3`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'alisson_quest_squad1', name:'91er Kader I', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'alisson_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'alisson_quest_nation', name:'Seleção Brasileira', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 88+, alle aus Brasilien (Alissons Heimatland). Belohnung: 2.000 Coins.',
+    reqs:[ req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`),
+           req('Alle aus Brasilien', c=>c.every(x=>x.nat==='Brazil'), c=>`${c.filter(x=>x.nat==='Brazil').length} / 11 aus Brasilien`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
     reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
@@ -7638,7 +7699,7 @@ async function claimDraftReward(maxed){
   draftState = null;
   renderDraftPanel();
 }
-const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest'};
+const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest'};
 const FEAS_INFO = {
   free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
   squad:{label:'Nur mit Kader-Aufl\u00f6sung', color:'var(--gold)'},
@@ -7687,15 +7748,20 @@ const CHALLENGE_DEFS = [
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
     desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
-    desc:'Ein einzelnes, extrem hartes Match. Sieg bringt die einzigartige Ballon d\u2019Or-Karte.'},
+    desc:'Ein einzelnes, extrem hartes Match. Sieg bringt die einzigartige Ballon d\u2019Or-Karte.',
+    doneCheck:()=>collection.some(c=>c.cardId===BALLONDOR_CARD.id)},
   {id:'prime-ronaldo', name:'PRIME Cristiano Ronaldo', pill:'Match', accent:'#ffd76a', contentId:'prime-ronaldo-content', renderFn:()=>renderPrimeChallengePanel(PRIME_CHALLENGES[0]),
-    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Ronaldo (109 OVR).'},
+    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Ronaldo (109 OVR).',
+    doneCheck:()=>collection.some(c=>c.cardId===PRIME_CHALLENGES[0].card.id)},
   {id:'prime-messi', name:'PRIME Lionel Messi', pill:'Match', accent:'#ffd76a', contentId:'prime-messi-content', renderFn:()=>renderPrimeChallengePanel(PRIME_CHALLENGES[1]),
-    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Messi (109 OVR).'},
+    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Messi (109 OVR).',
+    doneCheck:()=>collection.some(c=>c.cardId===PRIME_CHALLENGES[1].card.id)},
   {id:'prime-neymar', name:'PRIME Neymar Jr', pill:'Match', accent:'#ffd76a', contentId:'prime-neymar-content', renderFn:()=>renderPrimeChallengePanel(PRIME_CHALLENGES[2]),
-    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Neymar (109 OVR).'},
+    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Neymar (109 OVR).',
+    doneCheck:()=>collection.some(c=>c.cardId===PRIME_CHALLENGES[2].card.id)},
   {id:'orei', name:'O Rei Herausforderung', pill:'Quest', accent:'#c98a3e', contentId:'orei-content', renderFn:()=>renderOReiPanel(),
-    desc:'Die Kr\u00f6nung aller Herausforderungen \u2014 3 Siege in Folge gegen Rating 111-114 schalten das Fu\u00dfballg\u00f6tter Pack dauerhaft frei.'},
+    desc:'Die Kr\u00f6nung aller Herausforderungen \u2014 3 Siege in Folge gegen Rating 111-114 schalten das Fu\u00dfballg\u00f6tter Pack dauerhaft frei.',
+    doneCheck:()=>!!profile.ogPackUnlocked},
   {id:'kontinental', name:'Kontinentalpokal', pill:'Match', accent:'var(--muted)', contentId:'kontinental-content', renderFn:()=>renderKontinentalpokalPanel(),
     desc:'Beliebig oft wiederholbares hartes Match (Rating 92-96). Sieg bringt 1.500 Coins + ein Rare Gold Vault Pack.'},
   {id:'streak', name:'Serie ohne Niederlage', pill:'Serie', accent:'var(--muted)', contentId:'streak-content', renderFn:()=>renderWinStreakPanel(),
@@ -7709,12 +7775,13 @@ function challengeTileHTML(def, statusHTML){
     ${statusHTML||''}
     <button class="sbc-build-btn" style="background:${def.accent};">\u00d6ffnen</button>`;
 }
+function challengeIsDone(def){ return !!(def.doneCheck && def.doneCheck()); }
 function openChallengeDetail(def){
   const view = document.getElementById('view');
   view.innerHTML = `
     <div class="view-head"><h2>${def.name}</h2><p>${def.desc}</p></div>
     <div class="toolbar"><button class="action-btn secondary" id="challenge-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button></div>
-    <div id="${def.contentId}"></div>`;
+    <div class="vs-panel"><div id="${def.contentId}"></div></div>`;
   document.getElementById('challenge-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   def.renderFn();
 }
@@ -7748,12 +7815,46 @@ function renderChallengeGrid(){
     }
     grid.appendChild(tile);
   }
+  if(oliseQuestActive()){
+    const doneCount = OLISE_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + OLISE_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
+    const claimed = profile.oliseQuestCardClaimed;
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card tier-promoquest';
+    tile.style.cursor = 'pointer';
+    tile.innerHTML = challengeTileHTML(
+      {id:'olisequest', name:'PROMO-Sonderaufgaben', pill:'Promo-Event', accent:'#7ad9ff',
+        desc:`7 schwere Aufgaben für ${OLISE_QUEST_CARD?OLISE_QUEST_CARD.n:'Olise'} (99 OVR).`},
+      `<div class="sbc-progress-dots" title="${doneCount} / 7 abgeschlossen">${Array.from({length:7},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+       ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
+    );
+    tile.addEventListener('click', openOliseQuestDetail);
+    grid.appendChild(tile);
+  }
+  if(alissonQuestActive()){
+    const doneCount = ALISSON_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + ALISSON_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
+    const claimed = profile.alissonQuestCardClaimed;
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = '#5fe1c9';
+    tile.style.boxShadow = '0 0 18px -9px #5fe1c9';
+    tile.style.cursor = 'pointer';
+    tile.innerHTML = challengeTileHTML(
+      {id:'alissonquest', name:'PROMO-Sonderaufgaben', pill:'Promo-Event', accent:'#5fe1c9',
+        desc:`7 schwere Aufgaben für ${ALISSON_QUEST_CARD?ALISSON_QUEST_CARD.n:'Alisson'} (99 OVR).`},
+      `<div class="sbc-progress-dots" title="${doneCount} / 7 abgeschlossen">${Array.from({length:7},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+       ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
+    );
+    tile.addEventListener('click', openAlissonQuestDetail);
+    grid.appendChild(tile);
+  }
   CHALLENGE_DEFS.forEach(def=>{
+    const done = challengeIsDone(def);
     const tile = document.createElement('div');
     tile.className = 'sbc-card';
     tile.style.borderLeftColor = def.accent;
     tile.style.cursor = 'pointer';
-    tile.innerHTML = challengeTileHTML(def);
+    tile.innerHTML = challengeTileHTML(def, done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : '');
+    if(done) tile.style.opacity = '.7';
     tile.addEventListener('click', ()=>openChallengeDetail(def));
     grid.appendChild(tile);
   });
@@ -7773,7 +7874,7 @@ async function renderSBCList(view){
   const poolWithSquad = allCards;
   const grid = document.getElementById('sbc-grid');
   grid.innerHTML = '';
-  SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id)).forEach(sbc=>{
+  SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id)).forEach(sbc=>{
     grid.appendChild(buildSbcTile(sbc, poolFree, poolWithSquad));
   });
 }
@@ -13962,6 +14063,213 @@ function openWmQuestDetail(){
   };
   updateCountdown();
   wmQuestCountdownTimer = setInterval(updateCountdown, 30000);
+}
+// ===== PROMO-Sonderaufgaben: same pattern as the WM quest above, 2 SBCs + 2 match quests, all =====
+// ===== available immediately (no staggered unlock), running for 2 weeks. =====
+const OLISE_QUEST_START = new Date(2026, 7, 14, 0, 0, 0).getTime(); // Friday - available immediately
+const OLISE_QUEST_DEADLINE = new Date(2026, 7, 28, 0, 0, 0).getTime(); // 2 weeks later
+function oliseQuestActive(){ const t = Date.now(); return t>=OLISE_QUEST_START && t<OLISE_QUEST_DEADLINE; }
+const OLISE_QUEST_SBC_IDS = ['olise_quest_kreativ', 'olise_quest_fluegel', 'olise_quest_squad1', 'olise_quest_squad2', 'olise_quest_nation'];
+const OLISE_QUEST_MATCHES = [
+  {id:1, flag:'oliseQuestMatch1Won', label:'PROMO-Test', targetOv:108},
+  {id:2, flag:'oliseQuestMatch2Won', label:'PROMO-Endspiel', targetOv:111},
+];
+function oliseQuestSbcsDone(){ return OLISE_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
+function oliseQuestMatchesDone(){ return OLISE_QUEST_MATCHES.every(m=>profile[m.flag]); }
+function oliseQuestAllDone(){ return oliseQuestSbcsDone() && oliseQuestMatchesDone(); }
+let oliseQuestCountdownTimer = null;
+async function playOliseQuestMatch(m){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(profile[m.flag]){ toast('Diese Herausforderung ist bereits gewonnen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const opp = buildFixedRatingOpponent(m.targetOv);
+  const area = document.getElementById(`olisequest-match${m.id}-area`);
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      profile[m.flag] = true;
+      await sSet('profile', profile);
+      toast(`🏆 ${m.label} gewonnen!`);
+    } else {
+      toast('Verloren — versuch es jederzeit erneut.');
+    }
+    renderOliseQuestSubgrid();
+  }});
+}
+async function claimOliseQuestReward(){
+  if(!oliseQuestAllDone() || profile.oliseQuestCardClaimed || !OLISE_QUEST_CARD) return;
+  profile.oliseQuestCardClaimed = true;
+  collection.push({uid:genId(), cardId:OLISE_QUEST_CARD.id});
+  await sSet('collection', collection);
+  await sSet('profile', profile);
+  toast(`🏆 ${OLISE_QUEST_CARD.n} (99 OVR) freigeschaltet!`);
+  showCutscene(OLISE_QUEST_CARD, ()=>{});
+  renderOliseQuestSubgrid();
+}
+function renderOliseQuestSubgrid(){
+  const grid = document.getElementById('olisequest-subgrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const squadLocked = new Set(Object.values(squad.slots));
+  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  OLISE_QUEST_SBC_IDS.forEach(id=>{
+    grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+  });
+  OLISE_QUEST_MATCHES.forEach(m=>{
+    const done = !!profile[m.flag];
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card tier-promoquest';
+    tile.innerHTML = `
+      <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
+      <h3 class="sbc-name">${m.label}</h3>
+      <div class="sbc-desc">Ein hartes Match gegen einen Fantasie-Gegner (Rating ~${m.targetOv}).</div>
+      ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
+      <div id="olisequest-match${m.id}-area"></div>
+      <button class="sbc-build-btn" id="olisequest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
+    if(!done) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playOliseQuestMatch(m));
+    grid.appendChild(tile);
+  });
+  const claimBtn = document.getElementById('olisequest-claim-btn');
+  if(claimBtn){
+    const allDone = oliseQuestAllDone();
+    const claimed = profile.oliseQuestCardClaimed;
+    claimBtn.disabled = !allDone || claimed;
+    claimBtn.textContent = claimed ? 'Bereits abgeholt' : 'Olise (99 OVR) abholen';
+    claimBtn.onclick = (allDone && !claimed) ? claimOliseQuestReward : null;
+  }
+}
+function openOliseQuestDetail(){
+  if(oliseQuestCountdownTimer){ clearInterval(oliseQuestCountdownTimer); oliseQuestCountdownTimer = null; }
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>PROMO-Sonderaufgaben</h2><p>Schließe alle 7 Aufgaben ab und hol dir <b style="color:#7ad9ff;">${OLISE_QUEST_CARD?OLISE_QUEST_CARD.n:'Olise'} (99 OVR)</b> — sonst nirgends erhältlich.</p></div>
+    <div class="toolbar"><button class="action-btn secondary" id="olisequest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
+    <div id="olisequest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
+    <div class="sbc-grid" id="olisequest-subgrid" style="margin-bottom:18px;"></div>
+    <button class="action-btn" id="olisequest-claim-btn" style="width:260px;"></button>`;
+  document.getElementById('olisequest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  renderOliseQuestSubgrid();
+  const updateCountdown = ()=>{
+    const el = document.getElementById('olisequest-countdown');
+    if(!el){ if(oliseQuestCountdownTimer){ clearInterval(oliseQuestCountdownTimer); oliseQuestCountdownTimer=null; } return; }
+    if(!oliseQuestActive()){ currentTab='sbc'; renderNav(); renderView('sbc'); return; }
+    el.textContent = `⏳ Noch ${formatCountdown(OLISE_QUEST_DEADLINE - Date.now())} verfügbar`;
+  };
+  updateCountdown();
+  oliseQuestCountdownTimer = setInterval(updateCountdown, 30000);
+}
+// ===== 2nd PROMO-Sonderaufgaben: same pattern again, 2 SBCs + 2 match quests, all available =====
+// ===== immediately, running for 2 weeks. =====
+const ALISSON_QUEST_START = new Date(2026, 7, 14, 0, 0, 0).getTime(); // Friday - available immediately
+const ALISSON_QUEST_DEADLINE = new Date(2026, 7, 28, 0, 0, 0).getTime(); // 2 weeks later
+function alissonQuestActive(){ const t = Date.now(); return t>=ALISSON_QUEST_START && t<ALISSON_QUEST_DEADLINE; }
+const ALISSON_QUEST_SBC_IDS = ['alisson_quest_abwehrkette', 'alisson_quest_kastenwache', 'alisson_quest_squad1', 'alisson_quest_squad2', 'alisson_quest_nation'];
+const ALISSON_QUEST_MATCHES = [
+  {id:1, flag:'alissonQuestMatch1Won', label:'PROMO-Test', targetOv:108},
+  {id:2, flag:'alissonQuestMatch2Won', label:'PROMO-Endspiel', targetOv:111},
+];
+function alissonQuestSbcsDone(){ return ALISSON_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
+function alissonQuestMatchesDone(){ return ALISSON_QUEST_MATCHES.every(m=>profile[m.flag]); }
+function alissonQuestAllDone(){ return alissonQuestSbcsDone() && alissonQuestMatchesDone(); }
+let alissonQuestCountdownTimer = null;
+async function playAlissonQuestMatch(m){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(profile[m.flag]){ toast('Diese Herausforderung ist bereits gewonnen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const opp = buildFixedRatingOpponent(m.targetOv);
+  const area = document.getElementById(`alissonquest-match${m.id}-area`);
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      profile[m.flag] = true;
+      await sSet('profile', profile);
+      toast(`🏆 ${m.label} gewonnen!`);
+    } else {
+      toast('Verloren — versuch es jederzeit erneut.');
+    }
+    renderAlissonQuestSubgrid();
+  }});
+}
+async function claimAlissonQuestReward(){
+  if(!alissonQuestAllDone() || profile.alissonQuestCardClaimed || !ALISSON_QUEST_CARD) return;
+  profile.alissonQuestCardClaimed = true;
+  collection.push({uid:genId(), cardId:ALISSON_QUEST_CARD.id});
+  await sSet('collection', collection);
+  await sSet('profile', profile);
+  toast(`🏆 ${ALISSON_QUEST_CARD.n} (99 OVR) freigeschaltet!`);
+  showCutscene(ALISSON_QUEST_CARD, ()=>{});
+  renderAlissonQuestSubgrid();
+}
+function renderAlissonQuestSubgrid(){
+  const grid = document.getElementById('alissonquest-subgrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const squadLocked = new Set(Object.values(squad.slots));
+  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  ALISSON_QUEST_SBC_IDS.forEach(id=>{
+    grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+  });
+  ALISSON_QUEST_MATCHES.forEach(m=>{
+    const done = !!profile[m.flag];
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = '#5fe1c9';
+    tile.innerHTML = `
+      <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
+      <h3 class="sbc-name">${m.label}</h3>
+      <div class="sbc-desc">Ein hartes Match gegen einen Fantasie-Gegner (Rating ~${m.targetOv}).</div>
+      ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
+      <div id="alissonquest-match${m.id}-area"></div>
+      <button class="sbc-build-btn" id="alissonquest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
+    if(!done) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playAlissonQuestMatch(m));
+    grid.appendChild(tile);
+  });
+  const claimBtn = document.getElementById('alissonquest-claim-btn');
+  if(claimBtn){
+    const allDone = alissonQuestAllDone();
+    const claimed = profile.alissonQuestCardClaimed;
+    claimBtn.disabled = !allDone || claimed;
+    claimBtn.textContent = claimed ? 'Bereits abgeholt' : 'Alisson (99 OVR) abholen';
+    claimBtn.onclick = (allDone && !claimed) ? claimAlissonQuestReward : null;
+  }
+}
+function openAlissonQuestDetail(){
+  if(alissonQuestCountdownTimer){ clearInterval(alissonQuestCountdownTimer); alissonQuestCountdownTimer = null; }
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>PROMO-Sonderaufgaben</h2><p>Schließe alle 7 Aufgaben ab und hol dir <b style="color:#5fe1c9;">${ALISSON_QUEST_CARD?ALISSON_QUEST_CARD.n:'Alisson'} (99 OVR)</b> — sonst nirgends erhältlich.</p></div>
+    <div class="toolbar"><button class="action-btn secondary" id="alissonquest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
+    <div id="alissonquest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
+    <div class="sbc-grid" id="alissonquest-subgrid" style="margin-bottom:18px;"></div>
+    <button class="action-btn" id="alissonquest-claim-btn" style="width:260px;"></button>`;
+  document.getElementById('alissonquest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  renderAlissonQuestSubgrid();
+  const updateCountdown = ()=>{
+    const el = document.getElementById('alissonquest-countdown');
+    if(!el){ if(alissonQuestCountdownTimer){ clearInterval(alissonQuestCountdownTimer); alissonQuestCountdownTimer=null; } return; }
+    if(!alissonQuestActive()){ currentTab='sbc'; renderNav(); renderView('sbc'); return; }
+    el.textContent = `⏳ Noch ${formatCountdown(ALISSON_QUEST_DEADLINE - Date.now())} verfügbar`;
+  };
+  updateCountdown();
+  alissonQuestCountdownTimer = setInterval(updateCountdown, 30000);
 }
 // ===== O Rei Herausforderung: the ultimate capstone challenge =====
 const OREI_ENTRY = {wins:200, rating:105, netWorth:500000};
