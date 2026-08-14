@@ -6440,12 +6440,12 @@ function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme=
 // one specific card only exists as the Wochen Pass level-15 reward, nowhere else, ever.
 const WEEK_PASS_CARD_BASE = findBaseCard(257534); // C. Palmer
 const WEEK_PASS_CARD = WEEK_PASS_CARD_BASE ? boostBaseToOv(WEEK_PASS_CARD_BASE, 106, 9770001, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
-if(WEEK_PASS_CARD) BY_ID.set(WEEK_PASS_CARD.id, WEEK_PASS_CARD);
+if(WEEK_PASS_CARD){ WEEK_PASS_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p84143614.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=de59ae0f955ff695e851d0fd52250f10'; BY_ID.set(WEEK_PASS_CARD.id, WEEK_PASS_CARD); }
 // level-30 reward, added when the pass was extended from 15 to 30 levels - the single highest-rated
 // real outfield player in the base game, picked programmatically so this never needs a hardcoded id.
 const WEEK_PASS_CARD2_BASE = ALL_BASE.filter(c=>!c.gk && c.id!==(WEEK_PASS_CARD_BASE&&WEEK_PASS_CARD_BASE.id)).slice().sort((a,b)=>b.ov-a.ov)[0];
 const WEEK_PASS_CARD2 = WEEK_PASS_CARD2_BASE ? boostBaseToOv(WEEK_PASS_CARD2_BASE, 108, 9770002, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
-if(WEEK_PASS_CARD2) BY_ID.set(WEEK_PASS_CARD2.id, WEEK_PASS_CARD2);
+if(WEEK_PASS_CARD2){ WEEK_PASS_CARD2.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p67318195.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=3d77815867745e84755128fbcadee0cc'; BY_ID.set(WEEK_PASS_CARD2.id, WEEK_PASS_CARD2); }
 // ===== Mystery Elite Pack's rare tier: 5 real standout players (best of each position group, plus
 // the single highest-rated outfield player overall) boosted into the 104-108 "105 range" - the pack's
 // normal pool tops out at 99, so these are the rare exception that occasionally punches above that.
@@ -7351,6 +7351,9 @@ if(SBC_GK_BASE) SBC_EXCLUSIVE_USED_IDS.add(SBC_GK_BASE.id);
 const SBC_STRIKER_CARD = SBC_STRIKER_BASE ? boostBaseToOv(SBC_STRIKER_BASE, 108, 9790001, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
 const SBC_DEFENDER_CARD = SBC_DEFENDER_BASE ? boostBaseToOv(SBC_DEFENDER_BASE, 107, 9790002, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
 const SBC_GK_CARD = SBC_GK_BASE ? boostBaseToOv(SBC_GK_BASE, 106, 9790003, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
+if(SBC_STRIKER_CARD) SBC_STRIKER_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p201558035.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=dff0413c573e2a81028e64773f9564ea'; // O. Dembélé
+if(SBC_DEFENDER_CARD) SBC_DEFENDER_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p50566860.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=df3de4049035af1e43e9caa7e419cb97'; // A. Hakimi
+if(SBC_GK_CARD) SBC_GK_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p67339485.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=550b460f4c75b83e7cff3e2073083fdd'; // G. Donnarumma
 [SBC_STRIKER_CARD, SBC_DEFENDER_CARD, SBC_GK_CARD].forEach(c=>{ if(c) BY_ID.set(c.id, c); });
 // every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
 // exclusive-card ones above set maxCompletions:1) - see sbcCompletions()/sbcMaxCompletions() below.
