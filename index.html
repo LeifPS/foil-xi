@@ -320,6 +320,41 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 20px -2px #a8c4c9;}
   50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 46px 2px #ffffff;}
 }
+/* PROMO-Sonderaufgaben reward cards (Olise/Alisson): a genuinely moving background glow behind the
+   card, not just a pulsing border, since these are the flashiest limited-event rewards in the game. */
+.pcard.theme-promoolise{border:2px solid transparent;
+  background:
+    radial-gradient(circle at 50% 30%, #0d2733 0%, #081a22 55%, #040d11 100%) padding-box,
+    linear-gradient(160deg,#0e2a33,#7ad9ff,#eafcff,#7ad9ff,#0e2a33) border-box !important;
+  background-size:100% 100%, 260% 260%;
+  animation: promoBorderShift 4.2s linear infinite, promoOliseGlow 2.4s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-promoolise::before{animation:autoShine 1.15s ease-in-out infinite;}
+.pcard.theme-promoolise .name.name-variant{
+  background:linear-gradient(90deg,#7ad9ff,#eafcff,#7ad9ff);
+  background-size:260% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:promoBorderShift 4.2s linear infinite; text-shadow:none;
+}
+@keyframes promoOliseGlow{
+  0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 22px -2px #7ad9ff;}
+  50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 52px 4px #eafcff;}
+}
+.pcard.theme-promoalisson{border:2px solid transparent;
+  background:
+    radial-gradient(circle at 50% 30%, #0c2a20 0%, #081e18 55%, #040f0c 100%) padding-box,
+    linear-gradient(160deg,#0e332a,#5fe1c9,#eafff9,#5fe1c9,#0e332a) border-box !important;
+  background-size:100% 100%, 260% 260%;
+  animation: promoBorderShift 4.2s linear infinite, promoAlissonGlow 2.4s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-promoalisson::before{animation:autoShine 1.15s ease-in-out infinite;}
+.pcard.theme-promoalisson .name.name-variant{
+  background:linear-gradient(90deg,#5fe1c9,#eafff9,#5fe1c9);
+  background-size:260% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:promoBorderShift 4.2s linear infinite; text-shadow:none;
+}
+@keyframes promoAlissonGlow{
+  0%,100%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 22px -2px #5fe1c9;}
+  50%{box-shadow:0 14px 32px rgba(0,0,0,.7), 0 0 52px 4px #eafff9;}
+}
+@keyframes promoBorderShift{0%{background-position:0% 0%,0% 50%;}100%{background-position:0% 0%,260% 50%;}}
 /* Kontrahent: bot-only, never a real collectible - a plain steel/tactical AI look on purpose, not
    meant to look as special as anything a player can actually own. */
 /* Kontrahent: bot-only, one look per position group instead of a single flat design for the whole
@@ -441,6 +476,16 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     repeating-conic-gradient(from 0deg at 50% 10%, rgba(255,255,255,.16) 0deg 4deg, transparent 4deg 13deg);
     animation:sbcxSparkle 2.5s ease-in-out infinite;}
 @keyframes sbcxSparkle{0%,100%{opacity:.7;}50%{opacity:1;}}
+.pcard.pattern-promoolisepattern .pattern-layer{background:
+    radial-gradient(circle at 50% 10%, rgba(122,217,255,.5), transparent 55%),
+    repeating-conic-gradient(from 0deg at 50% 10%, rgba(234,252,255,.2) 0deg 4deg, transparent 4deg 12deg);
+    animation:promoSparkle 2s linear infinite, promoDrift 5.5s ease-in-out infinite;}
+.pcard.pattern-promoalissonpattern .pattern-layer{background:
+    radial-gradient(circle at 50% 10%, rgba(95,225,201,.5), transparent 55%),
+    repeating-conic-gradient(from 0deg at 50% 10%, rgba(234,255,249,.2) 0deg 4deg, transparent 4deg 12deg);
+    animation:promoSparkle 2s linear infinite, promoDrift 5.5s ease-in-out infinite;}
+@keyframes promoSparkle{0%,100%{opacity:.65;}50%{opacity:1;}}
+@keyframes promoDrift{0%,100%{background-position:50% 10%, 50% 10%;}50%{background-position:35% 22%, 35% 22%;}}
 .pcard.pattern-kontra .pattern-layer{background:
     repeating-linear-gradient(0deg, rgba(143,163,184,.08) 0 1px, transparent 1px 18px),
     repeating-linear-gradient(90deg, rgba(143,163,184,.08) 0 1px, transparent 1px 18px);
@@ -6635,7 +6680,8 @@ const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8
   derbyicon:'#ff4d4d',underdog:'#4dd0e1',
   uclw:'#0a1e4d',uclw_mgr:'#e8003c', ballondor:'#f2c14e', wm_mgr:'#aa151b', prime:'#ffd76a',
   sigicon:'#7ad9ff', eradef:'#ffcf5c', sigseason:'#ff6fb1',
-  ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00', iconswap:'#22d3ee', poet:'#b06cff'};
+  ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00', iconswap:'#22d3ee', poet:'#b06cff',
+  promoolise:'#7ad9ff', promoalisson:'#5fe1c9'};
 function cardAccent(card){
   if(card.variant==='meistertrainer') return '#ff8a3d';
   if(card.variant==='uclw_mgr') return THEME_ACC.uclw_mgr;
@@ -6692,6 +6738,7 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
 const VARIANT_SPECIALTY_MULT = {
   base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, mysteryrare:5, sbcx:25,
+  wmquestreward:25, promoquestreward:22,
   kontra_gk:1.5, kontra_def:1.5, kontra_mid:1.5, kontra_fwd:1.5, goat:5.8,
   signature_icon:3.6, era_definer:4.1, signature_season:4.8,
   wcchamp:2, goldenball:5, ggwm:4, youngplayer:4, semifinalist:1.3, quarterfinalist:1.15,
@@ -7379,13 +7426,13 @@ if(WM_QUEST_MBAPPE_CARD) BY_ID.set(WM_QUEST_MBAPPE_CARD.id, WM_QUEST_MBAPPE_CARD
 // PROMO-Sonderaufgaben limited event (see OLISE_QUEST_DEADLINE): same pattern as the WM quest above,
 // built from Olise's real base card (id 247827, 86 OV) boosted to exactly 99.
 const OLISE_QUEST_BASE = findBaseCard(247827);
-const OLISE_QUEST_CARD = OLISE_QUEST_BASE ? boostBaseToOv(OLISE_QUEST_BASE, 99, 9791002, 'promoquestreward', 'PROMO', 'sbcx') : null;
+const OLISE_QUEST_CARD = OLISE_QUEST_BASE ? boostBaseToOv(OLISE_QUEST_BASE, 99, 9791002, 'promoquestreward', 'PROMO', 'promoolise') : null;
 if(OLISE_QUEST_CARD) OLISE_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p117688339.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=fe26eeb877a37e0db77ca41708401a68';
 if(OLISE_QUEST_CARD) BY_ID.set(OLISE_QUEST_CARD.id, OLISE_QUEST_CARD);
 // 2nd PROMO-Sonderaufgaben limited event (see ALISSON_QUEST_DEADLINE): same pattern again, built from
 // Alisson's real base card (id 212831, 89 OV) boosted to exactly 99.
 const ALISSON_QUEST_BASE = findBaseCard(212831);
-const ALISSON_QUEST_CARD = ALISSON_QUEST_BASE ? boostBaseToOv(ALISSON_QUEST_BASE, 99, 9791003, 'promoquestreward', 'PROMO', 'sbcx') : null;
+const ALISSON_QUEST_CARD = ALISSON_QUEST_BASE ? boostBaseToOv(ALISSON_QUEST_BASE, 99, 9791003, 'promoquestreward', 'PROMO', 'promoalisson') : null;
 if(ALISSON_QUEST_CARD) ALISSON_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p67321695.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=20b746b33f020ff17c4aeab8f4b39628';
 if(ALISSON_QUEST_CARD) BY_ID.set(ALISSON_QUEST_CARD.id, ALISSON_QUEST_CARD);
 // every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
@@ -9836,6 +9883,8 @@ const VARIANT_ICON = {
   wpmvp:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
   mysteryrare:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 9a3 3 0 115.2 2c-.9.7-1.7 1.2-1.7 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/>',
   sbcx:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/><circle cx="12" cy="8.2" r="2.1" fill="#0a0d12"/>',
+  promoolise:'<path d="M12 2l2.5 5.5 6 .7-4.4 4 1.2 6-5.3-3-5.3 3 1.2-6-4.4-4 6-.7z" fill="currentColor"/>',
+  promoalisson:'<path d="M12 2l2.5 5.5 6 .7-4.4 4 1.2 6-5.3-3-5.3 3 1.2-6-4.4-4 6-.7z" fill="currentColor"/>',
   saph:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   rub:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   dia:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
@@ -9905,6 +9954,7 @@ const PATTERN_FAMILY = {
   ogicon:'ogpattern', og_mgr:'ogpattern',
   iconswap:'iconswappattern',
   poet:'poetpattern',
+  promoolise:'promoolisepattern', promoalisson:'promoalissonpattern',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
@@ -14093,8 +14143,8 @@ const OLISE_QUEST_DEADLINE = new Date(2026, 7, 28, 0, 0, 0).getTime(); // 2 week
 function oliseQuestActive(){ const t = Date.now(); return t>=OLISE_QUEST_START && t<OLISE_QUEST_DEADLINE; }
 const OLISE_QUEST_SBC_IDS = ['olise_quest_kreativ', 'olise_quest_fluegel', 'olise_quest_squad1', 'olise_quest_squad2', 'olise_quest_nation'];
 const OLISE_QUEST_MATCHES = [
-  {id:1, flag:'oliseQuestMatch1Won', label:'PROMO-Test', targetOv:95},
-  {id:2, flag:'oliseQuestMatch2Won', label:'PROMO-Endspiel', targetOv:107},
+  {id:1, flag:'oliseQuestMatch1Won', label:'PROMO-Test', targetOv:97},
+  {id:2, flag:'oliseQuestMatch2Won', label:'PROMO-Endspiel', targetOv:118},
 ];
 function oliseQuestSbcsDone(){ return OLISE_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
 function oliseQuestMatchesDone(){ return OLISE_QUEST_MATCHES.every(m=>profile[m.flag]); }
@@ -14207,8 +14257,8 @@ const ALISSON_QUEST_DEADLINE = new Date(2026, 7, 28, 0, 0, 0).getTime(); // 2 we
 function alissonQuestActive(){ const t = Date.now(); return t>=ALISSON_QUEST_START && t<ALISSON_QUEST_DEADLINE; }
 const ALISSON_QUEST_SBC_IDS = ['alisson_quest_abwehrkette', 'alisson_quest_kastenwache', 'alisson_quest_squad1', 'alisson_quest_squad2', 'alisson_quest_nation'];
 const ALISSON_QUEST_MATCHES = [
-  {id:1, flag:'alissonQuestMatch1Won', label:'PROMO-Test', targetOv:95},
-  {id:2, flag:'alissonQuestMatch2Won', label:'PROMO-Endspiel', targetOv:107},
+  {id:1, flag:'alissonQuestMatch1Won', label:'PROMO-Test', targetOv:97},
+  {id:2, flag:'alissonQuestMatch2Won', label:'PROMO-Endspiel', targetOv:118},
 ];
 function alissonQuestSbcsDone(){ return ALISSON_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
 function alissonQuestMatchesDone(){ return ALISSON_QUEST_MATCHES.every(m=>profile[m.flag]); }
