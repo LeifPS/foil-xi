@@ -13738,6 +13738,23 @@ const TOURNAMENT_ROUNDS = [
   {name:'Halbfinale', minOv:95, maxOv:99, coins:1000},
   {name:'Finale', minOv:100, maxOv:104, coins:0},
 ];
+// gives single-player bot squads (tournament, O Rei, quest matches, etc.) the same trainer/chemistry/
+// position bonuses a real squad gets via getMySquadPlayers() - only online-queue matchmaking
+// (pickRealisticOpponent) is exempt from this helper, since it needs to stay matched close to the
+// player's own rating rather than get boosted further.
+const BOT_ELITE_MANAGER_POOL = MANAGERS.filter(m=>m.tier==='Elite'||m.tier==='Legendär').concat(MEISTERTRAINER);
+function boostBotXI(xi, slots, forceManager){
+  const mgr = forceManager || (BOT_ELITE_MANAGER_POOL.length ? pick(BOT_ELITE_MANAGER_POOL) : null);
+  const list = xi.map((card,i)=>{
+    let ov = card.ov;
+    if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
+    const info = positionEligibility(card, slots[i].label);
+    if(info) ov += info.bonus;
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id};
+  });
+  const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
+  return {players, managerName: mgr ? mgr.n : null};
+}
 function buildEliteOpponentXI(minOv, maxOv, opts={}){
   const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS)
     .filter(c=>c.ov>=minOv && c.ov<=maxOv && !c.isManager);
@@ -13751,15 +13768,9 @@ function buildEliteOpponentXI(minOv, maxOv, opts={}){
   });
   const NAMES = ['Weltauswahl','All-Stars XI','Legenden-Elf','Superstar United','Elite FC'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:p.ov, img:p.img, id:p.id}));
-  // computer opponents no longer get trainers by default (only if explicitly forced via opts.forceManager)
-  let mgr = null;
-  if(opts.forceManager) mgr = opts.forceManager;
-  if(mgr){
-    players.forEach(p=>{ p.ov = Math.round(mgr.boostType==='percent' ? p.ov*(1+mgr.boostValue/100) : p.ov+mgr.boostValue); });
-  }
+  const {players, managerName} = boostBotXI(xi, slots, opts.forceManager);
   const avgOv = Math.round(players.reduce((s,p)=>s+p.ov,0)/11);
-  return {owner, rating:avgOv, players, isBot:true, managerName: mgr ? mgr.n : null};
+  return {owner, rating:avgOv, players, isBot:true, managerName};
 }
 async function startTournament(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
@@ -14295,11 +14306,11 @@ function buildFixedRatingOpponent(targetOv){
     const groupPool = byGroup[group].length ? byGroup[group] : pool;
     return pickNear(groupPool);
   });
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:p.ov, img:p.img, id:p.id})); // real ov, no forcing
   const NAMES = ['Legenden-Auswahl','Unschlagbare Elf','Die Unm\u00f6glichen','Weltauswahl Prime'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
+  const {players, managerName} = boostBotXI(xi, slots);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
-  return {owner, rating, players, isBot:true};
+  return {owner, rating, players, isBot:true, managerName};
 }
 function oreiRequirementsMet(){
   const {rating} = squadRating();
