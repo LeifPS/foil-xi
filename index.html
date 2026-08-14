@@ -7357,20 +7357,28 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
   let outside = pool.filter(x=>!inCurrent.has(x.uid));
   let currentScore = sbcReqScore(sbc, current.map(x=>x.card));
   const target = sbc.reqs.length;
-  for(let iter=0; iter<250 && currentScore<target; iter++){
+  // deterministic steepest-ascent instead of random hill-climbing: each iteration tries every possible
+  // single swap and takes whichever one improves the score the most, rather than picking one random
+  // swap and hoping it helps. The old random approach could genuinely find a solution on one attempt
+  // and fail to find the exact same solution on the next attempt with the same collection, purely from
+  // bad luck in which swaps got tried within the iteration budget - this fixes that inconsistency.
+  for(let iter=0; iter<Math.min(60, size*6) && currentScore<target; iter++){
     if(!outside.length) break;
-    const outIdx = Math.floor(Math.random()*current.length);
-    const inIdx = Math.floor(Math.random()*outside.length);
-    const removed = current[outIdx], added = outside[inIdx];
-    const trial = current.slice();
-    trial[outIdx] = added;
-    const trialScore = sbcReqScore(sbc, trial.map(x=>x.card));
-    if(trialScore >= currentScore){
-      current = trial;
-      currentScore = trialScore;
-      outside = outside.slice();
-      outside[inIdx] = removed;
+    let bestOutIdx=-1, bestInIdx=-1, bestScore=currentScore;
+    for(let oi=0; oi<current.length; oi++){
+      for(let ii=0; ii<outside.length; ii++){
+        const trial = current.slice();
+        trial[oi] = outside[ii];
+        const trialScore = sbcReqScore(sbc, trial.map(x=>x.card));
+        if(trialScore>bestScore){ bestScore = trialScore; bestOutIdx = oi; bestInIdx = ii; }
+      }
     }
+    if(bestOutIdx===-1) break; // no single swap improves the score any further
+    const removed = current[bestOutIdx];
+    current[bestOutIdx] = outside[bestInIdx];
+    currentScore = bestScore;
+    outside = outside.slice();
+    outside[bestInIdx] = removed;
   }
   if(currentScore<target) return null;
   // refinement pass: once ANY valid combo is found, try to swap each card for a cheaper/more-duplicate
