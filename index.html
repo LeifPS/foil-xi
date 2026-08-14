@@ -7321,10 +7321,13 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
   const rap = x => computeRAP(x.card);
   const nameCounts = {};
   pool.forEach(x=>{ nameCounts[x.card.n] = (nameCounts[x.card.n]||0)+1; });
-  const sortFn = mode==='cheapest' ? (a,b)=>rap(a)-rap(b)
-    : mode==='duplicates' ? (a,b)=>(nameCounts[b.card.n]-nameCounts[a.card.n])||(rap(a)-rap(b))
-    : (a,b)=>b.card.ov-a.card.ov; // 'highest' (default/original behavior)
-  let current = pool.slice().sort(sortFn).slice(0, size);
+  // always seed the search with the highest-OV crew, regardless of mode - starting 'cheapest'/'duplicates'
+  // from the worst-scoring initial pick (the actual cheapest/most-duplicated cards, often far from
+  // meeting an avgOv requirement) made the random hill-climb below unreliable for strict SBCs, since it
+  // isn't guaranteed to find a feasible combo within its iteration budget. 'highest' reliably finds a
+  // feasible combo when one exists; the refinement pass further down then optimizes toward cheaper/more-
+  // duplicated cards from that guaranteed-feasible baseline instead.
+  let current = pool.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, size);
   const inCurrent = new Set(current.map(x=>x.uid));
   let outside = pool.filter(x=>!inCurrent.has(x.uid));
   let currentScore = sbcReqScore(sbc, current.map(x=>x.card));
@@ -8032,22 +8035,19 @@ async function openSBCBuilder(sbc){
   });
   document.getElementById('sbc-submit').addEventListener('click', (e)=>{ e.target.disabled=true; submitSBC(); });
   document.getElementById('sbc-autofill').addEventListener('click', ()=>{
+    // never fall back to squad-locked cards here: submitSBC() has no squad-lock check at submission
+    // time, so an autofill pick that reached into the active squad-editor lineup would let a player
+    // consume/remove a card that's still equipped in a slot, leaving a dangling squad reference.
     const poolFree = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid) && !squadLocked.has(x.uid));
-    const poolWithSquad = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid));
-    let result = trySolveSBC(activeSBC, poolFree, activeSBC.size, sbcAutofillMode);
-    let brokeSquad = false;
-    if(!result){
-      result = trySolveSBC(activeSBC, poolWithSquad, activeSBC.size, sbcAutofillMode);
-      brokeSquad = !!result;
-    }
-    if(!result){ toast('Mit deiner aktuellen Sammlung aktuell nicht erf\u00fcllbar.'); return; }
+    const result = trySolveSBC(activeSBC, poolFree, activeSBC.size, sbcAutofillMode);
+    if(!result){ toast('Mit deiner aktuellen Sammlung aktuell nicht erf\u00fcllbar (ohne Karten aus deinem aktiven Kader).'); return; }
     sbcSelection = new Set(result);
     uidToEl.forEach((el,uid)=>{
       if(sbcSelection.has(uid)){ el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
       else { el.style.outline=''; el.style.transform=''; }
     });
     updateSBCState();
-    toast(brokeSquad ? 'Automatisch ausgef\u00fcllt \u2014 nutzt Spieler aus deinem aktuellen Kader!' : 'Automatisch ausgef\u00fcllt.');
+    toast('Automatisch ausgef\u00fcllt.');
   });
 }
 function updateSBCState(){
@@ -8072,7 +8072,8 @@ function updateSBCState(){
 async function submitSBC(){
   if(sbcCompletions(activeSBC.id)>=sbcMaxCompletions(activeSBC)){ toast('Diese Herausforderung wurde bereits maximal oft abgeschlossen.'); return; }
   const uids = [...sbcSelection];
-  if(uids.length!==activeSBC.size || uids.some(uid=>!collection.some(c=>c.uid===uid))){
+  const squadLockedUids = new Set(Object.values(squad.slots));
+  if(uids.length!==activeSBC.size || uids.some(uid=>!collection.some(c=>c.uid===uid) || squadLockedUids.has(uid))){
     toast('Deine Auswahl ist nicht mehr g\u00fcltig \u2014 bitte erneut ausw\u00e4hlen.');
     openSBCBuilder(activeSBC); return;
   }
@@ -13819,6 +13820,14 @@ function buildEliteOpponentXI(minOv, maxOv, opts={}){
   const NAMES = ['Weltauswahl','All-Stars XI','Legenden-Elf','Superstar United','Elite FC'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
   const {players, managerName} = boostBotXI(xi, slots, opts.forceManager);
+  // rescale the boosted lineup so the team average lands back inside [minOv,maxOv] - callers advertise
+  // this range verbatim in their UI text (e.g. "Viertelfinale (Rating 90-94)"), and the trainer/chemistry/
+  // position boost in boostBotXI would otherwise inflate every tier by roughly the same amount, collapsing
+  // the tournament's Viertelfinale/Halbfinale/Finale bands (and similar ranges elsewhere) into each other.
+  const rawAvg = players.reduce((s,p)=>s+p.ov,0)/players.length;
+  const targetAvg = minOv + Math.random()*(maxOv-minOv);
+  const scale = rawAvg>0 ? targetAvg/rawAvg : 1;
+  players.forEach(p=>{ p.ov = Math.max(1, Math.round(p.ov*scale)); });
   const avgOv = Math.round(players.reduce((s,p)=>s+p.ov,0)/11);
   return {owner, rating:avgOv, players, isBot:true, managerName};
 }
