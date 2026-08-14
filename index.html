@@ -896,6 +896,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .sbc-card.tier-advanced{border-left-color:#c78bf5;background:radial-gradient(circle at 0% 0%, rgba(199,139,245,.07), var(--panel) 65%);}
 .sbc-card.tier-quest{border-left-color:#ff5f5f;background:radial-gradient(circle at 0% 0%, rgba(255,95,95,.08), var(--panel) 65%);}
 .sbc-card.tier-exclusive{border-left-color:#d9eef2;background:radial-gradient(circle at 0% 0%, rgba(217,238,242,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #d9eef2;}
+.sbc-card.tier-wmquest{border-left-color:#ffcc00;background:radial-gradient(circle at 0% 0%, rgba(170,21,27,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #aa151b;}
 .sbc-card-head{display:flex;justify-content:space-between;align-items:center;}
 .sbc-tier-pill, .sbc-size-pill{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-family:'JetBrains Mono';}
 .sbc-card .sbc-name{font-family:'Anton';font-size:16px;letter-spacing:.01em;margin:0;font-weight:400;}
@@ -5548,15 +5549,20 @@ function distributeStatGain(base, gain, keys){
     }
     return out;
   }
+  // no upper cap here on purpose: a handful of the game's hardest-to-get cards (Diamant Kronjuwelen,
+  // GOAT, etc.) push individual substats past 99 - that's intended, not a bug, and matches the hand-
+  // authored GOAT/WM/Legenden cards which already do the same. Capping at 99 used to silently drop
+  // leftover gain once every stat hit the ceiling, under-crediting exactly the cards that deserved
+  // the biggest boost.
   let remaining = gain, guard = 0;
   while(remaining>0 && guard<200){
     guard++;
     let progressed = false;
     for(const k of keys){
       if(remaining<=0) break;
-      if(typeof out[k]==='number' && out[k]<99){ out[k]++; remaining--; progressed = true; }
+      if(typeof out[k]==='number'){ out[k]++; remaining--; progressed = true; }
     }
-    if(!progressed) break; // every stat already maxed - can't place the rest
+    if(!progressed) break;
   }
   return out;
 }
@@ -6528,6 +6534,14 @@ const POS_DE = {
 };
 function posDE(label){ return POS_DE[label] || label; }
 const STAT_DE = {PAC:'TEM', SHO:'SCH', PAS:'PAS', DRI:'DRI', DEF:'DEF', PHY:'PHY'};
+// goalkeepers use the same 6 underlying fields (pac/sho/pas/dri/defn/phy) as every outfield card -
+// there's no separate DIV/HAN/KIC/REF/POS data anywhere in the dataset - but showing raw outfield
+// labels like "SCH" (Schuss/Shooting) or "PAS" (Passing) on a keeper card reads as nonsensical.
+// Relabel + reinterpret the same fields into keeper-appropriate stats instead of inventing/hand-typing
+// new numbers for every GK card in the game: pace->speed (already a natural match), shooting power->
+// kicking power, passing vision->positioning awareness, dribbling reactions->reflexes, defending->
+// shot-stopping/diving, physical presence->handling.
+const STAT_DE_GK = {PAC:'TEM', SHO:'ABS', PAS:'STE', DRI:'REF', DEF:'PAR', PHY:'HAL'};
 
 // ===== online backend (Firebase Firestore, lite/REST client - no IndexedDB/localStorage) =====
 const FIREBASE_CONFIG = {
@@ -7352,9 +7366,15 @@ const SBC_STRIKER_CARD = SBC_STRIKER_BASE ? boostBaseToOv(SBC_STRIKER_BASE, 108,
 const SBC_DEFENDER_CARD = SBC_DEFENDER_BASE ? boostBaseToOv(SBC_DEFENDER_BASE, 107, 9790002, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
 const SBC_GK_CARD = SBC_GK_BASE ? boostBaseToOv(SBC_GK_BASE, 106, 9790003, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
 if(SBC_STRIKER_CARD) SBC_STRIKER_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p201558035.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=dff0413c573e2a81028e64773f9564ea'; // O. Dembélé
-if(SBC_DEFENDER_CARD) SBC_DEFENDER_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p50566860.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=df3de4049035af1e43e9caa7e419cb97'; // A. Hakimi
+if(SBC_DEFENDER_CARD) SBC_DEFENDER_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p50566860.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=d6245047e232c41df48c9f21075b3862'; // A. Hakimi
 if(SBC_GK_CARD) SBC_GK_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p67339485.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=550b460f4c75b83e7cff3e2073083fdd'; // G. Donnarumma
 [SBC_STRIKER_CARD, SBC_DEFENDER_CARD, SBC_GK_CARD].forEach(c=>{ if(c) BY_ID.set(c.id, c); });
+// WM-Sonderaufgaben limited event (see WM_QUEST_DEADLINE): capstone reward for finishing all 5 quests -
+// built from Mbappé's real base card (id 231747, 91 OV) boosted to exactly 100, reusing the sbcx foil look.
+const WM_QUEST_MBAPPE_BASE = findBaseCard(231747);
+const WM_QUEST_MBAPPE_CARD = WM_QUEST_MBAPPE_BASE ? boostBaseToOv(WM_QUEST_MBAPPE_BASE, 100, 9791001, 'wmquestreward', 'WM-Elite', 'sbcx') : null;
+if(WM_QUEST_MBAPPE_CARD) WM_QUEST_MBAPPE_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p67340611.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=6dcd0ad869f2d76db5937265e0cf203f';
+if(WM_QUEST_MBAPPE_CARD) BY_ID.set(WM_QUEST_MBAPPE_CARD.id, WM_QUEST_MBAPPE_CARD);
 // every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
 // exclusive-card ones above set maxCompletions:1) - see sbcCompletions()/sbcMaxCompletions() below.
 const SBC_DEFAULT_MAX_COMPLETIONS = 5;
@@ -7456,6 +7476,27 @@ const SBC_DEFS = [
     desc:'Erstmals gefragt: Spieler UND Trainer zusammen. 10 Spieler, Durchschnittsrating 90+, plus ein Trainer der Stufe Legend\u00e4r \u2014 beides wird verbraucht.',
     managerReq:{minTier:'Legend\u00e4r'},
     reqs:[ req('Durchschnittsrating 90+', c=>avgOv(c)>=90, c=>`${avgOv(c)} / 90`) ]},
+  // --- WM-Sonderaufgaben limited event (see WM_QUEST_DEADLINE): 3 of the event's 5 quests. Each is
+  // one-time-only and grants a WM Winners Pack; completing all 3 plus the 2 match quests in
+  // WM_QUEST_MATCHES unlocks the WM_QUEST_MBAPPE_CARD claim - see openWmQuestDetail().
+  {id:'wm_quest_sturm', name:'WM-Sturmreihe', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 92+, niemand unter 87 OVR, mindestens 4 Stürmer und 6 Sonderkarten. Belohnung: 1 WM Winners Pack.',
+    reqs:[ req('Durchschnittsrating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`),
+           req('Kein Spieler unter 87 OVR', c=>c.every(x=>x.ov>=87), c=>`${c.filter(x=>x.ov<87).length} unter 87`),
+           req('4+ Stürmer', c=>c.filter(x=>posGroup(x.pos)==='FWD').length>=4, c=>`${c.filter(x=>posGroup(x.pos)==='FWD').length} / 4`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'wm_quest_abwehr', name:'WM-Abwehrblock', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+, niemand unter 86 OVR, mindestens 5 Verteidiger und 5 Sonderkarten. Belohnung: 1 WM Winners Pack.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`),
+           req('Kein Spieler unter 86 OVR', c=>c.every(x=>x.ov>=86), c=>`${c.filter(x=>x.ov<86).length} unter 86`),
+           req('5+ Verteidiger', c=>c.filter(x=>posGroup(x.pos)==='DEF').length>=5, c=>`${c.filter(x=>posGroup(x.pos)==='DEF').length} / 5`),
+           req('5+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=5, c=>`${c.filter(x=>x.variant!=='base').length} / 5 Sonderkarten`) ]},
+  {id:'wm_quest_mittelfeld', name:'WM-Mittelfeldmotor', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 88 OVR, mindestens 4 Mittelfeldspieler und 6 Sonderkarten. Belohnung: 1 WM Winners Pack.',
+    reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
+           req('Kein Spieler unter 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} unter 88`),
+           req('4+ Mittelfeldspieler', c=>c.filter(x=>posGroup(x.pos)==='MID').length>=4, c=>`${c.filter(x=>posGroup(x.pos)==='MID').length} / 4`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
     reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
@@ -7597,56 +7638,123 @@ async function claimDraftReward(maxed){
   draftState = null;
   renderDraftPanel();
 }
-const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive'};
+const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest'};
+const FEAS_INFO = {
+  free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
+  squad:{label:'Nur mit Kader-Aufl\u00f6sung', color:'var(--gold)'},
+  none:{label:'Aktuell nicht erf\u00fcllbar', color:'var(--danger)'},
+};
+// shared by the main SBC grid and the WM-quest submenu (its 3 SBCs use the exact same tile), so the
+// two areas of the Herausforderungen tab render identically rather than looking like different systems.
+function buildSbcTile(sbc, poolFree, poolWithSquad){
+  const completions = sbcCompletions(sbc.id);
+  const maxC = sbcMaxCompletions(sbc);
+  const done = completions>=maxC;
+  const locked = sbc.requires && sbcCompletions(sbc.requires)<=0;
+  const rewardInfo = sbcRewardDisplay(sbc);
+  const feas = (done||locked) ? null : sbcFeasibility(sbc, poolFree, poolWithSquad);
+  const tierSlug = SBC_TIER_SLUG[sbc.tier] || 'mid';
+  const card = document.createElement('div');
+  card.className = `sbc-card tier-${tierSlug}`;
+  if(locked) card.style.opacity = '.5';
+  const progressHTML = maxC>1
+    ? `<div class="sbc-progress-dots" title="${completions} / ${maxC} abgeschlossen">${Array.from({length:maxC},(_,i)=>`<span class="sbc-dot ${i<completions?'filled':''}"></span>`).join('')}</div>`
+    : (completions>0 ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : '');
+  const btnLabel = done ? (maxC>1?'Maximal erreicht':'Abgeschlossen') : (completions>0?`Erneut bauen (${completions}/${maxC})`:'Bauen');
+  card.innerHTML = `
+    <div class="sbc-card-head">
+      <span class="sbc-tier-pill">${sbc.tier}</span>
+      <span class="sbc-size-pill">${sbc.size} Spieler</span>
+    </div>
+    <h3 class="sbc-name">${sbc.name}</h3>
+    <div class="sbc-desc">${sbc.desc}</div>
+    ${locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">\ud83d\udd12 Erst nach "${SBC_DEFS.find(s=>s.id===sbc.requires).name}" freigeschaltet</div>` : ''}
+    ${(!done && !locked) ? `<div class="mono" style="font-size:10.5px;color:${FEAS_INFO[feas].color};">\u25CF ${FEAS_INFO[feas].label}</div>` : ''}
+    <div class="sbc-reward-row">
+      <div class="sbc-reward-dot" style="background:${rewardInfo.dotColor};color:${rewardInfo.dotColor};"></div>
+      <span class="sbc-reward-label">${rewardInfo.label}</span>
+    </div>
+    ${progressHTML}
+    <button class="sbc-build-btn" ${done||locked||feas==='none'?'disabled':''}>${btnLabel}</button>`;
+  if(!done && !locked && feas!=='none') card.querySelector('.sbc-build-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
+  return card;
+}
+// every non-SBC challenge (match-based, all-or-nothing) rendered through the same tile+detail-view
+// pattern as SBCs (openSBCBuilder) instead of always-expanded boxes, so the two feel like one system.
+const CHALLENGE_DEFS = [
+  {id:'tournament', name:'Turnier-Modus', pill:'Match', accent:'var(--muted)', contentId:'tournament-content', renderFn:()=>renderTournamentPanel(),
+    desc:'3 Runden gegen wachsend starke Fantasie-Auswahlteams. Verlierst du, ist das Turnier vorbei. Pokalsieg bringt das UCL Winners Pack.'},
+  {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
+    desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
+  {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
+    desc:'Ein einzelnes, extrem hartes Match. Sieg bringt die einzigartige Ballon d\u2019Or-Karte.'},
+  {id:'prime-ronaldo', name:'PRIME Cristiano Ronaldo', pill:'Match', accent:'#ffd76a', contentId:'prime-ronaldo-content', renderFn:()=>renderPrimeChallengePanel(PRIME_CHALLENGES[0]),
+    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Ronaldo (109 OVR).'},
+  {id:'prime-messi', name:'PRIME Lionel Messi', pill:'Match', accent:'#ffd76a', contentId:'prime-messi-content', renderFn:()=>renderPrimeChallengePanel(PRIME_CHALLENGES[1]),
+    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Messi (109 OVR).'},
+  {id:'prime-neymar', name:'PRIME Neymar Jr', pill:'Match', accent:'#ffd76a', contentId:'prime-neymar-content', renderFn:()=>renderPrimeChallengePanel(PRIME_CHALLENGES[2]),
+    desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Neymar (109 OVR).'},
+  {id:'orei', name:'O Rei Herausforderung', pill:'Quest', accent:'#c98a3e', contentId:'orei-content', renderFn:()=>renderOReiPanel(),
+    desc:'Die Kr\u00f6nung aller Herausforderungen \u2014 3 Siege in Folge gegen Rating 111-114 schalten das Fu\u00dfballg\u00f6tter Pack dauerhaft frei.'},
+  {id:'kontinental', name:'Kontinentalpokal', pill:'Match', accent:'var(--muted)', contentId:'kontinental-content', renderFn:()=>renderKontinentalpokalPanel(),
+    desc:'Beliebig oft wiederholbares hartes Match (Rating 92-96). Sieg bringt 1.500 Coins + ein Rare Gold Vault Pack.'},
+  {id:'streak', name:'Serie ohne Niederlage', pill:'Serie', accent:'var(--muted)', contentId:'streak-content', renderFn:()=>renderWinStreakPanel(),
+    desc:'Gewinne 5 Spiele in Folge (Rating 90-93) \u2014 jede Niederlage setzt zur\u00fcck. Belohnung bei 5/5: 3.000 Coins + Icon Moments Pack.'},
+];
+function challengeTileHTML(def, statusHTML){
+  return `
+    <div class="sbc-card-head"><span class="sbc-tier-pill">${def.pill}</span></div>
+    <h3 class="sbc-name">${def.name}</h3>
+    <div class="sbc-desc">${def.desc}</div>
+    ${statusHTML||''}
+    <button class="sbc-build-btn" style="background:${def.accent};">\u00d6ffnen</button>`;
+}
+function openChallengeDetail(def){
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>${def.name}</h2><p>${def.desc}</p></div>
+    <div class="toolbar"><button class="action-btn secondary" id="challenge-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button></div>
+    <div id="${def.contentId}"></div>`;
+  document.getElementById('challenge-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  def.renderFn();
+}
+function renderChallengeGrid(){
+  const grid = document.getElementById('challenge-grid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  if(wmQuestActive()){
+    const doneCount = WM_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + WM_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
+    const claimed = profile.wmQuestMbappeClaimed;
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card tier-wmquest';
+    tile.style.cursor = 'pointer';
+    tile.innerHTML = challengeTileHTML(
+      {id:'wmquest', name:'WM-Sonderaufgaben', pill:'WM-Event', accent:'#ffcc00',
+        desc:`Nur dieses Wochenende: 5 schwere Aufgaben f\u00fcr ${WM_QUEST_MBAPPE_CARD?WM_QUEST_MBAPPE_CARD.n:'Mbapp\u00e9'} (100 OVR).`},
+      `<div class="sbc-progress-dots" title="${doneCount} / 5 abgeschlossen">${Array.from({length:5},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+       ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : ''}`
+    );
+    tile.addEventListener('click', openWmQuestDetail);
+    grid.appendChild(tile);
+  }
+  CHALLENGE_DEFS.forEach(def=>{
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = def.accent;
+    tile.style.cursor = 'pointer';
+    tile.innerHTML = challengeTileHTML(def);
+    tile.addEventListener('click', ()=>openChallengeDetail(def));
+    grid.appendChild(tile);
+  });
+}
 async function renderSBCList(view){
   view.innerHTML = `
-    <div class="view-head"><h2>Herausforderungen</h2><p>Turnier und Ballon d'Or sind Match-Herausforderungen gegen harte Fantasie-Gegner. SBCs weiter unten verlangen stattdessen einen Kader aus deinem Verein, der die Anforderungen erf\u00fcllt.</p></div>
-    <div class="vs-panel" id="tournament-panel" style="margin-bottom:22px;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Turnier-Modus</h3>
-      <div id="tournament-content"></div>
-    </div>
-    <div class="vs-panel" id="draft-panel" style="margin-bottom:22px;border-color:#4da8ff;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:#4da8ff;text-transform:uppercase;letter-spacing:.04em;">Draft-Modus</h3>
-      <div id="draft-content"></div>
-    </div>
-    <div class="vs-panel" id="ballondor-panel" style="margin-bottom:22px;border-color:var(--gold-dim);">
-      <h3 style="font-size:15px;margin-bottom:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.04em;">Ballon d'Or Herausforderung</h3>
-      <div id="ballondor-content"></div>
-    </div>
-    <div class="vs-panel" id="prime-ronaldo-panel" style="margin-bottom:22px;border-color:#ffd76a;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:#ffd76a;text-transform:uppercase;letter-spacing:.04em;">PRIME Cristiano Ronaldo</h3>
-      <div id="prime-ronaldo-content"></div>
-    </div>
-    <div class="vs-panel" id="prime-messi-panel" style="margin-bottom:22px;border-color:#ffd76a;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:#ffd76a;text-transform:uppercase;letter-spacing:.04em;">PRIME Lionel Messi</h3>
-      <div id="prime-messi-content"></div>
-    </div>
-    <div class="vs-panel" id="prime-neymar-panel" style="margin-bottom:22px;border-color:#ffd76a;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:#ffd76a;text-transform:uppercase;letter-spacing:.04em;">PRIME Neymar Jr</h3>
-      <div id="prime-neymar-content"></div>
-    </div>
-    <div class="vs-panel" id="orei-panel" style="margin-bottom:22px;border-color:#c98a3e;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:#c98a3e;text-transform:uppercase;letter-spacing:.04em;">O Rei Herausforderung</h3>
-      <div id="orei-content"></div>
-    </div>
-    <div class="vs-panel" id="kontinental-panel" style="margin-bottom:22px;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Kontinentalpokal</h3>
-      <div id="kontinental-content"></div>
-    </div>
-    <div class="vs-panel" id="streak-panel" style="margin-bottom:22px;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Serie ohne Niederlage</h3>
-      <div id="streak-content"></div>
-    </div>
+    <div class="view-head"><h2>Herausforderungen</h2><p>W\u00e4hle eine Karte: Match-Herausforderungen gegen harte Fantasie-Gegner oder SBCs, die einen Kader aus deinem Verein verlangen, der die Anforderungen erf\u00fcllt.</p></div>
+    <div class="sbc-grid" id="challenge-grid"></div>
     <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">SBCs (Squad Building Challenges)</h3>
     <p class="hint" style="margin-top:0;margin-bottom:12px;">Die meisten SBCs sind bis zu ${SBC_DEFAULT_MAX_COMPLETIONS}\u00d7 wiederholbar. Die drei "Einzigartig"-SBCs geben eine echte Einzelkarte, die es sonst nirgends gibt \u2014 die gibt's nur einmal.</p>
     <div class="sbc-grid" id="sbc-grid"><p class="hint">Pr\u00fcfe Erf\u00fcllbarkeit\u2026</p></div>`;
-  renderTournamentPanel();
-  renderDraftPanel();
-  renderBallonDorPanel();
-  PRIME_CHALLENGES.forEach(renderPrimeChallengePanel);
-  renderOReiPanel();
-  renderKontinentalpokalPanel();
-  renderWinStreakPanel();
+  renderChallengeGrid();
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
   const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid));
@@ -7654,43 +7762,8 @@ async function renderSBCList(view){
   const poolWithSquad = allCards;
   const grid = document.getElementById('sbc-grid');
   grid.innerHTML = '';
-  const FEAS_INFO = {
-    free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
-    squad:{label:'Nur mit Kader-Aufl\u00f6sung', color:'var(--gold)'},
-    none:{label:'Aktuell nicht erf\u00fcllbar', color:'var(--danger)'},
-  };
-  SBC_DEFS.forEach(sbc=>{
-    const completions = sbcCompletions(sbc.id);
-    const maxC = sbcMaxCompletions(sbc);
-    const done = completions>=maxC;
-    const locked = sbc.requires && sbcCompletions(sbc.requires)<=0;
-    const rewardInfo = sbcRewardDisplay(sbc);
-    const feas = (done||locked) ? null : sbcFeasibility(sbc, poolFree, poolWithSquad);
-    const tierSlug = SBC_TIER_SLUG[sbc.tier] || 'mid';
-    const card = document.createElement('div');
-    card.className = `sbc-card tier-${tierSlug}`;
-    if(locked) card.style.opacity = '.5';
-    const progressHTML = maxC>1
-      ? `<div class="sbc-progress-dots" title="${completions} / ${maxC} abgeschlossen">${Array.from({length:maxC},(_,i)=>`<span class="sbc-dot ${i<completions?'filled':''}"></span>`).join('')}</div>`
-      : (completions>0 ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : '');
-    const btnLabel = done ? (maxC>1?'Maximal erreicht':'Abgeschlossen') : (completions>0?`Erneut bauen (${completions}/${maxC})`:'Bauen');
-    card.innerHTML = `
-      <div class="sbc-card-head">
-        <span class="sbc-tier-pill">${sbc.tier}</span>
-        <span class="sbc-size-pill">${sbc.size} Spieler</span>
-      </div>
-      <h3 class="sbc-name">${sbc.name}</h3>
-      <div class="sbc-desc">${sbc.desc}</div>
-      ${locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">\ud83d\udd12 Erst nach "${SBC_DEFS.find(s=>s.id===sbc.requires).name}" freigeschaltet</div>` : ''}
-      ${(!done && !locked) ? `<div class="mono" style="font-size:10.5px;color:${FEAS_INFO[feas].color};">\u25CF ${FEAS_INFO[feas].label}</div>` : ''}
-      <div class="sbc-reward-row">
-        <div class="sbc-reward-dot" style="background:${rewardInfo.dotColor};color:${rewardInfo.dotColor};"></div>
-        <span class="sbc-reward-label">${rewardInfo.label}</span>
-      </div>
-      ${progressHTML}
-      <button class="sbc-build-btn" ${done||locked||feas==='none'?'disabled':''}>${btnLabel}</button>`;
-    if(!done && !locked && feas!=='none') card.querySelector('.sbc-build-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
-    grid.appendChild(card);
+  SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id)).forEach(sbc=>{
+    grid.appendChild(buildSbcTile(sbc, poolFree, poolWithSquad));
   });
 }
 function sbcRewardDisplay(sbc){
@@ -9774,6 +9847,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
     ${card.lg ? (leagueLogoUrl ? `<img class="nc-league" src="${leagueLogoUrl}" alt="" title="${card.lg}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-league-mono" title="${card.lg}">${initialsOf2(card.lg)}</div>`) : ''}
     ${clubLogoUrl ? `<img class="nc-club" src="${clubLogoUrl}" alt="" title="${card.club}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-club-mono" title="${card.club}">${initialsOf2(card.club)}</div>`}
   </div>`;
+  const statLabels = (!card.isManager && mainPos(card.pos)==='GK') ? STAT_DE_GK : STAT_DE;
   const bodyInner = card.isManager
     ? `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
@@ -9781,9 +9855,9 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
     : `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
        <div class="stats">
-         ${statBar(STAT_DE.PAC,card.pac)}${statBar(STAT_DE.DRI,card.dri)}
-         ${statBar(STAT_DE.SHO,card.sho)}${statBar(STAT_DE.DEF,card.defn)}
-         ${statBar(STAT_DE.PAS,card.pas)}${statBar(STAT_DE.PHY,card.phy)}
+         ${statBar(statLabels.PAC,card.pac)}${statBar(statLabels.DRI,card.dri)}
+         ${statBar(statLabels.SHO,card.sho)}${statBar(statLabels.DEF,card.defn)}
+         ${statBar(statLabels.PAS,card.pas)}${statBar(statLabels.PHY,card.phy)}
        </div>`;
   div.innerHTML = `
     ${hasVariant || card.isManager ? '<div class="pattern-layer"></div>' : ''}
@@ -13742,6 +13816,111 @@ async function playPrimeChallenge(ch){
   }});
 }
 
+// ===== WM-Sonderaufgaben: weekend-only limited event, 3 SBCs (see SBC_DEFS) + 2 match quests =====
+// Opens Saturday 00:00, hard cutoff Monday 00:00 - same pattern as WM_WINNERS_DEADLINE above, this
+// event just runs one weekend later. Rendered as a single tile in the main Herausforderungen grid
+// (see renderChallengeGrid) that opens a submenu (openWmQuestDetail) listing all 5 sub-challenges.
+const WM_QUEST_START = new Date(2026, 7, 15, 0, 0, 0).getTime();
+const WM_QUEST_DEADLINE = new Date(2026, 7, 17, 0, 0, 0).getTime();
+function wmQuestActive(){ const t = Date.now(); return t>=WM_QUEST_START && t<WM_QUEST_DEADLINE; }
+const WM_QUEST_SBC_IDS = ['wm_quest_sturm', 'wm_quest_abwehr', 'wm_quest_mittelfeld'];
+const WM_QUEST_MATCHES = [
+  {id:1, flag:'wmQuestMatch1Won', label:'WM-Härtetest', targetOv:102},
+  {id:2, flag:'wmQuestMatch2Won', label:'WM-Finale', targetOv:106},
+];
+function wmQuestSbcsDone(){ return WM_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
+function wmQuestMatchesDone(){ return WM_QUEST_MATCHES.every(m=>profile[m.flag]); }
+function wmQuestAllDone(){ return wmQuestSbcsDone() && wmQuestMatchesDone(); }
+let wmQuestCountdownTimer = null;
+async function playWmQuestMatch(m){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(profile[m.flag]){ toast('Diese Herausforderung ist bereits gewonnen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const opp = buildFixedRatingOpponent(m.targetOv);
+  const area = document.getElementById(`wmquest-match${m.id}-area`);
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      profile[m.flag] = true;
+      await sSet('profile', profile);
+      toast(`🏆 ${m.label} gewonnen!`);
+    } else {
+      toast('Verloren — versuch es jederzeit erneut.');
+    }
+    renderWmQuestSubgrid();
+  }});
+}
+async function claimWmQuestReward(){
+  if(!wmQuestAllDone() || profile.wmQuestMbappeClaimed || !WM_QUEST_MBAPPE_CARD) return;
+  profile.wmQuestMbappeClaimed = true;
+  collection.push({uid:genId(), cardId:WM_QUEST_MBAPPE_CARD.id});
+  await sSet('collection', collection);
+  await sSet('profile', profile);
+  toast(`🏆 ${WM_QUEST_MBAPPE_CARD.n} (100 OVR) freigeschaltet!`);
+  showCutscene(WM_QUEST_MBAPPE_CARD, ()=>{});
+  renderWmQuestSubgrid();
+}
+function renderWmQuestSubgrid(){
+  const grid = document.getElementById('wmquest-subgrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const squadLocked = new Set(Object.values(squad.slots));
+  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  WM_QUEST_SBC_IDS.forEach(id=>{
+    grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+  });
+  WM_QUEST_MATCHES.forEach(m=>{
+    const done = !!profile[m.flag];
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card tier-wmquest';
+    tile.innerHTML = `
+      <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
+      <h3 class="sbc-name">${m.label}</h3>
+      <div class="sbc-desc">Ein hartes Match gegen einen Fantasie-Gegner (Rating ~${m.targetOv}). Belohnung: 1 WM Winners Pack.</div>
+      ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
+      <div id="wmquest-match${m.id}-area"></div>
+      <button class="sbc-build-btn" id="wmquest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
+    if(!done) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playWmQuestMatch(m));
+    grid.appendChild(tile);
+  });
+  const claimBtn = document.getElementById('wmquest-claim-btn');
+  if(claimBtn){
+    const allDone = wmQuestAllDone();
+    const claimed = profile.wmQuestMbappeClaimed;
+    claimBtn.disabled = !allDone || claimed;
+    claimBtn.textContent = claimed ? 'Bereits abgeholt' : 'Mbappé (100 OVR) abholen';
+    claimBtn.onclick = (allDone && !claimed) ? claimWmQuestReward : null;
+  }
+}
+function openWmQuestDetail(){
+  if(wmQuestCountdownTimer){ clearInterval(wmQuestCountdownTimer); wmQuestCountdownTimer = null; }
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>WM-Sonderaufgaben</h2><p>Schließe alle 5 Aufgaben ab und hol dir <b style="color:#ffcc00;">${WM_QUEST_MBAPPE_CARD?WM_QUEST_MBAPPE_CARD.n:'Mbappé'} (100 OVR)</b> — sonst nirgends erhältlich. Jede SBC gibt zusätzlich sofort ein WM Winners Pack.</p></div>
+    <div class="toolbar"><button class="action-btn secondary" id="wmquest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
+    <div id="wmquest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
+    <div class="sbc-grid" id="wmquest-subgrid" style="margin-bottom:18px;"></div>
+    <button class="action-btn" id="wmquest-claim-btn" style="width:260px;"></button>`;
+  document.getElementById('wmquest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  renderWmQuestSubgrid();
+  const updateCountdown = ()=>{
+    const el = document.getElementById('wmquest-countdown');
+    if(!el){ if(wmQuestCountdownTimer){ clearInterval(wmQuestCountdownTimer); wmQuestCountdownTimer=null; } return; }
+    if(!wmQuestActive()){ currentTab='sbc'; renderNav(); renderView('sbc'); return; }
+    el.textContent = `⏳ Noch ${formatCountdown(WM_QUEST_DEADLINE - Date.now())} (bis Montag 00:00)`;
+  };
+  updateCountdown();
+  wmQuestCountdownTimer = setInterval(updateCountdown, 30000);
+}
 // ===== O Rei Herausforderung: the ultimate capstone challenge =====
 const OREI_ENTRY = {wins:200, rating:105, netWorth:500000};
 function buildFixedRatingOpponent(targetOv){
