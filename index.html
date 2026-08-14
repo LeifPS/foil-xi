@@ -8398,8 +8398,9 @@ function drawMarketGrid(){
   const grid = document.getElementById('market-grid');
   if(!grid) return;
   let items = marketListingsCache.map(l=>{
-    const card = l.itemType==='manager' ? MGR_BY_ID.get(l.cardId) : BY_ID.get(l.cardId);
-    return {listing:l, card};
+    if(l.itemType==='manager') return {listing:l, card: MGR_BY_ID.get(l.cardId)};
+    const base = BY_ID.get(l.cardId);
+    return {listing:l, card: base ? applyCardLevel(base, l.xp||0, l.cardUid) : null};
   }).filter(x=>x.card);
   if(marketFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(marketFilter.q.toLowerCase()));
   if(marketFilter.pos==='MGR') items = items.filter(x=>x.listing.itemType==='manager');
@@ -8580,7 +8581,7 @@ function renderSellManual(allEligible, usedInSquad){
       wrap.addEventListener('click', ()=>{
         if(locked){ toast('Diese Karte ist gerade nicht verf\u00fcgbar (im Kader, bereits gelistet oder in einem Angebot).'); return; }
         if(selected.has(uid)){ selected.delete(uid); wrap.style.outline=''; }
-        else{ selected.set(uid, {uid, itemType:'player', cardId}); wrap.style.outline='3px solid var(--turf-bright)'; }
+        else{ selected.set(uid, {uid, itemType:'player', cardId, xp:card.xp||0}); wrap.style.outline='3px solid var(--turf-bright)'; }
         updateSel();
       });
       pGrid.appendChild(wrap);
@@ -8624,7 +8625,7 @@ function renderSellManual(allEligible, usedInSquad){
       try{
         await fb.setDoc(fb.doc(fb.db,'market', genId()), {
           sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
-          itemType: item.itemType, cardUid: item.uid, cardId: item.cardId,
+          itemType: item.itemType, cardUid: item.uid, cardId: item.cardId, xp: item.xp||0,
           price, createdAt: Date.now()
         });
         created++;
@@ -8884,13 +8885,13 @@ function renderSellFilter(allEligible, usedInSquad){
     const squadValues = new Set(Object.values(squad.slots));
     let created = 0, skipped = 0;
     for(let i=0;i<toList.length;i++){
-      const {uid,cardId} = toList[i];
+      const {uid,cardId,card} = toList[i];
       const price = prices[i].price;
       if(squadValues.has(uid)){ skipped++; continue; }
       try{
         await fb.setDoc(fb.doc(fb.db,'market', genId()), {
           sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
-          itemType:'player', cardUid: uid, cardId,
+          itemType:'player', cardUid: uid, cardId, xp: card.xp||0,
           price, createdAt: Date.now()
         });
         created++;
