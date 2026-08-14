@@ -7722,19 +7722,30 @@ function renderChallengeGrid(){
   const grid = document.getElementById('challenge-grid');
   if(!grid) return;
   grid.innerHTML = '';
-  if(wmQuestActive()){
-    const doneCount = WM_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + WM_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
-    const claimed = profile.wmQuestMbappeClaimed;
+  if(wmQuestVisible()){
+    const active = wmQuestActive();
     const tile = document.createElement('div');
     tile.className = 'sbc-card tier-wmquest';
-    tile.style.cursor = 'pointer';
-    tile.innerHTML = challengeTileHTML(
-      {id:'wmquest', name:'WM-Sonderaufgaben', pill:'WM-Event', accent:'#ffcc00',
-        desc:`Nur dieses Wochenende: 5 schwere Aufgaben f\u00fcr ${WM_QUEST_MBAPPE_CARD?WM_QUEST_MBAPPE_CARD.n:'Mbapp\u00e9'} (100 OVR).`},
-      `<div class="sbc-progress-dots" title="${doneCount} / 5 abgeschlossen">${Array.from({length:5},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
-       ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : ''}`
-    );
-    tile.addEventListener('click', openWmQuestDetail);
+    if(active){
+      const doneCount = WM_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + WM_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
+      const claimed = profile.wmQuestMbappeClaimed;
+      tile.style.cursor = 'pointer';
+      tile.innerHTML = challengeTileHTML(
+        {id:'wmquest', name:'WM-Sonderaufgaben', pill:'WM-Event', accent:'#ffcc00',
+          desc:`Nur dieses Wochenende: 5 schwere Aufgaben f\u00fcr ${WM_QUEST_MBAPPE_CARD?WM_QUEST_MBAPPE_CARD.n:'Mbapp\u00e9'} (100 OVR).`},
+        `<div class="sbc-progress-dots" title="${doneCount} / 5 abgeschlossen">${Array.from({length:5},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+         ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : ''}`
+      );
+      tile.addEventListener('click', openWmQuestDetail);
+    } else {
+      tile.style.opacity = '.6';
+      tile.innerHTML = `
+        <div class="sbc-card-head"><span class="sbc-tier-pill">WM-Event</span></div>
+        <h3 class="sbc-name">WM-Sonderaufgaben</h3>
+        <div class="sbc-desc">Nur dieses Wochenende: 5 schwere Aufgaben f\u00fcr ${WM_QUEST_MBAPPE_CARD?WM_QUEST_MBAPPE_CARD.n:'Mbapp\u00e9'} (100 OVR).</div>
+        <div class="mono" style="font-size:10.5px;color:var(--muted);">\ud83d\udd12 Startet Samstag 00:00</div>
+        <button class="sbc-build-btn" disabled>Noch nicht freigeschaltet</button>`;
+    }
     grid.appendChild(tile);
   }
   CHALLENGE_DEFS.forEach(def=>{
@@ -13817,23 +13828,35 @@ async function playPrimeChallenge(ch){
 }
 
 // ===== WM-Sonderaufgaben: weekend-only limited event, 3 SBCs (see SBC_DEFS) + 2 match quests =====
-// Opens Saturday 00:00, hard cutoff Monday 00:00 - same pattern as WM_WINNERS_DEADLINE above, this
-// event just runs one weekend later. Rendered as a single tile in the main Herausforderungen grid
+// Staggered unlock: easiest SBC available immediately (Friday), 2nd SBC + match 1 unlock Saturday
+// 00:00, hardest SBC + match 2 (and with them the final card, since it needs all 5) unlock Sunday
+// 00:00. Hard cutoff Monday 00:00. Rendered as a single tile in the main Herausforderungen grid
 // (see renderChallengeGrid) that opens a submenu (openWmQuestDetail) listing all 5 sub-challenges.
-const WM_QUEST_START = new Date(2026, 7, 15, 0, 0, 0).getTime();
-const WM_QUEST_DEADLINE = new Date(2026, 7, 17, 0, 0, 0).getTime();
+const WM_QUEST_START = new Date(2026, 7, 14, 0, 0, 0).getTime(); // Friday - event tile itself becomes active
+const WM_QUEST_DAY2 = new Date(2026, 7, 15, 0, 0, 0).getTime(); // Saturday 00:00
+const WM_QUEST_DAY3 = new Date(2026, 7, 16, 0, 0, 0).getTime(); // Sunday 00:00
+const WM_QUEST_DEADLINE = new Date(2026, 7, 17, 0, 0, 0).getTime(); // Monday 00:00
 function wmQuestActive(){ const t = Date.now(); return t>=WM_QUEST_START && t<WM_QUEST_DEADLINE; }
-const WM_QUEST_SBC_IDS = ['wm_quest_sturm', 'wm_quest_abwehr', 'wm_quest_mittelfeld'];
+function wmQuestVisible(){ return Date.now() < WM_QUEST_DEADLINE; } // shown (locked) before start too, hidden only once it's over
+// ordered easiest -> hardest (matches each SBC's own avgOv requirement in SBC_DEFS)
+const WM_QUEST_SBC_IDS = ['wm_quest_abwehr', 'wm_quest_sturm', 'wm_quest_mittelfeld'];
+const WM_QUEST_SBC_UNLOCK = {wm_quest_abwehr: WM_QUEST_START, wm_quest_sturm: WM_QUEST_DAY2, wm_quest_mittelfeld: WM_QUEST_DAY3};
 const WM_QUEST_MATCHES = [
-  {id:1, flag:'wmQuestMatch1Won', label:'WM-Härtetest', targetOv:102},
-  {id:2, flag:'wmQuestMatch2Won', label:'WM-Finale', targetOv:106},
+  {id:1, flag:'wmQuestMatch1Won', label:'WM-Härtetest', targetOv:102, unlockAt:WM_QUEST_DAY2},
+  {id:2, flag:'wmQuestMatch2Won', label:'WM-Finale', targetOv:106, unlockAt:WM_QUEST_DAY3},
 ];
+function wmQuestUnlockLabel(ts){
+  if(ts===WM_QUEST_START) return 'heute';
+  if(ts===WM_QUEST_DAY2) return 'Samstag';
+  return 'Sonntag';
+}
 function wmQuestSbcsDone(){ return WM_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
 function wmQuestMatchesDone(){ return WM_QUEST_MATCHES.every(m=>profile[m.flag]); }
 function wmQuestAllDone(){ return wmQuestSbcsDone() && wmQuestMatchesDone(); }
 let wmQuestCountdownTimer = null;
 async function playWmQuestMatch(m){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(Date.now() < m.unlockAt){ toast(`Schaltet sich ${wmQuestUnlockLabel(m.unlockAt)} frei.`); return; }
   if(profile[m.flag]){ toast('Diese Herausforderung ist bereits gewonnen.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
@@ -13875,21 +13898,40 @@ function renderWmQuestSubgrid(){
   const squadLocked = new Set(Object.values(squad.slots));
   const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  const now = Date.now();
   WM_QUEST_SBC_IDS.forEach(id=>{
-    grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+    const unlockAt = WM_QUEST_SBC_UNLOCK[id];
+    if(now < unlockAt){
+      const sbc = SBC_DEFS.find(s=>s.id===id);
+      const tile = document.createElement('div');
+      tile.className = 'sbc-card tier-wmquest';
+      tile.style.opacity = '.6';
+      tile.innerHTML = `
+        <div class="sbc-card-head"><span class="sbc-tier-pill">${sbc.tier}</span><span class="sbc-size-pill">${sbc.size} Spieler</span></div>
+        <h3 class="sbc-name">${sbc.name}</h3>
+        <div class="sbc-desc">${sbc.desc}</div>
+        <div class="mono" style="font-size:10.5px;color:var(--muted);">🔒 Schaltet sich ${wmQuestUnlockLabel(unlockAt)} frei</div>
+        <button class="sbc-build-btn" disabled>Noch nicht freigeschaltet</button>`;
+      grid.appendChild(tile);
+    } else {
+      grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+    }
   });
   WM_QUEST_MATCHES.forEach(m=>{
     const done = !!profile[m.flag];
+    const locked = now < m.unlockAt;
     const tile = document.createElement('div');
     tile.className = 'sbc-card tier-wmquest';
+    if(locked) tile.style.opacity = '.6';
     tile.innerHTML = `
       <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
       <h3 class="sbc-name">${m.label}</h3>
       <div class="sbc-desc">Ein hartes Match gegen einen Fantasie-Gegner (Rating ~${m.targetOv}). Belohnung: 1 WM Winners Pack.</div>
       ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
+      ${locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">🔒 Schaltet sich ${wmQuestUnlockLabel(m.unlockAt)} frei</div>` : ''}
       <div id="wmquest-match${m.id}-area"></div>
-      <button class="sbc-build-btn" id="wmquest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
-    if(!done) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playWmQuestMatch(m));
+      <button class="sbc-build-btn" id="wmquest-match${m.id}-btn" ${(done||locked)?'disabled':''}>${done?'Gewonnen':locked?'Noch nicht freigeschaltet':'Herausforderung annehmen'}</button>`;
+    if(!done && !locked) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playWmQuestMatch(m));
     grid.appendChild(tile);
   });
   const claimBtn = document.getElementById('wmquest-claim-btn');
