@@ -7532,8 +7532,8 @@ const SBC_DEFS = [
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
   {id:'olise_quest_nation', name:'Équipe de France', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
-    desc:'11 Spieler, Durchschnittsrating 88+, alle aus Frankreich (Olises Heimatland). Belohnung: 2.000 Coins.',
-    reqs:[ req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`),
+    desc:'11 Spieler, Durchschnittsrating 85+, alle aus Frankreich (Olises Heimatland). Belohnung: 2.000 Coins.',
+    reqs:[ req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
            req('Alle aus Frankreich', c=>c.every(x=>x.nat==='France'), c=>`${c.filter(x=>x.nat==='France').length} / 11 aus Frankreich`) ]},
   // --- 2nd PROMO-Sonderaufgaben limited event (see ALISSON_QUEST_DEADLINE) - same pattern again.
   {id:'alisson_quest_abwehrkette', name:'Abwehrkette', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
@@ -7555,8 +7555,8 @@ const SBC_DEFS = [
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
   {id:'alisson_quest_nation', name:'Seleção Brasileira', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
-    desc:'11 Spieler, Durchschnittsrating 88+, alle aus Brasilien (Alissons Heimatland). Belohnung: 2.000 Coins.',
-    reqs:[ req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`),
+    desc:'11 Spieler, Durchschnittsrating 85+, alle aus Brasilien (Alissons Heimatland). Belohnung: 2.000 Coins.',
+    reqs:[ req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
            req('Alle aus Brasilien', c=>c.every(x=>x.nat==='Brazil'), c=>`${c.filter(x=>x.nat==='Brazil').length} / 11 aus Brasilien`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
@@ -13954,8 +13954,8 @@ function wmQuestVisible(){ return Date.now() < WM_QUEST_DEADLINE; } // shown (lo
 const WM_QUEST_SBC_IDS = ['wm_quest_abwehr', 'wm_quest_sturm', 'wm_quest_mittelfeld'];
 const WM_QUEST_SBC_UNLOCK = {wm_quest_abwehr: WM_QUEST_START, wm_quest_sturm: WM_QUEST_DAY2, wm_quest_mittelfeld: WM_QUEST_DAY3};
 const WM_QUEST_MATCHES = [
-  {id:1, flag:'wmQuestMatch1Won', label:'WM-Härtetest', targetOv:102, unlockAt:WM_QUEST_DAY2},
-  {id:2, flag:'wmQuestMatch2Won', label:'WM-Finale', targetOv:106, unlockAt:WM_QUEST_DAY3},
+  {id:1, flag:'wmQuestMatch1Won', label:'WM-Härtetest', targetOv:95, unlockAt:WM_QUEST_DAY2},
+  {id:2, flag:'wmQuestMatch2Won', label:'WM-Finale', targetOv:107, unlockAt:WM_QUEST_DAY3},
 ];
 function wmQuestUnlockLabel(ts){
   if(ts===WM_QUEST_START) return 'heute';
@@ -14034,6 +14034,7 @@ function renderWmQuestSubgrid(){
     const locked = now < m.unlockAt;
     const tile = document.createElement('div');
     tile.className = 'sbc-card tier-wmquest';
+    tile.style.gridColumn = '1 / -1'; // full width - a live match (teams/score/commentary) doesn't fit the compact SBC tile size
     if(locked) tile.style.opacity = '.6';
     tile.innerHTML = `
       <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
@@ -14060,11 +14061,21 @@ function openWmQuestDetail(){
   const view = document.getElementById('view');
   view.innerHTML = `
     <div class="view-head"><h2>WM-Sonderaufgaben</h2><p>Schließe alle 5 Aufgaben ab und hol dir <b style="color:#ffcc00;">${WM_QUEST_MBAPPE_CARD?WM_QUEST_MBAPPE_CARD.n:'Mbappé'} (100 OVR)</b> — sonst nirgends erhältlich. Jede SBC gibt zusätzlich sofort ein WM Winners Pack.</p></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px;">
+      <div id="wmquest-reward-card"></div>
+      ${profile.wmQuestMbappeClaimed ? '' : '<div class="mono" style="font-size:10.5px;color:var(--muted);">Vorschau — erst nach Abschluss aller Aufgaben erhältlich</div>'}
+    </div>
     <div class="toolbar"><button class="action-btn secondary" id="wmquest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
     <div id="wmquest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
     <div class="sbc-grid" id="wmquest-subgrid" style="margin-bottom:18px;"></div>
     <button class="action-btn" id="wmquest-claim-btn" style="width:260px;"></button>`;
   document.getElementById('wmquest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const rewardBox = document.getElementById('wmquest-reward-card');
+  if(rewardBox && WM_QUEST_MBAPPE_CARD){
+    const cardNode = cardEl(WM_QUEST_MBAPPE_CARD, 'mini');
+    if(!profile.wmQuestMbappeClaimed) cardNode.style.opacity = '.8';
+    rewardBox.appendChild(cardNode);
+  }
   renderWmQuestSubgrid();
   const updateCountdown = ()=>{
     const el = document.getElementById('wmquest-countdown');
@@ -14082,8 +14093,8 @@ const OLISE_QUEST_DEADLINE = new Date(2026, 7, 28, 0, 0, 0).getTime(); // 2 week
 function oliseQuestActive(){ const t = Date.now(); return t>=OLISE_QUEST_START && t<OLISE_QUEST_DEADLINE; }
 const OLISE_QUEST_SBC_IDS = ['olise_quest_kreativ', 'olise_quest_fluegel', 'olise_quest_squad1', 'olise_quest_squad2', 'olise_quest_nation'];
 const OLISE_QUEST_MATCHES = [
-  {id:1, flag:'oliseQuestMatch1Won', label:'PROMO-Test', targetOv:108},
-  {id:2, flag:'oliseQuestMatch2Won', label:'PROMO-Endspiel', targetOv:111},
+  {id:1, flag:'oliseQuestMatch1Won', label:'PROMO-Test', targetOv:95},
+  {id:2, flag:'oliseQuestMatch2Won', label:'PROMO-Endspiel', targetOv:107},
 ];
 function oliseQuestSbcsDone(){ return OLISE_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
 function oliseQuestMatchesDone(){ return OLISE_QUEST_MATCHES.every(m=>profile[m.flag]); }
@@ -14139,6 +14150,7 @@ function renderOliseQuestSubgrid(){
     const done = !!profile[m.flag];
     const tile = document.createElement('div');
     tile.className = 'sbc-card tier-promoquest';
+    tile.style.gridColumn = '1 / -1'; // full width - a live match (teams/score/commentary) doesn't fit the compact SBC tile size
     tile.innerHTML = `
       <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
       <h3 class="sbc-name">${m.label}</h3>
@@ -14163,11 +14175,21 @@ function openOliseQuestDetail(){
   const view = document.getElementById('view');
   view.innerHTML = `
     <div class="view-head"><h2>PROMO-Sonderaufgaben</h2><p>Schließe alle 7 Aufgaben ab und hol dir <b style="color:#7ad9ff;">${OLISE_QUEST_CARD?OLISE_QUEST_CARD.n:'Olise'} (99 OVR)</b> — sonst nirgends erhältlich.</p></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px;">
+      <div id="olisequest-reward-card"></div>
+      ${profile.oliseQuestCardClaimed ? '' : '<div class="mono" style="font-size:10.5px;color:var(--muted);">Vorschau — erst nach Abschluss aller Aufgaben erhältlich</div>'}
+    </div>
     <div class="toolbar"><button class="action-btn secondary" id="olisequest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
     <div id="olisequest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
     <div class="sbc-grid" id="olisequest-subgrid" style="margin-bottom:18px;"></div>
     <button class="action-btn" id="olisequest-claim-btn" style="width:260px;"></button>`;
   document.getElementById('olisequest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const oliseRewardBox = document.getElementById('olisequest-reward-card');
+  if(oliseRewardBox && OLISE_QUEST_CARD){
+    const cardNode = cardEl(OLISE_QUEST_CARD, 'mini');
+    if(!profile.oliseQuestCardClaimed) cardNode.style.opacity = '.8';
+    oliseRewardBox.appendChild(cardNode);
+  }
   renderOliseQuestSubgrid();
   const updateCountdown = ()=>{
     const el = document.getElementById('olisequest-countdown');
@@ -14185,8 +14207,8 @@ const ALISSON_QUEST_DEADLINE = new Date(2026, 7, 28, 0, 0, 0).getTime(); // 2 we
 function alissonQuestActive(){ const t = Date.now(); return t>=ALISSON_QUEST_START && t<ALISSON_QUEST_DEADLINE; }
 const ALISSON_QUEST_SBC_IDS = ['alisson_quest_abwehrkette', 'alisson_quest_kastenwache', 'alisson_quest_squad1', 'alisson_quest_squad2', 'alisson_quest_nation'];
 const ALISSON_QUEST_MATCHES = [
-  {id:1, flag:'alissonQuestMatch1Won', label:'PROMO-Test', targetOv:108},
-  {id:2, flag:'alissonQuestMatch2Won', label:'PROMO-Endspiel', targetOv:111},
+  {id:1, flag:'alissonQuestMatch1Won', label:'PROMO-Test', targetOv:95},
+  {id:2, flag:'alissonQuestMatch2Won', label:'PROMO-Endspiel', targetOv:107},
 ];
 function alissonQuestSbcsDone(){ return ALISSON_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
 function alissonQuestMatchesDone(){ return ALISSON_QUEST_MATCHES.every(m=>profile[m.flag]); }
@@ -14243,6 +14265,7 @@ function renderAlissonQuestSubgrid(){
     const tile = document.createElement('div');
     tile.className = 'sbc-card';
     tile.style.borderLeftColor = '#5fe1c9';
+    tile.style.gridColumn = '1 / -1'; // full width - a live match (teams/score/commentary) doesn't fit the compact SBC tile size
     tile.innerHTML = `
       <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
       <h3 class="sbc-name">${m.label}</h3>
@@ -14267,11 +14290,21 @@ function openAlissonQuestDetail(){
   const view = document.getElementById('view');
   view.innerHTML = `
     <div class="view-head"><h2>PROMO-Sonderaufgaben</h2><p>Schließe alle 7 Aufgaben ab und hol dir <b style="color:#5fe1c9;">${ALISSON_QUEST_CARD?ALISSON_QUEST_CARD.n:'Alisson'} (99 OVR)</b> — sonst nirgends erhältlich.</p></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px;">
+      <div id="alissonquest-reward-card"></div>
+      ${profile.alissonQuestCardClaimed ? '' : '<div class="mono" style="font-size:10.5px;color:var(--muted);">Vorschau — erst nach Abschluss aller Aufgaben erhältlich</div>'}
+    </div>
     <div class="toolbar"><button class="action-btn secondary" id="alissonquest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
     <div id="alissonquest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
     <div class="sbc-grid" id="alissonquest-subgrid" style="margin-bottom:18px;"></div>
     <button class="action-btn" id="alissonquest-claim-btn" style="width:260px;"></button>`;
   document.getElementById('alissonquest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const alissonRewardBox = document.getElementById('alissonquest-reward-card');
+  if(alissonRewardBox && ALISSON_QUEST_CARD){
+    const cardNode = cardEl(ALISSON_QUEST_CARD, 'mini');
+    if(!profile.alissonQuestCardClaimed) cardNode.style.opacity = '.8';
+    alissonRewardBox.appendChild(cardNode);
+  }
   renderAlissonQuestSubgrid();
   const updateCountdown = ()=>{
     const el = document.getElementById('alissonquest-countdown');
