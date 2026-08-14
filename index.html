@@ -14274,19 +14274,32 @@ function openAlissonQuestDetail(){
 // ===== O Rei Herausforderung: the ultimate capstone challenge =====
 const OREI_ENTRY = {wins:200, rating:105, netWorth:500000};
 function buildFixedRatingOpponent(targetOv){
+  // built the same way as buildEliteOpponentXI: real cards picked by their own genuine ov, never
+  // force-overwritten - so the intro screen shows the actual squad that's playing, and only players
+  // who are genuinely that strong can end up scoring. Search outward from targetOv in each position
+  // group until real cards are found, since an exact rating may not exist at every position.
   const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, UCLW_SPECIALS);
   const slots = FORMATIONS['433'].slots;
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
+  const pickNear = (candidatesAll)=>{
+    let radius = 3, candidates = [];
+    while(!candidates.length && radius<=60){
+      candidates = candidatesAll.filter(c=>Math.abs(c.ov-targetOv)<=radius);
+      radius += 3;
+    }
+    return pick(candidates.length ? candidates : candidatesAll);
+  };
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
-    const candidates = byGroup[group].length ? byGroup[group] : pool;
-    return pick(candidates);
+    const groupPool = byGroup[group].length ? byGroup[group] : pool;
+    return pickNear(groupPool);
   });
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:targetOv, img:p.img, id:p.id})); // every player forced to exactly targetOv
-  const NAMES = ['Legenden-Auswahl 115','Unschlagbare Elf','Die Unm\u00f6glichen','Weltauswahl Prime'];
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:p.ov, img:p.img, id:p.id})); // real ov, no forcing
+  const NAMES = ['Legenden-Auswahl','Unschlagbare Elf','Die Unm\u00f6glichen','Weltauswahl Prime'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
-  return {owner, rating:targetOv, players, isBot:true};
+  const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
+  return {owner, rating, players, isBot:true};
 }
 function oreiRequirementsMet(){
   const {rating} = squadRating();
