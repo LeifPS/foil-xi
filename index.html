@@ -151,16 +151,20 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 /* ---- card component ---- */
 .pcard{
   --acc: var(--r-gold);
-  width:172px;height:272px;border-radius:14px;position:relative;padding:0;display:flex;flex-direction:column;flex-shrink:0;
+  --radius:14px;
+  width:172px;height:272px;border-radius:var(--radius);position:relative;padding:0;display:flex;flex-direction:column;flex-shrink:0;
   background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 2px, transparent 2px 9px),
     linear-gradient(160deg,#20261a 0%,#12150d 62%,#0c0e09 100%);
   border:1px solid var(--acc);
   box-shadow:0 10px 24px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.02) inset, 0 0 22px -6px var(--acc);
-  overflow:hidden;isolation:isolate;
+  /* overflow stays visible (not hidden) so the level-badge can sit half outside the top/bottom edge -
+     every other child that needs rounded-corner clipping (shine sweep, pattern layer, photo) gets its
+     own border-radius:var(--radius) below instead of relying on this element's overflow. */
+  isolation:isolate;
 }
 .pcard::before{
-  content:"";position:absolute;inset:0;z-index:4;pointer-events:none;
+  content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:var(--radius);overflow:hidden;
   background:linear-gradient(115deg, transparent 40%, rgba(255,255,255,.16) 48%, transparent 56%);
   background-size:220% 220%;background-position:120% 0%;
   transition:background-position .7s ease;
@@ -400,7 +404,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     linear-gradient(90deg, #000 0 5%, #dd0000 5% 7%, #ffce00 7% 9%, transparent 9% 100%);
     opacity:1;}
 
-.pcard .pattern-layer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.65;}
+.pcard .pattern-layer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.65;border-radius:var(--radius);overflow:hidden;}
 .pcard.pattern-attack .pattern-layer{background:repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 3px, transparent 3px 15px);}
 .pcard.pattern-defense .pattern-layer{background:
   repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 2px, transparent 2px 17px),
@@ -618,7 +622,23 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.xs .variant-badge{width:16px;height:16px;top:48px;right:3px;border-radius:5px;}
 .pcard.xs .variant-badge svg{width:9px;height:9px;}
 
-.pcard .photo-frame{position:relative;z-index:0;width:100%;height:160px;flex-shrink:0;overflow:hidden;}
+/* player leveling badge - Bronze/Silber/Gold, bottom-center on the card border, clickable to see XP progress */
+.pcard .level-badge{position:absolute;top:auto;bottom:-9px;left:50%;transform:translateX(-50%);z-index:5;
+  width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:#2a2d27;border:1.5px solid #555;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+.pcard .level-badge svg{width:11px;height:11px;color:#999;}
+.pcard .level-badge.lvl1{background:linear-gradient(160deg,#c9814f,#7a4a24);border-color:#e0a468;}
+.pcard .level-badge.lvl1 svg{color:#ffe0bd;}
+.pcard .level-badge.lvl2{background:linear-gradient(160deg,#d7dade,#9297a0);border-color:#eef0f2;}
+.pcard .level-badge.lvl2 svg{color:#fff;}
+.pcard .level-badge.lvl3{background:linear-gradient(160deg,#ffd76a,#c9971f);border-color:#ffe9a0;}
+.pcard .level-badge.lvl3 svg{color:#3a2a00;}
+.pcard.mini .level-badge{width:15px;height:15px;bottom:-6px;}
+.pcard.mini .level-badge svg{width:8px;height:8px;}
+.pcard.xs .level-badge{width:12px;height:12px;bottom:-5px;border-width:1px;}
+.pcard.xs .level-badge svg{width:6.5px;height:6.5px;}
+
+.pcard .photo-frame{position:relative;z-index:0;width:100%;height:160px;flex-shrink:0;overflow:hidden;border-radius:var(--radius) var(--radius) 0 0;}
 .pcard .avatar{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   font-family:'Anton';font-size:44px;color:var(--chalk);letter-spacing:.02em;
   background:radial-gradient(circle at 42% 30%, color-mix(in srgb, var(--acc) 45%, #1b2016) 0%, #0c0e09 78%);}
@@ -689,7 +709,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.mini .nc-club{width:13px;height:13px;}
 .pcard.mini .stats{gap:2px 6px;}
 .pcard.mini .stat{font-size:7.5px;}
-.pcard.xs{width:86px;height:152px;border-radius:10px;}
+.pcard.xs{width:86px;height:152px;border-radius:10px;--radius:10px;}
 .pcard.xs .photo-frame{height:60px;margin:2px 0 3px;}
 .pcard.xs .ov{font-size:17px;}
 .pcard.xs .ov-underline{width:14px;}
@@ -6785,9 +6805,11 @@ function powerScore(card){
     const base = MGR_POWER_VALUE[card.tier] || 1000;
     return base * (card.variant==='meistertrainer' ? 1.3 : 1);
   }
-  const base = sellValue(card.ov);
+  const baseOv = card.level ? card.ov - card.level : card.ov;
+  const base = sellValue(baseOv);
   const mult = VARIANT_SPECIALTY_MULT[card.variant] ?? (card.variant && card.variant!=='base' ? 1.5 : 1);
-  return base * mult;
+  const levelMult = LEVEL_RAP_MULT[card.level||0] || 1;
+  return base * mult * levelMult;
 }
 function getBaselineRAP(card){
   return Math.round(powerScore(card));
@@ -6876,7 +6898,7 @@ function rapBadge(card, opts={}){
 // the collection is examined (Club tab) or the player checks the leaderboard (Play tab).
 function computeMyNetWorth(){
   let total = profile.coins || 0;
-  collection.forEach(c=>{ const card = BY_ID.get(c.cardId); if(card) total += computeRAP(card); });
+  collection.forEach(c=>{ const card = leveledOwnedCard(c); if(card) total += computeRAP(card); });
   managerCollection.forEach(m=>{ const mgr = MGR_BY_ID.get(m.mgrId); if(mgr) total += computeRAP(mgr); });
   return Math.round(total);
 }
@@ -8053,7 +8075,7 @@ async function renderSBCList(view){
   renderChallengeGrid();
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   const poolWithSquad = allCards;
   const grid = document.getElementById('sbc-grid');
@@ -8104,7 +8126,7 @@ async function openSBCBuilder(sbc){
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   const grid = document.getElementById('sbc-club-grid');
   const uidToEl = new Map();
-  collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card).forEach(({uid,card})=>{
+  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card).forEach(({uid,card})=>{
     const inSquad = squadLocked.has(uid);
     const isListed = externalLocked.has(uid);
     const unavailable = inSquad || isListed;
@@ -8172,7 +8194,7 @@ async function openSBCBuilder(sbc){
     // never fall back to squad-locked cards here: submitSBC() has no squad-lock check at submission
     // time, so an autofill pick that reached into the active squad-editor lineup would let a player
     // consume/remove a card that's still equipped in a slot, leaving a dangling squad reference.
-    const poolFree = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !externalLocked.has(x.uid) && !squadLocked.has(x.uid));
+    const poolFree = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid) && !squadLocked.has(x.uid));
     const result = trySolveSBC(activeSBC, poolFree, activeSBC.size, sbcAutofillMode);
     if(!result){ toast('Mit deiner aktuellen Sammlung aktuell nicht erf\u00fcllbar (ohne Karten aus deinem aktiven Kader).'); return; }
     sbcSelection = new Set(result);
@@ -8490,7 +8512,7 @@ let sellModalMode = 'manual';
 async function openSellModal(){
   openModal(`<h2 style="margin-bottom:10px;">Karte(n) verkaufen</h2><p class="hint" style="margin-top:0;">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p>`);
   const usedInSquad = await getLockedUids();
-  const allEligible = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId), cardId:c.cardId})).filter(x=>x.card);
+  const allEligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c), cardId:c.cardId})).filter(x=>x.card);
   openModal(`
     <h2 style="margin-bottom:4px;">Karte(n) verkaufen</h2>
     <p class="hint" style="margin-top:0;margin-bottom:12px;">W\u00e4hle Karten manuell aus, oder liste alle Karten mit bestimmten Eigenschaften auf einmal (z.\u00a0B. Rating 90-92, LW).</p>
@@ -8968,6 +8990,8 @@ async function buyMarketListing(listing){
       ? sellerManagerCollection.some(m=>m.uid===listing.cardUid)
       : sellerCollection.some(c=>c.uid===listing.cardUid);
     if(!stillThere){ toast('Diese Karte ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
+    // player leveling: carry the sold card's XP/level over to the buyer, same as direct trades
+    const soldEntryXp = isManager ? 0 : ((sellerCollection.find(c=>c.uid===listing.cardUid)||{}).xp||0);
     if(isManager) sellerManagerCollection = sellerManagerCollection.filter(m=>m.uid!==listing.cardUid);
     else sellerCollection = sellerCollection.filter(c=>c.uid!==listing.cardUid);
     // pay the seller via an ATOMIC increment (not a snapshot-based overwrite) - this guarantees the
@@ -8984,7 +9008,7 @@ async function buyMarketListing(listing){
     try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
 
     if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
-    else { collection.push({uid:genId(), cardId:listing.cardId}); await sSet('collection', collection); }
+    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp}); await sSet('collection', collection); }
     await atomicCoinChange(-listing.price);
     recordSale(listing.cardId, listing.price);
     closeModal();
@@ -9068,7 +9092,7 @@ function showTradeCardsModal(t){
     <button class="modal-close" id="trade-cards-close">Schlie\u00dfen</button>`);
   const grid = document.getElementById('trade-cards-grid');
   (t.offerCards||[]).forEach(c=>{
-    const card = BY_ID.get(c.cardId);
+    const card = leveledOwnedCard(c);
     if(card){ const wrap=document.createElement('div'); wrap.style.position='relative'; wrap.appendChild(cardEl(card,'mini')); wrap.appendChild(rapBadge(card)); grid.appendChild(wrap); }
   });
   (t.offerManagers||[]).forEach(m=>{
@@ -9126,7 +9150,7 @@ async function openTradeBuilder(){
     <button class="action-btn" id="trade-submit" style="width:220px;">Angebot senden</button>
   `);
   const grid = document.getElementById('trade-pick-grid');
-  collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card).forEach(({uid,card})=>{
+  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card).forEach(({uid,card})=>{
     const inSquad = usedInSquad.has(uid);
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
@@ -9274,6 +9298,11 @@ async function finalizeTradeAccept(t, payment){
 
     const offerCardUids = new Set((t.offerCards||[]).map(c=>c.uid));
     const offerMgrUids = new Set((t.offerManagers||[]).map(m=>m.uid));
+    // player leveling: XP/level must travel with a card through trading. Look up each offered card's
+    // live XP from the sender's own collection (not from `t.offerCards`, which is just a snapshot from
+    // when the offer was created) so XP earned after the offer went out still carries over correctly.
+    const offerCardXpByUid = {};
+    senderCollection.forEach(c=>{ if(offerCardUids.has(c.uid)) offerCardXpByUid[c.uid] = c.xp||0; });
     // verify the sender still actually owns every offered card/manager - if any are gone
     // (already traded, sold, or used elsewhere), refuse rather than silently granting them for free
     const missingCards = [...offerCardUids].filter(uid=>!senderCollection.some(c=>c.uid===uid));
@@ -9297,7 +9326,7 @@ async function finalizeTradeAccept(t, payment){
 
     payment.cardUids.forEach(uid=>{
       const entry = collection.find(c=>c.uid===uid);
-      if(entry) senderCollection.push({uid:genId(), cardId:entry.cardId});
+      if(entry) senderCollection.push({uid:genId(), cardId:entry.cardId, xp:entry.xp||0});
     });
     if(payment.managerUid){
       const entry = managerCollection.find(m=>m.uid===payment.managerUid);
@@ -9317,7 +9346,7 @@ async function finalizeTradeAccept(t, payment){
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
     if(payment.managerUid) managerCollection = managerCollection.filter(m=>m.uid!==payment.managerUid);
-    (t.offerCards||[]).forEach(c=>collection.push({uid:genId(), cardId:c.cardId}));
+    (t.offerCards||[]).forEach(c=>collection.push({uid:genId(), cardId:c.cardId, xp:offerCardXpByUid[c.uid]||0}));
     (t.offerManagers||[]).forEach(m=>managerCollection.push({uid:genId(), mgrId:m.mgrId}));
     await sSet('collection', collection);
     await sSet('managerCollection', managerCollection);
@@ -9352,7 +9381,7 @@ async function acceptTrade(t){
 }
 function openAcceptCardsModal(t, want){
   const usedInSquad = new Set(Object.values(squad.slots));
-  const eligible = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)}))
+  const eligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)}))
     .filter(x=>x.card && !usedInSquad.has(x.uid) && x.card.ov>=want.minOvr && (want.pos==='ANY' || posGroup(x.card.pos)===want.pos));
   const picked = new Set();
   openModal(`
@@ -9668,15 +9697,89 @@ const NOSAVE_ALLOWED_IDS = new Set(['leifps','test','tst']);
 
 // ===== state =====
 let profile = null; // {coins,userId,displayName,wins,draws,losses}
-let collection = []; // [{uid,cardId}]
+let collection = []; // [{uid,cardId,xp}] - xp is per owned copy, not per card template, so two copies
+                      // of the same real player can be at different levels
 let managerCollection = []; // [{uid,mgrId}]
 let squadPresets = []; // [{id,name,formation,slots,managerUid}]
 let squad = null; // {formation, slots:{slotId:uid}}
 let currentTab = 'store';
 
+// ===== player leveling: every owned card copy earns XP from matches it plays in and can reach 3
+// levels (Bronze/Silber/Gold), each worth +1 OVR and +1 on every substat (max +3 OVR at Gold). XP and
+// level live on the collection entry itself (uid-scoped), so they travel with the card through trades
+// automatically - no separate carry-over step needed, the trade code already moves the whole entry. =====
+const CARD_XP_THRESHOLDS = [200, 1500, 10000]; // cumulative XP needed for Bronze/Silber/Gold
+const CARD_LEVEL_LABEL = {0:'Kein Level', 1:'Bronze', 2:'Silber', 3:'Gold'};
+const LEVEL_RAP_MULT = {0:1, 1:1.25, 2:1.75, 3:3}; // RAP multiplier over the base card's value: Bronze +25%, Silber +75%, Gold +200%
+function cardLevelForXp(xp){
+  if(xp>=CARD_XP_THRESHOLDS[2]) return 3;
+  if(xp>=CARD_XP_THRESHOLDS[1]) return 2;
+  if(xp>=CARD_XP_THRESHOLDS[0]) return 1;
+  return 0;
+}
+function cardLevelProgress(xp){
+  const level = cardLevelForXp(xp);
+  const prevThreshold = level>0 ? CARD_XP_THRESHOLDS[level-1] : 0;
+  const nextThreshold = level<3 ? CARD_XP_THRESHOLDS[level] : null;
+  return {level, xp, prevThreshold, nextThreshold};
+}
+// returns a clone with the level's +1 OVR/+1-per-substat bonus applied (base card data itself is never
+// mutated - every owned copy needs its own independently-boosted view) and uid/xp/level stashed on the
+// clone so cardEl and the rest of the UI can show the badge and open the XP modal without a separate
+// lookup.
+function applyCardLevel(base, xp, uid){
+  const level = base.isManager ? 0 : cardLevelForXp(xp||0);
+  const out = level>0 ? {...base, ov:base.ov+level} : {...base};
+  if(level>0) BLACK_HOLE_STAT_KEYS.forEach(k=>{ if(typeof out[k]==='number') out[k] = out[k]+level; });
+  out.uid = uid; out.xp = xp||0; out.level = level;
+  return out;
+}
+function leveledOwnedCard(entry){
+  const base = BY_ID.get(entry.cardId);
+  return base ? applyCardLevel(base, entry.xp, entry.uid) : null;
+}
 function ownedCard(uid){
   const entry = collection.find(c=>c.uid===uid);
-  return entry ? BY_ID.get(entry.cardId) : null;
+  return entry ? leveledOwnedCard(entry) : null;
+}
+// takes the already-leveled card object itself (has .n/.xp/.level from applyCardLevel/leveledOwnedCard/
+// ownedCard) rather than re-looking it up via the local collection - works identically whether it's
+// your own card or one seen while viewing another club's published squad.
+function openCardXpModal(card){
+  if(!card) return;
+  const {level, xp, prevThreshold, nextThreshold} = cardLevelProgress(card.xp||0);
+  const pct = nextThreshold ? Math.round(((xp-prevThreshold)/(nextThreshold-prevThreshold))*100) : 100;
+  openModal(`
+    <h2 style="margin-bottom:4px;">${card.n}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">${level>0 ? `Level ${level} (${CARD_LEVEL_LABEL[level]}) — +${level} OVR und +${level} auf alle Unterstats.` : 'Noch kein Level erreicht — spiele Matches mit dieser Karte im Kader, um XP zu sammeln.'}</p>
+    <div class="mono" style="font-size:11px;color:var(--muted);margin-bottom:6px;">${xp} XP${nextThreshold!=null ? ` — noch ${nextThreshold-xp} XP bis ${CARD_LEVEL_LABEL[level+1]}` : ' — Maximal-Level erreicht'}</div>
+    <div class="chem-bar" style="margin-bottom:16px;"><i style="width:${pct}%;"></i></div>
+    <button class="action-btn" id="card-xp-close" style="width:100%;">Schließen</button>`);
+  document.getElementById('card-xp-close').addEventListener('click', closeModal);
+}
+// XP a card earns from one match it played in: driven by its post-match rating (already factors in
+// match result, goals scored, and cards received - see computeMatchRatings), matching "je nach
+// Spielbewertung, Toren, Karten". Every player who started the match gets XP, not just scorers.
+function cardXpGainFromRating(rating){ return Math.max(3, Math.round(rating*5)); }
+async function awardCardXP(matchRatings){
+  if(!matchRatings || !matchRatings.ratings || !matchRatings.ratings.length) return;
+  const levelUps = [];
+  let changed = false;
+  matchRatings.ratings.forEach(p=>{
+    if(!p.uid) return;
+    const entry = collection.find(c=>c.uid===p.uid);
+    if(!entry) return;
+    const before = cardLevelForXp(entry.xp||0);
+    entry.xp = (entry.xp||0) + cardXpGainFromRating(p.rating);
+    changed = true;
+    const after = cardLevelForXp(entry.xp);
+    if(after>before){
+      const base = BY_ID.get(entry.cardId);
+      levelUps.push({n: base ? base.n : p.n, level: after});
+    }
+  });
+  if(changed) await sSet('collection', collection);
+  levelUps.forEach(lu=>{ toast(`⭐ ${lu.n} erreicht Level ${lu.level} (${CARD_LEVEL_LABEL[lu.level]})!`); });
 }
 
 
@@ -10111,6 +10214,14 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
   const boostText = card.isManager ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue}`) : '';
   const nameClass = (hasVariant || card.isManager) ? ' name-variant' : '';
   const badge = hasVariant && VARIANT_ICON[card.theme] ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON[card.theme]}</svg></div>` : (card.isManager ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON.manager}</svg></div>` : '');
+  // player leveling: Bronze/Silber/Gold badge on the card border, bottom-center, only for owned cards
+  // (card.uid set - see leveledOwnedCard/ownedCard) that have actually reached a level. Sits half outside
+  // the card edge (see .pcard's overflow:visible) and is clickable to open the XP progress modal - see
+  // the listener attached after div.innerHTML is set below.
+  const levelBadgeIcon = `<svg viewBox="0 0 24 24"><path d="M12 4l2 4.8 5 .4-3.8 3.4 1.2 5-4.4-2.6-4.4 2.6 1.2-5-3.8-3.4 5-.4z" fill="currentColor"/></svg>`;
+  const levelBadge = (!card.isManager && card.uid && card.level>0)
+    ? `<div class="level-badge lvl${card.level}" title="${CARD_LEVEL_LABEL[card.level]} — Level-Fortschritt ansehen">${levelBadgeIcon}</div>`
+    : '';
   const photoInner = card.isManager
     ? `<div class="avatar">${initialsOf(card.n)}</div>`
     : (card.img
@@ -10162,12 +10273,18 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
       <div class="photo-tint"></div>
     </div>
     ${badge}
+    ${levelBadge}
     <div class="top">
       ${topInner}
     </div>
     <div class="card-body">
       ${bodyInner}
     </div>`;
+  if(levelBadge){
+    div.querySelectorAll('.level-badge').forEach(lvlEl=>{
+      lvlEl.addEventListener('click', (e)=>{ e.stopPropagation(); openCardXpModal(card); });
+    });
+  }
   return div;
 }
 // auto-cycles the position label of every currently-rendered multi-position card (marked with the
@@ -12082,7 +12199,7 @@ function drawManagerClubGrid(){
 function drawClubGrid(){
   const grid = document.getElementById('club-grid');
   if(!grid) return;
-  let items = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  let items = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   if(clubFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(clubFilter.q.toLowerCase()));
   if(clubFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===clubFilter.pos);
   items.sort((a,b)=> clubFilter.sort==='ov' ? b.card.ov-a.card.ov : a.card.n.localeCompare(b.card.n));
@@ -12517,7 +12634,7 @@ async function openPicker(slot){
   const externalLocked = await getExternalLockedUids();
   const marketLocked = await getMarketLockedUidsOnly();
   const usedNames = allSquadNames('slots:'+slot.id);
-  let items = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  let items = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   items = items.map(x=>({...x, effOv: previewEffectiveOvAtSlot(x.card, slot, x.uid)})).filter(x=>x.effOv!==null);
   items.sort((a,b)=>b.effOv-a.effOv);
   const currentUid = squad.slots[slot.id];
@@ -12667,7 +12784,7 @@ function publishSquad(){
     // stats, variant styling, nat/club/league - via BY_ID, instead of a stale partial copy
     const players = form.slots.map(slot=>{
       const card = ownedCard(squad.slots[slot.id]);
-      return {pos:slot.label, cardId:card.id, variant:card.variant};
+      return {pos:slot.label, cardId:card.id, variant:card.variant, uid:card.uid, xp:card.xp};
     });
     const mgr = getAssignedManager();
     const payload = {owner:profile.displayName, userId:profile.userId, crest: profile.crest, rating, formation:squad.formation, players, managerId: mgr?mgr.id:null, updatedAt:Date.now()};
@@ -13101,7 +13218,7 @@ async function hostTournamentPrompt(){
   hostPrizeCardUid = null;
   openModal(`<h2 style="margin-bottom:10px;">Turnier veranstalten</h2><p class="hint" style="margin-top:0;">Kader wird gepr\u00fcft\u2026</p>`);
   const locked = await getLockedUids();
-  const eligibleCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card && !locked.has(x.uid));
+  const eligibleCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !locked.has(x.uid));
   openModal(`
     <h2 style="margin-bottom:4px;">Turnier veranstalten</h2>
     <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle Format, Teilnehmerzahl und Preis. Sobald das Turnier voll ist, startet es automatisch \u2014 du musst nicht dabei sein. Freie Pl\u00e4tze werden mit echten CPU-Vereinen aufgef\u00fcllt.</p>
@@ -14227,7 +14344,7 @@ function renderWmQuestSubgrid(){
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   const now = Date.now();
   WM_QUEST_SBC_IDS.forEach(id=>{
@@ -14362,7 +14479,7 @@ function renderOliseQuestSubgrid(){
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   OLISE_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -14478,7 +14595,7 @@ function renderAlissonQuestSubgrid(){
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   ALISSON_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -14595,7 +14712,7 @@ function renderYamalQuestSubgrid(){
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   YAMAL_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -14712,7 +14829,7 @@ function renderRudigerQuestSubgrid(){
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:BY_ID.get(c.cardId)})).filter(x=>x.card);
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   RUDIGER_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15277,8 +15394,12 @@ async function loadLeaderboard(){
 // Keeps null entries in place (alignment with FORMATIONS[...].slots matters for rendering).
 function resolveSquadDataPlayers(squadData){
   return (squadData.players||[]).map(p=>{
-    const card = p && p.cardId!=null ? BY_ID.get(p.cardId) : null;
-    return card ? {...card, pos:p.pos} : null;
+    const base = p && p.cardId!=null ? BY_ID.get(p.cardId) : null;
+    if(!base) return null;
+    // apply the owner's card level (published squads carry xp/uid per slot - see publishSquad) so a
+    // viewed squad shows the real leveled OV/substats and the Bronze/Silber/Gold badge, not raw stats
+    const card = applyCardLevel(base, p.xp, p.uid);
+    return {...card, pos:p.pos};
   });
 }
 function showSquadModal(s){
@@ -15388,7 +15509,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -16102,7 +16223,7 @@ function computeMatchRatings(myPlayers, myGoals, oppGoals, myScorers, incidents,
     if(card){ r += (card.type==='red'||card.type==='red2') ? -2.2 : (card.type==='yellow' ? -0.7 : 0); }
     r += (Math.random()-0.5)*0.7; // small natural variance
     r = Math.max(2.5, Math.min(10, r));
-    return {n:p.n, pos:p.pos, rating: Math.round(r*10)/10, goals};
+    return {n:p.n, pos:p.pos, rating: Math.round(r*10)/10, goals, uid:p.uid};
   });
   const motm = ratings.reduce((best,p)=> (!best || p.rating>best.rating) ? p : best, null);
   return {ratings, motm};
@@ -16139,6 +16260,7 @@ async function runLocalMatch(myRating, opp, opts={}){
     const final = await playFullMatch(md, myName, oppName);
     const outcome = await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, final.myScorers, opts.friendly);
     const matchRatings = computeMatchRatings(myPlayers, final.myGoals, final.oppGoals, final.myScorers, md.incidents, md.winnerSide);
+    await awardCardXP(matchRatings);
     const resultArea = document.getElementById('result-area');
     if(resultArea) resultArea.insertAdjacentHTML('beforeend', renderMatchRatingsHTML(matchRatings));
     if(opts.onComplete) opts.onComplete({...outcome, matchRatings});
@@ -16513,6 +16635,7 @@ async function enterSyncedMatch(matchDoc){
   }
   const myPlayersForRating = getMySquadPlayers();
   const matchRatings = computeMatchRatings(myPlayersForRating, myGoalsFinal, oppGoalsFinal, final.myScorers, incidents, winnerSide);
+  await awardCardXP(matchRatings);
   const resultArea = document.getElementById('result-area');
   if(resultArea) resultArea.insertAdjacentHTML('beforeend', renderMatchRatingsHTML(matchRatings));
   if(fb && matchDoc.mid){
