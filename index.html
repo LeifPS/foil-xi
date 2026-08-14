@@ -7582,9 +7582,9 @@ const SBC_DEFS = [
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
   {id:'olise_quest_nation', name:'Équipe de France', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
-    desc:'11 Spieler, Durchschnittsrating 85+, alle aus Frankreich (Olises Heimatland). Belohnung: 2.000 Coins.',
-    reqs:[ req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
-           req('Alle aus Frankreich', c=>c.every(x=>x.nat==='France'), c=>`${c.filter(x=>x.nat==='France').length} / 11 aus Frankreich`) ]},
+    desc:'11 Spieler, alle aus Frankreich (Olises Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
+    reqs:[ req('Alle aus Frankreich', c=>c.every(x=>x.nat==='France'), c=>`${c.filter(x=>x.nat==='France').length} / 11 aus Frankreich`),
+           req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
   // --- 2nd PROMO-Sonderaufgaben limited event (see ALISSON_QUEST_DEADLINE) - same pattern again.
   {id:'alisson_quest_abwehrkette', name:'Abwehrkette', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 6 Verteidiger und 6 Sonderkarten. Belohnung: 3.000 Coins.',
@@ -7605,9 +7605,9 @@ const SBC_DEFS = [
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
   {id:'alisson_quest_nation', name:'Seleção Brasileira', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
-    desc:'11 Spieler, Durchschnittsrating 85+, alle aus Brasilien (Alissons Heimatland). Belohnung: 2.000 Coins.',
-    reqs:[ req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
-           req('Alle aus Brasilien', c=>c.every(x=>x.nat==='Brazil'), c=>`${c.filter(x=>x.nat==='Brazil').length} / 11 aus Brasilien`) ]},
+    desc:'11 Spieler, alle aus Brasilien (Alissons Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
+    reqs:[ req('Alle aus Brasilien', c=>c.every(x=>x.nat==='Brazil'), c=>`${c.filter(x=>x.nat==='Brazil').length} / 11 aus Brasilien`),
+           req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
     reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
@@ -13806,6 +13806,34 @@ function boostBotXI(xi, slots, forceManager){
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
 }
+// forces a bot XI's average rating to land EXACTLY on targetAvg (an integer), not just approximately -
+// simply scaling then rounding each player independently can drift the team average off-target by up to
+// ~0.5 in the worst case, which isn't acceptable for a strictly-advertised range (e.g. "Viertelfinale
+// 90-94" must ALWAYS actually be 90-94, and a quest match advertised as a "118" opponent must ALWAYS
+// actually be 118). Uses the largest-remainder method: scale every player, floor each to an integer,
+// then hand out the leftover +1s to whichever players had the largest fractional remainder until the
+// SUM of all 11 ovs exactly equals targetAvg*11 (rounded) - so the average is exact by construction,
+// not by chance.
+function scaleTeamToExactAvg(players, targetAvg){
+  const n = players.length;
+  const rawAvg = players.reduce((s,p)=>s+p.ov,0)/n;
+  const scale = rawAvg>0 ? targetAvg/rawAvg : 1;
+  const desiredTotal = Math.round(targetAvg*n);
+  const scaled = players.map(p=>{
+    const exact = Math.max(1, p.ov*scale);
+    const floor = Math.max(1, Math.floor(exact));
+    return {p, floor, rem: exact-Math.floor(exact)};
+  });
+  let total = scaled.reduce((s,x)=>s+x.floor,0);
+  let diff = desiredTotal - total;
+  if(diff>0){
+    scaled.slice().sort((a,b)=>b.rem-a.rem).slice(0,diff).forEach(x=>x.floor++);
+  } else if(diff<0){
+    scaled.slice().sort((a,b)=>a.rem-b.rem).slice(0,-diff).forEach(x=>{ if(x.floor>1) x.floor--; });
+  }
+  scaled.forEach(x=>{ x.p.ov = x.floor; });
+  return Math.round(players.reduce((s,p)=>s+p.ov,0)/n);
+}
 function buildEliteOpponentXI(minOv, maxOv, opts={}){
   const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS)
     .filter(c=>c.ov>=minOv && c.ov<=maxOv && !c.isManager);
@@ -13820,15 +13848,12 @@ function buildEliteOpponentXI(minOv, maxOv, opts={}){
   const NAMES = ['Weltauswahl','All-Stars XI','Legenden-Elf','Superstar United','Elite FC'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
   const {players, managerName} = boostBotXI(xi, slots, opts.forceManager);
-  // rescale the boosted lineup so the team average lands back inside [minOv,maxOv] - callers advertise
-  // this range verbatim in their UI text (e.g. "Viertelfinale (Rating 90-94)"), and the trainer/chemistry/
-  // position boost in boostBotXI would otherwise inflate every tier by roughly the same amount, collapsing
-  // the tournament's Viertelfinale/Halbfinale/Finale bands (and similar ranges elsewhere) into each other.
-  const rawAvg = players.reduce((s,p)=>s+p.ov,0)/players.length;
-  const targetAvg = minOv + Math.random()*(maxOv-minOv);
-  const scale = rawAvg>0 ? targetAvg/rawAvg : 1;
-  players.forEach(p=>{ p.ov = Math.max(1, Math.round(p.ov*scale)); });
-  const avgOv = Math.round(players.reduce((s,p)=>s+p.ov,0)/11);
+  // force the boosted lineup's average to land EXACTLY on a random integer inside [minOv,maxOv] - callers
+  // advertise this range verbatim in their UI text (e.g. "Viertelfinale (Rating 90-94)") and it must
+  // ALWAYS actually be in that band, not just usually - see scaleTeamToExactAvg for why simple
+  // scale-then-round isn't reliable enough on its own.
+  const targetAvg = minOv + Math.floor(Math.random()*(maxOv-minOv+1));
+  const avgOv = scaleTeamToExactAvg(players, targetAvg);
   return {owner, rating:avgOv, players, isBot:true, managerName};
 }
 async function startTournament(){
@@ -14033,6 +14058,8 @@ async function playWmQuestMatch(m){
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const opp = buildFixedRatingOpponent(m.targetOv);
   const area = document.getElementById(`wmquest-match${m.id}-area`);
+  const btn = document.getElementById(`wmquest-match${m.id}-btn`);
+  if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
@@ -14098,7 +14125,7 @@ function renderWmQuestSubgrid(){
     tile.innerHTML = `
       <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
       <h3 class="sbc-name">${m.label}</h3>
-      <div class="sbc-desc">Ein hartes Match gegen einen Fantasie-Gegner (Rating ~${m.targetOv}). Belohnung: 1 WM Winners Pack.</div>
+      <div class="sbc-desc">${m.id===1?'Ein hartes Match':'Ein extrem hartes Match'} gegen einen Fantasie-Gegner. Belohnung: 1 WM Winners Pack.</div>
       ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
       ${locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">🔒 Schaltet sich ${wmQuestUnlockLabel(m.unlockAt)} frei</div>` : ''}
       <div id="wmquest-match${m.id}-area"></div>
@@ -14166,6 +14193,8 @@ async function playOliseQuestMatch(m){
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const opp = buildFixedRatingOpponent(m.targetOv);
   const area = document.getElementById(`olisequest-match${m.id}-area`);
+  const btn = document.getElementById(`olisequest-match${m.id}-btn`);
+  if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
@@ -14213,7 +14242,7 @@ function renderOliseQuestSubgrid(){
     tile.innerHTML = `
       <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
       <h3 class="sbc-name">${m.label}</h3>
-      <div class="sbc-desc">Ein hartes Match gegen einen Fantasie-Gegner (Rating ~${m.targetOv}).</div>
+      <div class="sbc-desc">${m.id===1?'Ein hartes Match':'Ein extrem hartes Match'} gegen einen Fantasie-Gegner.</div>
       ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
       <div id="olisequest-match${m.id}-area"></div>
       <button class="sbc-build-btn" id="olisequest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
@@ -14280,6 +14309,8 @@ async function playAlissonQuestMatch(m){
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const opp = buildFixedRatingOpponent(m.targetOv);
   const area = document.getElementById(`alissonquest-match${m.id}-area`);
+  const btn = document.getElementById(`alissonquest-match${m.id}-btn`);
+  if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
@@ -14328,7 +14359,7 @@ function renderAlissonQuestSubgrid(){
     tile.innerHTML = `
       <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
       <h3 class="sbc-name">${m.label}</h3>
-      <div class="sbc-desc">Ein hartes Match gegen einen Fantasie-Gegner (Rating ~${m.targetOv}).</div>
+      <div class="sbc-desc">${m.id===1?'Ein hartes Match':'Ein extrem hartes Match'} gegen einen Fantasie-Gegner.</div>
       ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
       <div id="alissonquest-match${m.id}-area"></div>
       <button class="sbc-build-btn" id="alissonquest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
@@ -14401,7 +14432,9 @@ function buildFixedRatingOpponent(targetOv){
   const NAMES = ['Legenden-Auswahl','Unschlagbare Elf','Die Unm\u00f6glichen','Weltauswahl Prime'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
   const {players, managerName} = boostBotXI(xi, slots);
-  const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
+  // force the average to land EXACTLY on targetOv every time - previously this only landed "close to"
+  // targetOv (e.g. a "118" opponent could show up as 111), see scaleTeamToExactAvg.
+  const rating = scaleTeamToExactAvg(players, targetOv);
   return {owner, rating, players, isBot:true, managerName};
 }
 function oreiRequirementsMet(){
