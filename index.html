@@ -16681,11 +16681,14 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   }
   // Wochen Pass daily quests - same "real, non-friendly match" eligibility as spXp above. Separate
   // write since the fast (fb.updateDoc) path above doesn't touch profile.weekPassQuests at all.
+  // earnCoins must be bumped here too (not just in atomicCoinChange) because match rewards are
+  // credited via the direct fb.increment payload above, bypassing atomicCoinChange entirely.
+  let questsChanged = finalReward>0 ? bumpWeekPassQuest('earnCoins', finalReward) : false;
   if(result==='WIN'){
-    let questsChanged = bumpWeekPassQuest('winMatches', 1);
+    questsChanged = bumpWeekPassQuest('winMatches', 1) || questsChanged;
     if(squadRating().rating<80) questsChanged = bumpWeekPassQuest('winUnderdog', 1) || questsChanged;
-    if(questsChanged) await sSet('profile', profile);
   }
+  if(questsChanged) await sSet('profile', profile);
   updateCoinDisplay();
   playSfx('whistle');
   playSfx(result==='WIN' ? 'win' : 'lose');
