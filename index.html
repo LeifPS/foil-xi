@@ -6258,8 +6258,8 @@ function weekPassLevel(xp){
 function weekPassXpIntoLevel(xp){ return (xp||0) - WEEK_PASS_LEVEL_THRESHOLDS[weekPassLevel(xp)]; }
 function weekPassXpForNextLevel(level){ return level>=WEEK_PASS_MAX_LEVEL ? 0 : WEEK_PASS_LEVEL_THRESHOLDS[level+1]-WEEK_PASS_LEVEL_THRESHOLDS[level]; }
 function weekPassReward(level){
-  if(level===15) return {type:'card', cardId:9770001};
-  if(level===WEEK_PASS_MAX_LEVEL) return {type:'card', cardId:9770002};
+  if(level===15){ const c = currentWeekPassCardSet().lvl15; return {type:'card', cardId: c ? c.id : null}; }
+  if(level===WEEK_PASS_MAX_LEVEL){ const c = currentWeekPassCardSet().lvl30; return {type:'card', cardId: c ? c.id : null}; }
   if(level%3===0) return {type:'pack', packId: level<9?'gold':(level<13?'sevenof88':(level<24?'zeitgeist':'kronjuwelen'))};
   return {type:'coins', amount: 900 + level*80};
 }
@@ -6497,16 +6497,36 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme===tier); }
-// ===== Wochen Pass exclusive card: the actual grind incentive, not another pack/coin payout - this
-// one specific card only exists as the Wochen Pass level-15 reward, nowhere else, ever.
-const WEEK_PASS_CARD_BASE = findBaseCard(257534); // C. Palmer
-const WEEK_PASS_CARD = WEEK_PASS_CARD_BASE ? boostBaseToOv(WEEK_PASS_CARD_BASE, 99, 9770001, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
-if(WEEK_PASS_CARD){ WEEK_PASS_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p84143614.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=de59ae0f955ff695e851d0fd52250f10'; BY_ID.set(WEEK_PASS_CARD.id, WEEK_PASS_CARD); }
-// level-30 reward, added when the pass was extended from 15 to 30 levels - the single highest-rated
-// real outfield player in the base game, picked programmatically so this never needs a hardcoded id.
-const WEEK_PASS_CARD2_BASE = ALL_BASE.filter(c=>!c.gk && c.id!==(WEEK_PASS_CARD_BASE&&WEEK_PASS_CARD_BASE.id)).slice().sort((a,b)=>b.ov-a.ov)[0];
-const WEEK_PASS_CARD2 = WEEK_PASS_CARD2_BASE ? boostBaseToOv(WEEK_PASS_CARD2_BASE, 108, 9770002, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
-if(WEEK_PASS_CARD2){ WEEK_PASS_CARD2.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p67318195.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=3d77815867745e84755128fbcadee0cc'; BY_ID.set(WEEK_PASS_CARD2.id, WEEK_PASS_CARD2); }
+// ===== Wochen Pass exclusive cards: the actual grind incentive, not another pack/coin payout - the
+// level-15 and level-30 rewards only ever exist as these specific rewards, nowhere else. A new real
+// pair of players rotates in every week rather than staying fixed forever - see WEEK_PASS_CARD_ROSTER
+// below. Every week's pair still gets built and registered into BY_ID up front (not just the currently
+// active one) so cards a player already claimed in a past week keep resolving correctly forever.
+const WEEK_PASS_CARD_ROSTER = [
+  // Week of 2026-08-10 (this week)
+  {lvl15:{baseId:257534, ov:99, img:'https://cdn3.futbin.com/content/fifa26/img/players/p84143614.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=de59ae0f955ff695e851d0fd52250f10'}, // C. Palmer
+   lvl30:{baseId:209331, ov:103, img:'https://cdn3.futbin.com/content/fifa25/img/players/p100872627.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=7c3ea53215e51f771307930a2ae14a65'}}, // M. Salah
+  // Week of 2026-08-17 (next week)
+  {lvl15:{baseId:234378, ov:99, img:'https://cdn3.futbin.com/content/fifa26/img/players/p67343242.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=c6f2b83fc92743815988143abc966d0c'}, // D. Rice
+   lvl30:{baseId:177003, ov:103, img:'https://cdn3.futbin.com/content/fifa26/img/players/p134394731.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=a0b12bf5a3172700e8770c3b06516a92'}}, // L. Modrić
+];
+const WEEK_PASS_CARDS = WEEK_PASS_CARD_ROSTER.map((wk,i)=>{
+  const lvl15Base = findBaseCard(wk.lvl15.baseId);
+  const lvl30Base = findBaseCard(wk.lvl30.baseId);
+  const lvl15Card = lvl15Base ? boostBaseToOv(lvl15Base, wk.lvl15.ov, 9770001+i*10, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
+  const lvl30Card = lvl30Base ? boostBaseToOv(lvl30Base, wk.lvl30.ov, 9770002+i*10, 'week_mvp', 'Wochen-MVP', 'wpmvp') : null;
+  if(lvl15Card){ lvl15Card.img = wk.lvl15.img; BY_ID.set(lvl15Card.id, lvl15Card); }
+  if(lvl30Card){ lvl30Card.img = wk.lvl30.img; BY_ID.set(lvl30Card.id, lvl30Card); }
+  return {lvl15:lvl15Card, lvl30:lvl30Card};
+});
+// anchor Monday for roster index 0 - every WEEK_PASS_START that many whole weeks after this one maps
+// to that entry; once the authored list runs out it just wraps back to the start rather than erroring.
+const WEEK_PASS_ROSTER_EPOCH = mostRecentMonday(new Date(2026,7,10));
+function currentWeekPassCardSet(){
+  const weeksSince = Math.round((WEEK_PASS_START-WEEK_PASS_ROSTER_EPOCH)/(7*24*60*60*1000));
+  const idx = ((weeksSince % WEEK_PASS_CARDS.length)+WEEK_PASS_CARDS.length) % WEEK_PASS_CARDS.length;
+  return WEEK_PASS_CARDS[idx];
+}
 // ===== Mystery Elite Pack's rare tier: 5 real standout players (best of each position group, plus
 // the single highest-rated outfield player overall) boosted into the 104-108 "105 range" - the pack's
 // normal pool tops out at 99, so these are the rare exception that occasionally punches above that.
@@ -6525,7 +6545,14 @@ const MYSTERY_RARE_ROSTER = (function(){
   const targets = [104,105,106,107,108];
   return picks.slice(0,5).map((base,i)=>boostBaseToOv(base, targets[i], 9780000+i, 'mysteryrare', 'Mystery Elite', 'mysteryrare'));
 })();
-MYSTERY_RARE_ROSTER.forEach(c=>BY_ID.set(c.id,c));
+const MYSTERY_RARE_IMG_OVERRIDE = {
+  252371: 'https://cdn3.futbin.com/content/fifa26/img/players/p151247315.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=6dba18b24e49ff9c6e463e3e239cfb61', // J. Bellingham
+  212831: 'https://cdn3.futbin.com/content/fifa25/img/players/p50544479.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=9f49dabb53bc97d2c2f05bb989ec6d87', // Alisson
+  203376: 'https://cdn3.futbin.com/content/fifa26/img/players/p167975536.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=fcbd79be74a28deed8275ba74513cedf', // V. van Dijk
+  209331: 'https://cdn3.futbin.com/content/fifa25/img/players/p100872627.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=7c3ea53215e51f771307930a2ae14a65', // M. Salah
+  231747: 'https://cdn3.futbin.com/content/fifa25/img/players/p84117827.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=d1d6ce066b85e6646ebec095d869970d', // K. Mbappé
+};
+MYSTERY_RARE_ROSTER.forEach(c=>{ if(MYSTERY_RARE_IMG_OVERRIDE[c.baseId]) c.img = MYSTERY_RARE_IMG_OVERRIDE[c.baseId]; BY_ID.set(c.id,c); });
 // Recompute every special/variant card's substats from its real base card's own DB values plus a flat
 // OV gain, instead of trusting whatever was hand-typed when that card's row was authored - keeps every
 // variant's stats consistent with its own advertised OV bump. E.g. base Messi (86 OV / 78 TEM / 90 DRI)
@@ -7464,8 +7491,7 @@ function req(label, check, progress){ return {label, check, progress}; }
 // are picked programmatically (best real player per position bucket, excluding anyone already used
 // as an exclusive-card base elsewhere) so this never needs a hardcoded, possibly-wrong id.
 const SBC_EXCLUSIVE_USED_IDS = new Set([
-  WEEK_PASS_CARD_BASE && WEEK_PASS_CARD_BASE.id,
-  WEEK_PASS_CARD2_BASE && WEEK_PASS_CARD2_BASE.id,
+  ...WEEK_PASS_CARD_ROSTER.flatMap(wk=>[wk.lvl15.baseId, wk.lvl30.baseId]),
   ...MYSTERY_RARE_ROSTER.map(c=>c.baseId),
 ].filter(Boolean));
 function pickSbcExclusiveBase(filterFn){
