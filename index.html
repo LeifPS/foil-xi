@@ -6233,6 +6233,12 @@ const WM_MANAGER = {
   variant:'wm_mgr', variantLabel:'Weltmeister-Trainer', theme:'wm_mgr',
 };
 MGR_BY_ID.set(WM_MANAGER.id, WM_MANAGER);
+const ZIDANE_MANAGER = {
+  id: 9800110, n:'Zinedine Zidane', club:'Frankreich', nat:'France', tier:'Legendär',
+  boostType:'percent', boostValue:8, isManager:true, pos:'MGR', ov:99,
+  variant:'zidane_mgr', variantLabel:'Kapitäne-Trainer', theme:'wm_mgr',
+};
+MGR_BY_ID.set(ZIDANE_MANAGER.id, ZIDANE_MANAGER);
 const DERBY_SPECIALS = PLAYERS_DERBY;
 DERBY_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 const UNDERDOG_SPECIALS = PLAYERS_UNDERDOG;
@@ -7290,8 +7296,21 @@ const PACKS = [
     draw(){ const totsPool=specialsByVariant(['tots']), hi=poolByRange(85,99,true);
       return [pick(totsPool),pick(totsPool),pick(hi),pick(hi)]; }},
   {id:'kapitaene',name:'Kapit\u00e4ne Pack',cost:14000,tier:'premium',count:2,
-    desc:'2 Spieler, garantiert echte Nationalmannschafts-Kapit\u00e4ne (Rating 100-107). Die einzige Quelle f\u00fcr diese Variante.',
-    draw(){ return [pick(KAPITAENE_SPECIALS), pick(KAPITAENE_SPECIALS)]; }},
+    desc:'2 Spieler, meist Rating 85-99 \u2014 pro Karte ca. 5,5% Chance auf einen echten Nationalmannschafts-Kapit\u00e4n (100+, die einzige Quelle f\u00fcr diese Variante), davon wiederum nur ein Zehntel auf einen der st\u00e4rksten Kapit\u00e4ne (105+). Au\u00dferdem ca. 2% Chance auf den exklusiven Zinedine Zidane Trainer (+8%).',
+    draw(){
+      const pool = poolByRange(85,99,true);
+      const topKapitaene = KAPITAENE_SPECIALS.filter(c=>c.ov>=105);
+      const midKapitaene = KAPITAENE_SPECIALS.filter(c=>c.ov<105); // kept separate so the top-tier
+      // roll below is the ONLY way to land a 105+ card - otherwise it'd also leak in through the mid
+      // "any captain" roll, since 105+ cards are members of the full KAPITAENE_SPECIALS pool too.
+      return Array.from({length:2}, ()=>{
+        const r = Math.random();
+        if(r<0.02) return ZIDANE_MANAGER; // ~2%
+        if(r<0.0255) return pick(topKapitaene.length?topKapitaene:KAPITAENE_SPECIALS); // ~0.55%
+        if(r<0.075) return pick(midKapitaene.length?midKapitaene:KAPITAENE_SPECIALS); // ~4.95% -> 5.5% combined 100+
+        return pick(pool);
+      });
+    }},
   {id:'sevenof88',name:'7\u00d7 88+ Pack',cost:22000,tier:'premium',count:7,
     desc:'7 Spieler, alle garantiert mit Rating 88 oder h\u00f6her.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
