@@ -8269,7 +8269,7 @@ async function openSBCBuilder(sbc){
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   const grid = document.getElementById('sbc-club-grid');
   const uidToEl = new Map();
-  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card).forEach(({uid,card})=>{
+  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
     const inSquad = squadLocked.has(uid);
     const isListed = externalLocked.has(uid);
     const unavailable = inSquad || isListed;
@@ -9294,7 +9294,7 @@ async function openTradeBuilder(){
     <button class="action-btn" id="trade-submit" style="width:220px;">Angebot senden</button>
   `);
   const grid = document.getElementById('trade-pick-grid');
-  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card).forEach(({uid,card})=>{
+  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
     const inSquad = usedInSquad.has(uid);
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
@@ -9526,7 +9526,8 @@ async function acceptTrade(t){
 function openAcceptCardsModal(t, want){
   const usedInSquad = new Set(Object.values(squad.slots));
   const eligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)}))
-    .filter(x=>x.card && !usedInSquad.has(x.uid) && x.card.ov>=want.minOvr && (want.pos==='ANY' || posGroup(x.card.pos)===want.pos));
+    .filter(x=>x.card && !usedInSquad.has(x.uid) && x.card.ov>=want.minOvr && (want.pos==='ANY' || posGroup(x.card.pos)===want.pos))
+    .sort((a,b)=>b.card.ov-a.card.ov);
   const picked = new Set();
   openModal(`
     <h2 style="margin-bottom:4px;">Karten ausw\u00e4hlen</h2>
