@@ -12026,6 +12026,11 @@ async function renderAdminPanel(view){
       </div>
     </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Team-Simulation</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Stelle zwei Elfer aus allen Karten im Spiel zusammen und lass sie gegeneinander antreten \u2014 reine Ansicht, wirkt sich auf keinen Account aus (keine Coins, kein XP, keine Statistik).</p>
+      <button class="action-btn secondary" id="admin-team-sim" style="width:auto;">2 Teams simulieren</button>
+    </div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Great Reset</h3>
       <p class="hint" style="margin-top:0;margin-bottom:10px;">Setzt ALLE Spieler zurück (Coins, Karten, Kader, Statistiken) — jeder bekommt vorher einen dauerhaften Prestige-Rang, der über Resets hinweg erhalten bleibt.</p>
       <button class="action-btn secondary" id="admin-great-reset" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Great Reset auslösen</button>
@@ -12045,6 +12050,7 @@ async function renderAdminPanel(view){
   });
   document.getElementById('admin-open-any-pack').addEventListener('click', openAdminPackPicker);
   document.getElementById('admin-add-card').addEventListener('click', openAdminAddCardModal);
+  document.getElementById('admin-team-sim').addEventListener('click', openAdminTeamSimModal);
   const doLoad = ()=>loadAdminUserPanel(document.getElementById('admin-user-search').value.trim());
   document.getElementById('admin-user-load').addEventListener('click', doLoad);
   document.getElementById('admin-user-search').addEventListener('keydown', e=>{ if(e.key==='Enter') doLoad(); });
@@ -12094,6 +12100,105 @@ function openAdminAddCardModal(){
       results.appendChild(wrap);
     });
   });
+}
+// ===== Admin: build 2 arbitrary teams from every card in the game and play them against each other -
+// a pure sandbox for eyeballing balance/design, never touches any real account (no coins, no XP, no
+// win/loss stats, no card ownership changes for either "team"). =====
+let adminSimTeamA = [];
+let adminSimTeamB = [];
+function openAdminTeamSimModal(){
+  adminSimTeamA = []; adminSimTeamB = [];
+  openModal(`
+    <h2 style="margin-bottom:4px;">2 Teams simulieren</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">Je 11 Karten pro Team auswählen, dann Match starten. Reine Ansicht — wirkt sich auf keinen Account aus.</p>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+      <div style="flex:1;min-width:260px;">
+        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Team A <span id="sim-count-a" class="mono">(0/11)</span></div>
+        <input id="sim-search-a" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 12px;border-radius:8px;margin-bottom:8px;">
+        <div id="sim-results-a" class="picker-list" style="max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
+        <div id="sim-selected-a" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+      <div style="flex:1;min-width:260px;">
+        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Team B <span id="sim-count-b" class="mono">(0/11)</span></div>
+        <input id="sim-search-b" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 12px;border-radius:8px;margin-bottom:8px;">
+        <div id="sim-results-b" class="picker-list" style="max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
+        <div id="sim-selected-b" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+    </div>
+    <button class="action-btn" id="sim-start" disabled style="opacity:.4;width:220px;">Match starten</button>`);
+  const pool = adminFullCardPool();
+  const updateStart = ()=>{
+    const btn = document.getElementById('sim-start');
+    if(!btn) return;
+    const ok = adminSimTeamA.length===11 && adminSimTeamB.length===11;
+    btn.disabled = !ok; btn.style.opacity = ok?'1':'.4';
+  };
+  const wireSide = (side, listArr)=>{
+    const input = document.getElementById(`sim-search-${side}`);
+    const results = document.getElementById(`sim-results-${side}`);
+    const selectedBox = document.getElementById(`sim-selected-${side}`);
+    const countEl = document.getElementById(`sim-count-${side}`);
+    const renderSelected = ()=>{
+      selectedBox.innerHTML = '';
+      listArr.forEach((card,i)=>{
+        const wrap = document.createElement('div');
+        wrap.style.cursor = 'pointer';
+        wrap.title = 'Entfernen';
+        wrap.appendChild(cardEl(card,'xs'));
+        wrap.addEventListener('click', ()=>{ listArr.splice(i,1); renderSelected(); updateStart(); });
+        selectedBox.appendChild(wrap);
+      });
+      countEl.textContent = `(${listArr.length}/11)`;
+    };
+    input.addEventListener('input', ()=>{
+      const q = input.value.trim().toLowerCase();
+      results.innerHTML = '';
+      if(q.length<2) return;
+      pool.filter(c=>c.n.toLowerCase().includes(q)).slice(0,20).forEach(card=>{
+        const wrap = document.createElement('div');
+        wrap.style.cursor = 'pointer';
+        wrap.appendChild(cardEl(card,'mini'));
+        wrap.addEventListener('click', ()=>{
+          if(listArr.length>=11){ toast('Team ist bereits voll (11).'); return; }
+          listArr.push(card);
+          renderSelected(); updateStart();
+        });
+        results.appendChild(wrap);
+      });
+    });
+    renderSelected();
+  };
+  wireSide('a', adminSimTeamA);
+  wireSide('b', adminSimTeamB);
+  document.getElementById('sim-start').addEventListener('click', ()=>{
+    const teamA = adminSimTeamA.slice(), teamB = adminSimTeamB.slice();
+    closeModal();
+    runAdminTeamSim(teamA, teamB);
+  });
+}
+async function runAdminTeamSim(playersA, playersB){
+  const ratingA = Math.round(playersA.reduce((s,c)=>s+c.ov,0)/playersA.length);
+  const ratingB = Math.round(playersB.reduce((s,c)=>s+c.ov,0)/playersB.length);
+  const view = document.getElementById('view');
+  if(!view) return;
+  view.innerHTML = `
+    <div class="view-head"><h2>Team-Simulation</h2><p>Admin-Sandbox — wirkt sich auf keinen Account aus.</p></div>
+    <div class="toolbar" style="margin-bottom:14px;"><button class="action-btn secondary" id="sim-back" style="width:auto;padding:9px 16px;">← Zurück zum Admin-Panel</button></div>
+    <div class="vs-teams">
+      ${teamBlobHTML(ratingA, fallbackCrestFor('Team A'), 'Team A')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(ratingB, fallbackCrestFor('Team B'), 'Team B')}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  document.getElementById('sim-back').addEventListener('click', ()=>{ currentTab='admin'; renderNav(); renderView('admin'); });
+  const md = buildDecisiveMatch(ratingA, ratingB, playersA, playersB);
+  md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+  const final = await playFullMatch(md, 'Team A', 'Team B');
+  const resultArea = document.getElementById('result-area');
+  if(resultArea){
+    resultArea.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;text-align:center;">Spielende — ${final.myGoals}:${final.oppGoals}</div>`;
+  }
 }
 async function loadAdminUserPanel(targetId){
   const box = document.getElementById('admin-user-content');
