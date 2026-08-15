@@ -10554,7 +10554,10 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
     : `<div><div class="ov">${card.ov}</div>${ovPreview}<div class="ov-underline"></div></div>
        <div class="pos-label${canCycle?' pos-cycle':''}"${cycleAttrs}>${posLabelInner}</div>`;
   const flagCode = NAT_FLAG[card.nat];
-  const clubLogoUrl = CLUB_LOGO[card.club];
+  // Legenden/OG Icons cards show the shared Icons badge for BOTH league and club slots, not their
+  // real historic club crest - same convention as real Icon cards, which transcend club affiliation.
+  const isLegendIconCard = card.lg==='Legenden' || card.lg==='OG Icons';
+  const clubLogoUrl = isLegendIconCard ? LEGENDS_ICON_BADGE : CLUB_LOGO[card.club];
   const leagueLogoUrl = resolveLeagueLogo(card);
   const natClubIcons = `<div class="nat-club-icons">
     ${flagCode ? `<img class="nc-flag" src="https://flagcdn.com/w40/${flagCode}.png" alt="" title="${natDE(card.nat)}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-flag-mono" title="${natDE(card.nat)}">${(card.nat||'?').slice(0,2).toUpperCase()}</div>`}
@@ -11283,6 +11286,9 @@ function positionPitchSVG(posLabel){
 function initialsOf2(name){
   return (name||'').split(/[\s.,''-]+/).filter(Boolean).map(w=>w[0]).join('').slice(0,3).toUpperCase() || '?';
 }
+// shared badge for Legenden/OG Icons cards (both their league AND club slot - see cardEl/isLegendIconCard) -
+// they transcend real club/league affiliation, same convention as real Icon cards.
+const LEGENDS_ICON_BADGE = 'https://cdn3.futbin.com/content/fifa26/img/clubs/dark/112658.png?fm=png&ixlib=java-2.1.0&verzion=3&w=30&s=09be0cbb3048da0d86603ea0aa34c773';
 const LEAGUE_LOGO = {
   'Premier League': 'https://assets.football-logos.cc/logos/england/64x64/english-premier-league-v2.0792019b.png',
   'Championship': 'https://assets.football-logos.cc/logos/england/64x64/efl-championship.4cd5a6cf.png',
@@ -11321,6 +11327,10 @@ const LEAGUE_LOGO = {
   'Veikkausliiga': 'https://football-logos.cc/logos/finland/1500x1500/veikkausliiga.e1cfd702.png',
   'A-League Men': 'https://assets.football-logos.cc/logos/australia/1500x1500/a-league.6a62e024.png',
   'Liga F': 'https://upload.wikimedia.org/wikipedia/en/b/b3/Ligafwomen.svg',
+  // "Legenden" (Ikone/WM-Legende/National-Legende) and "OG Icons" aren't real leagues - see
+  // LEGENDS_ICON_BADGE below, reused for both their league AND club slot.
+  'Legenden': LEGENDS_ICON_BADGE,
+  'OG Icons': LEGENDS_ICON_BADGE,
 };
 // "Super League" collides across 4 different real leagues in our data (Switzerland, Greece, China, India) -
 // resolve which one applies by club, since the league NAME field can't tell them apart on its own.
