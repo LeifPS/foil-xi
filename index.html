@@ -6227,6 +6227,15 @@ if(UCLW_MANAGER){
 const BALLONDOR_CARD = PLAYERS_BALLONDOR[0];
 BALLONDOR_CARD.untradable = true;
 BY_ID.set(BALLONDOR_CARD.id, BALLONDOR_CARD);
+// 2nd Ballon d'Or challenge, unlocked only after the Dembélé one is done (see CHALLENGE_DEFS) - same
+// exclusive, untradable, beliebig-oft-versuchbar pattern, just a harder follow-up reward.
+const RODRI_BALLONDOR_BASE = findBaseCard(231866);
+const RODRI_BALLONDOR_CARD = RODRI_BALLONDOR_BASE ? boostBaseToOv(RODRI_BALLONDOR_BASE, 100, 9800002, 'ballondor', "Ballon d'Or", 'ballondor') : null;
+if(RODRI_BALLONDOR_CARD){
+  RODRI_BALLONDOR_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p67340730.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=7bd25803d96db356c007769f013e8b30';
+  RODRI_BALLONDOR_CARD.untradable = true;
+  BY_ID.set(RODRI_BALLONDOR_CARD.id, RODRI_BALLONDOR_CARD);
+}
 const PRIME_CARDS = PLAYERS_PRIME;
 PRIME_CARDS.forEach(p=>{ p.untradable = true; BY_ID.set(p.id,p); });
 const PRIME_RONALDO = PRIME_CARDS.find(p=>p.n==='Cristiano Ronaldo');
@@ -8100,8 +8109,12 @@ const CHALLENGE_DEFS = [
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
     desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
-    desc:'Ein einzelnes, extrem hartes Match. Sieg bringt die einzigartige Ballon d\u2019Or-Karte.',
+    desc:'Ein einzelnes, extrem hartes Match. Sieg bringt die einzigartige Ballon d\u2019Or-Karte \u2014 und schaltet danach eine noch h\u00e4rtere zweite Ballon d\u2019Or-Herausforderung frei.',
     doneCheck:()=>collection.some(c=>c.cardId===BALLONDOR_CARD.id)},
+  {id:'ballondor-rodri', name:"Ballon d'Or Herausforderung: Rodri", pill:'Match', accent:'var(--gold)', contentId:'ballondor-rodri-content', renderFn:()=>renderBallonDorRodriPanel(),
+    desc:'Die noch h\u00e4rtere Fortsetzung nach Demb\u00e9l\u00e9s Ballon d\u2019Or. Sieg bringt die einzigartige Rodri-Karte. Erst ab 250 Gesamtsiegen verf\u00fcgbar.',
+    requires:'ballondor', minWins:250,
+    doneCheck:()=>RODRI_BALLONDOR_CARD && collection.some(c=>c.cardId===RODRI_BALLONDOR_CARD.id)},
   {id:'prime-ronaldo', name:'PRIME Cristiano Ronaldo', pill:'Match', accent:'#ffd76a', contentId:'prime-ronaldo-content', renderFn:()=>renderPrimeChallengePanel(PRIME_CHALLENGES[0]),
     desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Ronaldo (109 OVR).',
     doneCheck:()=>collection.some(c=>c.cardId===PRIME_CHALLENGES[0].card.id)},
@@ -8286,13 +8299,25 @@ function renderChallengeGrid(){
   }
   CHALLENGE_DEFS.forEach(def=>{
     const done = challengeIsDone(def);
+    const requiredDef = def.requires ? CHALLENGE_DEFS.find(d=>d.id===def.requires) : null;
+    const requiredDefDone = requiredDef ? challengeIsDone(requiredDef) : true;
+    const winsShort = def.minWins && (profile.wins||0)<def.minWins;
+    const locked = !requiredDefDone || winsShort;
     const tile = document.createElement('div');
     tile.className = 'sbc-card';
     tile.style.borderLeftColor = def.accent;
     tile.style.cursor = 'pointer';
-    tile.innerHTML = challengeTileHTML(def, done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : '');
-    if(done) tile.style.opacity = '.7';
-    tile.addEventListener('click', ()=>openChallengeDetail(def));
+    const lockReason = !requiredDefDone ? `Erst nach "${requiredDef.name}"` : (winsShort ? `🔒 Erst ab ${def.minWins} Siegen (${profile.wins||0} / ${def.minWins})` : '');
+    const statusHTML = done
+      ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>`
+      : (locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">${lockReason.startsWith('🔒')?lockReason:'🔒 '+lockReason}</div>` : '');
+    tile.innerHTML = challengeTileHTML(def, statusHTML);
+    if(done || locked) tile.style.opacity = '.7';
+    tile.addEventListener('click', ()=>{
+      if(!requiredDefDone){ toast(`Erst verfügbar, nachdem du "${requiredDef.name}" abgeschlossen hast.`); return; }
+      if(winsShort){ toast(`Erst ab ${def.minWins} Gesamtsiegen verfügbar (aktuell ${profile.wins||0}).`); return; }
+      openChallengeDetail(def);
+    });
     grid.appendChild(tile);
   });
   standaloneSbcDefs().forEach(sbc=>{
@@ -14482,8 +14507,16 @@ function scaleTeamToExactAvg(players, targetAvg){
   return Math.round(players.reduce((s,p)=>s+p.ov,0)/n);
 }
 function buildEliteOpponentXI(minOv, maxOv, opts={}){
-  const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS)
-    .filter(c=>c.ov>=minOv && c.ov<=maxOv && !c.isManager);
+  const fullPool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS).filter(c=>!c.isManager);
+  let pool = fullPool.filter(c=>c.ov>=minOv && c.ov<=maxOv);
+  // if the requested range sits above (or below) every real card this pool actually has - e.g. a
+  // target range past PRIME's 107 ceiling - fall back to the closest real cards instead of an empty
+  // pool. scaleTeamToExactAvg() below still forces the final average onto the exact target regardless
+  // of where these starting players' own ov sits, so this only needs *some* real players to scale from.
+  if(!pool.length){
+    const mid = (minOv+maxOv)/2;
+    pool = fullPool.slice().sort((a,b)=>Math.abs(a.ov-mid)-Math.abs(b.ov-mid)).slice(0, 40);
+  }
   const slots = FORMATIONS['433'].slots; // 1 GK, 4 DEF, 3 MID, 3 FWD - a real, balanced shape
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
@@ -14606,14 +14639,71 @@ function renderBallonDorPanel(){
   if(!box) return;
   const owned = collection.some(c=>c.cardId===BALLONDOR_CARD.id);
   if(owned){
-    box.innerHTML = `<p class="hint" style="margin-top:0;">Du besitzt bereits die Ballon d'Or-Karte von O. Dembél\u00e9 (100 OVR) \u2014 den amtierenden Sieger des prestigetr\u00e4chtigsten Einzelpreises im Fu\u00dfball.</p>`;
+    box.innerHTML = `
+      <div style="display:flex;justify-content:center;margin-bottom:14px;" id="ballondor-owned-preview"></div>
+      <p class="hint" style="margin-top:0;">Du besitzt bereits die Ballon d'Or-Karte von O. Dembélé${untradableInlineIcon(BALLONDOR_CARD)} (100 OVR) — den amtierenden Sieger des prestigeträchtigsten Einzelpreises im Fußball.</p>`;
+    const ownedPreviewBox = document.getElementById('ballondor-owned-preview');
+    if(ownedPreviewBox) ownedPreviewBox.appendChild(cardEl(BALLONDOR_CARD, 'mini'));
     return;
   }
   box.innerHTML = `
-    <p class="hint" style="margin-top:0;">Die h\u00e4rteste Einzelherausforderung im Spiel: ein Spiel gegen eine Fantasie-Weltauswahl auf GOAT-Niveau (Rating 102-105) \u2014 noch st\u00e4rker als das Turnier-Finale. Sieg bringt die exklusive <b style="color:var(--gold);">Ballon d'Or</b>-Karte von O. Dembél\u00e9 (100 OVR, amtierender Sieger). Kein Coin-Einsatz, keine Statistik-Auswirkung \u2014 beliebig oft versuchbar.</p>
+    <div style="display:flex;justify-content:center;margin-bottom:14px;" id="ballondor-preview"></div>
+    <p class="hint" style="margin-top:0;">Die härteste Einzelherausforderung im Spiel: ein Spiel gegen eine Fantasie-Weltauswahl auf GOAT-Niveau (Rating 102-105) — noch stärker als das Turnier-Finale. Sieg bringt die exklusive <b style="color:var(--gold);">Ballon d'Or</b>-Karte von O. Dembélé${untradableInlineIcon(BALLONDOR_CARD)} (100 OVR, amtierender Sieger) — und schaltet danach eine noch härtere zweite Ballon d'Or-Herausforderung um die Rodri-Karte frei. Kein Coin-Einsatz, keine Statistik-Auswirkung — beliebig oft versuchbar.</p>
     <button class="action-btn" id="ballondor-play" style="width:260px;background:linear-gradient(135deg,var(--gold),#c9971f);color:#1a1200;">Herausforderung annehmen</button>
     <div id="ballondor-match-area" style="margin-top:14px;"></div>`;
+  const previewBox = document.getElementById('ballondor-preview');
+  if(previewBox) previewBox.appendChild(cardEl(BALLONDOR_CARD, 'mini'));
   document.getElementById('ballondor-play').addEventListener('click', playBallonDorChallenge);
+}
+async function playBallonDorRodriChallenge(){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(!RODRI_BALLONDOR_CARD) return;
+  if((profile.wins||0)<250){ toast(`Erst ab 250 Gesamtsiegen verfügbar (aktuell ${profile.wins||0}).`); return; }
+  if(collection.some(c=>c.cardId===RODRI_BALLONDOR_CARD.id)){ toast('Du besitzt die Rodri Ballon d’Or-Karte bereits.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const opp = buildEliteOpponentXI(111, 114);
+  const area = document.getElementById('ballondor-rodri-match-area');
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Ballon d'Or Herausforderung: Rodri)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: (outcome)=>{
+    if(outcome.result==='WIN'){
+      collection.push({uid:genId(), cardId:RODRI_BALLONDOR_CARD.id});
+      sSet('collection', collection);
+      toast('🏆 Unglaublich! Du hast die Rodri Ballon d’Or-Karte gewonnen!');
+      showCutscene(RODRI_BALLONDOR_CARD, ()=>{});
+    } else {
+      toast('Verloren — aber du kannst es jederzeit erneut versuchen.');
+    }
+    renderBallonDorRodriPanel();
+  }});
+}
+function renderBallonDorRodriPanel(){
+  const box = document.getElementById('ballondor-rodri-content');
+  if(!box || !RODRI_BALLONDOR_CARD) return;
+  const owned = collection.some(c=>c.cardId===RODRI_BALLONDOR_CARD.id);
+  if(owned){
+    box.innerHTML = `
+      <div style="display:flex;justify-content:center;margin-bottom:14px;" id="ballondor-rodri-owned-preview"></div>
+      <p class="hint" style="margin-top:0;">Du besitzt bereits die Ballon d'Or-Karte von Rodri${untradableInlineIcon(RODRI_BALLONDOR_CARD)} (100 OVR).</p>`;
+    const ownedPreviewBox = document.getElementById('ballondor-rodri-owned-preview');
+    if(ownedPreviewBox) ownedPreviewBox.appendChild(cardEl(RODRI_BALLONDOR_CARD, 'mini'));
+    return;
+  }
+  box.innerHTML = `
+    <div style="display:flex;justify-content:center;margin-bottom:14px;" id="ballondor-rodri-preview"></div>
+    <p class="hint" style="margin-top:0;">Die Fortsetzung nach Dembelés Ballon d'Or — ein noch härteres Match gegen eine Fantasie-Weltauswahl (Rating 111-114). Sieg bringt die exklusive <b style="color:var(--gold);">Ballon d'Or</b>-Karte von Rodri${untradableInlineIcon(RODRI_BALLONDOR_CARD)} (100 OVR). Kein Coin-Einsatz, keine Statistik-Auswirkung — beliebig oft versuchbar.</p>
+    <button class="action-btn" id="ballondor-rodri-play" style="width:260px;background:linear-gradient(135deg,var(--gold),#c9971f);color:#1a1200;">Herausforderung annehmen</button>
+    <div id="ballondor-rodri-match-area" style="margin-top:14px;"></div>`;
+  const previewBox = document.getElementById('ballondor-rodri-preview');
+  if(previewBox) previewBox.appendChild(cardEl(RODRI_BALLONDOR_CARD, 'mini'));
+  document.getElementById('ballondor-rodri-play').addEventListener('click', playBallonDorRodriChallenge);
 }
 
 // ===== PRIME legends: 3 ultra-exclusive challenges for the highest-rated cards in the game (109 OVR) =====
@@ -15658,7 +15748,7 @@ function buildFixedRatingOpponent(targetOv){
   // force-overwritten - so the intro screen shows the actual squad that's playing, and only players
   // who are genuinely that strong can end up scoring. Search outward from targetOv in each position
   // group until real cards are found, since an exact rating may not exist at every position.
-  const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, UCLW_SPECIALS);
+  const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, UCLW_SPECIALS, KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS);
   const slots = FORMATIONS['433'].slots;
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
