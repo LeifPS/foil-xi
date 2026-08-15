@@ -12190,7 +12190,7 @@ async function renderAdminPanel(view){
   });
   document.getElementById('admin-open-any-pack').addEventListener('click', openAdminPackPicker);
   document.getElementById('admin-add-card').addEventListener('click', openAdminAddCardModal);
-  document.getElementById('admin-team-sim').addEventListener('click', openAdminTeamSimModal);
+  document.getElementById('admin-team-sim').addEventListener('click', openAdminTeamSimBuilder);
   const doLoad = ()=>loadAdminUserPanel(document.getElementById('admin-user-search').value.trim());
   document.getElementById('admin-user-load').addEventListener('click', doLoad);
   document.getElementById('admin-user-search').addEventListener('keydown', e=>{ if(e.key==='Enter') doLoad(); });
@@ -12241,97 +12241,195 @@ function openAdminAddCardModal(){
     });
   });
 }
-// ===== Admin: build 2 arbitrary teams from every card in the game and play them against each other -
-// a pure sandbox for eyeballing balance/design, never touches any real account (no coins, no XP, no
-// win/loss stats, no card ownership changes for either "team"). =====
-let adminSimTeamA = [];
-let adminSimTeamB = [];
-function openAdminTeamSimModal(){
-  adminSimTeamA = []; adminSimTeamB = [];
-  openModal(`
-    <h2 style="margin-bottom:4px;">2 Teams simulieren</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">Je 11 Karten pro Team auswählen, dann Match starten. Reine Ansicht — wirkt sich auf keinen Account aus.</p>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
-      <div style="flex:1;min-width:260px;">
-        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Team A <span id="sim-count-a" class="mono">(0/11)</span></div>
-        <input id="sim-search-a" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 12px;border-radius:8px;margin-bottom:8px;">
-        <div id="sim-results-a" class="picker-list" style="max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
-        <div id="sim-selected-a" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-      </div>
-      <div style="flex:1;min-width:260px;">
-        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Team B <span id="sim-count-b" class="mono">(0/11)</span></div>
-        <input id="sim-search-b" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 12px;border-radius:8px;margin-bottom:8px;">
-        <div id="sim-results-b" class="picker-list" style="max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
-        <div id="sim-selected-b" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-      </div>
-    </div>
-    <button class="action-btn" id="sim-start" disabled style="opacity:.4;width:220px;">Match starten</button>`);
-  const pool = adminFullCardPool();
-  const updateStart = ()=>{
-    const btn = document.getElementById('sim-start');
-    if(!btn) return;
-    const ok = adminSimTeamA.length===11 && adminSimTeamB.length===11;
-    btn.disabled = !ok; btn.style.opacity = ok?'1':'.4';
+// ===== Admin: build 2 full, real squads (formation, position eligibility + bonus, chemistry, optional
+// trainer boost) from every card in the game and play them against each other - a pure sandbox for
+// eyeballing balance/design, never touches any real account (no coins, no XP, no win/loss stats, no
+// card ownership changes for either "team"). Mirrors getMySquadPlayers()'s exact real-match pipeline. =====
+let ADMIN_SIM_STATE = null;
+function freshAdminSimSide(){ return {formation:'433', slots:{}, mgrId:null}; }
+function buildAdminSquadPlayers(side){
+  const form = FORMATIONS[side.formation];
+  const mgr = side.mgrId!=null ? MGR_BY_ID.get(side.mgrId) : null;
+  const list = [];
+  form.slots.forEach(slot=>{
+    const card = side.slots[slot.id];
+    if(!card) return;
+    let ov = card.ov;
+    if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
+    const info = positionEligibility(card, slot.label);
+    if(info) ov += info.bonus;
+    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id});
+  });
+  return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
+}
+function adminSideFilled(side){ return FORMATIONS[side.formation].slots.every(slot=>side.slots[slot.id]); }
+function adminSideRating(side){
+  const players = buildAdminSquadPlayers(side);
+  return players.length ? Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length) : null;
+}
+function openAdminTeamSimBuilder(){
+  ADMIN_SIM_STATE = {a: freshAdminSimSide(), b: freshAdminSimSide()};
+  renderAdminTeamSimBuilder();
+}
+function renderAdminTeamSimBuilder(){
+  const view = document.getElementById('view');
+  if(!view || !ADMIN_SIM_STATE) return;
+  const sideHTML = (side, label)=>{
+    const s = ADMIN_SIM_STATE[side];
+    const form = FORMATIONS[s.formation];
+    const filled = form.slots.filter(slot=>s.slots[slot.id]).length;
+    const rating = adminSideRating(s);
+    return `
+      <div class="vs-panel" style="flex:1;min-width:300px;">
+        <h3 style="font-size:15px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;">${label} <span class="mono" style="color:var(--muted);">(${filled}/11)${rating!=null?` · Rating ${rating}`:''}</span></h3>
+        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Formation</div>
+        <div class="formation-select" id="admin-sim-form-${side}" style="margin-bottom:14px;">
+          ${Object.entries(FORMATIONS).map(([key,f])=>`<div class="chip admin-sim-form-chip${s.formation===key?' active':''}" data-formation="${key}">${f.label}</div>`).join('')}
+        </div>
+        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
+        <div id="admin-sim-mgr-${side}" style="cursor:pointer;margin-bottom:14px;min-height:32px;position:relative;display:inline-block;"></div>
+        <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Aufstellung</div>
+        <div class="sbc-grid" id="admin-sim-slots-${side}" style="grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));"></div>
+      </div>`;
   };
-  const wireSide = (side, listArr)=>{
-    const input = document.getElementById(`sim-search-${side}`);
-    const results = document.getElementById(`sim-results-${side}`);
-    const selectedBox = document.getElementById(`sim-selected-${side}`);
-    const countEl = document.getElementById(`sim-count-${side}`);
-    const renderSelected = ()=>{
-      selectedBox.innerHTML = '';
-      listArr.forEach((card,i)=>{
-        const wrap = document.createElement('div');
-        wrap.style.cursor = 'pointer';
-        wrap.title = 'Entfernen';
-        wrap.appendChild(cardEl(card,'xs'));
-        wrap.addEventListener('click', ()=>{ listArr.splice(i,1); renderSelected(); updateStart(); });
-        selectedBox.appendChild(wrap);
-      });
-      countEl.textContent = `(${listArr.length}/11)`;
-    };
-    input.addEventListener('input', ()=>{
-      const q = input.value.trim().toLowerCase();
-      results.innerHTML = '';
-      if(q.length<2) return;
-      pool.filter(c=>c.n.toLowerCase().includes(q)).slice(0,20).forEach(card=>{
-        const wrap = document.createElement('div');
-        wrap.style.cursor = 'pointer';
-        wrap.appendChild(cardEl(card,'mini'));
-        wrap.addEventListener('click', ()=>{
-          if(listArr.length>=11){ toast('Team ist bereits voll (11).'); return; }
-          listArr.push(card);
-          renderSelected(); updateStart();
-        });
-        results.appendChild(wrap);
+  view.innerHTML = `
+    <div class="view-head"><h2>2 Teams simulieren</h2><p>Volle Kader-Erstellung wie im echten Spiel — Formation, Chemie, Positionsbonus, Trainer-Boost. Reine Ansicht, wirkt sich auf keinen Account aus (keine Coins, kein XP, keine Statistik).</p></div>
+    <div class="toolbar" style="margin-bottom:14px;"><button class="action-btn secondary" id="admin-sim-back" style="width:auto;padding:9px 16px;">← Zurück zum Admin-Panel</button></div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px;">
+      ${sideHTML('a','Team A')}
+      ${sideHTML('b','Team B')}
+    </div>
+    <button class="action-btn" id="admin-sim-start" disabled style="opacity:.4;width:220px;">Match starten</button>`;
+  document.getElementById('admin-sim-back').addEventListener('click', ()=>{ currentTab='admin'; renderNav(); renderView('admin'); });
+  ['a','b'].forEach(side=>{
+    const s = ADMIN_SIM_STATE[side];
+    document.querySelectorAll(`#admin-sim-form-${side} .admin-sim-form-chip`).forEach(chip=>{
+      chip.addEventListener('click', ()=>{
+        s.formation = chip.dataset.formation;
+        s.slots = {}; // formation change invalidates slot ids, same as the real squad editor
+        renderAdminTeamSimBuilder();
       });
     });
-    renderSelected();
-  };
-  wireSide('a', adminSimTeamA);
-  wireSide('b', adminSimTeamB);
-  document.getElementById('sim-start').addEventListener('click', ()=>{
-    const teamA = adminSimTeamA.slice(), teamB = adminSimTeamB.slice();
-    closeModal();
-    runAdminTeamSim(teamA, teamB);
+    const mgrBox = document.getElementById(`admin-sim-mgr-${side}`);
+    const mgr = s.mgrId!=null ? MGR_BY_ID.get(s.mgrId) : null;
+    if(mgr){
+      mgrBox.appendChild(cardEl(mgr, 'xs'));
+      const clearBtn = document.createElement('div');
+      clearBtn.className = 'sbc-inuse-badge';
+      clearBtn.textContent = 'ENTFERNEN';
+      clearBtn.style.cursor = 'pointer';
+      clearBtn.addEventListener('click', (e)=>{ e.stopPropagation(); s.mgrId = null; renderAdminTeamSimBuilder(); });
+      mgrBox.appendChild(clearBtn);
+    } else {
+      mgrBox.innerHTML = `<button class="action-btn secondary" style="width:auto;padding:8px 14px;">+ Trainer wählen</button>`;
+    }
+    mgrBox.addEventListener('click', ()=>{ if(!mgr) openAdminMgrPicker(side); });
+    const slotsGrid = document.getElementById(`admin-sim-slots-${side}`);
+    FORMATIONS[s.formation].slots.forEach(slot=>{
+      const card = s.slots[slot.id];
+      const wrap = document.createElement('div');
+      wrap.style.cursor = 'pointer';
+      wrap.style.textAlign = 'center';
+      if(card){
+        wrap.appendChild(cardEl(card, 'mini'));
+      } else {
+        const ph = document.createElement('div');
+        ph.style.cssText = 'width:128px;height:204px;border:2px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:12px;margin:0 auto;';
+        ph.innerHTML = `<div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;">${posDE(slot.label)}</div><div style="margin-top:4px;">+ wählen</div>`;
+        wrap.appendChild(ph);
+      }
+      wrap.addEventListener('click', ()=>openAdminSlotPicker(side, slot));
+      slotsGrid.appendChild(wrap);
+    });
   });
+  const startBtn = document.getElementById('admin-sim-start');
+  const ok = adminSideFilled(ADMIN_SIM_STATE.a) && adminSideFilled(ADMIN_SIM_STATE.b);
+  startBtn.disabled = !ok; startBtn.style.opacity = ok?'1':'.4';
+  startBtn.addEventListener('click', startAdminTeamSim);
 }
-async function runAdminTeamSim(playersA, playersB){
-  const ratingA = Math.round(playersA.reduce((s,c)=>s+c.ov,0)/playersA.length);
-  const ratingB = Math.round(playersB.reduce((s,c)=>s+c.ov,0)/playersB.length);
+function openAdminSlotPicker(side, slot){
+  const pool = adminFullCardPool().filter(c=>positionEligibility(c, slot.label)!==null);
+  openModal(`
+    <h2 style="margin-bottom:4px;">${posDE(slot.label)} wählen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Nur Karten, die diese Position tatsächlich spielen können, werden angezeigt. ++/+ zeigt den Positionsbonus.</p>
+    <input id="admin-sim-slot-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin-bottom:12px;">
+    <div class="picker-list" id="admin-sim-slot-results" style="max-height:340px;overflow-y:auto;"></div>`);
+  const input = document.getElementById('admin-sim-slot-search');
+  const results = document.getElementById('admin-sim-slot-results');
+  const renderResults = (q)=>{
+    results.innerHTML = '';
+    const filtered = (q.length>=2 ? pool.filter(c=>c.n.toLowerCase().includes(q)) : pool.slice().sort((a,b)=>b.ov-a.ov)).slice(0,30);
+    filtered.forEach(card=>{
+      const info = positionEligibility(card, slot.label);
+      const wrap = document.createElement('div');
+      wrap.style.cursor = 'pointer';
+      wrap.style.position = 'relative';
+      wrap.appendChild(cardEl(card, 'mini'));
+      if(info && info.bonus>0){
+        const tag = document.createElement('div');
+        tag.className = 'price-pill';
+        tag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:3px 0;font-size:10.5px;color:var(--gold);';
+        tag.textContent = POS_BONUS_LABEL[info.bonus];
+        wrap.appendChild(tag);
+      }
+      wrap.addEventListener('click', ()=>{
+        ADMIN_SIM_STATE[side].slots[slot.id] = card;
+        closeModal();
+        renderAdminTeamSimBuilder();
+      });
+      results.appendChild(wrap);
+    });
+  };
+  renderResults('');
+  input.addEventListener('input', ()=>renderResults(input.value.trim().toLowerCase()));
+}
+function openAdminMgrPicker(side){
+  const pool = Array.from(MGR_BY_ID.values());
+  openModal(`
+    <h2 style="margin-bottom:4px;">Trainer wählen</h2>
+    <input id="admin-sim-mgr-search" placeholder="Trainername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:10px 0 12px;">
+    <div class="picker-list" id="admin-sim-mgr-results" style="max-height:340px;overflow-y:auto;"></div>`);
+  const input = document.getElementById('admin-sim-mgr-search');
+  const results = document.getElementById('admin-sim-mgr-results');
+  const renderResults = (q)=>{
+    results.innerHTML = '';
+    const filtered = (q.length>=2 ? pool.filter(m=>m.n.toLowerCase().includes(q)) : pool.slice().sort((a,b)=>b.ov-a.ov)).slice(0,30);
+    filtered.forEach(mgr=>{
+      const wrap = document.createElement('div');
+      wrap.style.cursor = 'pointer';
+      wrap.appendChild(cardEl(mgr, 'mini'));
+      wrap.addEventListener('click', ()=>{
+        ADMIN_SIM_STATE[side].mgrId = mgr.id;
+        closeModal();
+        renderAdminTeamSimBuilder();
+      });
+      results.appendChild(wrap);
+    });
+  };
+  renderResults('');
+  input.addEventListener('input', ()=>renderResults(input.value.trim().toLowerCase()));
+}
+async function startAdminTeamSim(){
+  if(!adminSideFilled(ADMIN_SIM_STATE.a) || !adminSideFilled(ADMIN_SIM_STATE.b)) return;
+  const playersA = buildAdminSquadPlayers(ADMIN_SIM_STATE.a);
+  const playersB = buildAdminSquadPlayers(ADMIN_SIM_STATE.b);
+  const ratingA = Math.round(playersA.reduce((s,p)=>s+p.ov,0)/playersA.length);
+  const ratingB = Math.round(playersB.reduce((s,p)=>s+p.ov,0)/playersB.length);
+  const mgrA = ADMIN_SIM_STATE.a.mgrId!=null ? MGR_BY_ID.get(ADMIN_SIM_STATE.a.mgrId) : null;
+  const mgrB = ADMIN_SIM_STATE.b.mgrId!=null ? MGR_BY_ID.get(ADMIN_SIM_STATE.b.mgrId) : null;
   const view = document.getElementById('view');
   if(!view) return;
   view.innerHTML = `
     <div class="view-head"><h2>Team-Simulation</h2><p>Admin-Sandbox — wirkt sich auf keinen Account aus.</p></div>
-    <div class="toolbar" style="margin-bottom:14px;"><button class="action-btn secondary" id="sim-back" style="width:auto;padding:9px 16px;">← Zurück zum Admin-Panel</button></div>
+    <div class="toolbar" style="margin-bottom:14px;"><button class="action-btn secondary" id="admin-sim-match-back" style="width:auto;padding:9px 16px;">← Zurück zum Admin-Panel</button></div>
     <div class="vs-teams">
-      ${teamBlobHTML(ratingA, fallbackCrestFor('Team A'), 'Team A')}
+      ${teamBlobHTML(ratingA, fallbackCrestFor('Team A'), `Team A${mgrA?`<br><span style="font-size:11px;opacity:.75;">Trainer: ${mgrA.n}</span>`:''}`)}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(ratingB, fallbackCrestFor('Team B'), 'Team B')}
+      ${teamBlobHTML(ratingB, fallbackCrestFor('Team B'), `Team B${mgrB?`<br><span style="font-size:11px;opacity:.75;">Trainer: ${mgrB.n}</span>`:''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  document.getElementById('sim-back').addEventListener('click', ()=>{ currentTab='admin'; renderNav(); renderView('admin'); });
+  document.getElementById('admin-sim-match-back').addEventListener('click', ()=>{ currentTab='admin'; renderNav(); renderView('admin'); });
   const md = buildDecisiveMatch(ratingA, ratingB, playersA, playersB);
   md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
   const final = await playFullMatch(md, 'Team A', 'Team B');
