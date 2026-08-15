@@ -12011,7 +12011,10 @@ async function renderAdminPanel(view){
   document.getElementById('admin-user-search').addEventListener('keydown', e=>{ if(e.key==='Enter') doLoad(); });
 }
 function adminFullCardPool(){
-  return ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, UCLW_SPECIALS, OGICON_CARDS, SIGNATURE_SEASON_CARDS);
+  // every player card that exists gets registered into BY_ID at boot (see the many BY_ID.set(...) calls
+  // scattered across the card-definition sections) - reading straight from there instead of listing each
+  // source array by hand means this never again silently misses a newly added card category/roster.
+  return Array.from(BY_ID.values());
 }
 function openAdminPackPicker(){
   openModal(`
