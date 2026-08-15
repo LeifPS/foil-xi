@@ -265,21 +265,6 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 18px 40px rgba(0,0,0,.7), 0 0 30px -2px #7ad9ff;}
   50%{box-shadow:0 18px 40px rgba(0,0,0,.7), 0 0 54px 2px #eafcff;}
 }
-/* Kapitäne Pack: steel/anthracite foil, deliberately restrained compared to the gemstone/rainbow tiers -
-   these are captains, not superlatives, so the look reads "authority" rather than "spectacle". */
-.pcard.theme-kapitaen{--acc:#9aa7b5;border:2px solid transparent;
-  background:
-    linear-gradient(155deg,#1c2228 0%,#12161a 45%,#0d1013 100%) padding-box,
-    linear-gradient(160deg,#3c4650,#9aa7b5,#e4e9ee,#9aa7b5,#3c4650) border-box !important;
-  background-size:100% 100%, 260% 260%;
-  animation: kapitaenGlow 3s ease-in-out infinite, kapitaenBorderShift 4.4s linear infinite, ultimateBreathe 2.6s ease-in-out infinite;}
-.pcard.theme-kapitaen::before{animation:autoShine 1.7s ease-in-out infinite;}
-.pcard.theme-kapitaen .name{color:#dfe4e9;text-shadow:0 0 8px rgba(154,167,181,.5);}
-@keyframes kapitaenBorderShift{0%{background-position:0% 0%,0% 50%;}100%{background-position:0% 0%,260% 50%;}}
-@keyframes kapitaenGlow{
-  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #9aa7b5;}
-  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #e4e9ee;}
-}
 /* Kronjuwelen cut-gem effect (Saphir/Rubin/Diamant only): real angular facets via animated clip-path
    polygons - not a gradient rotating in a circle - so the card looks like an actual cut stone slowly
    turning, plus a diagonal beam of light that visibly disperses into a rainbow as it crosses, the way
@@ -542,14 +527,6 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   opacity:.9;}
 .pcard.theme-goat{animation:ultimateGlow 3.2s linear infinite, ultimateBreathe 2.2s ease-in-out infinite, goatPulse 1.8s ease-in-out infinite;}
 @keyframes goatPulse{0%,100%{filter:saturate(1);}50%{filter:saturate(1.25) brightness(1.06);}}
-/* Kapitäne: a subtle armband stripe wrapping the upper-mid photo area instead of a sparkle burst -
-   the one visual borrowed directly from the real thing an armband is. */
-.pcard.pattern-kapitaenpattern .pattern-layer{background:
-    repeating-linear-gradient(115deg, rgba(154,167,181,.14) 0 2px, transparent 2px 16px),
-    linear-gradient(180deg, transparent 0% 24%, rgba(154,167,181,.4) 24% 28%, rgba(255,255,255,.55) 28% 29%, rgba(154,167,181,.4) 29% 33%, transparent 33% 100%),
-    radial-gradient(circle at 50% 10%, rgba(154,167,181,.25), transparent 55%);
-    animation:kapitaenSparkle 2.6s ease-in-out infinite;}
-@keyframes kapitaenSparkle{0%,100%{opacity:.68;}50%{opacity:1;}}
 /* ===== PRIME: the most spectacular card treatment in the game, reserved for all-time legends ===== */
 .pcard.theme-prime{
   border:2px solid transparent;
@@ -6360,15 +6337,12 @@ async function claimWeekPassReward(level){
 const WEEK_PASS_QUEST_DEFS = [
   {id:'win5', type:'winMatches', target:5, xp:150, label:'Gewinne 5 Matches'},
   {id:'win10', type:'winMatches', target:10, xp:280, label:'Gewinne 10 Matches'},
-  {id:'play5', type:'playMatches', target:5, xp:110, label:'Spiele 5 Matches (Sieg oder Niederlage)'},
-  {id:'play10', type:'playMatches', target:10, xp:200, label:'Spiele 10 Matches (Sieg oder Niederlage)'},
-  {id:'goals10', type:'scoreGoals', target:10, xp:160, label:'Erziele 10 Tore'},
-  {id:'goals20', type:'scoreGoals', target:20, xp:280, label:'Erziele 20 Tore'},
+  {id:'winUnderdog3', type:'winUnderdog', target:3, xp:180, label:'Gewinne 3 Matches mit einem Kader unter 80 Rating'},
+  {id:'winUnderdog5', type:'winUnderdog', target:5, xp:300, label:'Gewinne 5 Matches mit einer Bewertung unter 80'},
   {id:'earn20k', type:'earnCoins', target:20000, xp:120, label:'Verdiene 20.000 Coins'},
   {id:'earn40k', type:'earnCoins', target:40000, xp:220, label:'Verdiene 40.000 Coins'},
   {id:'openGold', type:'openPack', packId:'gold', target:2, xp:100, label:'Öffne 2 Gold Rush Packs'},
   {id:'openZeitgeist', type:'openPack', packId:'zeitgeist', target:1, xp:180, label:'Öffne 1 Zeitgeist Pack'},
-  {id:'openAny2', type:'openPack', packId:null, target:2, xp:110, label:'Öffne 2 beliebige Packs'},
 ];
 // picks one quest definition not already among the given active ids - falls back to the full pool
 // if every template is somehow already active (can't happen with 8 templates and only 3 active slots).
@@ -6387,11 +6361,8 @@ function ensureWeekPassQuestsFresh(){
   }
   const before = profile.weekPassQuests.quests.length;
   // migration: the old version left claimed quests sitting in the list until a daily reset - drop
-  // any leftover claimed entries so this only ever holds currently-active quests going forward. Also
-  // drop any quest whose def no longer exists (e.g. winUnderdog was retired) - this doubles as a
-  // generic migration for any future quest-def removal, not just this one, since a dangling id would
-  // otherwise sit stuck at 0 progress forever (bumpWeekPassQuest can't match it to anything).
-  profile.weekPassQuests.quests = profile.weekPassQuests.quests.filter(q=>!q.claimed && WEEK_PASS_QUEST_DEFS.some(d=>d.id===q.id));
+  // any leftover claimed entries so this only ever holds currently-active quests going forward
+  profile.weekPassQuests.quests = profile.weekPassQuests.quests.filter(q=>!q.claimed);
   let changed = profile.weekPassQuests.quests.length!==before;
   while(profile.weekPassQuests.quests.length<3){
     const def = pickWeekPassQuest(profile.weekPassQuests.quests.map(q=>q.id));
@@ -6409,7 +6380,7 @@ function bumpWeekPassQuest(type, amount, packId){
   profile.weekPassQuests.quests.forEach(q=>{
     const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id);
     if(!def || def.type!==type) return;
-    if(def.type==='openPack' && def.packId && def.packId!==packId) return; // packId:null on the def means "any pack"
+    if(def.type==='openPack' && def.packId!==packId) return;
     const next = Math.min(def.target, q.progress+amount);
     if(next!==q.progress){ q.progress = next; changed = true; }
   });
@@ -6558,37 +6529,6 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
-// ===== Kapitäne Pack: real NATIONAL TEAM captains only (not just club captains), boosted to 100-107,
-// one flat tier (no saph/rub/dia split like Kronjuwelen) - a distinct standalone pack/theme, own
-// steel/anthracite design with an armband badge instead of a gemstone icon. =====
-const KAPITAENE_ROSTER = [
-  {baseId:231747, ov:107}, // K. Mbappé - Frankreich-Kapitän
-  {baseId:203376, ov:106}, // V. van Dijk - Niederlande-Kapitän
-  {baseId:202126, ov:105}, // H. Kane - England-Kapitän
-  {baseId:212622, ov:104}, // J. Kimmich - Deutschland-Kapitän
-  {baseId:222665, ov:103}, // M. Ødegaard - Norwegen-Kapitän
-  {baseId:207865, ov:102}, // Marquinhos - Brasilien-Kapitän
-  {baseId:20801, ov:101},  // Cristiano Ronaldo - Portugal-Kapitän
-  {baseId:199503, ov:100}, // G. Xhaka - Schweiz-Kapitän
-];
-const KAPITAENE_IMG_OVERRIDE = {
-  231747: 'https://cdn3.futbin.com/content/fifa26/img/players/p84117827.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=b106b6f14c1c3416418c1ec66bfeeee3',
-  203376: 'https://cdn3.futbin.com/content/fifa26/img/players/p50535024.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=999b62e40878ca6ed5d0f0dc220780cd',
-  202126: 'https://cdn3.futbin.com/content/fifa26/img/players/p100865422.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=e4cf36d23fc849e36935371015b3785a',
-  212622: 'https://cdn3.futbin.com/content/fifa26/img/players/p117653134.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=767a7236a8a64b50da61126b1513c8dd',
-  222665: 'https://cdn3.futbin.com/content/fifa26/img/players/p50554313.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=92626b23b77f737227af3e8855c430c6',
-  207865: 'https://cdn3.futbin.com/content/fifa26/img/players/p117648377.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=54184fedaef3bbac263ff1f2e6f002dd',
-  20801: 'https://cdn3.futbin.com/content/fifa26/img/players/p67129665.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=60b2916c63678f6f52835f88a5c25c4d',
-  199503: 'https://cdn3.futbin.com/content/fifa26/img/players/p84085583.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=2ee07ef50e95e5e11c8f0de003ae8b0d',
-};
-const KAPITAENE_SPECIALS = KAPITAENE_ROSTER.map((r,i)=>{
-  const base = findBaseCard(r.baseId);
-  if(!base) return null;
-  const card = boostBaseToOv(base, r.ov, 9761000+i, 'kapitaen', 'Kapitän', 'kapitaen');
-  if(KAPITAENE_IMG_OVERRIDE[r.baseId]) card.img = KAPITAENE_IMG_OVERRIDE[r.baseId];
-  return card;
-}).filter(Boolean);
-KAPITAENE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme===tier); }
 // ===== Wochen Pass exclusive cards: the actual grind incentive, not another pack/coin payout - the
 // level-15 and level-30 rewards only ever exist as these specific rewards, nowhere else. A new real
@@ -6911,7 +6851,7 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 //    than a fragile per-pack normalization that was hard to calibrate precisely.
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
 const VARIANT_SPECIALTY_MULT = {
-  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, mysteryrare:5, sbcx:25, kapitaen:4.2,
+  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, mysteryrare:5, sbcx:25,
   wmquestreward:25, promoquestreward:22,
   kontra_gk:1.5, kontra_def:1.5, kontra_mid:1.5, kontra_fwd:1.5, goat:5.8,
   signature_icon:3.6, era_definer:4.1, signature_season:4.8,
@@ -7289,9 +7229,6 @@ const PACKS = [
     desc:'4 Spieler, 2 garantierte Team-der-Saison-Karten. Einziges Pack mit garantierten Team-der-Saison-Karten.',
     draw(){ const totsPool=specialsByVariant(['tots']), hi=poolByRange(85,99,true);
       return [pick(totsPool),pick(totsPool),pick(hi),pick(hi)]; }},
-  {id:'kapitaene',name:'Kapit\u00e4ne Pack',cost:14000,tier:'premium',count:2,
-    desc:'2 Spieler, garantiert echte Nationalmannschafts-Kapit\u00e4ne (Rating 100-107). Die einzige Quelle f\u00fcr diese Variante.',
-    draw(){ return [pick(KAPITAENE_SPECIALS), pick(KAPITAENE_SPECIALS)]; }},
   {id:'sevenof88',name:'7\u00d7 88+ Pack',cost:22000,tier:'premium',count:7,
     desc:'7 Spieler, alle garantiert mit Rating 88 oder h\u00f6her.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
@@ -7614,7 +7551,6 @@ if(SBC_GK_BASE) SBC_EXCLUSIVE_USED_IDS.add(SBC_GK_BASE.id);
 const SBC_STRIKER_CARD = SBC_STRIKER_BASE ? boostBaseToOv(SBC_STRIKER_BASE, 105, 9790001, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
 const SBC_DEFENDER_CARD = SBC_DEFENDER_BASE ? boostBaseToOv(SBC_DEFENDER_BASE, 104, 9790002, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
 const SBC_GK_CARD = SBC_GK_BASE ? boostBaseToOv(SBC_GK_BASE, 103, 9790003, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
-[SBC_STRIKER_CARD, SBC_DEFENDER_CARD, SBC_GK_CARD].forEach(c=>{ if(c) c.untradable = true; });
 if(SBC_STRIKER_CARD) SBC_STRIKER_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p201558035.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=dff0413c573e2a81028e64773f9564ea'; // O. Dembélé
 if(SBC_DEFENDER_CARD) SBC_DEFENDER_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p50566860.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=d6245047e232c41df48c9f21075b3862'; // A. Hakimi
 if(SBC_GK_CARD) SBC_GK_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p67339485.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=550b460f4c75b83e7cff3e2073083fdd'; // G. Donnarumma
@@ -10487,7 +10423,6 @@ const VARIANT_ICON = {
   mysteryrare:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 9a3 3 0 115.2 2c-.9.7-1.7 1.2-1.7 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/>',
   sbcx:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/><circle cx="12" cy="8.2" r="2.1" fill="#0a0d12"/>',
   promocard:'<path d="M12 2l2.5 5.5 6 .7-4.4 4 1.2 6-5.3-3-5.3 3 1.2-6-4.4-4 6-.7z" fill="currentColor"/>',
-  kapitaen:'<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 12h16" stroke="currentColor" stroke-width="2"/><path d="M12 7.5l1.1 2.3 2.5.3-1.8 1.7.4 2.4-2.2-1.2-2.2 1.2.4-2.4-1.8-1.7 2.5-.3z" fill="currentColor"/>',
   saph:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   rub:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
   dia:'<path d="M12 2L4 9l8 13 8-13z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 9h16M8.4 9L12 2l3.6 7M9.6 9L12 22M14.4 9L12 22" fill="none" stroke="currentColor" stroke-width="1"/>',
@@ -10558,7 +10493,6 @@ const PATTERN_FAMILY = {
   iconswap:'iconswappattern',
   poet:'poetpattern',
   promocard:'promocardpattern',
-  kapitaen:'kapitaenpattern',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
@@ -17211,9 +17145,10 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   // earnCoins must be bumped here too (not just in atomicCoinChange) because match rewards are
   // credited via the direct fb.increment payload above, bypassing atomicCoinChange entirely.
   let questsChanged = finalReward>0 ? bumpWeekPassQuest('earnCoins', finalReward) : false;
-  questsChanged = bumpWeekPassQuest('playMatches', 1) || questsChanged;
-  if(myGoals>0) questsChanged = bumpWeekPassQuest('scoreGoals', myGoals) || questsChanged;
-  if(result==='WIN') questsChanged = bumpWeekPassQuest('winMatches', 1) || questsChanged;
+  if(result==='WIN'){
+    questsChanged = bumpWeekPassQuest('winMatches', 1) || questsChanged;
+    if(squadRating().rating<80) questsChanged = bumpWeekPassQuest('winUnderdog', 1) || questsChanged;
+  }
   if(questsChanged) await sSet('profile', profile);
   updateCoinDisplay();
   playSfx('whistle');
