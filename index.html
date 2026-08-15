@@ -14491,12 +14491,13 @@ async function claimWmQuestReward(){
   showCutscene(WM_QUEST_MBAPPE_CARD, ()=>{});
   renderWmQuestSubgrid();
 }
-function renderWmQuestSubgrid(){
+async function renderWmQuestSubgrid(){
   const grid = document.getElementById('wmquest-subgrid');
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   const now = Date.now();
   WM_QUEST_SBC_IDS.forEach(id=>{
@@ -14626,12 +14627,13 @@ async function claimOliseQuestReward(){
   showCutscene(OLISE_QUEST_CARD, ()=>{});
   renderOliseQuestSubgrid();
 }
-function renderOliseQuestSubgrid(){
+async function renderOliseQuestSubgrid(){
   const grid = document.getElementById('olisequest-subgrid');
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   OLISE_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -14742,12 +14744,13 @@ async function claimAlissonQuestReward(){
   showCutscene(ALISSON_QUEST_CARD, ()=>{});
   renderAlissonQuestSubgrid();
 }
-function renderAlissonQuestSubgrid(){
+async function renderAlissonQuestSubgrid(){
   const grid = document.getElementById('alissonquest-subgrid');
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   ALISSON_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -14859,12 +14862,13 @@ async function claimYamalQuestReward(){
   showCutscene(YAMAL_QUEST_CARD, ()=>{});
   renderYamalQuestSubgrid();
 }
-function renderYamalQuestSubgrid(){
+async function renderYamalQuestSubgrid(){
   const grid = document.getElementById('yamalquest-subgrid');
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   YAMAL_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -14976,12 +14980,13 @@ async function claimRudigerQuestReward(){
   showCutscene(RUDIGER_QUEST_CARD, ()=>{});
   renderRudigerQuestSubgrid();
 }
-function renderRudigerQuestSubgrid(){
+async function renderRudigerQuestSubgrid(){
   const grid = document.getElementById('rudigerquest-subgrid');
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   RUDIGER_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15093,12 +15098,13 @@ async function claimHaalandQuestReward(){
   showCutscene(HAALAND_QUEST_CARD, ()=>{});
   renderHaalandQuestSubgrid();
 }
-function renderHaalandQuestSubgrid(){
+async function renderHaalandQuestSubgrid(){
   const grid = document.getElementById('haalandquest-subgrid');
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   HAALAND_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15210,12 +15216,13 @@ async function claimChongQuestReward(){
   showCutscene(CHONG_QUEST_CARD, ()=>{});
   renderChongQuestSubgrid();
 }
-function renderChongQuestSubgrid(){
+async function renderChongQuestSubgrid(){
   const grid = document.getElementById('chongquest-subgrid');
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   CHONG_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15327,12 +15334,13 @@ async function claimPinaQuestReward(){
   showCutscene(PINA_QUEST_CARD, ()=>{});
   renderPinaQuestSubgrid();
 }
-function renderPinaQuestSubgrid(){
+async function renderPinaQuestSubgrid(){
   const grid = document.getElementById('pinaquest-subgrid');
   if(!grid) return;
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   PINA_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
