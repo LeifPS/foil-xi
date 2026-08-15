@@ -6874,6 +6874,9 @@ async function recordSale(cardId, price){
   catch(e){ console.warn('record sale failed', e); }
 }
 function computeRAP(card){
+  // untradable cards are always 0, full stop - real sale prices recorded before a card was flagged
+  // untradable (e.g. an old market sale) must never blend back in and show a leftover value.
+  if(card.untradable) return 0;
   const arr = (salesHistoryCache && salesHistoryCache.get(card.id)) || [];
   const baseline = getBaselineRAP(card);
   if(arr.length>=3){
