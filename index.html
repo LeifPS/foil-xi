@@ -7503,9 +7503,9 @@ const SBC_DEFENDER_BASE = pickSbcExclusiveBase(c=>posGroup2(mainPos(c.pos))==='D
 if(SBC_DEFENDER_BASE) SBC_EXCLUSIVE_USED_IDS.add(SBC_DEFENDER_BASE.id);
 const SBC_GK_BASE = pickSbcExclusiveBase(c=>posGroup2(mainPos(c.pos))==='GK');
 if(SBC_GK_BASE) SBC_EXCLUSIVE_USED_IDS.add(SBC_GK_BASE.id);
-const SBC_STRIKER_CARD = SBC_STRIKER_BASE ? boostBaseToOv(SBC_STRIKER_BASE, 108, 9790001, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
-const SBC_DEFENDER_CARD = SBC_DEFENDER_BASE ? boostBaseToOv(SBC_DEFENDER_BASE, 107, 9790002, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
-const SBC_GK_CARD = SBC_GK_BASE ? boostBaseToOv(SBC_GK_BASE, 106, 9790003, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
+const SBC_STRIKER_CARD = SBC_STRIKER_BASE ? boostBaseToOv(SBC_STRIKER_BASE, 105, 9790001, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
+const SBC_DEFENDER_CARD = SBC_DEFENDER_BASE ? boostBaseToOv(SBC_DEFENDER_BASE, 104, 9790002, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
+const SBC_GK_CARD = SBC_GK_BASE ? boostBaseToOv(SBC_GK_BASE, 103, 9790003, 'sbcexclusive', 'SBC Ikone', 'sbcx') : null;
 if(SBC_STRIKER_CARD) SBC_STRIKER_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p201558035.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=dff0413c573e2a81028e64773f9564ea'; // O. Dembélé
 if(SBC_DEFENDER_CARD) SBC_DEFENDER_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p50566860.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=d6245047e232c41df48c9f21075b3862'; // A. Hakimi
 if(SBC_GK_CARD) SBC_GK_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p67339485.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=550b460f4c75b83e7cff3e2073083fdd'; // G. Donnarumma
@@ -7990,6 +7990,28 @@ async function claimDraftReward(maxed){
   renderDraftPanel();
 }
 const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest'};
+const SBC_TIER_ACCENT = {'Einsteiger':'var(--turf-bright)', 'Mittel':'#4da8ff', 'Fortgeschritten':'#c78bf5', 'QUEST':'#ff2e63', 'Einzigartig':'#d9eef2'};
+// every SBC not already folded into a WM/PROMO quest event - each now gets its own tile in the unified
+// Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
+// opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
+function standaloneSbcDefs(){
+  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id));
+}
+async function openSbcChallengeDetail(sbc){
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc}</p></div>
+    <div class="toolbar"><button class="action-btn secondary" id="challenge-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
+    <div class="sbc-grid" id="sbc-challenge-tile"><p class="hint">Prüfe Erfüllbarkeit…</p></div>`;
+  document.getElementById('challenge-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const squadLocked = new Set(Object.values(squad.slots));
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  const poolWithSquad = allCards;
+  const container = document.getElementById('sbc-challenge-tile');
+  if(container){ container.innerHTML = ''; container.appendChild(buildSbcTile(sbc, poolFree, poolWithSquad)); }
+}
 const FEAS_INFO = {
   free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
   squad:{label:'Nur mit Kader-Aufl\u00f6sung', color:'var(--gold)'},
@@ -8233,25 +8255,29 @@ function renderChallengeGrid(){
     tile.addEventListener('click', ()=>openChallengeDetail(def));
     grid.appendChild(tile);
   });
+  standaloneSbcDefs().forEach(sbc=>{
+    const completions = sbcCompletions(sbc.id);
+    const maxC = sbcMaxCompletions(sbc);
+    const done = completions>=maxC;
+    const accent = SBC_TIER_ACCENT[sbc.tier] || 'var(--muted)';
+    const statusHTML = maxC>1
+      ? `<div class="sbc-progress-dots" title="${completions} / ${maxC} abgeschlossen">${Array.from({length:maxC},(_,i)=>`<span class="sbc-dot ${i<completions?'filled':''}"></span>`).join('')}</div>`
+      : (completions>0 ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : '');
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = accent;
+    tile.style.cursor = 'pointer';
+    tile.innerHTML = challengeTileHTML({name:sbc.name, pill:sbc.tier, desc:sbc.desc, accent}, statusHTML);
+    if(done) tile.style.opacity = '.7';
+    tile.addEventListener('click', ()=>openSbcChallengeDetail(sbc));
+    grid.appendChild(tile);
+  });
 }
 async function renderSBCList(view){
   view.innerHTML = `
-    <div class="view-head"><h2>Herausforderungen</h2><p>W\u00e4hle eine Karte: Match-Herausforderungen gegen harte Fantasie-Gegner oder SBCs, die einen Kader aus deinem Verein verlangen, der die Anforderungen erf\u00fcllt.</p></div>
-    <div class="sbc-grid" id="challenge-grid"></div>
-    <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">SBCs (Squad Building Challenges)</h3>
-    <p class="hint" style="margin-top:0;margin-bottom:12px;">Die meisten SBCs sind bis zu ${SBC_DEFAULT_MAX_COMPLETIONS}\u00d7 wiederholbar. Die drei "Einzigartig"-SBCs geben eine echte Einzelkarte, die es sonst nirgends gibt \u2014 die gibt's nur einmal.</p>
-    <div class="sbc-grid" id="sbc-grid"><p class="hint">Pr\u00fcfe Erf\u00fcllbarkeit\u2026</p></div>`;
+    <div class="view-head"><h2>Herausforderungen</h2><p>W\u00e4hle eine Karte: Match-Herausforderungen gegen harte Fantasie-Gegner oder SBCs, die einen Kader aus deinem Verein verlangen, der die Anforderungen erf\u00fcllt. Jede \u00f6ffnet eine eigene Detailseite mit dem passenden Kartenbau.</p></div>
+    <div class="sbc-grid" id="challenge-grid"></div>`;
   renderChallengeGrid();
-  const squadLocked = new Set(Object.values(squad.slots));
-  const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
-  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
-  const poolWithSquad = allCards;
-  const grid = document.getElementById('sbc-grid');
-  grid.innerHTML = '';
-  SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id)).forEach(sbc=>{
-    grid.appendChild(buildSbcTile(sbc, poolFree, poolWithSquad));
-  });
 }
 function sbcRewardDisplay(sbc){
   if(sbc.directCard==='BALLONDOR_CARD'){
