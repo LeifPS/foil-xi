@@ -16103,7 +16103,7 @@ function pickScorer(players){
     for(let i=0;i<reps;i++) weighted.push(p);
   });
   const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
-  return {n:chosen.n, img:chosen.img, id:chosen.id};
+  return {n:chosen.n, img:chosen.img, id:chosen.id, uid:chosen.uid};
 }
 function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, myRedMinute=null, oppRedMinute=null, mySentOff=null, oppSentOff=null){
   const used = new Set();
@@ -16407,7 +16407,10 @@ function showGoalCardFlash(scorer, side, teamName, isPenalty){
   return new Promise(resolve=>{
     const host = document.getElementById('live-match');
     if(!host){ resolve(); return; }
-    const card = scorer.id!=null ? BY_ID.get(scorer.id) : null;
+    // resolve the scorer's actual owned card (real XP level + rating) when it's one of my own squad's
+    // players, not the raw unleveled template - bots have no uid/collection entry, so they fall back
+    // to the plain base card as before
+    const card = scorer.uid ? (ownedCard(scorer.uid) || BY_ID.get(scorer.id)) : (scorer.id!=null ? BY_ID.get(scorer.id) : null);
     const overlay = document.createElement('div');
     overlay.className = 'goal-flash-overlay';
     overlay.innerHTML = `
