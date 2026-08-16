@@ -7594,19 +7594,28 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
   // the single-swap hill-climb above unless the top-OV seed already happens to contain enough matching
   // cards - swapping in matching cards one at a time never improves the score until the very last swap
   // completes the "all" condition, so the greedy search has no gradient to follow and gives up. Fix:
-  // for SBCs that declare a groupKey (e.g. 'nat' or 'lg'), also try seeding directly from the top-OV
-  // cards WITHIN each large-enough group - if the player genuinely owns enough matching cards, that
-  // seed starts already satisfying the "all" requirement, and the climb only needs to improve any
-  // remaining (non-all) requirements from there.
-  if(currentScore<target && sbc.groupKey){
-    const groups = new Map();
-    pool.forEach(x=>{
-      const key = x.card[sbc.groupKey];
-      if(key==null) return;
-      if(!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(x);
-    });
-    for(const members of groups.values()){
+  // for SBCs that declare a groupKey (e.g. 'nat' or 'lg') or a seedFilter (e.g. "is a striker", "is a
+  // top variant"), also try seeding directly from the top-OV cards WITHIN that group/filter - if the
+  // player genuinely owns enough matching cards, that seed starts already satisfying the "all" or
+  // "same X" requirement, and the climb only needs to improve any remaining requirements from there.
+  // Without this, a single-swap hill-climb can never discover an all-or-nothing requirement spanning
+  // every slot: swapping in one matching card at a time never improves the score until the very last
+  // swap completes it, so it gives up long before getting there whenever higher-OV non-matching cards
+  // dominate the plain top-OV seed.
+  if(currentScore<target && (sbc.groupKey || sbc.seedFilter)){
+    const extraSeeds = [];
+    if(sbc.groupKey){
+      const groups = new Map();
+      pool.forEach(x=>{
+        const key = x.card[sbc.groupKey];
+        if(key==null) return;
+        if(!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(x);
+      });
+      groups.forEach(members=>extraSeeds.push(members));
+    }
+    if(sbc.seedFilter) extraSeeds.push(pool.filter(x=>sbc.seedFilter(x.card)));
+    for(const members of extraSeeds){
       if(currentScore>=target) break;
       if(members.length<size) continue;
       const groupSeed = members.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, size);
@@ -7758,11 +7767,11 @@ const SBC_DEFS = [
     desc:'4 Spieler, Durchschnittsrating 74+, niemand unter 68 OVR.',
     reqs:[ req('Durchschnittsrating 74+', c=>avgOv(c)>=74, c=>`${avgOv(c)} / 74`),
            req('Kein Spieler unter 68 OVR', c=>c.every(x=>x.ov>=68), c=>`${c.filter(x=>x.ov<68).length} unter 68`) ]},
-  {id:'goalkeeper_gala', name:'Torh\u00fcter-Gala', reward:'gold', size:3, tier:'Einsteiger',
+  {id:'goalkeeper_gala', name:'Torh\u00fcter-Gala', reward:'gold', size:3, tier:'Einsteiger', seedFilter:c=>cardInPosGroup(c,'GK'),
     desc:'Ungew\u00f6hnlich: alle 3 Karten m\u00fcssen Torh\u00fcter sein, Durchschnittsrating 72+.',
     reqs:[ req('Alle 3 sind Torh\u00fcter', c=>c.every(x=>cardInPosGroup(x,'GK')), c=>`${c.filter(x=>cardInPosGroup(x,'GK')).length} / 3 Torh\u00fcter`),
            req('Durchschnittsrating 72+', c=>avgOv(c)>=72, c=>`${avgOv(c)} / 72`) ]},
-  {id:'strike_duo', name:'Sturm-Duo', reward:'derby', size:2, tier:'Einsteiger',
+  {id:'strike_duo', name:'Sturm-Duo', reward:'derby', size:2, tier:'Einsteiger', seedFilter:c=>cardInPosGroup(c,'FWD'),
     desc:'2 St\u00fcrmer, Durchschnittsrating 76+.',
     reqs:[ req('Beide sind St\u00fcrmer', c=>c.every(x=>cardInPosGroup(x,'FWD')), c=>`${c.filter(x=>cardInPosGroup(x,'FWD')).length} / 2 St\u00fcrmer`),
            req('Durchschnittsrating 76+', c=>avgOv(c)>=76, c=>`${avgOv(c)} / 76`) ]},
@@ -7780,15 +7789,15 @@ const SBC_DEFS = [
     desc:'7 Spieler, Durchschnittsrating 85+, mindestens 2 Sonderkarten.',
     reqs:[ req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`),
            req('2+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=2, c=>`${c.filter(x=>x.variant!=='base').length} / 2 Sonderkarten`) ]},
-  {id:'sturmreihe', name:'Sturmreihe', reward:'raregold', size:5, tier:'Mittel',
+  {id:'sturmreihe', name:'Sturmreihe', reward:'raregold', size:5, tier:'Mittel', seedFilter:c=>cardInPosGroup(c,'FWD'),
     desc:'5 St\u00fcrmer, Durchschnittsrating 82+.',
     reqs:[ req('Alle 5 sind St\u00fcrmer', c=>c.every(x=>cardInPosGroup(x,'FWD')), c=>`${c.filter(x=>cardInPosGroup(x,'FWD')).length} / 5 St\u00fcrmer`),
            req('Durchschnittsrating 82+', c=>avgOv(c)>=82, c=>`${avgOv(c)} / 82`) ]},
-  {id:'eiserne_abwehr', name:'Eiserne Abwehr', reward:'raregold', size:5, tier:'Mittel',
+  {id:'eiserne_abwehr', name:'Eiserne Abwehr', reward:'raregold', size:5, tier:'Mittel', seedFilter:c=>cardInPosGroup(c,'DEF'),
     desc:'5 Verteidiger, Durchschnittsrating 82+.',
     reqs:[ req('Alle 5 sind Verteidiger', c=>c.every(x=>cardInPosGroup(x,'DEF')), c=>`${c.filter(x=>cardInPosGroup(x,'DEF')).length} / 5 Verteidiger`),
            req('Durchschnittsrating 82+', c=>avgOv(c)>=82, c=>`${avgOv(c)} / 82`) ]},
-  {id:'mittelfeldmotor', name:'Mittelfeldmotor', reward:'raregold', size:5, tier:'Mittel',
+  {id:'mittelfeldmotor', name:'Mittelfeldmotor', reward:'raregold', size:5, tier:'Mittel', seedFilter:c=>cardInPosGroup(c,'MID'),
     desc:'5 Mittelfeldspieler, Durchschnittsrating 82+.',
     reqs:[ req('Alle 5 sind Mittelfeldspieler', c=>c.every(x=>cardInPosGroup(x,'MID')), c=>`${c.filter(x=>cardInPosGroup(x,'MID')).length} / 5 Mittelfeldspieler`),
            req('Durchschnittsrating 82+', c=>avgOv(c)>=82, c=>`${avgOv(c)} / 82`) ]},
@@ -7839,6 +7848,7 @@ const SBC_DEFS = [
     reqs:[ req('Gleiche Liga', c=>new Set(c.map(x=>x.lg)).size===1, c=>`${new Set(c.map(x=>x.lg)).size} Ligen verwendet`),
            req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`) ]},
   {id:'legenden_elf', name:'Legenden-Elf', reward:'hof', size:11, tier:'Fortgeschritten',
+    seedFilter:c=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','wpmvp','goat'].includes(c.theme),
     desc:'Alle 11 Spieler m\u00fcssen Top-Varianten sein (Icon, Centurion, Hall of Fame, Galactico, Golden Glove, World Cup Moment, Blackout oder GOAT).',
     reqs:[ req('Alle 11 sind Top-Varianten', c=>c.every(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','wpmvp','goat'].includes(x.theme)), c=>`${c.filter(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','wpmvp','goat'].includes(x.theme)).length} / 11`) ]},
   {id:'chef_trainer', name:'Der Chef-Trainer', reward:'blackout', size:10, tier:'Fortgeschritten',
@@ -8495,6 +8505,7 @@ async function openSBCBuilder(sbc){
     <div class="toolbar"><button class="action-btn secondary" id="sbc-autofill" style="width:auto;padding:9px 16px;">Automatisch ausf\u00fcllen</button></div>
     <div id="sbc-reqs" style="margin-bottom:14px;"></div>
     <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / ${sbc.size} ausgew\u00e4hlt</div>
+    <input id="sbc-card-search" placeholder="Spielername filtern..." style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 14px;border-radius:9px;margin-bottom:12px;">
     <div class="club-grid" id="sbc-club-grid"></div>
     ${sbc.managerReq ? `
       <div class="lbl" style="margin:18px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer (Stufe ${sbc.managerReq.minTier}+ ben\u00f6tigt)</div>
@@ -8504,6 +8515,7 @@ async function openSBCBuilder(sbc){
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   const grid = document.getElementById('sbc-club-grid');
   const uidToEl = new Map();
+  const searchableWraps = []; // {wrap, name} - lets the search box filter without rebuilding the grid
   collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
     const inSquad = squadLocked.has(uid);
     const isListed = externalLocked.has(uid);
@@ -8515,6 +8527,7 @@ async function openSBCBuilder(sbc){
     const el = cardEl(card, 'mini');
     wrap.appendChild(el);
     uidToEl.set(uid, el);
+    searchableWraps.push({wrap, name:card.n.toLowerCase()});
     if(unavailable){
       const badge = document.createElement('div');
       badge.className = 'sbc-inuse-badge';
@@ -8532,6 +8545,10 @@ async function openSBCBuilder(sbc){
       updateSBCState();
     });
     grid.appendChild(wrap);
+  });
+  document.getElementById('sbc-card-search').addEventListener('input', e=>{
+    const q = e.target.value.trim().toLowerCase();
+    searchableWraps.forEach(({wrap,name})=>{ wrap.style.display = (!q || name.includes(q)) ? '' : 'none'; });
   });
   if(sbc.managerReq){
     const mgrGrid = document.getElementById('sbc-mgr-grid');
@@ -8876,11 +8893,16 @@ async function getExternalLockedUids(){
     }catch(e){ console.warn('trade lock check failed', e); }
     try{
       // a card staked as a tournament prize stays visible in the collection (see hostTournamentPrompt)
-      // but must not be sellable/tradeable/squaddable while the tournament is still open
+      // but must not be sellable/tradeable/squaddable while the tournament is still open - this must
+      // stay locked through 'running' too, not just 'registering': the bracket (and therefore the real
+      // winner) is already fully decided the instant registration closes, rounds are just revealed one
+      // at a time from there (see advanceHostedTournamentRound), so releasing the lock mid-tournament
+      // let a host sell/trade the card away before claimTournamentPrize() ever ran, leaving the
+      // eventual winner's payout as a duplicate mint instead of a real transfer
       const tourneySnap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('hostUserId','==',profile.userId)));
       tourneySnap.docs.forEach(d=>{
         const t = d.data();
-        if(t.status==='registering' && t.prizeType==='card' && t.prizeCard) locked.add(t.prizeCard.stakedUid);
+        if((t.status==='registering' || t.status==='running') && t.prizeType==='card' && t.prizeCard) locked.add(t.prizeCard.stakedUid);
       });
     }catch(e){ console.warn('tournament card lock check failed', e); }
     return locked;
@@ -9516,6 +9538,7 @@ async function openTradeBuilder(){
     <p class="hint" style="margin-top:0;">W\u00e4hle, was du anbietest, was du daf\u00fcr willst, und wer es bekommen soll.</p>
     <div class="lbl" style="margin:14px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Spieler</div>
     <div class="mono" style="color:var(--muted);margin-bottom:8px;" id="trade-sel-count">0 Karten ausgew\u00e4hlt</div>
+    <input id="trade-pick-search" placeholder="Spielername filtern..." style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 14px;border-radius:9px;margin-bottom:10px;">
     <div class="club-grid" id="trade-pick-grid" style="max-height:260px;overflow:auto;margin-bottom:14px;"></div>
     <div class="lbl" style="margin:6px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Trainer (optional)</div>
     <div class="club-grid" id="trade-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
@@ -9556,6 +9579,7 @@ async function openTradeBuilder(){
     <button class="action-btn" id="trade-submit" style="width:220px;">Angebot senden</button>
   `);
   const grid = document.getElementById('trade-pick-grid');
+  const tradeSearchableWraps = [];
   collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.untradable).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
     const inSquad = usedInSquad.has(uid);
     const wrap = document.createElement('div');
@@ -9565,6 +9589,7 @@ async function openTradeBuilder(){
     const el = cardEl(card,'mini');
     wrap.appendChild(el);
     wrap.appendChild(rapBadge(card));
+    tradeSearchableWraps.push({wrap, name:card.n.toLowerCase()});
     if(inSquad){
       const badge = document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='NICHT VERF\u00dcGBAR';
       wrap.appendChild(badge);
@@ -9576,6 +9601,10 @@ async function openTradeBuilder(){
       document.getElementById('trade-sel-count').textContent = `${tradeOfferCards.size} Karte${tradeOfferCards.size===1?'':'n'} ausgew\u00e4hlt`;
     });
     grid.appendChild(wrap);
+  });
+  document.getElementById('trade-pick-search').addEventListener('input', e=>{
+    const q = e.target.value.trim().toLowerCase();
+    tradeSearchableWraps.forEach(({wrap,name})=>{ wrap.style.display = (!q || name.includes(q)) ? '' : 'none'; });
   });
   const mgrGrid = document.getElementById('trade-mgr-grid');
   const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr && !x.mgr.untradable);
