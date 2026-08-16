@@ -683,6 +683,15 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.mini .untradable-badge{width:23px;height:23px;bottom:-8px;right:-8px;}
 .pcard.xs .untradable-badge{width:17px;height:17px;bottom:-6px;right:-6px;}
 
+/* player-toggled favorite star - mirrors the untradable badge but bottom-left, and IS clickable
+   (see cardEl's opts.onToggleFavorite) unlike every other badge on the card. */
+.pcard .favorite-badge{position:absolute;bottom:-11px;left:-11px;width:32px;height:32px;z-index:6;cursor:pointer;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));}
+.pcard .favorite-badge svg{width:100%;height:100%;display:block;}
+.pcard .favorite-badge:not(.is-fav) svg{fill:#2a2f38;stroke:#8b95a3;stroke-width:1.5;}
+.pcard .favorite-badge.is-fav svg{fill:#ffd76a;stroke:#c9971f;stroke-width:1.5;}
+.pcard.mini .favorite-badge{width:23px;height:23px;bottom:-8px;left:-8px;}
+.pcard.xs .favorite-badge{width:17px;height:17px;bottom:-6px;left:-6px;}
+
 .pcard .photo-frame{position:relative;z-index:0;width:100%;height:160px;flex-shrink:0;overflow:hidden;border-radius:var(--radius) var(--radius) 0 0;}
 .pcard .avatar{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   font-family:'Anton';font-size:44px;color:var(--chalk);letter-spacing:.02em;
@@ -8308,7 +8317,7 @@ async function renderChallengeGrid(){
   grid.addEventListener('click', ()=>{ sbcListScrollY = window.scrollY; }, {capture:true});
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   const poolWithSquad = allCards;
   if(wmQuestVisible()){
@@ -8536,7 +8545,7 @@ async function openSBCBuilder(sbc){
   const grid = document.getElementById('sbc-club-grid');
   const uidToEl = new Map();
   const searchableWraps = []; // {wrap, name} - lets the search box filter without rebuilding the grid
-  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
+  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
     const inSquad = squadLocked.has(uid);
     const isListed = externalLocked.has(uid);
     const unavailable = inSquad || isListed;
@@ -8609,7 +8618,7 @@ async function openSBCBuilder(sbc){
     // never fall back to squad-locked cards here: submitSBC() has no squad-lock check at submission
     // time, so an autofill pick that reached into the active squad-editor lineup would let a player
     // consume/remove a card that's still equipped in a slot, leaving a dangling squad reference.
-    const poolFree = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid) && !squadLocked.has(x.uid));
+    const poolFree = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid) && !squadLocked.has(x.uid));
     const result = trySolveSBC(activeSBC, poolFree, activeSBC.size, sbcAutofillMode);
     if(!result){ toast('Mit deiner aktuellen Sammlung aktuell nicht erf\u00fcllbar (ohne Karten aus deinem aktiven Kader).'); return; }
     sbcSelection = new Set(result);
@@ -8960,7 +8969,7 @@ let sellModalMode = 'manual';
 async function openSellModal(){
   openModal(`<h2 style="margin-bottom:10px;">Karte(n) verkaufen</h2><p class="hint" style="margin-top:0;">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p>`);
   const usedInSquad = await getLockedUids();
-  const allEligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c), cardId:c.cardId})).filter(x=>x.card && !x.card.untradable);
+  const allEligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c), cardId:c.cardId})).filter(x=>x.card && !x.card.untradable && !x.card.favorited);
   openModal(`
     <h2 style="margin-bottom:4px;">Karte(n) verkaufen</h2>
     <p class="hint" style="margin-top:0;margin-bottom:12px;">W\u00e4hle Karten manuell aus, oder liste alle Karten mit bestimmten Eigenschaften auf einmal (z.\u00a0B. Rating 90-92, LW).</p>
@@ -9600,7 +9609,7 @@ async function openTradeBuilder(){
   `);
   const grid = document.getElementById('trade-pick-grid');
   const tradeSearchableWraps = [];
-  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.untradable).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
+  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.untradable && !x.card.favorited).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
     const inSquad = usedInSquad.has(uid);
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
@@ -9837,7 +9846,7 @@ async function acceptTrade(t){
 function openAcceptCardsModal(t, want){
   const usedInSquad = new Set(Object.values(squad.slots));
   const eligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)}))
-    .filter(x=>x.card && !x.card.untradable && !usedInSquad.has(x.uid) && x.card.ov>=want.minOvr && (want.pos==='ANY' || posGroup(x.card.pos)===want.pos))
+    .filter(x=>x.card && !x.card.untradable && !x.card.favorited && !usedInSquad.has(x.uid) && x.card.ov>=want.minOvr && (want.pos==='ANY' || posGroup(x.card.pos)===want.pos))
     .sort((a,b)=>b.card.ov-a.card.ov);
   const picked = new Set();
   openModal(`
@@ -10195,7 +10204,7 @@ function cardLevelProgress(xp){
 // mutated - every owned copy needs its own independently-boosted view) and uid/xp/level stashed on the
 // clone so cardEl and the rest of the UI can show the badge and open the XP modal without a separate
 // lookup.
-function applyCardLevel(base, xp, uid, forceUntradable){
+function applyCardLevel(base, xp, uid, forceUntradable, favorited){
   const level = base.isManager ? 0 : cardLevelForXp(xp||0);
   const out = level>0 ? {...base, ov:base.ov+level} : {...base};
   if(level>0) BLACK_HOLE_STAT_KEYS.forEach(k=>{ if(typeof out[k]==='number') out[k] = out[k]+level; });
@@ -10203,15 +10212,27 @@ function applyCardLevel(base, xp, uid, forceUntradable){
   // per-instance override (this specific owned copy - see addCardsToCollection) on top of whatever
   // the shared card type's own untradable flag already says, never the other way around
   if(forceUntradable) out.untradable = true;
+  // player-toggled "Favorisiert" flag (see toggleCardFavorite) - separate from untradable: it doesn't
+  // hide the RAP badge or otherwise mark the card as worthless, it just blocks the same "could
+  // accidentally lose this card" paths (SBCs, trading, selling, tournament staking - see every
+  // `!x.card.favorited` check) so a player can protect a card they simply don't want to risk.
+  if(favorited) out.favorited = true;
   return out;
 }
 function leveledOwnedCard(entry){
   const base = BY_ID.get(entry.cardId);
-  return base ? applyCardLevel(base, entry.xp, entry.uid, entry.untradable) : null;
+  return base ? applyCardLevel(base, entry.xp, entry.uid, entry.untradable, entry.favorite) : null;
 }
 function ownedCard(uid){
   const entry = collection.find(c=>c.uid===uid);
   return entry ? leveledOwnedCard(entry) : null;
+}
+async function toggleCardFavorite(uid){
+  const entry = collection.find(c=>c.uid===uid);
+  if(!entry) return;
+  entry.favorite = !entry.favorite;
+  await sSet('collection', collection);
+  return entry.favorite;
 }
 // takes the already-leveled card object itself (has .n/.xp/.level from applyCardLevel/leveledOwnedCard/
 // ownedCard) rather than re-looking it up via the local collection - works identically whether it's
@@ -10677,7 +10698,7 @@ function initialsOf(name){
 function statBar(label, val){
   return `<div class="stat"><div class="stat-head"><span>${label}</span><span>${val}</span></div><div class="bar"><i style="width:${Math.min(100,val)}%"></i></div></div>`;
 }
-function cardEl(card, size='', effOvs=null, pinnedPos=null){
+function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const r = rarityInfo(card.ov);
   const hasVariant = card.variant && card.variant!=='base';
   const family = hasVariant ? (PATTERN_FAMILY[card.theme || (card.isManager?'manager':'')]||'') : '';
@@ -10743,6 +10764,12 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
   // bottom-right badge on the card itself (see .untradable-badge below).
   const untradableIconImg = `<img class="untradable-inline-icon" src="https://images.zenithfcm.com/untradable-flag-player-card.png" alt="" title="Nicht handelbar">`;
   const untradableBadge = card.untradable ? `<div class="untradable-badge" title="Nicht handelbar">${untradableIconImg}</div>` : '';
+  // player-toggled favorite star, bottom-left - only rendered where opts.onToggleFavorite is passed
+  // (Mein Verein), never on cards shown elsewhere (SBC/trade/market pickers, match screens, ...)
+  const favoriteStarSvg = `<svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7-5.4-4.7 7.1-.6z"/></svg>`;
+  const favoriteBadge = (opts.onToggleFavorite && !card.isManager)
+    ? `<div class="favorite-badge${card.favorited?' is-fav':''}" title="${card.favorited?'Favorit entfernen':'Als Favorit markieren (nicht in SBCs/Handel/Verkauf nutzbar)'}">${favoriteStarSvg}</div>`
+    : '';
   const bodyInner = card.isManager
     ? `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
@@ -10764,6 +10791,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
     ${badge}
     ${levelBadge}
     ${untradableBadge}
+    ${favoriteBadge}
     <div class="top">
       ${topInner}
     </div>
@@ -10773,6 +10801,16 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
   if(levelBadge && card.uid){
     div.querySelectorAll('.level-badge').forEach(lvlEl=>{
       lvlEl.addEventListener('click', (e)=>{ e.stopPropagation(); openCardXpModal(card); });
+    });
+  }
+  if(favoriteBadge){
+    div.querySelectorAll('.favorite-badge').forEach(favEl=>{
+      favEl.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const nowFav = await opts.onToggleFavorite(card.uid);
+        favEl.classList.toggle('is-fav', !!nowFav);
+        favEl.title = nowFav ? 'Favorit entfernen' : 'Als Favorit markieren (nicht in SBCs/Handel/Verkauf nutzbar)';
+      });
     });
   }
   return div;
@@ -12976,7 +13014,7 @@ function drawClubGrid(){
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap';
     wrap.style.cursor = 'pointer';
-    wrap.appendChild(cardEl(card, '', previewEffectiveOvsForCard(card, uid)));
+    wrap.appendChild(cardEl(card, '', previewEffectiveOvsForCard(card, uid), null, {onToggleFavorite: toggleCardFavorite}));
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
@@ -13987,7 +14025,7 @@ async function hostTournamentPrompt(){
   hostPrizeCardUid = null;
   openModal(`<h2 style="margin-bottom:10px;">Turnier veranstalten</h2><p class="hint" style="margin-top:0;">Kader wird gepr\u00fcft\u2026</p>`);
   const locked = await getLockedUids();
-  const eligibleCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.untradable && !locked.has(x.uid));
+  const eligibleCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.untradable && !x.card.favorited && !locked.has(x.uid));
   openModal(`
     <h2 style="margin-bottom:4px;">Turnier veranstalten</h2>
     <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle Format, Teilnehmerzahl und Preis. Sobald das Turnier voll ist, startet es automatisch \u2014 du musst nicht dabei sein. Freie Pl\u00e4tze werden mit echten CPU-Vereinen aufgef\u00fcllt.</p>
@@ -15185,7 +15223,7 @@ async function renderWmQuestSubgrid(){
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   const now = Date.now();
   WM_QUEST_SBC_IDS.forEach(id=>{
@@ -15321,7 +15359,7 @@ async function renderOliseQuestSubgrid(){
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   OLISE_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15438,7 +15476,7 @@ async function renderAlissonQuestSubgrid(){
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   ALISSON_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15556,7 +15594,7 @@ async function renderYamalQuestSubgrid(){
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   YAMAL_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15674,7 +15712,7 @@ async function renderRudigerQuestSubgrid(){
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   RUDIGER_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15792,7 +15830,7 @@ async function renderHaalandQuestSubgrid(){
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   HAALAND_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -15910,7 +15948,7 @@ async function renderChongQuestSubgrid(){
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   CHONG_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
@@ -16028,7 +16066,7 @@ async function renderPinaQuestSubgrid(){
   grid.innerHTML = '';
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   PINA_QUEST_SBC_IDS.forEach(id=>{
     grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
