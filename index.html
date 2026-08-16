@@ -6293,7 +6293,11 @@ function mostRecentMonday(d){
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()-diffToMonday, 0,0,0,0).getTime();
 }
 const WEEK_PASS_START = mostRecentMonday(new Date());
-const WEEK_PASS_END = WEEK_PASS_START + 7*24*60*60*1000;
+// this run spans two calendar weeks (this week + next week) rather than the usual single week, with
+// 10 extra levels (30->40) added to match the longer grind window - WEEK_PASS_ID still changes the
+// moment WEEK_PASS_END passes, so the following run resets normally back to whatever START/END/
+// MAX_LEVEL are set to at that point.
+const WEEK_PASS_END = WEEK_PASS_START + 14*24*60*60*1000;
 const WEEK_PASS_ID = 'wp-'+WEEK_PASS_START;
 // extended from 15 to 30 levels - levels 1-15 keep their exact original rewards (the level-15 card
 // check below is now hardcoded to 15 rather than tracking WEEK_PASS_MAX_LEVEL, specifically so it
@@ -6301,7 +6305,7 @@ const WEEK_PASS_ID = 'wp-'+WEEK_PASS_START;
 // keeps accumulating uncapped even past the old level-15 threshold (weekPassLevel() only clamped the
 // *displayed* level, never the stored xp), so anyone already past 3750 xp this week simply appears
 // at their true, now-uncapped level the moment this loads - same {xp, claimed, weekId} shape throughout.
-const WEEK_PASS_MAX_LEVEL = 30;
+const WEEK_PASS_MAX_LEVEL = 40;
 const WEEK_PASS_XP_PER_LEVEL = 250; // flat cost per level through 15, unchanged from before
 const WEEK_PASS_XP_WIN = 100;
 const WEEK_PASS_XP_LOSS = 40;
@@ -7617,8 +7621,24 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
     if(sbc.seedFilter) extraSeeds.push(pool.filter(x=>sbc.seedFilter(x.card)));
     for(const members of extraSeeds){
       if(currentScore>=target) break;
-      if(members.length<size) continue;
-      const groupSeed = members.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, size);
+      // "K of N must match" (e.g. "6+ Verteidiger" among 11) needs far fewer matching cards than
+      // "ALL must match" (e.g. "alle aus Frankreich") - take as many top-OV matching cards as exist
+      // (up to size) and fill any remaining slots with the best non-matching cards, rather than
+      // requiring at least `size` matches outright. This still covers the "ALL" case exactly as
+      // before (when members.length>=size, fillCount is 0) while now also covering partial-count
+      // requirements the plain top-OV seed couldn't discover for the same reason as the "ALL" case:
+      // going from 5/6 matching to 6/6 in one swap looks like zero improvement until that single
+      // swap crosses the threshold, so the greedy climb never gets there once higher-OV non-matching
+      // cards dominate the initial seed.
+      const sortedMembers = members.slice().sort((a,b)=>b.card.ov-a.card.ov);
+      const takeMembers = sortedMembers.slice(0, size);
+      const memberUids = new Set(takeMembers.map(x=>x.uid));
+      const fillCount = size-takeMembers.length;
+      const filler = fillCount>0
+        ? pool.filter(x=>!memberUids.has(x.uid)).sort((a,b)=>b.card.ov-a.card.ov).slice(0, fillCount)
+        : [];
+      const groupSeed = takeMembers.concat(filler);
+      if(groupSeed.length!==size) continue;
       const attempt = climbSbcFrom(sbc, pool, size, groupSeed, target);
       if(attempt.currentScore>currentScore) ({current, outside, currentScore} = attempt);
     }
@@ -7858,19 +7878,19 @@ const SBC_DEFS = [
   // --- WM-Sonderaufgaben limited event (see WM_QUEST_DEADLINE): 3 of the event's 5 quests. Each is
   // one-time-only and grants a WM Winners Pack; completing all 3 plus the 2 match quests in
   // WM_QUEST_MATCHES unlocks the WM_QUEST_MBAPPE_CARD claim - see openWmQuestDetail().
-  {id:'wm_quest_sturm', name:'WM-Sturmreihe', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1,
+  {id:'wm_quest_sturm', name:'WM-Sturmreihe', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 92+, niemand unter 87 OVR, mindestens 4 Stürmer und 6 Sonderkarten. Belohnung: 1 WM Winners Pack.',
     reqs:[ req('Durchschnittsrating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`),
            req('Kein Spieler unter 87 OVR', c=>c.every(x=>x.ov>=87), c=>`${c.filter(x=>x.ov<87).length} unter 87`),
            req('4+ Stürmer', c=>c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length>=4, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length} / 4`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
-  {id:'wm_quest_abwehr', name:'WM-Abwehrblock', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1,
+  {id:'wm_quest_abwehr', name:'WM-Abwehrblock', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'DEF'),
     desc:'11 Spieler, Durchschnittsrating 91+, niemand unter 86 OVR, mindestens 5 Verteidiger und 5 Sonderkarten. Belohnung: 1 WM Winners Pack.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`),
            req('Kein Spieler unter 86 OVR', c=>c.every(x=>x.ov>=86), c=>`${c.filter(x=>x.ov<86).length} unter 86`),
            req('5+ Verteidiger', c=>c.filter(x=>cardInPosGroupPreferred(x,'DEF')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'DEF')).length} / 5`),
            req('5+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=5, c=>`${c.filter(x=>x.variant!=='base').length} / 5 Sonderkarten`) ]},
-  {id:'wm_quest_mittelfeld', name:'WM-Mittelfeldmotor', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1,
+  {id:'wm_quest_mittelfeld', name:'WM-Mittelfeldmotor', reward:'wmwinners', size:11, tier:'WM-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'MID'),
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 88 OVR, mindestens 4 Mittelfeldspieler und 6 Sonderkarten. Belohnung: 1 WM Winners Pack.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('Kein Spieler unter 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} unter 88`),
@@ -7879,13 +7899,13 @@ const SBC_DEFS = [
   // --- PROMO-Sonderaufgaben limited event (see OLISE_QUEST_DEADLINE): 4 of the event's 6 quests.
   // Each is one-time-only and grants coins directly (no intermediate pack, unlike the WM quest);
   // completing all 4 plus the 2 match quests in OLISE_QUEST_MATCHES unlocks the OLISE_QUEST_CARD claim.
-  {id:'olise_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'olise_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'MID'),
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 5 Mittelfeldspieler und 6 Sonderkarten. Belohnung: 3.000 Coins.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
            req('5+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroupPreferred(x,'MID')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'MID')).length} / 5`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
-  {id:'olise_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'olise_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
     reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
            req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
@@ -7902,13 +7922,13 @@ const SBC_DEFS = [
     reqs:[ req('Alle aus Frankreich', c=>c.every(x=>x.nat==='France'), c=>`${c.filter(x=>x.nat==='France').length} / 7 aus Frankreich`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
   // --- 2nd PROMO-Sonderaufgaben limited event (see ALISSON_QUEST_DEADLINE) - same pattern again.
-  {id:'alisson_quest_abwehrkette', name:'Abwehrkette', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'alisson_quest_abwehrkette', name:'Abwehrkette', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'DEF'),
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 6 Verteidiger und 6 Sonderkarten. Belohnung: 3.000 Coins.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
            req('6+ Verteidiger', c=>c.filter(x=>cardInPosGroupPreferred(x,'DEF')).length>=6, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'DEF')).length} / 6`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
-  {id:'alisson_quest_kastenwache', name:'Kastenwache', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'alisson_quest_kastenwache', name:'Kastenwache', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'GK'),
     desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 3 Torhüter und 6 Sonderkarten. Belohnung: 3.500 Coins.',
     reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
            req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
@@ -7925,13 +7945,13 @@ const SBC_DEFS = [
     reqs:[ req('Alle aus Brasilien', c=>c.every(x=>x.nat==='Brazil'), c=>`${c.filter(x=>x.nat==='Brazil').length} / 7 aus Brasilien`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
   // --- 3rd PROMO-Sonderaufgaben limited event (see YAMAL_QUEST_DEADLINE) - same pattern again.
-  {id:'yamal_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'yamal_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'MID'),
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 5 Mittelfeldspieler und 6 Sonderkarten. Belohnung: 3.000 Coins.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
            req('5+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroupPreferred(x,'MID')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'MID')).length} / 5`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
-  {id:'yamal_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'yamal_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
     reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
            req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
@@ -7948,13 +7968,13 @@ const SBC_DEFS = [
     reqs:[ req('Alle aus Spanien', c=>c.every(x=>x.nat==='Spain'), c=>`${c.filter(x=>x.nat==='Spain').length} / 7 aus Spanien`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
   // --- 4th PROMO-Sonderaufgaben limited event (see RUDIGER_QUEST_DEADLINE) - same pattern again.
-  {id:'rudiger_quest_abwehrkette', name:'Abwehrkette', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'rudiger_quest_abwehrkette', name:'Abwehrkette', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'DEF'),
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 6 Verteidiger und 6 Sonderkarten. Belohnung: 3.000 Coins.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
            req('6+ Verteidiger', c=>c.filter(x=>cardInPosGroupPreferred(x,'DEF')).length>=6, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'DEF')).length} / 6`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
-  {id:'rudiger_quest_kastenwache', name:'Kastenwache', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'rudiger_quest_kastenwache', name:'Kastenwache', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'GK'),
     desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 3 Torhüter und 6 Sonderkarten. Belohnung: 3.500 Coins.',
     reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
            req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
@@ -7971,13 +7991,13 @@ const SBC_DEFS = [
     reqs:[ req('Alle aus Deutschland', c=>c.every(x=>x.nat==='Germany'), c=>`${c.filter(x=>x.nat==='Germany').length} / 7 aus Deutschland`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
   // --- 5th PROMO-Sonderaufgaben limited event (see HAALAND_QUEST_DEADLINE) - same pattern again.
-  {id:'haaland_quest_sturm', name:'Sturmspitze', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'haaland_quest_sturm', name:'Sturmspitze', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.000 Coins.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
            req('5+ Stürmer', c=>c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length} / 5`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
-  {id:'haaland_quest_knipser', name:'Knipser-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'haaland_quest_knipser', name:'Knipser-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 6 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
     reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
            req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
@@ -7994,13 +8014,13 @@ const SBC_DEFS = [
     reqs:[ req('Alle aus Norwegen', c=>c.every(x=>x.nat==='Norway'), c=>`${c.filter(x=>x.nat==='Norway').length} / 7 aus Norwegen`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
   // --- 6th PROMO-Sonderaufgaben limited event (see CHONG_QUEST_DEADLINE) - same pattern again.
-  {id:'chong_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'chong_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'MID'),
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 5 Mittelfeldspieler und 6 Sonderkarten. Belohnung: 3.000 Coins.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
            req('5+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroupPreferred(x,'MID')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'MID')).length} / 5`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
-  {id:'chong_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'chong_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
     reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
            req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
@@ -8017,13 +8037,13 @@ const SBC_DEFS = [
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`),
            req('1+ aus Curaçao', c=>c.filter(x=>x.nat==='Curacao').length>=1, c=>`${c.filter(x=>x.nat==='Curacao').length} / 1 aus Curaçao`) ]},
   // --- 7th PROMO-Sonderaufgaben limited event (see PINA_QUEST_DEADLINE) - same pattern again.
-  {id:'pina_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'pina_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'MID'),
     desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 5 Mittelfeldspieler und 6 Sonderkarten. Belohnung: 3.000 Coins.',
     reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
            req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
            req('5+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroupPreferred(x,'MID')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'MID')).length} / 5`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
-  {id:'pina_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1,
+  {id:'pina_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
     reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
            req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
