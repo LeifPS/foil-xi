@@ -13203,11 +13203,19 @@ function showCardInfoModal(card, uid){
     <p class="hint" style="margin:10px 0 0;">Inklusive Trainer-Boost, Chemie und Positionsbonus — so, als würde die Karte gerade dort aufgestellt.</p>
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button class="action-btn secondary" id="card-info-rap" style="flex:1;">RAP ~${formatCoins(computeRAP(card))}</button>
+      ${uid!=null && !card.isManager ? `<button class="action-btn secondary" id="card-info-fav" style="flex:1;">${card.favorited?'★ Favorit entfernen':'☆ Als Favorit markieren'}</button>` : ''}
       <button class="modal-close" id="card-info-close" style="flex:1;">Schließen</button>
     </div>
   `);
   document.getElementById('card-info-close').addEventListener('click', closeModal);
   document.getElementById('card-info-rap').addEventListener('click', ()=>showPriceHistoryModal(card));
+  const favBtn = document.getElementById('card-info-fav');
+  if(favBtn) favBtn.addEventListener('click', async ()=>{
+    const nowFav = await toggleCardFavorite(uid);
+    card.favorited = nowFav;
+    favBtn.textContent = nowFav ? '★ Favorit entfernen' : '☆ Als Favorit markieren';
+    if(currentTab==='club') drawClubGrid();
+  });
 }
 function chemBreakdownText(b){
   if(!b) return '';
