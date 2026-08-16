@@ -6336,11 +6336,14 @@ function weekPassRewardIcon(reward){
   if(reward.type==='pack') return '🎁';
   return '🪙';
 }
+// icon markup shared by the untradable badge on cards - reused here (without needing a card object)
+// for the Wochen-Pass pack tiles/labels, since every card those packs grant is untradable
+const UT_PACK_ICON = `<img src="https://images.zenithfcm.com/untradable-flag-player-card.png" alt="" title="Alle Karten aus diesem Pack sind nicht handelbar" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;">`;
 function weekPassRewardLabel(reward){
   if(reward.type==='coins') return `${formatCoins(reward.amount)} Coins`;
   if(reward.type==='card'){ const card = BY_ID.get(reward.cardId); return card ? `${card.n} (${card.variantLabel})` : 'Exklusive Karte'; }
   const pack = PACKS.find(p=>p.id===reward.packId);
-  return pack ? pack.name : 'Pack';
+  return pack ? `${pack.name} (UT) ${UT_PACK_ICON}` : 'Pack';
 }
 async function claimWeekPassReward(level){
   const wp = profile.weekPass;
@@ -6362,7 +6365,10 @@ async function claimWeekPassReward(level){
     profile.weekPass = newWp;
     await sSet('profile', profile);
     const pack = PACKS.find(p=>p.id===reward.packId);
-    if(pack) showPackOpening(pack, pack.draw());
+    // Wochen-Pass-Packs are always UT (untradable) - a per-instance flag on the collection entry
+    // (see addCardsToCollection/leveledOwnedCard), not on the shared card type, so a normally-bought
+    // copy of the same card from the store stays tradable as usual
+    if(pack) showPackOpening({...pack, name:`${pack.name} (UT)`}, pack.draw(), {untradable:true});
   }
   if(currentTab==='week') renderWeekPass(document.getElementById('view'));
 }
@@ -10113,16 +10119,19 @@ function cardLevelProgress(xp){
 // mutated - every owned copy needs its own independently-boosted view) and uid/xp/level stashed on the
 // clone so cardEl and the rest of the UI can show the badge and open the XP modal without a separate
 // lookup.
-function applyCardLevel(base, xp, uid){
+function applyCardLevel(base, xp, uid, forceUntradable){
   const level = base.isManager ? 0 : cardLevelForXp(xp||0);
   const out = level>0 ? {...base, ov:base.ov+level} : {...base};
   if(level>0) BLACK_HOLE_STAT_KEYS.forEach(k=>{ if(typeof out[k]==='number') out[k] = out[k]+level; });
   out.uid = uid; out.xp = xp||0; out.level = level;
+  // per-instance override (this specific owned copy - see addCardsToCollection) on top of whatever
+  // the shared card type's own untradable flag already says, never the other way around
+  if(forceUntradable) out.untradable = true;
   return out;
 }
 function leveledOwnedCard(entry){
   const base = BY_ID.get(entry.cardId);
-  return base ? applyCardLevel(base, entry.xp, entry.uid) : null;
+  return base ? applyCardLevel(base, entry.xp, entry.uid, entry.untradable) : null;
 }
 function ownedCard(uid){
   const entry = collection.find(c=>c.uid===uid);
@@ -11085,7 +11094,7 @@ async function buyPack(pack){
   showPackOpening(pack, drawn);
   renderStore(document.getElementById('view'));
 }
-async function addCardsToCollection(cards){
+async function addCardsToCollection(cards, opts={}){
   let touchedPlayers=false, touchedManagers=false;
   const added = []; // [{uid, card}], in the same order as `cards` - lets callers later identify
                      // exactly which collection entry a given draw became (e.g. to prune unpicked
@@ -11093,7 +11102,14 @@ async function addCardsToCollection(cards){
   cards.forEach(c=>{
     const uid = genId();
     if(c.isManager){ managerCollection.push({uid, mgrId:c.id}); touchedManagers=true; }
-    else { collection.push({uid, cardId:c.id}); touchedPlayers=true; }
+    else {
+      const entry = {uid, cardId:c.id};
+      // per-instance override (this specific owned copy, NOT the shared card type - see
+      // leveledOwnedCard/applyCardLevel) used by e.g. Wochen-Pass-Packs so the same card pulled from
+      // a normal store pack stays tradable while this copy doesn't
+      if(opts.untradable) entry.untradable = true;
+      collection.push(entry); touchedPlayers=true;
+    }
     added.push({uid, card:c});
   });
   // the pushes above already happened synchronously - the collection is correct in memory the
@@ -11104,10 +11120,10 @@ async function addCardsToCollection(cards){
   return added;
 }
 
-function showPackOpening(pack, drawn){
+function showPackOpening(pack, drawn, opts={}){
   // grant immediately, before any animation/modal exists - closing the pack-opening modal early
   // (or anything else interrupting the reveal) must never cost the player the pack they paid for
-  const addedPromise = addCardsToCollection(drawn);
+  const addedPromise = addCardsToCollection(drawn, opts);
   const ultraRareManager = c => c.isManager && (c.variant==='wm_mgr' || c.variant==='uclw_mgr');
   const ordered = drawn.slice().sort((a,b)=>{
     const aKey = a.ov + (ultraRareManager(a) ? 1000 : 0);
@@ -12569,6 +12585,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-give-coins" style="width:auto;">Coins geben</button>
       <button class="action-btn secondary" id="admin-give-card" style="width:auto;">Karte schicken</button>
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
+      <button class="action-btn secondary" id="admin-make-ut" style="width:auto;">Karte nachtr\u00e4glich UT machen</button>
       <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
       <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
       <button class="action-btn secondary" id="admin-toggle-lb-ban" style="width:auto;color:${leaderboardBanned?'var(--turf-bright)':'var(--danger)'};">${leaderboardBanned?'Leaderboard-Sperre aufheben':'Tempor\u00e4r vom Leaderboard sperren'}</button>
@@ -12587,6 +12604,7 @@ async function loadAdminUserPanel(targetId){
   });
   document.getElementById('admin-give-card').addEventListener('click', ()=>openAdminSendCardModal(targetId, data));
   document.getElementById('admin-give-pack').addEventListener('click', ()=>openAdminSendPackModal(targetId, data));
+  document.getElementById('admin-make-ut').addEventListener('click', ()=>openAdminMakeUntradableModal(targetId, data));
   document.getElementById('admin-send-warning').addEventListener('click', ()=>{
     askTextModal('Verwarnungstext', 'z. B. Bitte fair spielen...', async (msg)=>{
       if(!msg) return;
@@ -12695,6 +12713,51 @@ function openAdminSendCardModal(targetId, data){
       results.appendChild(wrap);
     });
   });
+}
+// lets an admin retroactively flag a specific card someone already owns as untradable (per-instance,
+// not the shared card type - see addCardsToCollection/leveledOwnedCard) or undo that, e.g. to correct
+// a card that should have come from a UT source, without touching any other copy of that same card
+function openAdminMakeUntradableModal(targetId, data){
+  const targetCollection = (data.collection || []).slice();
+  openModal(`
+    <h2 style="margin-bottom:4px;">Karten von ${targetId} nachträglich UT machen</h2>
+    <p class="hint" style="margin:0 0 12px;">Klicken schaltet Untauschbar für genau diese Karte um — andere Karten desselben Typs sind nicht betroffen.</p>
+    <input id="admin-ut-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:0 0 12px;">
+    <div class="picker-list" id="admin-ut-results" style="max-height:400px;overflow-y:auto;"></div>`);
+  const input = document.getElementById('admin-ut-search');
+  const results = document.getElementById('admin-ut-results');
+  const renderList = ()=>{
+    const q = input.value.trim().toLowerCase();
+    results.innerHTML = '';
+    let shown = 0;
+    targetCollection.forEach((entry, idx)=>{
+      if(q.length<2 && shown>=100) return; // cap the unfiltered view - search narrows down a big collection
+      const base = BY_ID.get(entry.cardId);
+      if(!base) return;
+      if(q.length>=2 && !base.n.toLowerCase().includes(q)) return;
+      shown++;
+      const card = applyCardLevel(base, entry.xp, entry.uid, entry.untradable);
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'cursor:pointer;position:relative;';
+      wrap.appendChild(cardEl(card, 'mini'));
+      const tag = document.createElement('div');
+      tag.className = 'mono';
+      tag.style.cssText = `text-align:center;font-size:10.5px;margin-top:2px;color:${entry.untradable?'var(--danger)':'var(--muted)'};`;
+      tag.textContent = entry.untradable ? 'UT (Klick zum Aufheben)' : 'handelbar (Klick für UT)';
+      wrap.appendChild(tag);
+      wrap.addEventListener('click', async ()=>{
+        entry.untradable = !entry.untradable;
+        targetCollection[idx] = entry;
+        await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection:targetCollection}, {merge:true});
+        toast(`${base.n} ${entry.untradable?'ist jetzt untauschbar':'ist wieder handelbar'} für ${targetId}.`);
+        renderList();
+      });
+      results.appendChild(wrap);
+    });
+    if(!results.children.length) results.innerHTML = '<p class="hint">Keine Karten gefunden.</p>';
+  };
+  input.addEventListener('input', renderList);
+  renderList();
 }
 function openAdminSendPackModal(targetId, data){
   openModal(`
