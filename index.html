@@ -859,6 +859,38 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   animation:futFlashFade .45s ease-out forwards;}
 @keyframes futFlashFade{to{opacity:0;}}
 
+/* ===== mythic (100+) enhancements: restrained and premium rather than loud - a single accent hue
+   (never rainbow) throughout. ===== */
+@keyframes futMythicTextShift{0%,100%{background-position:120% 0;}50%{background-position:-20% 0;}}
+/* hype intro: before the card itself appears, a breathing glow orb with concentric rings expanding
+   outward from it - pure atmosphere, no content/reveal - then fades out as the card fades/scales in
+   from behind it (see runMythicHypeIntro). */
+.fut-hype-intro{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;transition:opacity .5s ease;overflow:hidden;}
+.fut-hype-intro.fut-hype-fadeout{opacity:0;}
+.fut-hype-bg{position:absolute;inset:0;
+  background:radial-gradient(circle, var(--cs-acc,#e8c468) 0%, transparent 60%);
+  opacity:.1;animation:futHypeBgPulse 1.9s ease-in-out infinite;}
+@keyframes futHypeBgPulse{0%,100%{opacity:.08;}50%{opacity:.3;}}
+.fut-hype-orb{position:absolute;width:170px;height:170px;border-radius:50%;
+  background:radial-gradient(circle, var(--cs-acc,#e8c468) 0%, transparent 72%);
+  filter:blur(2px);box-shadow:0 0 100px 6px var(--cs-acc,#e8c468);
+  animation:futHypeOrbPulse 1.9s ease-in-out infinite;}
+@keyframes futHypeOrbPulse{0%,100%{transform:scale(.78);opacity:.55;}50%{transform:scale(1.3);opacity:1;}}
+.fut-hype-ring{position:absolute;width:160px;height:160px;border-radius:50%;
+  border:2px solid var(--cs-acc,#e8c468);opacity:0;animation:futHypeRingExpand 2.8s ease-out infinite;}
+@keyframes futHypeRingExpand{0%{transform:scale(.4);opacity:.9;}60%{opacity:.25;}100%{transform:scale(4.4);opacity:0;}}
+/* on-card identity reveal (position/nation/league/club, see stageMythicCardReveal): each pops in with
+   a small overshoot bounce rather than a separate pre-sequence screen. */
+.fut-identity-pop{transition:opacity .5s ease, transform .5s cubic-bezier(.3,1.5,.4,1);}
+/* the final showCutscene reveal also gets a quieter mythic treatment: same flat accent backdrop as
+   any card (no spinning hue), just a slower breathing glow on the card and a shimmering banner text */
+.cs-mythic .cs-card-wrap{animation:csFlip .6s .35s cubic-bezier(.2,.7,.3,1) forwards, csMythicCardPulse 3.4s 1s ease-in-out infinite;}
+@keyframes csMythicCardPulse{0%,100%{filter:drop-shadow(0 0 22px var(--cs-acc,#e8c468));}50%{filter:drop-shadow(0 0 38px #fff);}}
+.cs-mythic-banner{color:#0a0d12 !important;
+  background:linear-gradient(100deg, var(--cs-acc,#e8c468) 30%, #fff 50%, var(--cs-acc,#e8c468) 70%) !important;
+  background-size:220% 100% !important;animation:csBannerIn .5s .25s forwards, futMythicTextShift 4s ease-in-out infinite !important;}
+
 /* ---- club grid ---- */
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
 .toolbar input,.toolbar select{background:var(--panel);border:1px solid var(--line);color:var(--chalk);padding:9px 12px;border-radius:8px;font-size:13px;}
@@ -6302,11 +6334,7 @@ function mostRecentMonday(d){
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()-diffToMonday, 0,0,0,0).getTime();
 }
 const WEEK_PASS_START = mostRecentMonday(new Date());
-// this run spans two calendar weeks (this week + next week) rather than the usual single week, with
-// 10 extra levels (30->40) added to match the longer grind window - WEEK_PASS_ID still changes the
-// moment WEEK_PASS_END passes, so the following run resets normally back to whatever START/END/
-// MAX_LEVEL are set to at that point.
-const WEEK_PASS_END = WEEK_PASS_START + 14*24*60*60*1000;
+const WEEK_PASS_END = WEEK_PASS_START + 7*24*60*60*1000;
 const WEEK_PASS_ID = 'wp-'+WEEK_PASS_START;
 // extended from 15 to 30 levels - levels 1-15 keep their exact original rewards (the level-15 card
 // check below is now hardcoded to 15 rather than tracking WEEK_PASS_MAX_LEVEL, specifically so it
@@ -6314,7 +6342,7 @@ const WEEK_PASS_ID = 'wp-'+WEEK_PASS_START;
 // keeps accumulating uncapped even past the old level-15 threshold (weekPassLevel() only clamped the
 // *displayed* level, never the stored xp), so anyone already past 3750 xp this week simply appears
 // at their true, now-uncapped level the moment this loads - same {xp, claimed, weekId} shape throughout.
-const WEEK_PASS_MAX_LEVEL = 40;
+const WEEK_PASS_MAX_LEVEL = 30;
 const WEEK_PASS_XP_PER_LEVEL = 250; // flat cost per level through 15, unchanged from before
 const WEEK_PASS_XP_WIN = 100;
 const WEEK_PASS_XP_LOSS = 40;
@@ -6633,6 +6661,13 @@ const WEEK_PASS_CARD_ROSTER = [
   // Week of 2026-08-17 (next week)
   {lvl15:{baseId:234378, ov:99, img:'https://cdn3.futbin.com/content/fifa26/img/players/p67343242.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=c6f2b83fc92743815988143abc966d0c'}, // D. Rice
    lvl30:{baseId:177003, ov:103, img:'https://cdn3.futbin.com/content/fifa26/img/players/p134394731.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=a0b12bf5a3172700e8770c3b06516a92'}}, // L. Modrić
+  // Week of 2026-08-24
+  {lvl15:{baseId:264652, ov:99, img:'https://cdn3.futbin.com/content/fifa26/img/players/p134482380.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=cfc17385bfa0041ac136c3a1398beaab'}, // B. Barcola
+   lvl30:{baseId:228702, ov:103, img:'https://cdn3.futbin.com/content/fifa26/img/players/p100891998.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=4c6b783d3bc1df72315755b5ffdc8850'}}, // F. de Jong
+  // Week of 2026-08-31 - lvl30 (Saka) is a placeholder sofifa image chosen just to fill the pair;
+  // swap it for a real futbin image once one's provided (same for Rafael Leão if a better one shows up)
+  {lvl15:{baseId:241721, ov:99, img:'https://cdn3.futbin.com/content/fifa26/img/players/p84127801.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=990b7bcfdf86736a634df3b3420d6478'}, // Rafael Leão
+   lvl30:{baseId:246669, ov:103, img:'https://cdn.sofifa.net/players/246/669/26_120.png'}}, // B. Saka (placeholder image)
 ];
 const WEEK_PASS_CARDS = WEEK_PASS_CARD_ROSTER.map((wk,i)=>{
   const lvl15Base = findBaseCard(wk.lvl15.baseId);
@@ -12306,23 +12341,65 @@ function monogramBadgeSVG(name, shape){
     <text x="50" y="58" text-anchor="middle" font-family="Anton" font-size="30" fill="#fff">${letters}</text>
   </svg>`;
 }
-function showFUTRevealSequence(card, onDone){
-  const acc = cardAccent(card);
-  const elite = card.ov>=90;
-  const root = document.getElementById('modal-root');
-  const overlay = document.createElement('div');
-  overlay.className = 'cutscene-overlay' + (elite?' fut-elite':'');
-  overlay.style.setProperty('--cs-acc', acc);
-  overlay.style.cursor = 'default';
-  root.appendChild(overlay);
+// builds the 4 {label,value,visual} steps shared by both the normal single-swap pre-sequence and the
+// mythic accumulating-row one below.
+function futRevealSteps(card){
   const flagCode = NAT_FLAG[card.nat];
-  const steps = [
+  return [
     {label:'Position', value: posDE(mainPos(card.pos)), visual: positionPitchSVG(mainPos(card.pos))},
     {label:'Nationalit\u00e4t', value: NAT_DE[card.nat]||card.nat,
       visual: flagCode ? `<img class="fut-visual-img fut-visual-flag" src="https://flagcdn.com/w320/${flagCode}.png" alt="" onerror="this.style.display='none'">` : monogramBadgeSVG(card.nat,'hex')},
     {label:'Liga', value: card.lg, visual: resolveLeagueLogo(card) ? `<div class="fut-visual-logo-pad"><img class="fut-visual-img fut-visual-logo" src="${resolveLeagueLogo(card)}" alt="" onerror="this.parentElement.style.display='none'"></div>` : monogramBadgeSVG(card.lg,'hex')},
     {label:'Verein', value: card.club, visual: CLUB_LOGO[card.club] ? `<div class="fut-visual-logo-pad"><img class="fut-visual-img fut-visual-logo" src="${CLUB_LOGO[card.club]}" alt="" onerror="this.parentElement.style.display='none'"></div>` : monogramBadgeSVG(card.club,'shield')},
   ];
+}
+// mythic (100+) pre-sequence: no field-by-field reveal screen and no content of any kind here - just
+// a calm, premium hype beat (a breathing glow orb with rings expanding outward, in the variant's own
+// accent color) before the card fades in from behind it. The actual position/nation/liga/verein
+// reveal happens ON the card itself afterwards, see stageMythicCardReveal. Not click-skippable by
+// design - it's a short, fixed hype beat, only the card-reveal stage that follows can be skipped.
+function runMythicHypeIntro(card, overlay, onDone){
+  overlay.innerHTML = `
+    <div class="cs-burst"></div>
+    <div class="fut-elite-rays"></div>
+    <div class="fut-elite-sparkle"></div>
+    <div class="fut-hype-intro" id="fut-hype-intro">
+      <div class="fut-hype-bg"></div>
+      <div class="fut-hype-ring" style="animation-delay:0s"></div>
+      <div class="fut-hype-ring" style="animation-delay:.7s"></div>
+      <div class="fut-hype-ring" style="animation-delay:1.4s"></div>
+      <div class="fut-hype-ring" style="animation-delay:2.1s"></div>
+      <div class="fut-hype-orb"></div>
+    </div>`;
+  const hype = overlay.querySelector('#fut-hype-intro');
+  let done = false;
+  function finish(){
+    if(done) return;
+    done = true;
+    onDone();
+  }
+  function fadeOutAndFinish(){
+    hype.classList.add('fut-hype-fadeout');
+    setTimeout(finish, 500);
+  }
+  overlay.style.cursor = 'default';
+  setTimeout(fadeOutAndFinish, 2600);
+}
+function showFUTRevealSequence(card, onDone){
+  const acc = cardAccent(card);
+  const elite = card.ov>=90;
+  const mythic = card.ov>=100;
+  const root = document.getElementById('modal-root');
+  const overlay = document.createElement('div');
+  overlay.className = 'cutscene-overlay' + (elite?' fut-elite':'') + (mythic?' fut-mythic':'');
+  overlay.style.setProperty('--cs-acc', acc);
+  overlay.style.cursor = 'default';
+  root.appendChild(overlay);
+  if(mythic){
+    runMythicHypeIntro(card, overlay, ()=>{ overlay.remove(); showCutscene(card, onDone); });
+    return;
+  }
+  const steps = futRevealSteps(card);
   let i = 0;
   let advanceTimer = null;
   function advance(){
@@ -12351,24 +12428,120 @@ function showFUTRevealSequence(card, onDone){
   overlay.addEventListener('click', advance);
   renderStep();
 }
+// a 100+ card doesn't just pop in - it reveals itself in four acts: the card shell (background/pattern/
+// frame, visible the instant it's inserted), then the OVR counting up to its final value, then each
+// substat bar filling in one at a time, then finally the name and photo fading in. Returns a "skip"
+// function that instantly finishes every remaining stage - the caller wires a click during the
+// sequence to call it (same "tap to skip" convention as showFUTRevealSequence), rather than letting a
+// click dismiss the whole cutscene mid-reveal.
+function stageMythicCardReveal(card, wrapEl, onSequenceDone){
+  const el = cardEl(card);
+  wrapEl.appendChild(el);
+  const ovEl = el.querySelector('.ov');
+  const nameEl = el.querySelector('.name');
+  const photoImg = el.querySelector('.face-photo');
+  const avatarEl = el.querySelector('.avatar');
+  const statEls = Array.from(el.querySelectorAll('.stats .stat'));
+  const statBars = statEls.map(s=>s.querySelector('.bar i'));
+  const statTargetWidths = statBars.map(b=>b?b.style.width:'0%'); // capture statBar()'s real width before zeroing it
+  const posLabelEl = el.querySelector('.pos-label');
+  const flagEl = el.querySelector('.nc-flag, .nc-flag-mono');
+  const leagueEl = el.querySelector('.nc-league, .nc-league-mono');
+  const clubEl = el.querySelector('.nc-club, .nc-club-mono');
+  // position is deliberately NOT first - it reveals alongside nation/liga/verein, not ahead of them
+  const identityEls = [flagEl, leagueEl, clubEl, posLabelEl].filter(Boolean);
+  const finalOv = card.ov;
+  if(ovEl) ovEl.textContent = ''; // stays blank until the count-up actually starts, not a placeholder "0"
+  if(nameEl){ nameEl.style.opacity='0'; nameEl.style.transition='opacity 1.2s ease'; }
+  if(photoImg){ photoImg.style.opacity='0'; photoImg.style.transition='opacity 1.5s ease'; }
+  if(avatarEl){ avatarEl.style.opacity='0'; avatarEl.style.transition='opacity 1.5s ease'; }
+  statEls.forEach((s,i)=>{ s.style.opacity='0'; s.style.transition='opacity 1.05s ease'; if(statBars[i]) statBars[i].style.width='0%'; });
+  identityEls.forEach(elm=>{ elm.classList.add('fut-identity-pop'); elm.style.opacity='0'; elm.style.transform='scale(.4)'; });
+
+  const timers = [];
+  let done = false;
+  function revealNamePhoto(){
+    if(nameEl) nameEl.style.opacity='1';
+    if(photoImg) photoImg.style.opacity='1';
+    if(avatarEl) avatarEl.style.opacity='1';
+  }
+  function revealIdentityAll(){
+    identityEls.forEach(elm=>{ elm.style.opacity='1'; elm.style.transform='scale(1)'; });
+  }
+  function finishAll(){
+    if(done) return;
+    done = true;
+    timers.forEach(t=>clearTimeout(t));
+    revealIdentityAll();
+    if(ovEl) ovEl.textContent = finalOv;
+    statEls.forEach((s,i)=>{ s.style.opacity='1'; if(statBars[i]){ statBars[i].style.transition=''; statBars[i].style.width=statTargetWidths[i]; } });
+    revealNamePhoto();
+    onSequenceDone();
+  }
+  // timings are ~3x the original pace - a 100+ pull is meant to take its time. OVR count-up gets the
+  // most weight (the headline moment), substats move a bit quicker so they don't overstay it.
+  function scheduleStats(){
+    statEls.forEach((s,i)=>{
+      timers.push(setTimeout(()=>{
+        s.style.opacity='1';
+        if(statBars[i]){ statBars[i].style.transition='width .85s ease'; statBars[i].style.width=statTargetWidths[i]; }
+      }, i*380));
+    });
+    timers.push(setTimeout(()=>{ revealNamePhoto(); done=true; onSequenceDone(); }, statEls.length*380+800));
+  }
+  function tweenOv(){
+    const dur = 3800, start = performance.now();
+    function tick(now){
+      const t = Math.min(1, (now-start)/dur);
+      const eased = 1-Math.pow(1-t,3);
+      if(ovEl) ovEl.textContent = Math.round(finalOv*eased);
+      if(t<1) requestAnimationFrame(tick);
+      else scheduleStats();
+    }
+    requestAnimationFrame(tick);
+  }
+  // POS -> Nation -> Liga -> Verein each pop in one at a time before the OVR starts counting up
+  function scheduleIdentity(){
+    identityEls.forEach((elm,i)=>{
+      timers.push(setTimeout(()=>{
+        elm.style.opacity='1';
+        elm.style.transform='scale(1)';
+        playSfx('notification');
+      }, i*650));
+    });
+    timers.push(setTimeout(tweenOv, identityEls.length*650+450));
+  }
+  timers.push(setTimeout(scheduleIdentity, 1050)); // wait for the card-flip (ends ~950ms) to fully settle first
+  return finishAll;
+}
 function showCutscene(card, onDone){
   const acc = cardAccent(card);
+  const mythic = !card.isManager && card.ov>=100;
   const root = document.getElementById('modal-root');
   const overlay = document.createElement('div');
-  overlay.className = 'cutscene-overlay';
+  overlay.className = 'cutscene-overlay' + (mythic?' cs-mythic':'');
   overlay.style.setProperty('--cs-acc', acc);
   const label = card.variant && card.variant!=='base' ? card.variantLabel : rarityInfo(card.ov).label;
   overlay.innerHTML = `
     <div class="cs-burst"></div>
-    <div class="cs-banner">${label} \u2014 ${card.ov} OVR</div>
+    <div class="cs-banner${mythic?' cs-mythic-banner':''}">${label} \u2014 ${card.ov} OVR</div>
     <div class="cs-card-wrap"></div>
     <div class="cs-hint">Zum Fortfahren irgendwo tippen</div>`;
-  overlay.querySelector('.cs-card-wrap').appendChild(cardEl(card));
+  const cardWrap = overlay.querySelector('.cs-card-wrap');
+  let sequenceDone = true, skipReveal = null;
+  if(mythic){
+    sequenceDone = false;
+    skipReveal = stageMythicCardReveal(card, cardWrap, ()=>{ sequenceDone = true; });
+  } else {
+    cardWrap.appendChild(cardEl(card));
+  }
   root.appendChild(overlay);
-  playSfx('cardReveal', card.ov>=95?2:(card.ov>=90?1:0));
+  playSfx('cardReveal', card.ov>=100?3:(card.ov>=95?2:(card.ov>=90?1:0)));
   let done=false;
   overlay.addEventListener('click', ()=>{
-    if(done) return; done=true;
+    if(done) return;
+    if(!sequenceDone){ skipReveal(); return; }
+    done=true;
     overlay.remove();
     onDone();
   });
