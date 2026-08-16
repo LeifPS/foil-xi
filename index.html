@@ -12384,10 +12384,16 @@ function runMythicHypeIntro(card, overlay, onDone){
   overlay.style.cursor = 'default';
   setTimeout(fadeOutAndFinish, 2600);
 }
+// a 100+ card gets the rare cutscene treatment; so does a manager whose boost is above +5(%) - a
+// notably strong trainer, even though he has no OVR/stats of his own to justify the ov>=100 check.
+function isMythicReveal(card){
+  if(card.isManager) return card.boostType==='percent' && card.boostValue>5;
+  return card.ov>=100;
+}
 function showFUTRevealSequence(card, onDone){
   const acc = cardAccent(card);
   const elite = card.ov>=90;
-  const mythic = card.ov>=100;
+  const mythic = isMythicReveal(card);
   const root = document.getElementById('modal-root');
   const overlay = document.createElement('div');
   overlay.className = 'cutscene-overlay' + (elite?' fut-elite':'') + (mythic?' fut-mythic':'');
@@ -12447,9 +12453,14 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
   const flagEl = el.querySelector('.nc-flag, .nc-flag-mono');
   const leagueEl = el.querySelector('.nc-league, .nc-league-mono');
   const clubEl = el.querySelector('.nc-club, .nc-club-mono');
-  // position is deliberately NOT first - it reveals alongside nation/liga/verein, not ahead of them
-  const identityEls = [flagEl, leagueEl, clubEl, posLabelEl].filter(Boolean);
+  // a manager has no position/league to speak of - only nation + club get revealed for him.
+  // for a player, position is deliberately NOT first - it reveals alongside nation/liga/verein,
+  // not ahead of them.
+  const identityEls = card.isManager
+    ? [flagEl, clubEl].filter(Boolean)
+    : [flagEl, leagueEl, clubEl, posLabelEl].filter(Boolean);
   const finalOv = card.ov;
+  const boostText = card.isManager ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue}`) : '';
   if(ovEl) ovEl.textContent = ''; // stays blank until the count-up actually starts, not a placeholder "0"
   if(nameEl){ nameEl.style.opacity='0'; nameEl.style.transition='opacity 1.2s ease'; }
   if(photoImg){ photoImg.style.opacity='0'; photoImg.style.transition='opacity 1.5s ease'; }
@@ -12472,7 +12483,7 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
     done = true;
     timers.forEach(t=>clearTimeout(t));
     revealIdentityAll();
-    if(ovEl) ovEl.textContent = finalOv;
+    if(ovEl) ovEl.textContent = card.isManager ? boostText : finalOv;
     statEls.forEach((s,i)=>{ s.style.opacity='1'; if(statBars[i]){ statBars[i].style.transition=''; statBars[i].style.width=statTargetWidths[i]; } });
     revealNamePhoto();
     onSequenceDone();
@@ -12489,17 +12500,27 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
     timers.push(setTimeout(()=>{ revealNamePhoto(); done=true; onSequenceDone(); }, statEls.length*380+800));
   }
   function tweenOv(){
-    const dur = 3800, start = performance.now();
+    // a manager's boost counts up twice as slowly as a player's OVR - it's the ONLY thing he has to
+    // reveal, so it gets to be the whole show
+    const dur = card.isManager ? 7600 : 3800, start = performance.now();
     function tick(now){
       const t = Math.min(1, (now-start)/dur);
       const eased = 1-Math.pow(1-t,3);
-      if(ovEl) ovEl.textContent = Math.round(finalOv*eased);
+      if(ovEl){
+        if(card.isManager){
+          const val = Math.round(card.boostValue*eased);
+          ovEl.textContent = card.boostType==='percent' ? `+${val}%` : `+${val}`;
+        } else {
+          ovEl.textContent = Math.round(finalOv*eased);
+        }
+      }
       if(t<1) requestAnimationFrame(tick);
       else scheduleStats();
     }
     requestAnimationFrame(tick);
   }
-  // POS -> Nation -> Liga -> Verein each pop in one at a time before the OVR starts counting up
+  // Nation -> Club (Position/Liga only for players, see identityEls above) each pop in one at a time
+  // before the rating/boost starts counting up
   function scheduleIdentity(){
     identityEls.forEach((elm,i)=>{
       timers.push(setTimeout(()=>{
@@ -12515,7 +12536,7 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
 }
 function showCutscene(card, onDone){
   const acc = cardAccent(card);
-  const mythic = !card.isManager && card.ov>=100;
+  const mythic = isMythicReveal(card);
   const root = document.getElementById('modal-root');
   const overlay = document.createElement('div');
   overlay.className = 'cutscene-overlay' + (mythic?' cs-mythic':'');
@@ -12535,7 +12556,7 @@ function showCutscene(card, onDone){
     cardWrap.appendChild(cardEl(card));
   }
   root.appendChild(overlay);
-  playSfx('cardReveal', card.ov>=100?3:(card.ov>=95?2:(card.ov>=90?1:0)));
+  playSfx('cardReveal', mythic?3:(card.ov>=95?2:(card.ov>=90?1:0)));
   let done=false;
   overlay.addEventListener('click', ()=>{
     if(done) return;
