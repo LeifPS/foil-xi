@@ -13899,6 +13899,11 @@ function initGlobalSfxListeners(){
 }
 let queueActive = false;
 let autorollEnabled = false;
+// tracks whether the CURRENT (or most recently started) queue search was kicked off by the player
+// manually tapping "Gegner suchen" vs. Autoroll firing it automatically - read by applyMatchResult
+// so a manually-initiated match always pays out full coins, bypassing the daily-fairness reduction
+// that only exists to soften pure AFK-autoroll farming (see dailyRewardMultiplier).
+let lastQueueWasManual = true;
 let queueTimer = null;
 let inMatch = false; // true for the entire duration of an actual match (not just searching), prevents any overlap
 let tournamentLiveRefreshTimer = null;
@@ -14912,6 +14917,7 @@ async function loadMyTournamentResults(){
 
 async function challengeFriend(friend){
   if(queueActive || inMatch || pendingDuelId) return;
+  lastQueueWasManual = true; // a friend duel is always explicitly initiated by hand - full coins
   pendingDuelId = 'pending'; // temporary sentinel set synchronously to block a second near-simultaneous call
   const {rating, filled} = squadRating();
   if(filled<11){ pendingDuelId=null; toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
@@ -15027,6 +15033,7 @@ async function loadIncomingDuels(){
           await fb.setDoc(fb.doc(fb.db,'matches',matchId), stripUndefined(matchDoc));
           await fb.setDoc(fb.doc(fb.db,'duels',duel.id), {status:'accepted', matchId}, {merge:true});
           invalidateReadCache('incoming-duels:'+profile.userId);
+          lastQueueWasManual = true; // accepting a duel is always an explicit manual action - full coins
           enterSyncedMatch(matchDoc);
         }catch(e){ console.warn('accept duel failed', e); toast('Herausforderung konnte nicht angenommen werden.'); acceptBtn.disabled=false; declineBtn.disabled=false; }
       });
@@ -15157,6 +15164,7 @@ function renderTournamentPanel(){
 }
 async function playTournamentRound(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
+  lastQueueWasManual = true; // "Spiel starten" is always an explicit manual tap - full coins
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const t = profile.tournament;
@@ -16738,7 +16746,7 @@ function renderPlay(view){
   }
   document.getElementById('autoroll-toggle').addEventListener('change', e=>{
     autorollEnabled = e.target.checked;
-    if(autorollEnabled && !queueActive && !inMatch){ joinQueue(); }
+    if(autorollEnabled && !queueActive && !inMatch){ joinQueue(false); }
     else if(!autorollEnabled) toast('Autoroll gestoppt.');
   });
   document.getElementById('friend-add').addEventListener('click', ()=>{
@@ -17574,7 +17582,9 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   // well behind the current net-worth leader (see dailyRewardMultiplier/catchUpBonusPct above)
   const today = localDateStr(new Date());
   const priorTracker = (profile.dailyRewardTracker && profile.dailyRewardTracker.date===today) ? profile.dailyRewardTracker : {date:today, count:0};
-  const dailyMult = dailyRewardMultiplier(priorTracker.count);
+  // manually tapping "Gegner suchen" yourself always pays full coins - the daily-fairness reduction
+  // only kicks in for matches Autoroll queued up on its own (see lastQueueWasManual)
+  const dailyMult = lastQueueWasManual ? 1 : dailyRewardMultiplier(priorTracker.count);
   const catchUpPct = await catchUpBonusPct();
   const totalMult = dailyMult * (1+catchUpPct/100);
   const finalReward = Math.round(reward*totalMult);
@@ -17665,7 +17675,7 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
       note.textContent = 'Autoroll: n\u00e4chstes Spiel startet in 4s\u2026';
       area.appendChild(note);
     }
-    setTimeout(()=>{ if(autorollEnabled && !queueActive && !inMatch) joinQueue(); }, 4000);
+    setTimeout(()=>{ if(autorollEnabled && !queueActive && !inMatch) joinQueue(false); }, 4000);
   }
   return {result, winnerSide};
 }
@@ -18104,9 +18114,10 @@ async function enterSyncedMatch(matchDoc){
     inMatch = false;
   }
 }
-async function joinQueue(){
+async function joinQueue(manual=true){
   if(queueActive || inMatch || pendingDuelId) return; // already searching, already in a match, or awaiting a challenge reply
   queueActive = true;
+  lastQueueWasManual = manual;
   const {rating, filled} = squadRating();
   if(filled<11){ queueActive=false; toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   await fbReady;
