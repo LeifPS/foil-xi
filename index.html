@@ -6343,7 +6343,7 @@ function weekPassRewardLabel(reward){
   if(reward.type==='coins') return `${formatCoins(reward.amount)} Coins`;
   if(reward.type==='card'){ const card = BY_ID.get(reward.cardId); return card ? `${card.n} (${card.variantLabel})` : 'Exklusive Karte'; }
   const pack = PACKS.find(p=>p.id===reward.packId);
-  return pack ? `${pack.name} (UT) ${UT_PACK_ICON}` : 'Pack';
+  return pack ? `${pack.name} ${UT_PACK_ICON}` : 'Pack';
 }
 async function claimWeekPassReward(level){
   const wp = profile.weekPass;
@@ -6368,7 +6368,7 @@ async function claimWeekPassReward(level){
     // Wochen-Pass-Packs are always UT (untradable) - a per-instance flag on the collection entry
     // (see addCardsToCollection/leveledOwnedCard), not on the shared card type, so a normally-bought
     // copy of the same card from the store stays tradable as usual
-    if(pack) showPackOpening({...pack, name:`${pack.name} (UT)`}, pack.draw(), {untradable:true});
+    if(pack) showPackOpening({...pack, name:`${pack.name} ${UT_PACK_ICON}`}, pack.draw(), {untradable:true});
   }
   if(currentTab==='week') renderWeekPass(document.getElementById('view'));
 }
@@ -12719,9 +12719,11 @@ function openAdminSendCardModal(targetId, data){
 // a card that should have come from a UT source, without touching any other copy of that same card
 function openAdminMakeUntradableModal(targetId, data){
   const targetCollection = (data.collection || []).slice();
+  const missingCount = targetCollection.filter(entry=>!BY_ID.get(entry.cardId)).length;
   openModal(`
     <h2 style="margin-bottom:4px;">Karten von ${targetId} nachträglich UT machen</h2>
-    <p class="hint" style="margin:0 0 12px;">Klicken schaltet Untauschbar für genau diese Karte um — andere Karten desselben Typs sind nicht betroffen.</p>
+    <p class="hint" style="margin:0 0 6px;">Klicken schaltet Untauschbar für genau diese Karte um — andere Karten desselben Typs sind nicht betroffen.</p>
+    <p class="hint" style="margin:0 0 12px;">${targetCollection.length} Karten insgesamt${missingCount ? ` (${missingCount} davon mit unbekannter cardId, werden nicht angezeigt)` : ''}.</p>
     <input id="admin-ut-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:0 0 12px;">
     <div class="picker-list" id="admin-ut-results" style="max-height:400px;overflow-y:auto;"></div>`);
   const input = document.getElementById('admin-ut-search');
@@ -12729,13 +12731,10 @@ function openAdminMakeUntradableModal(targetId, data){
   const renderList = ()=>{
     const q = input.value.trim().toLowerCase();
     results.innerHTML = '';
-    let shown = 0;
     targetCollection.forEach((entry, idx)=>{
-      if(q.length<2 && shown>=100) return; // cap the unfiltered view - search narrows down a big collection
       const base = BY_ID.get(entry.cardId);
       if(!base) return;
       if(q.length>=2 && !base.n.toLowerCase().includes(q)) return;
-      shown++;
       const card = applyCardLevel(base, entry.xp, entry.uid, entry.untradable);
       const wrap = document.createElement('div');
       wrap.style.cssText = 'cursor:pointer;position:relative;';
