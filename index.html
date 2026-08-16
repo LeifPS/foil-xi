@@ -8252,8 +8252,11 @@ function buildSbcTile(sbc, poolFree, poolWithSquad){
       <span class="sbc-reward-label">${rewardInfo.label}</span>
     </div>
     ${progressHTML}
-    <button class="sbc-build-btn" ${done||locked||feas==='none'?'disabled':''}>${btnLabel}</button>`;
-  if(!done && !locked && feas!=='none') card.querySelector('.sbc-build-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
+    <button class="sbc-build-btn" ${done||locked?'disabled':''}>${btnLabel}</button>`;
+  // the "nicht erfüllbar" label above is only a heuristic solver's best guess (see trySolveSBC) and
+  // can occasionally false-negative even after fixing several such cases - always let the button open
+  // the real builder regardless of what it says, rather than trusting the guess enough to hard-block
+  if(!done && !locked) card.querySelector('.sbc-build-btn').addEventListener('click', ()=>openSBCBuilder(sbc));
   return card;
 }
 // every non-SBC challenge (match-based, all-or-nothing) rendered through the same tile+detail-view
