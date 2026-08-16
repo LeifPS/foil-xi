@@ -7548,27 +7548,14 @@ function sbcReqScore(sbc, cards){
   for(const r of sbc.reqs) if(r.check(cards)) s++;
   return s;
 }
-function trySolveSBC(sbc, pool, size, mode='highest'){
-  if(pool.length < size) return null;
-  const rap = x => computeRAP(x.card);
-  const nameCounts = {};
-  pool.forEach(x=>{ nameCounts[x.card.n] = (nameCounts[x.card.n]||0)+1; });
-  // always seed the search with the highest-OV crew, regardless of mode - starting 'cheapest'/'duplicates'
-  // from the worst-scoring initial pick (the actual cheapest/most-duplicated cards, often far from
-  // meeting an avgOv requirement) made the random hill-climb below unreliable for strict SBCs, since it
-  // isn't guaranteed to find a feasible combo within its iteration budget. 'highest' reliably finds a
-  // feasible combo when one exists; the refinement pass further down then optimizes toward cheaper/more-
-  // duplicated cards from that guaranteed-feasible baseline instead.
-  let current = pool.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, size);
+// deterministic steepest-ascent hill-climb from a given starting `size`-card seed: each iteration
+// tries every possible single swap and takes whichever one improves the requirement score the most.
+// Returns {current, outside, currentScore} - the caller decides whether currentScore reached target.
+function climbSbcFrom(sbc, pool, size, seed, target){
+  let current = seed;
   const inCurrent = new Set(current.map(x=>x.uid));
   let outside = pool.filter(x=>!inCurrent.has(x.uid));
   let currentScore = sbcReqScore(sbc, current.map(x=>x.card));
-  const target = sbc.reqs.length;
-  // deterministic steepest-ascent instead of random hill-climbing: each iteration tries every possible
-  // single swap and takes whichever one improves the score the most, rather than picking one random
-  // swap and hoping it helps. The old random approach could genuinely find a solution on one attempt
-  // and fail to find the exact same solution on the next attempt with the same collection, purely from
-  // bad luck in which swaps got tried within the iteration budget - this fixes that inconsistency.
   for(let iter=0; iter<Math.min(60, size*6) && currentScore<target; iter++){
     if(!outside.length) break;
     let bestOutIdx=-1, bestInIdx=-1, bestScore=currentScore;
@@ -7586,6 +7573,46 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
     currentScore = bestScore;
     outside = outside.slice();
     outside[bestInIdx] = removed;
+  }
+  return {current, outside, currentScore};
+}
+function trySolveSBC(sbc, pool, size, mode='highest'){
+  if(pool.length < size) return null;
+  const rap = x => computeRAP(x.card);
+  const nameCounts = {};
+  pool.forEach(x=>{ nameCounts[x.card.n] = (nameCounts[x.card.n]||0)+1; });
+  const target = sbc.reqs.length;
+  // always seed the search with the highest-OV crew, regardless of mode - starting 'cheapest'/'duplicates'
+  // from the worst-scoring initial pick (the actual cheapest/most-duplicated cards, often far from
+  // meeting an avgOv requirement) made the random hill-climb below unreliable for strict SBCs, since it
+  // isn't guaranteed to find a feasible combo within its iteration budget. 'highest' reliably finds a
+  // feasible combo when one exists; the refinement pass further down then optimizes toward cheaper/more-
+  // duplicated cards from that guaranteed-feasible baseline instead.
+  const topOvSeed = pool.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, size);
+  let {current, outside, currentScore} = climbSbcFrom(sbc, pool, size, topOvSeed, target);
+  // an "ALL cards must share property X" requirement (same nation/league) can never be discovered by
+  // the single-swap hill-climb above unless the top-OV seed already happens to contain enough matching
+  // cards - swapping in matching cards one at a time never improves the score until the very last swap
+  // completes the "all" condition, so the greedy search has no gradient to follow and gives up. Fix:
+  // for SBCs that declare a groupKey (e.g. 'nat' or 'lg'), also try seeding directly from the top-OV
+  // cards WITHIN each large-enough group - if the player genuinely owns enough matching cards, that
+  // seed starts already satisfying the "all" requirement, and the climb only needs to improve any
+  // remaining (non-all) requirements from there.
+  if(currentScore<target && sbc.groupKey){
+    const groups = new Map();
+    pool.forEach(x=>{
+      const key = x.card[sbc.groupKey];
+      if(key==null) return;
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(x);
+    });
+    for(const members of groups.values()){
+      if(currentScore>=target) break;
+      if(members.length<size) continue;
+      const groupSeed = members.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, size);
+      const attempt = climbSbcFrom(sbc, pool, size, groupSeed, target);
+      if(attempt.currentScore>currentScore) ({current, outside, currentScore} = attempt);
+    }
   }
   if(currentScore<target) return null;
   // refinement pass: once ANY valid combo is found, try to swap each card for a cheaper/more-duplicate
@@ -7740,10 +7767,10 @@ const SBC_DEFS = [
     reqs:[ req('Beide sind St\u00fcrmer', c=>c.every(x=>cardInPosGroup(x,'FWD')), c=>`${c.filter(x=>cardInPosGroup(x,'FWD')).length} / 2 St\u00fcrmer`),
            req('Durchschnittsrating 76+', c=>avgOv(c)>=76, c=>`${avgOv(c)} / 76`) ]},
   // --- medium (5-7 players) ---
-  {id:'one_nation', name:'Eine Nation', reward:'derby', size:6, tier:'Mittel',
+  {id:'one_nation', name:'Eine Nation', reward:'derby', size:6, tier:'Mittel', groupKey:'nat',
     desc:'Alle 6 Spieler m\u00fcssen dieselbe Nationalit\u00e4t haben.',
     reqs:[ req('Gleiche Nationalit\u00e4t', c=>new Set(c.map(x=>x.nat)).size===1, c=>`${new Set(c.map(x=>x.nat)).size} Nationen verwendet`) ]},
-  {id:'league_royalty', name:'Liga-K\u00f6nigsklasse', reward:'raregold', size:5, tier:'Mittel',
+  {id:'league_royalty', name:'Liga-K\u00f6nigsklasse', reward:'raregold', size:5, tier:'Mittel', groupKey:'lg',
     desc:'Alle 5 Spieler aus derselben Liga.',
     reqs:[ req('Gleiche Liga', c=>new Set(c.map(x=>x.lg)).size===1, c=>`${new Set(c.map(x=>x.lg)).size} Ligen verwendet`) ]},
   {id:'special_selection', name:'Sonderauswahl', reward:'iconmoment', size:7, tier:'Mittel',
@@ -7777,11 +7804,11 @@ const SBC_DEFS = [
     desc:'5 Spieler mit gro\u00dfem Entwicklungspotenzial (Potenzial mindestens 5 Punkte \u00fcber Rating), Durchschnittsrating 75+.',
     reqs:[ req('Alle mit Potenzial-Sprung 5+', c=>c.every(x=>(x.pot-x.ov)>=5), c=>`${c.filter(x=>(x.pot-x.ov)>=5).length} / 5 mit gro\u00dfem Potenzial`),
            req('Durchschnittsrating 75+', c=>avgOv(c)>=75, c=>`${avgOv(c)} / 75`) ]},
-  {id:'premier_power', name:'Premier-League-Power', reward:'tots', size:6, tier:'Mittel',
+  {id:'premier_power', name:'Premier-League-Power', reward:'tots', size:6, tier:'Mittel', groupKey:'lg',
     desc:'6 Spieler aus der Premier League, Durchschnittsrating 83+.',
     reqs:[ req('Alle aus der Premier League', c=>c.every(x=>x.lg==='Premier League'), c=>`${c.filter(x=>x.lg==='Premier League').length} / 6`),
            req('Durchschnittsrating 83+', c=>avgOv(c)>=83, c=>`${avgOv(c)} / 83`) ]},
-  {id:'la_liga_gala', name:'La-Liga-Gala', reward:'tots', size:6, tier:'Mittel',
+  {id:'la_liga_gala', name:'La-Liga-Gala', reward:'tots', size:6, tier:'Mittel', groupKey:'lg',
     desc:'6 Spieler aus La Liga, Durchschnittsrating 83+.',
     reqs:[ req('Alle aus La Liga', c=>c.every(x=>x.lg==='La Liga'), c=>`${c.filter(x=>x.lg==='La Liga').length} / 6`),
            req('Durchschnittsrating 83+', c=>avgOv(c)>=83, c=>`${avgOv(c)} / 83`) ]},
@@ -7807,7 +7834,7 @@ const SBC_DEFS = [
     desc:'11 Spieler aus mindestens 8 verschiedenen Nationen, Durchschnittsrating 85+.',
     reqs:[ req('8+ verschiedene Nationen', c=>new Set(c.map(x=>x.nat)).size>=8, c=>`${new Set(c.map(x=>x.nat)).size} / 8 Nationen`),
            req('Durchschnittsrating 85+', c=>avgOv(c)>=85, c=>`${avgOv(c)} / 85`) ]},
-  {id:'liga_dynastie', name:'Ein-Liga-Dynastie', reward:'twoof95', size:11, tier:'Fortgeschritten',
+  {id:'liga_dynastie', name:'Ein-Liga-Dynastie', reward:'twoof95', size:11, tier:'Fortgeschritten', groupKey:'lg',
     desc:'Alle 11 Spieler aus derselben Liga, Durchschnittsrating 88+.',
     reqs:[ req('Gleiche Liga', c=>new Set(c.map(x=>x.lg)).size===1, c=>`${new Set(c.map(x=>x.lg)).size} Ligen verwendet`),
            req('Durchschnittsrating 88+', c=>avgOv(c)>=88, c=>`${avgOv(c)} / 88`) ]},
@@ -7860,7 +7887,7 @@ const SBC_DEFS = [
   {id:'olise_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
-  {id:'olise_quest_nation', name:'Équipe de France', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1,
+  {id:'olise_quest_nation', name:'Équipe de France', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1, groupKey:'nat',
     desc:'7 Spieler, alle aus Frankreich (Olises Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Frankreich', c=>c.every(x=>x.nat==='France'), c=>`${c.filter(x=>x.nat==='France').length} / 7 aus Frankreich`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
@@ -7883,7 +7910,7 @@ const SBC_DEFS = [
   {id:'alisson_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
-  {id:'alisson_quest_nation', name:'Seleção Brasileira', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1,
+  {id:'alisson_quest_nation', name:'Seleção Brasileira', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1, groupKey:'nat',
     desc:'7 Spieler, alle aus Brasilien (Alissons Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Brasilien', c=>c.every(x=>x.nat==='Brazil'), c=>`${c.filter(x=>x.nat==='Brazil').length} / 7 aus Brasilien`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
@@ -7906,7 +7933,7 @@ const SBC_DEFS = [
   {id:'yamal_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
-  {id:'yamal_quest_nation', name:'España', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1,
+  {id:'yamal_quest_nation', name:'España', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1, groupKey:'nat',
     desc:'7 Spieler, alle aus Spanien (Yamals Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Spanien', c=>c.every(x=>x.nat==='Spain'), c=>`${c.filter(x=>x.nat==='Spain').length} / 7 aus Spanien`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
@@ -7929,7 +7956,7 @@ const SBC_DEFS = [
   {id:'rudiger_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
-  {id:'rudiger_quest_nation', name:'Deutsche Elf', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1,
+  {id:'rudiger_quest_nation', name:'Deutsche Elf', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1, groupKey:'nat',
     desc:'7 Spieler, alle aus Deutschland (Rüdigers Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Deutschland', c=>c.every(x=>x.nat==='Germany'), c=>`${c.filter(x=>x.nat==='Germany').length} / 7 aus Deutschland`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
@@ -7952,7 +7979,7 @@ const SBC_DEFS = [
   {id:'haaland_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
-  {id:'haaland_quest_nation', name:'Norge', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1,
+  {id:'haaland_quest_nation', name:'Norge', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1, groupKey:'nat',
     desc:'7 Spieler, alle aus Norwegen (Haalands Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Norwegen', c=>c.every(x=>x.nat==='Norway'), c=>`${c.filter(x=>x.nat==='Norway').length} / 7 aus Norwegen`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
@@ -7975,7 +8002,7 @@ const SBC_DEFS = [
   {id:'chong_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
-  {id:'chong_quest_nation', name:'Karibik-Talent', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1,
+  {id:'chong_quest_nation', name:'Karibik-Talent', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1, groupKey:'nat',
     desc:'7 Spieler, Durchschnittsrating 91+, mindestens 1 davon aus Curaçao (Chongs Heimatland - er ist die einzige Curaçao-Karte im ganzen Spiel, "alle 7" wäre also unmöglich). Belohnung: 2.000 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`),
            req('1+ aus Curaçao', c=>c.filter(x=>x.nat==='Curacao').length>=1, c=>`${c.filter(x=>x.nat==='Curacao').length} / 1 aus Curaçao`) ]},
@@ -7998,7 +8025,7 @@ const SBC_DEFS = [
   {id:'pina_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
     desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
     reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
-  {id:'pina_quest_nation', name:'España', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1,
+  {id:'pina_quest_nation', name:'España', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1, groupKey:'nat',
     desc:'7 Spieler, alle aus Spanien (Pinas Heimatland), mindestens 3 davon über 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Spanien', c=>c.every(x=>x.nat==='Spain'), c=>`${c.filter(x=>x.nat==='Spain').length} / 7 aus Spanien`),
            req('3+ über 90 OVR', c=>c.filter(x=>x.ov>90).length>=3, c=>`${c.filter(x=>x.ov>90).length} / 3 über 90 OVR`) ]},
