@@ -8138,27 +8138,11 @@ async function claimDraftReward(maxed){
   renderDraftPanel();
 }
 const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest'};
-const SBC_TIER_ACCENT = {'Einsteiger':'var(--turf-bright)', 'Mittel':'#4da8ff', 'Fortgeschritten':'#c78bf5', 'QUEST':'#ff2e63', 'Einzigartig':'#d9eef2'};
 // every SBC not already folded into a WM/PROMO quest event - each now gets its own tile in the unified
 // Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
 // opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
 function standaloneSbcDefs(){
   return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id));
-}
-async function openSbcChallengeDetail(sbc){
-  const view = document.getElementById('view');
-  view.innerHTML = `
-    <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc}</p></div>
-    <div class="toolbar"><button class="action-btn secondary" id="challenge-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
-    <div class="sbc-grid" id="sbc-challenge-tile"><p class="hint">Prüfe Erfüllbarkeit…</p></div>`;
-  document.getElementById('challenge-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
-  const squadLocked = new Set(Object.values(squad.slots));
-  const externalLocked = await getExternalLockedUids();
-  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
-  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
-  const poolWithSquad = allCards;
-  const container = document.getElementById('sbc-challenge-tile');
-  if(container){ container.innerHTML = ''; container.appendChild(buildSbcTile(sbc, poolFree, poolWithSquad)); }
 }
 const FEAS_INFO = {
   free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
@@ -8249,10 +8233,21 @@ function openChallengeDetail(def){
   document.getElementById('challenge-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   def.renderFn();
 }
-function renderChallengeGrid(){
+// preserves the Herausforderungen grid's scroll position across a visit to a challenge/SBC detail page
+// and back - saved via one delegated capture-phase listener on the grid (below) rather than editing
+// every individual tile's click handler, restored once renderChallengeGrid rebuilds the list (see end
+// of this function)
+let sbcListScrollY = 0;
+async function renderChallengeGrid(){
   const grid = document.getElementById('challenge-grid');
   if(!grid) return;
   grid.innerHTML = '';
+  grid.addEventListener('click', ()=>{ sbcListScrollY = window.scrollY; }, {capture:true});
+  const squadLocked = new Set(Object.values(squad.slots));
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !externalLocked.has(x.uid));
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  const poolWithSquad = allCards;
   if(wmQuestVisible()){
     const active = wmQuestActive();
     const tile = document.createElement('div');
@@ -8419,29 +8414,20 @@ function renderChallengeGrid(){
     });
     grid.appendChild(tile);
   });
+  // buildSbcTile already covers everything the old hand-rolled tile here did (progress dots, done/
+  // locked state) plus feasibility against poolFree/poolWithSquad, computed once above - so every
+  // standalone SBC now shows "Erf\u00fcllbar" / "Nur mit Kader-Aufl\u00f6sung" / "Aktuell nicht erf\u00fcllbar" right
+  // in the grid, and its own Bauen button goes straight to openSBCBuilder (no more detail-page hop).
   standaloneSbcDefs().forEach(sbc=>{
-    const completions = sbcCompletions(sbc.id);
-    const maxC = sbcMaxCompletions(sbc);
-    const done = completions>=maxC;
-    const accent = SBC_TIER_ACCENT[sbc.tier] || 'var(--muted)';
-    const statusHTML = maxC>1
-      ? `<div class="sbc-progress-dots" title="${completions} / ${maxC} abgeschlossen">${Array.from({length:maxC},(_,i)=>`<span class="sbc-dot ${i<completions?'filled':''}"></span>`).join('')}</div>`
-      : (completions>0 ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : '');
-    const tile = document.createElement('div');
-    tile.className = 'sbc-card';
-    tile.style.borderLeftColor = accent;
-    tile.style.cursor = 'pointer';
-    tile.innerHTML = challengeTileHTML({name:sbc.name, pill:sbc.tier, desc:sbc.desc, accent}, statusHTML);
-    if(done) tile.style.opacity = '.7';
-    tile.addEventListener('click', ()=>openSbcChallengeDetail(sbc));
-    grid.appendChild(tile);
+    grid.appendChild(buildSbcTile(sbc, poolFree, poolWithSquad));
   });
+  requestAnimationFrame(()=>window.scrollTo(0, sbcListScrollY));
 }
 async function renderSBCList(view){
   view.innerHTML = `
-    <div class="view-head"><h2>Herausforderungen</h2><p>W\u00e4hle eine Karte: Match-Herausforderungen gegen harte Fantasie-Gegner oder SBCs, die einen Kader aus deinem Verein verlangen, der die Anforderungen erf\u00fcllt. Jede \u00f6ffnet eine eigene Detailseite mit dem passenden Kartenbau.</p></div>
+    <div class="view-head"><h2>Herausforderungen</h2><p>W\u00e4hle eine Karte: Match-Herausforderungen gegen harte Fantasie-Gegner oder SBCs, die einen Kader aus deinem Verein verlangen, der die Anforderungen erf\u00fcllt. Jede zeigt sofort, ob sie mit deinem aktuellen Kader erf\u00fcllbar ist.</p></div>
     <div class="sbc-grid" id="challenge-grid"></div>`;
-  renderChallengeGrid();
+  await renderChallengeGrid();
 }
 function sbcRewardDisplay(sbc){
   if(sbc.directCard==='BALLONDOR_CARD'){
@@ -10622,13 +10608,15 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
   const boostText = card.isManager ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue}`) : '';
   const nameClass = (hasVariant || card.isManager) ? ' name-variant' : '';
   const badge = hasVariant && VARIANT_ICON[card.theme] ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON[card.theme]}</svg></div>` : (card.isManager ? `<div class="variant-badge"><svg viewBox="0 0 24 24">${VARIANT_ICON.manager}</svg></div>` : '');
-  // player leveling: Bronze/Silber/Gold badge on the card border, bottom-center, only for owned cards
-  // (card.uid set - see leveledOwnedCard/ownedCard) that have actually reached a level. Sits half outside
-  // the card edge (see .pcard's overflow:visible) and is clickable to open the XP progress modal - see
-  // the listener attached after div.innerHTML is set below.
+  // player leveling: Bronze/Silber/Gold badge on the card border, bottom-center, for any card carrying
+  // a level>0 - normally that's only an owned card (card.uid set - see leveledOwnedCard/ownedCard), but
+  // an opponent's real lineup in the pre-match reveal also carries a resolved level (see resolveCardRefs)
+  // without a uid, and should still show their badge. Sits half outside the card edge (see .pcard's
+  // overflow:visible); clickable to open the XP progress modal only when uid is present (see the
+  // listener attached after div.innerHTML is set below) - an opponent's card has no XP data to show.
   const levelBadgeIcon = `<svg viewBox="0 0 24 24"><path d="M12 4l2 4.8 5 .4-3.8 3.4 1.2 5-4.4-2.6-4.4 2.6 1.2-5-3.8-3.4 5-.4z" fill="currentColor"/></svg>`;
-  const levelBadge = (!card.isManager && card.uid && card.level>0)
-    ? `<div class="level-badge lvl${card.level}" title="${CARD_LEVEL_LABEL[card.level]} — Level-Fortschritt ansehen">${levelBadgeIcon}</div>`
+  const levelBadge = (!card.isManager && card.level>0)
+    ? `<div class="level-badge lvl${card.level}" title="${CARD_LEVEL_LABEL[card.level]}${card.uid ? ' — Level-Fortschritt ansehen' : ''}">${levelBadgeIcon}</div>`
     : '';
   const photoInner = card.isManager
     ? `<div class="avatar">${initialsOf(card.n)}</div>`
@@ -10697,7 +10685,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null){
     <div class="card-body">
       ${bodyInner}
     </div>`;
-  if(levelBadge){
+  if(levelBadge && card.uid){
     div.querySelectorAll('.level-badge').forEach(lvlEl=>{
       lvlEl.addEventListener('click', (e)=>{ e.stopPropagation(); openCardXpModal(card); });
     });
@@ -16597,12 +16585,17 @@ function getMySquadCardRefs(){
   form.slots.forEach(slot=>{
     const uid = squad.slots[slot.id];
     const card = uid ? ownedCard(uid) : null;
-    if(card) refs.push({id:card.id, pos:slot.label});
+    if(card) refs.push({id:card.id, pos:slot.label, level:card.level||0});
   });
   return refs;
 }
 function resolveCardRefs(refs){
-  return (refs||[]).map(r=>({card:BY_ID.get(r.id), pos:r.pos})).filter(x=>x.card);
+  // shallow-copy each resolved card (never mutate the shared BY_ID object) so the opponent's real
+  // level can be attached for display in the pre-match lineup reveal - see cardEl's level-badge
+  return (refs||[]).map(r=>{
+    const base = BY_ID.get(r.id);
+    return base ? {card:{...base, level:r.level||0}, pos:r.pos} : null;
+  }).filter(Boolean);
 }
 // splits a formation's outfield count into its real tactical lines, e.g. "4-2-3-1" -> [4,2,3,1] -
 // read straight off the formation label rather than a generic GK/DEF/MID/FWD bucket, so a 4-2-3-1's
