@@ -749,6 +749,17 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard .bar i{display:block;height:100%;background:var(--acc);border-radius:2px;}
 
 .pcard.mini{width:128px;height:204px;}
+/* compact pack tile for grids outside the Kartenladen itself (club inventory, market, trade) - same
+   footprint as a .pcard.mini so it lines up in the same .club-grid rows. */
+.pack-mini-tile{width:128px;height:204px;border-radius:12px;overflow:hidden;background:var(--panel2);
+  border:1px solid var(--line);display:flex;flex-direction:column;}
+.pack-mini-glyph{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
+  font-family:'Anton';font-size:26px;color:var(--chalk);
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,.04) 0 3px, transparent 3px 15px), linear-gradient(180deg,#1b2116,#12150d 85%);}
+.pack-mini-glyph.has-img{padding:0;}
+.pack-mini-glyph img{width:100%;height:100%;object-fit:cover;}
+.pack-mini-name{padding:7px 8px;font-size:11px;font-weight:600;text-align:center;line-height:1.25;
+  border-top:1px solid var(--line);background:var(--panel);}
 .pcard.mini .photo-frame{height:118px;}
 .pcard.mini .ov{font-size:20px;}
 .pcard.mini .ov-preview{font-size:9px;min-height:11px;}
@@ -1233,7 +1244,10 @@ function applyAppLogo(){
   // single HTML file), so build one in memory and link to it via a blob: URL instead.
   try{
     const manifest = {
-      name: 'FOIL ELEVEN', short_name: 'FOIL ELEVEN', start_url: '.', display: 'standalone',
+      // start_url must be absolute - the manifest itself is served from a blob: URL (no page base to
+      // resolve a relative '.' against), which is exactly what was causing Chrome's "start_url ignored,
+      // URL is invalid" warning
+      name: 'FOIL ELEVEN', short_name: 'FOIL ELEVEN', start_url: location.href, display: 'standalone',
       icons: [
         {src: APP_LOGO_DATA_URI, sizes: '256x256', type: 'image/png'},
         {src: APP_LOGO_DATA_URI, sizes: '512x512', type: 'image/png'},
@@ -7175,6 +7189,24 @@ function rapBadge(card, opts={}){
   el.addEventListener('touchend', (e)=>{ e.stopPropagation(); }, {passive:true});
   return el;
 }
+// ===== unopened packs: tradable/sellable/RAP'd inventory items, same idea as owned cards/managers
+// but opened via openOwnedPack() instead of used directly. Packs have no sales-history market (no
+// real price signal exists for them yet), so their RAP is simply their own Kartenladen cost - no
+// baseline-blending like computeRAP does for cards. =====
+function computePackRAP(pack){ return pack.cost; }
+// small pack visual for grids that aren't the Kartenladen itself (club inventory, market, trade) -
+// reuses the same glyph look as the store's pack-card, just compact, since a full player card layout
+// (cardEl) makes no sense for something that isn't a player.
+function packTileMiniEl(pack){
+  const div = document.createElement('div');
+  div.className = 'pack-mini-tile';
+  div.innerHTML = `
+    <div class="pack-mini-glyph${pack.img?' has-img':''}">
+      ${pack.img ? `<img src="${pack.img}" alt="" loading="lazy">` : `<div>${pack.count}</div>`}
+    </div>
+    <div class="pack-mini-name">${pack.name}</div>`;
+  return div;
+}
 // ===== club net worth leaderboard =====
 // Firestore can't sort by a derived value server-side, so each club denormalizes its own
 // net worth (coins + RAP of every owned card) into a dedicated 'networth' doc whenever
@@ -7183,6 +7215,7 @@ function computeMyNetWorth(){
   let total = profile.coins || 0;
   collection.forEach(c=>{ const card = leveledOwnedCard(c); if(card) total += computeRAP(card); });
   managerCollection.forEach(m=>{ const mgr = MGR_BY_ID.get(m.mgrId); if(mgr) total += computeRAP(mgr); });
+  packCollection.forEach(p=>{ const pack = PACKS.find(x=>x.id===p.packId); if(pack) total += computePackRAP(pack); });
   return Math.round(total);
 }
 // ===== playtime-fairness: players who can simply play far more end up with a permanently bigger
@@ -7272,11 +7305,13 @@ async function applyGreatReset(resetId){
   if(btn){ btn.disabled = true; btn.textContent = 'Wird zurückgesetzt…'; }
   collection = buildStarterCollection();
   managerCollection = [];
+  packCollection = [];
   squad = {formation:'433', slots:{}, managerUid:null, tactics:{...DEFAULT_TACTICS}};
   squadPresets = [];
   Object.assign(profile, greatResetProfilePatch(profile, resetId));
   await sSet('collection', collection);
   await sSet('managerCollection', managerCollection);
+  await sSet('packCollection', packCollection);
   await sSet('squad', squad);
   await sSet('squadPresets', squadPresets);
   await sSet('profile', profile);
@@ -9025,10 +9060,12 @@ const POS_GROUP_DE = {ANY:'Beliebig', GK:'Torh\u00fcter', DEF:'Verteidiger', MID
 const MGR_TIER_LIST = ['Bronze','Silber','Gold','Elite','Legend\u00e4r'];
 let tradeOfferCards = new Set();
 let tradeOfferManagers = new Set();
+let tradeOfferPacks = new Set();
 function describeOffer(t){
   const parts = [];
   if(t.offerCards.length) parts.push(`${t.offerCards.length} Karte${t.offerCards.length>1?'n':''}`);
   if(t.offerManagers && t.offerManagers.length) parts.push(`${t.offerManagers.length} Trainer`);
+  if(t.offerPacks && t.offerPacks.length) parts.push(`${t.offerPacks.length} Pack${t.offerPacks.length>1?'s':''}`);
   if(t.offerCoins) parts.push(`${formatCoins(t.offerCoins)} Coins`);
   return parts.join(' + ') || 'nichts';
 }
@@ -9137,15 +9174,16 @@ function drawMarketGrid(){
   if(!grid) return;
   let items = marketListingsCache.map(l=>{
     if(l.itemType==='manager') return {listing:l, card: MGR_BY_ID.get(l.cardId)};
+    if(l.itemType==='pack') return {listing:l, pack: PACKS.find(p=>p.id===l.cardId)};
     const base = BY_ID.get(l.cardId);
     return {listing:l, card: base ? applyCardLevel(base, l.xp||0, l.cardUid) : null};
-  }).filter(x=>x.card);
-  if(marketFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(marketFilter.q.toLowerCase()));
+  }).filter(x=>x.card || x.pack);
+  if(marketFilter.q) items = items.filter(x=>(x.card?x.card.n:x.pack.name).toLowerCase().includes(marketFilter.q.toLowerCase()));
   if(marketFilter.pos==='MGR') items = items.filter(x=>x.listing.itemType==='manager');
-  else if(marketFilter.pos!=='ALL') items = items.filter(x=>x.listing.itemType!=='manager' && posGroup(x.card.pos)===marketFilter.pos);
+  else if(marketFilter.pos!=='ALL') items = items.filter(x=>x.card && x.listing.itemType!=='manager' && posGroup(x.card.pos)===marketFilter.pos);
   if(marketFilter.sort==='price_asc') items.sort((a,b)=>a.listing.price-b.listing.price);
   else if(marketFilter.sort==='price_desc') items.sort((a,b)=>b.listing.price-a.listing.price);
-  else if(marketFilter.sort==='rating_desc') items.sort((a,b)=>b.card.ov-a.card.ov);
+  else if(marketFilter.sort==='rating_desc') items.sort((a,b)=>(b.card?b.card.ov:0)-(a.card?a.card.ov:0));
   else items.sort((a,b)=>b.listing.createdAt-a.listing.createdAt);
   // fairness cap: don't let one seller's bulk-listing crowd everyone else's offers out of view
   let hiddenCount = 0;
@@ -9167,23 +9205,33 @@ function drawMarketGrid(){
     note.textContent = `${hiddenCount} weitere Angebote ausgeblendet (max. ${MARKET_PER_SELLER_CAP} pro Verk\u00e4ufer gleichzeitig sichtbar, damit nicht ein einzelner Verk\u00e4ufer die Liste dominiert). Nutze die Suche, um gezielt nach mehr zu suchen.`;
     grid.appendChild(note);
   }
-  items.forEach(({listing,card})=>{
+  items.forEach(({listing,card,pack})=>{
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
     wrap.style.cursor = 'pointer';
-    wrap.appendChild(cardEl(card,'mini'));
-    wrap.appendChild(rapBadge(card, {style:'position:relative;z-index:2;'}));
+    if(pack){
+      wrap.appendChild(packTileMiniEl(pack));
+      const rap = document.createElement('div');
+      rap.className = 'mono rap-badge';
+      rap.style.cssText = 'text-align:center;font-size:9.5px;color:var(--gold);margin-top:3px;';
+      rap.textContent = `RAP ${formatCoins(computePackRAP(pack))}`;
+      wrap.appendChild(rap);
+    } else {
+      wrap.appendChild(cardEl(card,'mini'));
+      wrap.appendChild(rapBadge(card, {style:'position:relative;z-index:2;'}));
+    }
     const priceTag = document.createElement('div');
     priceTag.className = 'price-pill';
     priceTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;';
     priceTag.innerHTML = `<div class="pdot"></div>${formatCoins(listing.price)}`;
     wrap.appendChild(priceTag);
+    const item = card || pack;
     if(listing.sellerUserId===profile.userId){
       wrap.title = 'Klicken zum Verwalten';
-      wrap.addEventListener('click', ()=>openManageListingModal(listing, card));
+      wrap.addEventListener('click', ()=>openManageListingModal(listing, item));
     } else {
       wrap.title = 'Klicken zum Kaufen';
-      wrap.addEventListener('click', ()=>confirmBuyListing(listing, card));
+      wrap.addEventListener('click', ()=>confirmBuyListing(listing, item));
     }
     grid.appendChild(wrap);
   });
@@ -9204,6 +9252,7 @@ async function getExternalLockedUids(){
         if(t.status==='pending'){
           (t.offerCards||[]).forEach(c=>locked.add(c.uid));
           (t.offerManagers||[]).forEach(m=>locked.add(m.uid));
+          (t.offerPacks||[]).forEach(p=>locked.add(p.uid));
         }
       });
     }catch(e){ console.warn('trade lock check failed', e); }
@@ -9286,6 +9335,8 @@ function renderSellManual(allEligible, usedInSquad){
     <div class="club-grid" id="sell-pick-grid" style="max-height:240px;overflow:auto;margin-bottom:12px;"></div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
     <div class="club-grid" id="sell-pick-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Packs</div>
+    <div class="club-grid" id="sell-pick-pack-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
     <div class="toolbar" style="margin-bottom:14px;">
       <input id="sell-price" type="text" inputmode="decimal" placeholder="Preis pro Karte in Coins (z. B. 1.2m)">
     </div>
@@ -9351,6 +9402,25 @@ function renderSellManual(allEligible, usedInSquad){
       updateSel();
     });
     mGrid.appendChild(wrap);
+  });
+  const pkGrid = document.getElementById('sell-pick-pack-grid');
+  const ownedPacks = packCollection.map(p=>({uid:p.uid, pack:PACKS.find(x=>x.id===p.packId), packId:p.packId})).filter(x=>x.pack);
+  if(!ownedPacks.length){ pkGrid.innerHTML = '<p class="hint">Keine Packs im Besitz.</p>'; }
+  ownedPacks.forEach(({uid,pack,packId})=>{
+    const locked = usedInSquad.has(uid);
+    const wrap = document.createElement('div');
+    wrap.className='club-card-wrap'; wrap.style.cursor = locked?'not-allowed':'pointer';
+    wrap.style.opacity = locked ? '.45' : '1';
+    wrap.appendChild(packTileMiniEl(pack));
+    if(locked){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERFÜGBAR'; wrap.appendChild(b); }
+    if(selected.has(uid)) wrap.style.outline = '3px solid var(--turf-bright)';
+    wrap.addEventListener('click', ()=>{
+      if(locked){ toast('Dieses Pack ist gerade nicht verfügbar (bereits gelistet oder in einem Angebot).'); return; }
+      if(selected.has(uid)){ selected.delete(uid); wrap.style.outline=''; }
+      else{ selected.set(uid, {uid, itemType:'pack', cardId:packId}); wrap.style.outline='3px solid var(--turf-bright)'; }
+      updateSel();
+    });
+    pkGrid.appendChild(wrap);
   });
   document.getElementById('sell-price').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('sell-submit').click(); });
   document.getElementById('sell-submit').addEventListener('click', async (e)=>{
@@ -9660,12 +9730,16 @@ async function withdrawMarketListing(listing){
   invalidateReadCache('external-locks:'+profile.userId);
   loadMarketListings();
 }
-function confirmBuyListing(listing, card){
+function confirmBuyListing(listing, item){
+  const isPack = listing.itemType==='pack';
+  const name = isPack ? item.name : item.n;
+  const visualHTML = isPack ? packTileMiniEl(item).outerHTML : cardEl(item,'mini').outerHTML;
+  const rap = isPack ? computePackRAP(item) : computeRAP(item);
   openModal(`
-    <h2 style="margin-bottom:10px;">${card.n} kaufen?</h2>
-    <div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(card,'mini').outerHTML}</div>
+    <h2 style="margin-bottom:10px;">${name} kaufen?</h2>
+    <div style="display:flex;justify-content:center;margin-bottom:14px;">${visualHTML}</div>
     <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:4px;">${formatCoins(listing.price)} Coins</p>
-    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(computeRAP(card))}</b> \u00b7 Verk\u00e4ufer: <b>${listing.sellerName||'Unbekannt'}</b></p>
+    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b> \u00b7 Verk\u00e4ufer: <b>${listing.sellerName||'Unbekannt'}</b></p>
     <div style="display:flex;gap:10px;justify-content:center;">
       <button class="action-btn secondary" id="cancel-buy" style="width:120px;">Abbrechen</button>
       <button class="action-btn" id="do-buy" style="width:120px;">Kaufen</button>
@@ -9676,12 +9750,16 @@ function confirmBuyListing(listing, card){
     buyMarketListing(listing);
   });
 }
-function openManageListingModal(listing, card){
+function openManageListingModal(listing, item){
+  const isPack = listing.itemType==='pack';
+  const name = isPack ? item.name : item.n;
+  const visualHTML = isPack ? packTileMiniEl(item).outerHTML : cardEl(item,'mini').outerHTML;
+  const rap = isPack ? computePackRAP(item) : computeRAP(item);
   openModal(`
-    <h2 style="margin-bottom:10px;">${card.n} \u2014 dein Angebot</h2>
-    <div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(card,'mini').outerHTML}</div>
+    <h2 style="margin-bottom:10px;">${name} \u2014 dein Angebot</h2>
+    <div style="display:flex;justify-content:center;margin-bottom:14px;">${visualHTML}</div>
     <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:4px;">${formatCoins(listing.price)} Coins</p>
-    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(computeRAP(card))}</b></p>
+    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b></p>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button class="action-btn" id="change-price-btn">Preis \u00e4ndern</button>
       <button class="action-btn secondary" id="withdraw-listing-btn" style="background:var(--danger);">Zur\u00fcckziehen</button>
@@ -9729,14 +9807,17 @@ async function buyMarketListing(listing){
     const sellerData = sellerSnap.data();
     let sellerCollection = sellerData.collection || [];
     let sellerManagerCollection = sellerData.managerCollection || [];
+    let sellerPackCollection = sellerData.packCollection || [];
     const isManager = listing.itemType==='manager';
-    const stillThere = isManager
-      ? sellerManagerCollection.some(m=>m.uid===listing.cardUid)
+    const isPack = listing.itemType==='pack';
+    const stillThere = isManager ? sellerManagerCollection.some(m=>m.uid===listing.cardUid)
+      : isPack ? sellerPackCollection.some(p=>p.uid===listing.cardUid)
       : sellerCollection.some(c=>c.uid===listing.cardUid);
-    if(!stillThere){ toast('Diese Karte ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
+    if(!stillThere){ toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
     // player leveling: carry the sold card's XP/level over to the buyer, same as direct trades
-    const soldEntryXp = isManager ? 0 : ((sellerCollection.find(c=>c.uid===listing.cardUid)||{}).xp||0);
+    const soldEntryXp = (isManager || isPack) ? 0 : ((sellerCollection.find(c=>c.uid===listing.cardUid)||{}).xp||0);
     if(isManager) sellerManagerCollection = sellerManagerCollection.filter(m=>m.uid!==listing.cardUid);
+    else if(isPack) sellerPackCollection = sellerPackCollection.filter(p=>p.uid!==listing.cardUid);
     else sellerCollection = sellerCollection.filter(c=>c.uid!==listing.cardUid);
     // pay the seller via an ATOMIC increment (not a snapshot-based overwrite) - this guarantees the
     // payment lands correctly even if the seller is doing something else concurrently (e.g. another
@@ -9748,13 +9829,14 @@ async function buyMarketListing(listing){
       sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
       await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile}, {merge:true});
     }
-    await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {collection:sellerCollection, managerCollection:sellerManagerCollection}, {merge:true});
+    await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {collection:sellerCollection, managerCollection:sellerManagerCollection, packCollection:sellerPackCollection}, {merge:true});
     try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
 
     if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
+    else if(isPack){ packCollection.push({uid:genId(), packId:listing.cardId}); await sSet('packCollection', packCollection); }
     else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp}); await sSet('collection', collection); }
     await atomicCoinChange(-listing.price);
-    recordSale(listing.cardId, listing.price);
+    if(!isPack) recordSale(listing.cardId, listing.price);
     closeModal();
     toast('Kauf erfolgreich!');
     invalidateReadCache('market-listings');
@@ -9843,10 +9925,14 @@ function showTradeCardsModal(t){
     const mgr = MGR_BY_ID.get(m.mgrId);
     if(mgr){ const wrap=document.createElement('div'); wrap.style.position='relative'; wrap.appendChild(cardEl(mgr,'mini')); wrap.appendChild(rapBadge(mgr)); grid.appendChild(wrap); }
   });
+  (t.offerPacks||[]).forEach(p=>{
+    const pack = PACKS.find(x=>x.id===p.packId);
+    if(pack){ const wrap=document.createElement('div'); wrap.style.position='relative'; wrap.appendChild(packTileMiniEl(pack)); grid.appendChild(wrap); }
+  });
   document.getElementById('trade-cards-close').addEventListener('click', closeModal);
 }
 async function openTradeBuilder(){
-  tradeOfferCards = new Set(); tradeOfferManagers = new Set();
+  tradeOfferCards = new Set(); tradeOfferManagers = new Set(); tradeOfferPacks = new Set();
   openModal(`<h2 style="margin-bottom:10px;">Neues Handelsangebot</h2><p class="hint" style="margin-top:0;">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p>`);
   const usedInSquad = await getLockedUids();
   openModal(`
@@ -9858,6 +9944,8 @@ async function openTradeBuilder(){
     <div class="club-grid" id="trade-pick-grid" style="max-height:260px;overflow:auto;margin-bottom:14px;"></div>
     <div class="lbl" style="margin:6px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Trainer (optional)</div>
     <div class="club-grid" id="trade-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
+    <div class="lbl" style="margin:6px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Packs (optional)</div>
+    <div class="club-grid" id="trade-pack-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
     <div class="toolbar" style="margin-bottom:14px;">
       <input id="trade-coins" type="text" inputmode="decimal" placeholder="Coins zus\u00e4tzlich anbieten (optional, z. B. 1.2m)">
     </div>
@@ -9942,6 +10030,25 @@ async function openTradeBuilder(){
     });
     mgrGrid.appendChild(wrap);
   });
+  const packGrid = document.getElementById('trade-pack-grid');
+  const ownedPacks = packCollection.map(p=>({uid:p.uid, pack:PACKS.find(x=>x.id===p.packId), packId:p.packId})).filter(x=>x.pack);
+  if(!ownedPacks.length){ packGrid.innerHTML = `<p class="hint">Noch keine Packs im Besitz.</p>`; }
+  ownedPacks.forEach(({uid,pack})=>{
+    const locked = usedInSquad.has(uid);
+    const wrap = document.createElement('div');
+    wrap.className = 'club-card-wrap';
+    wrap.style.cursor = locked ? 'not-allowed' : 'pointer';
+    wrap.style.opacity = locked ? '.45' : '1';
+    const el = packTileMiniEl(pack);
+    wrap.appendChild(el);
+    if(locked){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERFÜGBAR'; wrap.appendChild(b); }
+    wrap.addEventListener('click', ()=>{
+      if(locked){ toast('Dieses Pack ist gerade nicht verfügbar (bereits gelistet oder in einem Angebot).'); return; }
+      if(tradeOfferPacks.has(uid)){ tradeOfferPacks.delete(uid); el.style.outline=''; el.style.transform=''; }
+      else{ tradeOfferPacks.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
+    });
+    packGrid.appendChild(wrap);
+  });
   const kindSelect = document.getElementById('trade-want-kind');
   kindSelect.addEventListener('change', ()=>{
     document.getElementById('trade-want-coins').style.display = kindSelect.value==='coins' ? 'flex':'none';
@@ -9955,7 +10062,7 @@ async function openTradeBuilder(){
   });
 }
 async function submitTradeOffer(){
-  if(!tradeOfferCards.size && !tradeOfferManagers.size){ toast('W\u00e4hle mindestens eine Karte oder einen Trainer zum Anbieten aus.'); return; }
+  if(!tradeOfferCards.size && !tradeOfferManagers.size && !tradeOfferPacks.size){ toast('W\u00e4hle mindestens eine Karte, einen Trainer oder ein Pack zum Anbieten aus.'); return; }
   const targetRaw = document.getElementById('trade-target').value;
   const targetId = sanitizeClubId(targetRaw || '');
   if(!targetId){ toast('Bitte einen g\u00fcltigen Vereinsnamen eingeben.'); return; }
@@ -9990,11 +10097,15 @@ async function submitTradeOffer(){
     const entry = managerCollection.find(m=>m.uid===uid);
     return entry ? {uid, mgrId: entry.mgrId} : null;
   }).filter(Boolean);
-  if(!offerCards.length && !offerManagers.length){ toast('Deine Auswahl ist nicht mehr g\u00fcltig. Bitte erneut ausw\u00e4hlen.'); return; }
+  const offerPacks = [...tradeOfferPacks].map(uid=>{
+    const entry = packCollection.find(p=>p.uid===uid);
+    return entry ? {uid, packId: entry.packId} : null;
+  }).filter(Boolean);
+  if(!offerCards.length && !offerManagers.length && !offerPacks.length){ toast('Deine Auswahl ist nicht mehr g\u00fcltig. Bitte erneut ausw\u00e4hlen.'); return; }
   const tradeDoc = {
     fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
     toUserId: targetId, toName: targetRaw.trim(),
-    offerCards, offerManagers, offerCoins, want, status:'pending', createdAt: Date.now()
+    offerCards, offerManagers, offerPacks, offerCoins, want, status:'pending', createdAt: Date.now()
   };
   try{
     await fb.setDoc(fb.doc(fb.db,'trades', genId()), tradeDoc);
@@ -10046,19 +10157,22 @@ async function finalizeTradeAccept(t, payment){
     let senderProfile = senderData.profile || {coins:0};
     let senderCollection = senderData.collection || [];
     let senderManagerCollection = senderData.managerCollection || [];
+    let senderPackCollection = senderData.packCollection || [];
 
     const offerCardUids = new Set((t.offerCards||[]).map(c=>c.uid));
     const offerMgrUids = new Set((t.offerManagers||[]).map(m=>m.uid));
+    const offerPackUids = new Set((t.offerPacks||[]).map(p=>p.uid));
     // player leveling: XP/level must travel with a card through trading. Look up each offered card's
     // live XP from the sender's own collection (not from `t.offerCards`, which is just a snapshot from
     // when the offer was created) so XP earned after the offer went out still carries over correctly.
     const offerCardXpByUid = {};
     senderCollection.forEach(c=>{ if(offerCardUids.has(c.uid)) offerCardXpByUid[c.uid] = c.xp||0; });
-    // verify the sender still actually owns every offered card/manager - if any are gone
+    // verify the sender still actually owns every offered card/manager/pack - if any are gone
     // (already traded, sold, or used elsewhere), refuse rather than silently granting them for free
     const missingCards = [...offerCardUids].filter(uid=>!senderCollection.some(c=>c.uid===uid));
     const missingMgrs = [...offerMgrUids].filter(uid=>!senderManagerCollection.some(m=>m.uid===uid));
-    if(missingCards.length || missingMgrs.length){
+    const missingPacks = [...offerPackUids].filter(uid=>!senderPackCollection.some(p=>p.uid===uid));
+    if(missingCards.length || missingMgrs.length || missingPacks.length){
       toast('Der Absender besitzt nicht mehr alle angebotenen Karten \u2014 Angebot wurde ung\u00fcltig.');
       try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(_){}
       closeModal(); loadTrades(); return;
@@ -10073,6 +10187,7 @@ async function finalizeTradeAccept(t, payment){
 
     senderCollection = senderCollection.filter(c=>!offerCardUids.has(c.uid));
     senderManagerCollection = senderManagerCollection.filter(m=>!offerMgrUids.has(m.uid));
+    senderPackCollection = senderPackCollection.filter(p=>!offerPackUids.has(p.uid));
     const senderCoinDelta = (payment.coins||0) - (t.offerCoins||0);
 
     payment.cardUids.forEach(uid=>{
@@ -10092,15 +10207,17 @@ async function finalizeTradeAccept(t, payment){
       senderProfile.coins = (senderProfile.coins||0) + senderCoinDelta;
       await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile}, {merge:true});
     }
-    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {collection:senderCollection, managerCollection:senderManagerCollection}, {merge:true});
+    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {collection:senderCollection, managerCollection:senderManagerCollection, packCollection:senderPackCollection}, {merge:true});
     try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(_){}
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
     if(payment.managerUid) managerCollection = managerCollection.filter(m=>m.uid!==payment.managerUid);
     (t.offerCards||[]).forEach(c=>collection.push({uid:genId(), cardId:c.cardId, xp:offerCardXpByUid[c.uid]||0}));
     (t.offerManagers||[]).forEach(m=>managerCollection.push({uid:genId(), mgrId:m.mgrId}));
+    (t.offerPacks||[]).forEach(p=>packCollection.push({uid:genId(), packId:p.packId}));
     await sSet('collection', collection);
     await sSet('managerCollection', managerCollection);
+    await sSet('packCollection', packCollection);
     await atomicCoinChange((t.offerCoins||0) - (payment.coins||0));
     // an unambiguous single-card-for-coins trade is a clean price signal - feed it into RAP too
     if(t.want && t.want.kind==='coins' && (t.offerCoins||0)===0 && (t.offerCards||[]).length===1 && !(t.offerManagers||[]).length){
@@ -10467,6 +10584,13 @@ let profile = null; // {coins,userId,displayName,wins,draws,losses}
 let collection = []; // [{uid,cardId,xp}] - xp is per owned copy, not per card template, so two copies
                       // of the same real player can be at different levels
 let managerCollection = []; // [{uid,mgrId}]
+// unopened packs a player owns - tradable/sellable/RAP'd exactly like a card or manager, opened via
+// openOwnedPack(uid) rather than bought-and-opened-in-one-step like the Kartenladen normally works.
+// Nothing currently grants these to a normal player (no purchase/reward path exists yet) - only the
+// admin panel's "Pack (ungeöffnet) schicken" can put one in someone's packCollection - but the full
+// trade/market/open mechanic is built out regardless, ready for whenever a real acquisition path
+// (event reward, etc.) gets added on top.
+let packCollection = []; // [{uid,packId}]
 let squadPresets = []; // [{id,name,formation,slots,managerUid}]
 let squad = null; // {formation, slots:{slotId:uid}}
 let currentTab = 'store';
@@ -10781,6 +10905,8 @@ async function init(){
   }
   managerCollection = await sGet('managerCollection');
   if(!managerCollection) managerCollection = [];
+  packCollection = await sGet('packCollection');
+  if(!packCollection) packCollection = [];
   squad = await sGet('squad');
   if(!squad){ squad = {formation:'433', slots:{}, managerUid:null, tactics:{...DEFAULT_TACTICS}}; await sSet('squad', squad); }
   else {
@@ -13151,6 +13277,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-give-coins" style="width:auto;">Coins geben</button>
       <button class="action-btn secondary" id="admin-give-card" style="width:auto;">Karte schicken</button>
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
+      <button class="action-btn secondary" id="admin-give-pack-unopened" style="width:auto;">Pack (unge\u00f6ffnet) schicken</button>
       <button class="action-btn secondary" id="admin-make-ut" style="width:auto;">Karte nachtr\u00e4glich UT machen</button>
       <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
       <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
@@ -13171,6 +13298,7 @@ async function loadAdminUserPanel(targetId){
   });
   document.getElementById('admin-give-card').addEventListener('click', ()=>openAdminSendCardModal(targetId, data));
   document.getElementById('admin-give-pack').addEventListener('click', ()=>openAdminSendPackModal(targetId, data));
+  document.getElementById('admin-give-pack-unopened').addEventListener('click', ()=>openAdminSendUnopenedPackModal(targetId, data));
   document.getElementById('admin-make-ut').addEventListener('click', ()=>openAdminMakeUntradableModal(targetId, data));
   document.getElementById('admin-send-warning').addEventListener('click', ()=>{
     askTextModal('Verwarnungstext', 'z. B. Bitte fair spielen...', async (msg)=>{
@@ -13271,7 +13399,7 @@ async function adminResetAccount(targetId, p){
   const newSquad = {formation:'433', slots:{}, managerUid:null, tactics:{...DEFAULT_TACTICS}};
   try{
     await fb.setDoc(fb.doc(fb.db,'saves',targetId), {
-      profile: newProfile, collection: newCollection, managerCollection: [], squad: newSquad, squadPresets: []
+      profile: newProfile, collection: newCollection, managerCollection: [], packCollection: [], squad: newSquad, squadPresets: []
     }, {merge:true});
     await fb.setDoc(fb.doc(fb.db,'legacy', targetId), {
       userId: newProfile.userId||targetId, name: newProfile.displayName||targetId, crest: newProfile.crest,
@@ -13375,6 +13503,29 @@ function openAdminSendPackModal(targetId, data){
     list.appendChild(btn);
   });
 }
+// the only way packCollection currently gets populated for anyone - see the packCollection
+// declaration for why (no normal acquisition path exists yet, mechanic is otherwise fully built).
+function openAdminSendUnopenedPackModal(targetId, data){
+  openModal(`
+    <h2 style="margin-bottom:12px;">Unge\u00f6ffnetes Pack f\u00fcr ${targetId}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Landet unge\u00f6ffnet in ${targetId}s Inventar (Mein Verein \u2192 Meine Packs) \u2014 tradable/verkaufbar, ${targetId} entscheidet selbst, wann es ge\u00f6ffnet wird.</p>
+    <div class="picker-list" id="admin-send-pack-unopened-list"></div>`);
+  const list = document.getElementById('admin-send-pack-unopened-list');
+  PACKS.forEach(pack=>{
+    const btn = document.createElement('button');
+    btn.className = 'action-btn secondary';
+    btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
+    btn.textContent = pack.name;
+    btn.addEventListener('click', async ()=>{
+      const targetPackCollection = (data.packCollection || []).slice();
+      targetPackCollection.push({uid:genId(), packId:pack.id});
+      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {packCollection:targetPackCollection}, {merge:true});
+      toast(`${pack.name} (unge\u00f6ffnet) an ${targetId} geschickt.`);
+      closeModal();
+    });
+    list.appendChild(btn);
+  });
+}
 // Renders a large list of cards incrementally instead of building DOM for every item up front.
 // With 1000+ owned cards, cardEl() building the full stat/photo markup for every single one in one
 // synchronous pass is what actually costs the 1s+ load time on "Mein Verein" - most of that list is
@@ -13438,7 +13589,11 @@ function renderClub(view){
     <div class="club-grid" id="club-grid"></div>
     ${managerCollection.length ? `
       <h3 style="font-size:15px;margin:26px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine Trainer</h3>
-      <div class="club-grid" id="mgr-club-grid"></div>` : ''}`;
+      <div class="club-grid" id="mgr-club-grid"></div>` : ''}
+    ${packCollection.length ? `
+      <h3 style="font-size:15px;margin:26px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine Packs</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:12px;">Unge\u00f6ffnete Packs \u2014 tradable und verkaufbar wie jede Karte, oder direkt hier \u00f6ffnen.</p>
+      <div class="club-grid" id="pack-club-grid"></div>` : ''}`;
   document.getElementById('club-crest-display').innerHTML = renderCrestSVG(profile.crest, 56);
   document.getElementById('club-crest-display').addEventListener('click', openCrestEditor);
   document.getElementById('rename-club').addEventListener('click', ()=>{
@@ -13457,11 +13612,47 @@ function renderClub(view){
   document.getElementById('club-sort').addEventListener('change', e=>{ clubFilter.sort=e.target.value; drawClubGrid(); });
   drawClubGrid();
   if(managerCollection.length) drawManagerClubGrid();
+  if(packCollection.length) drawPackClubGrid();
   loadSalesHistory().then(()=>{
     if(currentTab==='club'){ drawClubGrid(); if(managerCollection.length) drawManagerClubGrid(); }
     updateMyNetWorthEntry();
     updateMyLegacyEntry();
   });
+}
+function drawPackClubGrid(){
+  const grid = document.getElementById('pack-club-grid');
+  if(!grid) return;
+  const items = packCollection.map(p=>({uid:p.uid, pack:PACKS.find(x=>x.id===p.packId)})).filter(x=>x.pack);
+  renderLazyGrid(grid, items, ({uid,pack})=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'club-card-wrap';
+    wrap.style.cursor = 'pointer';
+    wrap.appendChild(packTileMiniEl(pack));
+    const rapTag = document.createElement('div');
+    rapTag.className = 'price-pill';
+    rapTag.style.cssText = 'position:absolute;bottom:26px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:3px 0;font-size:10px;';
+    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computePackRAP(pack))}`;
+    wrap.appendChild(rapTag);
+    const openBtn = document.createElement('button');
+    openBtn.className = 'action-btn';
+    openBtn.textContent = '\u00d6ffnen';
+    openBtn.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:5px 0;font-size:11px;border-radius:0 0 12px 12px;';
+    openBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openOwnedPack(uid); });
+    wrap.appendChild(openBtn);
+    return wrap;
+  });
+}
+async function openOwnedPack(uid){
+  const entry = packCollection.find(p=>p.uid===uid);
+  if(!entry) return;
+  const pack = PACKS.find(p=>p.id===entry.packId);
+  if(!pack) return;
+  const locked = await getExternalLockedUids();
+  if(locked.has(uid)){ toast('Dieses Pack ist gerade gelistet oder in einem Handelsangebot \u2014 zuerst zur\u00fccknehmen.'); return; }
+  packCollection = packCollection.filter(p=>p.uid!==uid);
+  await sSet('packCollection', packCollection);
+  showPackOpening(pack, pack.draw());
+  drawPackClubGrid();
 }
 function drawManagerClubGrid(){
   const grid = document.getElementById('mgr-club-grid');
