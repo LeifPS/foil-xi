@@ -14166,7 +14166,7 @@ function initGlobalSfxListeners(){
 let queueActive = false;
 let autorollEnabled = false;
 // tracks whether the CURRENT (or most recently started) queue search was kicked off by the player
-// manually tapping "Gegner suchen" vs. Autoroll firing it automatically - read by applyMatchResult
+// manually tapping "Gegner suchen" vs. Autoroll firing it automatically - read by commitMatchResult
 // so a manually-initiated match always pays out full coins, bypassing the daily-fairness reduction
 // that only exists to soften pure AFK-autoroll farming (see dailyRewardMultiplier).
 let lastQueueWasManual = true;
@@ -15458,28 +15458,43 @@ async function playTournamentRound(){
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  await runLocalMatch(rating, opp, {onComplete: async (outcome)=>{
-    if(outcome.result==='WIN'){
-      if(t.round>=TOURNAMENT_ROUNDS.length){
-        // won the whole cup - the UCL Winners Pack IS the reward for the final, no separate coins
+  // outcome.result-dependent state (round advance / elimination) is committed inside
+  // onOutcomeDecided - BEFORE the match animation plays - so refreshing mid-animation can't dodge an
+  // elimination; roundOutcome just carries the decision through to the post-animation toast/pack UI
+  let roundOutcome = null;
+  await runLocalMatch(rating, opp, {
+    onOutcomeDecided: async (outcome)=>{
+      if(outcome.result==='WIN'){
+        if(t.round>=TOURNAMENT_ROUNDS.length){
+          // won the whole cup - the UCL Winners Pack IS the reward for the final, no separate coins
+          profile.tournament = null;
+          await sSet('profile', profile);
+          roundOutcome = 'cupWin';
+        } else {
+          await atomicCoinChange(round.coins);
+          profile.tournament = {round: t.round+1};
+          await sSet('profile', profile);
+          roundOutcome = 'advance';
+        }
+      } else {
         profile.tournament = null;
         await sSet('profile', profile);
+        roundOutcome = 'eliminated';
+      }
+    },
+    onComplete: ()=>{
+      if(roundOutcome==='cupWin'){
         toast(`\ud83c\udfc6 Pokalsieger! \u00d6ffne dein UCL Winners Pack\u2026`);
         const cupPack = PACKS.find(p=>p.id==='uclwinners');
         showPackOpening(cupPack, cupPack.draw());
-      } else {
-        await atomicCoinChange(round.coins);
-        profile.tournament = {round: t.round+1};
-        await sSet('profile', profile);
+      } else if(roundOutcome==='advance'){
         toast(`${round.name} gewonnen! +${formatCoins(round.coins)} Coins. Weiter geht's.`);
+      } else {
+        toast(`Ausgeschieden im ${round.name}. Versuch's noch mal!`);
       }
-    } else {
-      profile.tournament = null;
-      await sSet('profile', profile);
-      toast(`Ausgeschieden im ${round.name}. Versuch's noch mal!`);
+      renderTournamentPanel();
     }
-    renderTournamentPanel();
-  }});
+  });
 }
 // ===== Ballon d'Or Challenge: the single hardest one-off match in the game =====
 async function playBallonDorChallenge(){
@@ -17053,41 +17068,57 @@ async function playOReiChallenge(){
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
-    if(outcome.result==='WIN'){
-      const streak = (profile.oreiStreak||0)+1;
-      profile.oreiStreak = streak>=3 ? 0 : streak;
-      let extra = '';
-      if(streak===1 && !profile.oreiFirstWinClaimed){
-        profile.oreiFirstWinClaimed = true;
-        await atomicCoinChange(30000);
-        extra = ' +30.000 Coins (einmalige Belohnung)!';
-      }
-      if(streak===2 && !profile.oreiSecondWinClaimed){
-        profile.oreiSecondWinClaimed = true;
-        const blackoutPack = PACKS.find(p=>p.id==='blackout');
-        extra = ' Einmalige Belohnung: ein Blackout Pack!';
-        await sSet('profile', profile);
-        toast(`Sieg ${streak}/3!${extra}`);
-        showPackOpening(blackoutPack, blackoutPack.draw());
-        renderOReiPanel();
-        return;
-      }
-      if(streak>=3){
-        profile.ogPackUnlocked = true;
-        await sSet('profile', profile);
-        toast('\ud83d\udc51 O Rei! Drei Siege in Folge \u2014 das Fu\u00dfballg\u00f6tter Pack ist jetzt im Kartenladen freigeschaltet!');
+  // same "commit before the animation, only reveal after" split as the tournament round above -
+  // oreiOutcome carries the decision through to the post-animation toast/pack UI
+  let oreiOutcome = null;
+  await runLocalMatch(rating, opp, {
+    friendly:true,
+    onOutcomeDecided: async (outcome)=>{
+      if(outcome.result==='WIN'){
+        const streak = (profile.oreiStreak||0)+1;
+        profile.oreiStreak = streak>=3 ? 0 : streak;
+        let extra = '';
+        if(streak===1 && !profile.oreiFirstWinClaimed){
+          profile.oreiFirstWinClaimed = true;
+          await atomicCoinChange(30000);
+          extra = ' +30.000 Coins (einmalige Belohnung)!';
+        }
+        if(streak===2 && !profile.oreiSecondWinClaimed){
+          profile.oreiSecondWinClaimed = true;
+          await sSet('profile', profile);
+          oreiOutcome = {type:'blackoutPack', extra};
+          return;
+        }
+        if(streak>=3){
+          profile.ogPackUnlocked = true;
+          await sSet('profile', profile);
+          oreiOutcome = {type:'oRei'};
+        } else {
+          await sSet('profile', profile);
+          oreiOutcome = {type:'win', streak, extra};
+        }
       } else {
+        profile.oreiStreak = 0;
         await sSet('profile', profile);
-        toast(`Sieg ${streak}/3!${extra}${extra?'':' Noch '+(3-streak)+' bis zum Fu\u00dfballg\u00f6tter Pack \u2014 eine Niederlage setzt zur\u00fcck.'}`);
+        oreiOutcome = {type:'loss'};
       }
-    } else {
-      profile.oreiStreak = 0;
-      await sSet('profile', profile);
-      toast('Niederlage \u2014 die Serie beginnt wieder bei 0.');
+    },
+    onComplete: ()=>{
+      if(oreiOutcome.type==='blackoutPack'){
+        const blackoutPack = PACKS.find(p=>p.id==='blackout');
+        toast(`Sieg 2/3!${oreiOutcome.extra} Einmalige Belohnung: ein Blackout Pack!`);
+        showPackOpening(blackoutPack, blackoutPack.draw());
+      } else if(oreiOutcome.type==='oRei'){
+        toast('\ud83d\udc51 O Rei! Drei Siege in Folge \u2014 das Fu\u00dfballg\u00f6tter Pack ist jetzt im Kartenladen freigeschaltet!');
+      } else if(oreiOutcome.type==='win'){
+        const {streak, extra} = oreiOutcome;
+        toast(`Sieg ${streak}/3!${extra}${extra?'':' Noch '+(3-streak)+' bis zum Fu\u00dfballg\u00f6tter Pack \u2014 eine Niederlage setzt zur\u00fcck.'}`);
+      } else {
+        toast('Niederlage \u2014 die Serie beginnt wieder bei 0.');
+      }
+      renderOReiPanel();
     }
-    renderOReiPanel();
-  }});
+  });
 }
 function renderOReiPanel(){
   const box = document.getElementById('orei-content');
@@ -17170,28 +17201,43 @@ async function playWinStreakMatch(){
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
-    if(outcome.result==='WIN'){
-      const newStreak = streak+1;
-      if(newStreak>=5){
+  // same "commit before the animation, only reveal after" split as the tournament round above -
+  // streakOutcome carries the decision through to the post-animation toast/pack UI
+  let streakOutcome = null;
+  await runLocalMatch(rating, opp, {
+    friendly:true,
+    onOutcomeDecided: async (outcome)=>{
+      if(outcome.result==='WIN'){
+        const newStreak = streak+1;
+        if(newStreak>=5){
+          profile.winStreak = 0;
+          await sSet('profile', profile);
+          await atomicCoinChange(3000);
+          streakOutcome = {type:'fiveWin'};
+        } else {
+          profile.winStreak = newStreak;
+          await sSet('profile', profile);
+          streakOutcome = {type:'win', newStreak};
+        }
+      } else {
         profile.winStreak = 0;
         await sSet('profile', profile);
-        await atomicCoinChange(3000);
+        streakOutcome = {type:'loss'};
+      }
+    },
+    onComplete: ()=>{
+      if(streakOutcome.type==='fiveWin'){
         const pack = PACKS.find(p=>p.id==='iconmoment');
         toast('\ud83d\udd25 5 Siege in Folge! +3.000 Coins, \u00f6ffne dein Pack\u2026');
         showPackOpening(pack, pack.draw());
+      } else if(streakOutcome.type==='win'){
+        toast(`Sieg ${streakOutcome.newStreak}/5! Weiter so \u2014 eine Niederlage setzt die Serie zur\u00fcck.`);
       } else {
-        profile.winStreak = newStreak;
-        await sSet('profile', profile);
-        toast(`Sieg ${newStreak}/5! Weiter so \u2014 eine Niederlage setzt die Serie zur\u00fcck.`);
+        toast('Niederlage \u2014 die Serie beginnt wieder bei 0.');
       }
-    } else {
-      profile.winStreak = 0;
-      await sSet('profile', profile);
-      toast('Niederlage \u2014 die Serie beginnt wieder bei 0.');
+      renderWinStreakPanel();
     }
-    renderWinStreakPanel();
-  }});
+  });
 }
 function renderWinStreakPanel(){
   const box = document.getElementById('streak-content');
@@ -18273,24 +18319,20 @@ async function playFullMatch(md, myName, oppName){
   return {myGoals: myTally, oppGoals: oppTally, myScorers};
 }
 const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
-async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers, friendly=false, oppUserId=null){
+// Split into two phases so the outcome can be COMMITTED (all saved-state writes: coins, wins/losses,
+// history, streaks, ...) the instant it's known - before the match animation plays - while the UI/
+// sound REVEAL still happens only after the animation, unchanged from before. Without this split, a
+// player who sees they're about to lose could just refresh mid-animation: nothing had been written
+// yet, so the loss (and any streak reset / tournament elimination / etc. an onOutcomeDecided hook
+// commits alongside it) never happened - a free do-over on every match mode that costs nothing to
+// attempt. See runLocalMatch's onOutcomeDecided and the 3 callers that use it (win streak, tournament,
+// O Rei) - all their state-mutating logic moved out of onComplete (post-animation) and into
+// onOutcomeDecided (pre-animation) for exactly this reason.
+async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers, friendly=false, oppUserId=null){
   const result = winnerSide==='me' ? 'WIN' : 'LOSS';
-  const reward = friendly ? 0 : (result==='WIN' ? 900 : 250);
-  const spXp = (!friendly && weekPassActive()) ? (result==='WIN' ? WEEK_PASS_XP_WIN : WEEK_PASS_XP_LOSS) : 0;
-  let suffix = '';
-  if(wentToPK) suffix = ' (n.E.)';
-  else if(wentToET) suffix = ' (n.V.)';
-
-  if(friendly){
-    playRefWhistle('end');
-    playSfx(result==='WIN' ? 'win' : 'lose');
-    const area = document.getElementById('result-area');
-    if(area){
-      area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':'var(--danger)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}${suffix}</div>
-        <div class="mono" style="color:var(--muted);margin-top:6px;">Freundschaftsspiel \u2014 keine Belohnung, keine Statistik</div>`;
-    }
-    return {result, winnerSide};
-  }
+  if(friendly) return {result, winnerSide, friendly:true};
+  const reward = result==='WIN' ? 900 : 250;
+  const spXp = weekPassActive() ? (result==='WIN' ? WEEK_PASS_XP_WIN : WEEK_PASS_XP_LOSS) : 0;
 
   await fbReady;
 
@@ -18370,8 +18412,26 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
   if(result==='WIN') questsChanged = bumpWeekPassQuest('winMatches', 1) || questsChanged;
   if(questsChanged) await sSet('profile', profile);
   updateCoinDisplay();
+  return {result, winnerSide, finalReward, catchUpPct, dailyMult, friendly:false};
+}
+// pure UI/sound reveal, run AFTER the match animation finishes - all real state was already written
+// by commitMatchResult before the animation started, so this never mutates saved data, only displays
+// what's already true.
+function revealMatchResultUI(committed, wentToET, wentToPK){
+  const {result, winnerSide, finalReward, catchUpPct, dailyMult, friendly} = committed;
+  let suffix = '';
+  if(wentToPK) suffix = ' (n.E.)';
+  else if(wentToET) suffix = ' (n.V.)';
   playRefWhistle('end');
   playSfx(result==='WIN' ? 'win' : 'lose');
+  if(friendly){
+    const area = document.getElementById('result-area');
+    if(area){
+      area.innerHTML = `<div style="font-family:'Anton';font-size:20px;letter-spacing:.05em;color:${result==='WIN'?'var(--turf-bright)':'var(--danger)'};">Spielende \u2014 ${RESULT_LABEL_DE[result]}${suffix}</div>
+        <div class="mono" style="color:var(--muted);margin-top:6px;">Freundschaftsspiel \u2014 keine Belohnung, keine Statistik</div>`;
+    }
+    return;
+  }
   const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses'), winrateEl=document.getElementById('stat-winrate');
   if(winsEl) winsEl.textContent = profile.wins;
   if(lossesEl) lossesEl.textContent = profile.losses;
@@ -18393,7 +18453,6 @@ async function applyMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToP
     }
     setTimeout(()=>{ if(autorollEnabled && !queueActive && !inMatch) joinQueue(false); }, 4000);
   }
-  return {result, winnerSide};
 }
 function computeMatchRatings(myPlayers, myGoals, oppGoals, myScorers, incidents, winnerSide){
   const scorerCounts = {};
@@ -18442,13 +18501,23 @@ async function runLocalMatch(myRating, opp, opts={}){
     md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
     const myName = profile.displayName || 'Dein Verein';
     const oppName = opp.owner + (opp.isBot ? ' (Simulation)' : '');
+    // the full outcome (myGoals/oppGoals/winnerSide/scorers) is already 100% determined right here,
+    // before a single second of animation plays - see buildDecisiveMatch. Commit it to saved state
+    // NOW, not after the ~45s animation, so refreshing mid-match can never dodge a loss (see
+    // commitMatchResult's comment). opts.onOutcomeDecided lets the caller commit its OWN state too
+    // (win streak / tournament round / O Rei streak) at this same safe moment.
+    const myScorers = [];
+    md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+    const committed = await commitMatchResult(md.myGoals, md.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, myScorers, opts.friendly);
+    if(opts.onOutcomeDecided) await opts.onOutcomeDecided(committed);
     const final = await playFullMatch(md, myName, oppName);
-    const outcome = await applyMatchResult(final.myGoals, final.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, final.myScorers, opts.friendly);
-    const matchRatings = computeMatchRatings(myPlayers, final.myGoals, final.oppGoals, final.myScorers, md.incidents, md.winnerSide);
+    revealMatchResultUI(committed, md.wentToET, md.wentToPK);
+    const matchRatings = computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide);
     await awardCardXP(matchRatings);
     const resultArea = document.getElementById('result-area');
     if(resultArea) resultArea.insertAdjacentHTML('beforeend', renderMatchRatingsHTML(matchRatings));
-    if(opts.onComplete) opts.onComplete({...outcome, matchRatings});
+    if(opts.onComplete) opts.onComplete({...committed, matchRatings});
   } finally {
     inMatch = false;
   }
@@ -18809,7 +18878,8 @@ async function enterSyncedMatch(matchDoc){
   } else {
     winnerSide = myGoalsFinal>oppGoalsFinal ? 'me' : 'opp';
   }
-  await applyMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers, false, oppSide.userId);
+  const committedOnline = await commitMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers, false, oppSide.userId);
+  revealMatchResultUI(committedOnline, matchDoc.wentToET, matchDoc.wentToPK);
   // Icon Swap event: any real head-to-head match (this function) counts, win or not - 1 token per
   // goal scored against the real opponent, capped at 5, only while the event window is still open
   if(iconSwapEventActive()){
