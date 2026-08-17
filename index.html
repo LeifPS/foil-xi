@@ -8110,19 +8110,26 @@ const SBC_DEFS = [
     reqs:[ req('Alle aus Spanien', c=>c.every(x=>x.nat==='Spain'), c=>`${c.filter(x=>x.nat==='Spain').length} / 7 aus Spanien`),
            req('3+ ab 90 OVR', c=>c.filter(x=>x.ov>=90).length>=3, c=>`${c.filter(x=>x.ov>=90).length} / 3 ab 90 OVR`) ]},
   // --- Kane-Sonderaufgaben limited event (see KANE_QUEST_DEADLINE): a short 2-day flash version of
-  // the PROMO-quest pattern above - 1 SBC + 1 match unlock today, the 2nd pair unlocks tomorrow.
+  // the PROMO-quest pattern above - 2 SBCs + 2 matches unlock today, the 2nd batch unlocks tomorrow
+  // (4 tasks/day, same difficulty tier held constant within each day).
   {id:'kane_quest_day1', name:'Kane-Sturmreihe', coinReward:2500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 92+, niemand unter 87 OVR, mindestens 5 Stürmer und 5 Sonderkarten. Belohnung: 2.500 Coins.',
     reqs:[ req('Durchschnittsrating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`),
            req('Kein Spieler unter 87 OVR', c=>c.every(x=>x.ov>=87), c=>`${c.filter(x=>x.ov<87).length} unter 87`),
            req('5+ Stürmer', c=>c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length} / 5`),
            req('5+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=5, c=>`${c.filter(x=>x.variant!=='base').length} / 5 Sonderkarten`) ]},
+  {id:'kane_quest_day1_kader', name:'92er Kader', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 92+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`) ]},
   {id:'kane_quest_day2', name:'Kane-Krönung', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
     desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
     reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
            req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
            req('5+ Stürmer', c=>c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length} / 5`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'kane_quest_day2_kader', name:'94er Kader', coinReward:2000, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 94+. Belohnung: 2.000 Coins.',
+    reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
     reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
@@ -8533,8 +8540,8 @@ async function renderChallengeGrid(){
       tile.style.cursor = 'pointer';
       tile.innerHTML = challengeTileHTML(
         {id:'kanequest', name:'Kane-Sonderaufgaben', pill:'2-Tage-Event', accent:'#dc052d',
-          desc:`Nur heute und morgen: 4 Aufgaben für ${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'} (102 OVR).`},
-        `<div class="sbc-progress-dots" title="${doneCount} / 4 abgeschlossen">${Array.from({length:4},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+          desc:`Nur heute und morgen: 8 Aufgaben (4 pro Tag) für ${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'} (102 OVR).`},
+        `<div class="sbc-progress-dots" title="${doneCount} / 8 abgeschlossen">${Array.from({length:8},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
          ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
       );
       tile.addEventListener('click', openKaneQuestDetail);
@@ -8543,7 +8550,7 @@ async function renderChallengeGrid(){
       tile.innerHTML = `
         <div class="sbc-card-head"><span class="sbc-tier-pill">2-Tage-Event</span></div>
         <h3 class="sbc-name">Kane-Sonderaufgaben</h3>
-        <div class="sbc-desc">Nur heute und morgen: 4 Aufgaben für ${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'} (102 OVR).</div>
+        <div class="sbc-desc">Nur heute und morgen: 8 Aufgaben (4 pro Tag) für ${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'} (102 OVR).</div>
         <button class="sbc-build-btn" disabled>Vorbei</button>`;
     }
     grid.appendChild(tile);
@@ -16401,17 +16408,21 @@ function openPinaQuestDetail(){
   pinaQuestCountdownTimer = setInterval(updateCountdown, 30000);
 }
 // ===== Kane-Sonderaufgaben: a short 2-day flash event, same scaffolding as the WM quest above (day-
-// gated: 1 SBC + 1 match unlock today, the 2nd pair unlocks tomorrow), hard cutoff the day after. =====
+// gated: 2 SBCs + 2 matches unlock today, the 2nd batch of 4 unlocks tomorrow), hard cutoff the day
+// after. Difficulty is held constant within each day - the 2nd SBC/match per day is a same-tier
+// repeat, not a harder one. =====
 const KANE_QUEST_START = new Date(2026, 7, 17, 0, 0, 0).getTime(); // today (Monday) - available immediately
 const KANE_QUEST_DAY2 = new Date(2026, 7, 18, 0, 0, 0).getTime(); // tomorrow (Tuesday) 00:00
 const KANE_QUEST_DEADLINE = new Date(2026, 7, 19, 0, 0, 0).getTime(); // Wednesday 00:00
 function kaneQuestActive(){ const t = Date.now(); return t>=KANE_QUEST_START && t<KANE_QUEST_DEADLINE; }
 function kaneQuestVisible(){ return Date.now() < KANE_QUEST_DEADLINE; }
-const KANE_QUEST_SBC_IDS = ['kane_quest_day1', 'kane_quest_day2'];
-const KANE_QUEST_SBC_UNLOCK = {kane_quest_day1: KANE_QUEST_START, kane_quest_day2: KANE_QUEST_DAY2};
+const KANE_QUEST_SBC_IDS = ['kane_quest_day1', 'kane_quest_day1_kader', 'kane_quest_day2', 'kane_quest_day2_kader'];
+const KANE_QUEST_SBC_UNLOCK = {kane_quest_day1: KANE_QUEST_START, kane_quest_day1_kader: KANE_QUEST_START, kane_quest_day2: KANE_QUEST_DAY2, kane_quest_day2_kader: KANE_QUEST_DAY2};
 const KANE_QUEST_MATCHES = [
   {id:1, flag:'kaneQuestMatch1Won', label:'Kane-Test', targetOv:107, unlockAt:KANE_QUEST_START},
-  {id:2, flag:'kaneQuestMatch2Won', label:'Kane-Finale', targetOv:112, unlockAt:KANE_QUEST_DAY2},
+  {id:2, flag:'kaneQuestMatch2Won', label:'Kane-Angriff', targetOv:107, unlockAt:KANE_QUEST_START},
+  {id:3, flag:'kaneQuestMatch3Won', label:'Kane-Finale', targetOv:112, unlockAt:KANE_QUEST_DAY2},
+  {id:4, flag:'kaneQuestMatch4Won', label:'Kane-Krone', targetOv:112, unlockAt:KANE_QUEST_DAY2},
 ];
 function kaneQuestUnlockLabel(ts){ return ts===KANE_QUEST_START ? 'heute' : 'morgen'; }
 function kaneQuestSbcsDone(){ return KANE_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
@@ -16494,7 +16505,7 @@ async function renderKaneQuestSubgrid(){
     tile.innerHTML = `
       <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
       <h3 class="sbc-name">${m.label}</h3>
-      <div class="sbc-desc">${m.id===1?'Ein hartes Match':'Ein extrem hartes Match'} gegen einen Fantasie-Gegner.</div>
+      <div class="sbc-desc">${m.targetOv>=112?'Ein extrem hartes Match':'Ein hartes Match'} gegen einen Fantasie-Gegner.</div>
       ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
       ${locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">🔒 Schaltet sich ${kaneQuestUnlockLabel(m.unlockAt)} frei</div>` : ''}
       <div id="kanequest-match${m.id}-area" style="text-align:center;"></div>
@@ -16515,7 +16526,7 @@ function openKaneQuestDetail(){
   if(kaneQuestCountdownTimer){ clearInterval(kaneQuestCountdownTimer); kaneQuestCountdownTimer = null; }
   const view = document.getElementById('view');
   view.innerHTML = `
-    <div class="view-head"><h2>Kane-Sonderaufgaben</h2><p>Nur heute und morgen: schließe alle 4 Aufgaben ab und hol dir <b style="color:#dc052d;">${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'}${untradableInlineIcon(KANE_QUEST_CARD)} (102 OVR)</b> — sonst nirgends erhältlich.</p></div>
+    <div class="view-head"><h2>Kane-Sonderaufgaben</h2><p>Nur heute und morgen: schließe alle 8 Aufgaben ab und hol dir <b style="color:#dc052d;">${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'}${untradableInlineIcon(KANE_QUEST_CARD)} (102 OVR)</b> — sonst nirgends erhältlich.</p></div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px;">
       <div id="kanequest-reward-card"></div>
       ${profile.kaneQuestCardClaimed ? '' : '<div class="mono" style="font-size:10.5px;color:var(--muted);">Vorschau — erst nach Abschluss aller Aufgaben erhältlich</div>'}
