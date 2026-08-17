@@ -1207,6 +1207,21 @@ function applyAppLogo(){
   favicon.rel = 'icon';
   favicon.href = APP_LOGO_DATA_URI;
   document.head.appendChild(favicon);
+  // iOS "Zum Home-Bildschirm hinzufügen" ignores the regular favicon entirely - it only ever looks
+  // at apple-touch-icon (and only shows a title via apple-mobile-web-app-title, otherwise it falls
+  // back to the page <title>/URL).
+  const appleIcon = document.createElement('link');
+  appleIcon.rel = 'apple-touch-icon';
+  appleIcon.href = APP_LOGO_DATA_URI;
+  document.head.appendChild(appleIcon);
+  const appleTitle = document.createElement('meta');
+  appleTitle.name = 'apple-mobile-web-app-title';
+  appleTitle.content = 'FOIL ELEVEN';
+  document.head.appendChild(appleTitle);
+  const appleCapable = document.createElement('meta');
+  appleCapable.name = 'apple-mobile-web-app-capable';
+  appleCapable.content = 'yes';
+  document.head.appendChild(appleCapable);
   document.querySelectorAll('.brand-mark').forEach(el=>{
     const img = document.createElement('img');
     img.src = APP_LOGO_DATA_URI;
