@@ -18367,6 +18367,9 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
   if(friendly) return {result, winnerSide, friendly:true};
   const reward = result==='WIN' ? 900 : 250;
   const spXp = weekPassActive() ? (result==='WIN' ? WEEK_PASS_XP_WIN : WEEK_PASS_XP_LOSS) : 0;
+  let suffix = '';
+  if(wentToPK) suffix = ' (n.E.)';
+  else if(wentToET) suffix = ' (n.V.)';
 
   await fbReady;
 
