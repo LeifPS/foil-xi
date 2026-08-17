@@ -7960,11 +7960,20 @@ const KROOS_QUEST_BASE = {id:9791211, n:'Toni Kroos', pos:'CM', ov:102, pot:102,
 const KROOS_QUEST_CARD = boostBaseToOv(KROOS_QUEST_BASE, 101, 9791011, 'promoquestreward', 'PROMO', 'promocard');
 KROOS_QUEST_CARD.img = 'https://images.zenithfcm.com/player_25_182521_CHA26_ICON_2_1d511d26e0e0b55c.png?v=3';
 BY_ID.set(KROOS_QUEST_CARD.id, KROOS_QUEST_CARD);
+// 11th PROMO-Sonderaufgaben limited event: same pattern again. Neymar Jr has no active-player entry
+// either (no longer at a club) - stats hand-authored from his real peak numbers, same as Pina/Kroos
+// above. His card shows "Free Agents"/"Free Agent" for league/club (see LEAGUE_LOGO/CLUB_LOGO) with
+// the specific badge images provided, since he genuinely has no real club to show right now.
+const NEYMAR_QUEST_BASE = {id:9791212, n:'Neymar Jr', pos:'LW, CAM, RW', ov:90, pot:90, nat:'Brazil', lg:'Free Agents', club:'Free Agent',
+  pac:88, sho:86, pas:87, dri:95, defn:32, phy:63, foot:'Right', img:'https://cdn3.futbin.com/content/fifa25/img/players/p50522519.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=42db6f6f3b3ca16e78a692e410c77cd3', gk:false};
+const NEYMAR_QUEST_CARD = boostBaseToOv(NEYMAR_QUEST_BASE, 101, 9791012, 'promoquestreward', 'PROMO', 'promocard');
+NEYMAR_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p50522519.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=42db6f6f3b3ca16e78a692e410c77cd3';
+BY_ID.set(NEYMAR_QUEST_CARD.id, NEYMAR_QUEST_CARD);
 // every PROMO/WM quest reward card (Mbappé, Olise, Alisson, Yamal, Rüdiger, Haaland, Chong, Pina, Kane,
-// Sylla, Kroos) is untradable - these only ever exist as the one quest's reward, never obtainable any
-// other way, so letting them be traded/sold away (and RAP-priced as if they were) would undercut the
-// whole point.
-[WM_QUEST_MBAPPE_CARD, OLISE_QUEST_CARD, ALISSON_QUEST_CARD, YAMAL_QUEST_CARD, RUDIGER_QUEST_CARD, HAALAND_QUEST_CARD, CHONG_QUEST_CARD, PINA_QUEST_CARD, KANE_QUEST_CARD, SYLLA_QUEST_CARD, KROOS_QUEST_CARD].forEach(c=>{ if(c) c.untradable = true; });
+// Sylla, Kroos, Neymar) is untradable - these only ever exist as the one quest's reward, never
+// obtainable any other way, so letting them be traded/sold away (and RAP-priced as if they were)
+// would undercut the whole point.
+[WM_QUEST_MBAPPE_CARD, OLISE_QUEST_CARD, ALISSON_QUEST_CARD, YAMAL_QUEST_CARD, RUDIGER_QUEST_CARD, HAALAND_QUEST_CARD, CHONG_QUEST_CARD, PINA_QUEST_CARD, KANE_QUEST_CARD, SYLLA_QUEST_CARD, KROOS_QUEST_CARD, NEYMAR_QUEST_CARD].forEach(c=>{ if(c) c.untradable = true; });
 // Jackpot Pack's ultra-rare 0.2% pull (see the 'jackpot' pack def below) - built from the existing
 // OG Icons Pelé card (id 9800300, 111 OV) boosted to exactly 115, the single highest-rated card in
 // the game. A normal pack pull like every other Jackpot card, so deliberately left tradable.
@@ -8326,6 +8335,29 @@ const SBC_DEFS = [
     desc:'7 Spieler, alle aus Deutschland (Kroos\' Heimatland), mindestens 3 davon ab 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Deutschland', c=>c.every(x=>x.nat==='Germany'), c=>`${c.filter(x=>x.nat==='Germany').length} / 7 aus Deutschland`),
            req('3+ ab 90 OVR', c=>c.filter(x=>x.ov>=90).length>=3, c=>`${c.filter(x=>x.ov>=90).length} / 3 ab 90 OVR`) ]},
+  // --- 11th PROMO-Sonderaufgaben limited event (see NEYMAR_QUEST_DEADLINE) - same pattern again.
+  {id:'neymar_quest_kreativ', name:'Kreativquartett', coinReward:3000, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'MID'),
+    desc:'11 Spieler, Durchschnittsrating 93+, niemand unter 89 OVR, mindestens 5 Mittelfeldspieler und 6 Sonderkarten. Belohnung: 3.000 Coins.',
+    reqs:[ req('Durchschnittsrating 93+', c=>avgOv(c)>=93, c=>`${avgOv(c)} / 93`),
+           req('Kein Spieler unter 89 OVR', c=>c.every(x=>x.ov>=89), c=>`${c.filter(x=>x.ov<89).length} unter 89`),
+           req('5+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroupPreferred(x,'MID')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'MID')).length} / 5`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'neymar_quest_fluegel', name:'Flügelspiel-Elf', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
+    desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
+    reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
+           req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
+           req('5+ Stürmer', c=>c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length} / 5`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'neymar_quest_squad1', name:'91er Kader I', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'neymar_quest_squad2', name:'91er Kader II', coinReward:1500, size:11, tier:'Promo-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 91+. Belohnung: 1.500 Coins.',
+    reqs:[ req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'neymar_quest_nation', name:'Seleção', coinReward:2000, size:7, tier:'Promo-Quest', maxCompletions:1, groupKey:'nat',
+    desc:'7 Spieler, alle aus Brasilien (Neymars Heimatland), mindestens 3 davon ab 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
+    reqs:[ req('Alle aus Brasilien', c=>c.every(x=>x.nat==='Brazil'), c=>`${c.filter(x=>x.nat==='Brazil').length} / 7 aus Brasilien`),
+           req('3+ ab 90 OVR', c=>c.filter(x=>x.ov>=90).length>=3, c=>`${c.filter(x=>x.ov>=90).length} / 3 ab 90 OVR`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
     reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
@@ -8472,7 +8504,7 @@ const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'
 // Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
 // opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
 function standaloneSbcDefs(){
-  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id) && !KANE_QUEST_SBC_IDS.includes(sbc.id) && !SYLLA_QUEST_SBC_IDS.includes(sbc.id) && !KROOS_QUEST_SBC_IDS.includes(sbc.id));
+  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id) && !KANE_QUEST_SBC_IDS.includes(sbc.id) && !SYLLA_QUEST_SBC_IDS.includes(sbc.id) && !KROOS_QUEST_SBC_IDS.includes(sbc.id) && !NEYMAR_QUEST_SBC_IDS.includes(sbc.id));
 }
 const FEAS_INFO = {
   free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
@@ -8783,6 +8815,23 @@ async function renderChallengeGrid(){
        ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
     );
     tile.addEventListener('click', openKroosQuestDetail);
+    grid.appendChild(tile);
+  }
+  if(neymarQuestActive()){
+    const doneCount = NEYMAR_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + NEYMAR_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
+    const claimed = profile.neymarQuestCardClaimed;
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = '#009739';
+    tile.style.boxShadow = '0 0 18px -9px #009739';
+    tile.style.cursor = 'pointer';
+    tile.innerHTML = challengeTileHTML(
+      {id:'neymarquest', name:'PROMO-Sonderaufgaben', pill:'Promo-Event', accent:'#009739',
+        desc:`7 schwere Aufgaben für ${NEYMAR_QUEST_CARD?NEYMAR_QUEST_CARD.n:'Neymar Jr'} (101 OVR).`},
+      `<div class="sbc-progress-dots" title="${doneCount} / 7 abgeschlossen">${Array.from({length:7},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+       ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
+    );
+    tile.addEventListener('click', openNeymarQuestDetail);
     grid.appendChild(tile);
   }
   CHALLENGE_DEFS.forEach(def=>{
@@ -10512,7 +10561,11 @@ async function sGet(key, shared=false){
   }catch(e){}
   return null;
 }
-async function atomicCoinChange(delta, extraSets={}){
+// opts.silentDisplay: skip the visible header coin counter update (still writes/updates profile.coins
+// in memory as normal) - used when this fires as part of a match's onOutcomeDecided, i.e. BEFORE the
+// match animation has played, so the coin pill ticking up/down doesn't give the result away early.
+// The caller is responsible for calling updateCoinDisplay() itself once the reveal actually happens.
+async function atomicCoinChange(delta, extraSets={}, opts={}){
   await fbReady;
   // "Verdiene X Coins" Wochen Pass quest - any positive delta counts as earned, regardless of source
   // (match reward, sale, quest/reward payout, admin grant, ...)
@@ -10525,14 +10578,14 @@ async function atomicCoinChange(delta, extraSets={}){
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
       profile.coins += delta;
       Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
-      updateCoinDisplay();
+      if(!opts.silentDisplay) updateCoinDisplay();
       return;
     }catch(e){ console.warn('atomic coin update failed, falling back to full profile write', e); }
   }
   profile.coins += delta;
   Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
   await sSet('profile', profile);
-  updateCoinDisplay();
+  if(!opts.silentDisplay) updateCoinDisplay();
 }
 async function sSet(key, value, shared=false){
   if(!shared){
@@ -11928,6 +11981,8 @@ function initialsOf2(name){
 // they transcend real club/league affiliation, same convention as real Icon cards.
 const LEGENDS_ICON_BADGE = 'https://cdn3.futbin.com/content/fifa26/img/clubs/dark/112658.png?fm=png&ixlib=java-2.1.0&verzion=3&w=30&s=09be0cbb3048da0d86603ea0aa34c773';
 const LEAGUE_LOGO = {
+  // no real league - used for the odd card whose real player currently has no club (see NEYMAR_QUEST_CARD)
+  'Free Agents': 'https://cdn3.futbin.com/content/fifa26/img/league/dark/78.png?fm=png&ixlib=java-2.1.0&verzion=2&w=44&s=4cd025dfec365180b633c8ee9ee26bfc',
   'Premier League': 'https://assets.football-logos.cc/logos/england/64x64/english-premier-league-v2.0792019b.png',
   'Championship': 'https://assets.football-logos.cc/logos/england/64x64/efl-championship.4cd5a6cf.png',
   'League One': 'https://assets.football-logos.cc/logos/england/64x64/efl-league-one.09905e74.png',
@@ -12049,6 +12104,8 @@ function resolveLeagueLogo(card){
 // projects like this game). Building this list out is a slow, one-club-per-lookup process, so it starts with
 // a handful of the very biggest names and can keep growing over time. Every other club uses the monogram badge.
 const CLUB_LOGO = {
+  // no real club - used for the odd card whose real player currently has no club (see NEYMAR_QUEST_CARD)
+  'Free Agent': 'https://cdn3.futbin.com/content/fifa26/img/clubs/dark/1370.png?fm=png&ixlib=java-2.1.0&verzion=3&w=44&s=c551354e6a2d39c3977df95cd9217e20',
   'Chelsea': 'https://assets.football-logos.cc/logos/england/1500x1500/chelsea.450170ff.png',
   'Nottingham Forest': 'https://assets.football-logos.cc/logos/england/1500x1500/nottingham-forest.e15fcde1.png',
   'Tottenham Hotspur': 'https://assets.football-logos.cc/logos/england/1500x1500/tottenham.b32501c6.png',
@@ -15719,7 +15776,7 @@ async function playTournamentRound(){
           await sSet('profile', profile);
           roundOutcome = 'cupWin';
         } else {
-          await atomicCoinChange(round.coins);
+          await atomicCoinChange(round.coins, {}, {silentDisplay:true});
           profile.tournament = {round: t.round+1};
           await sSet('profile', profile);
           roundOutcome = 'advance';
@@ -17259,6 +17316,123 @@ function openKroosQuestDetail(){
   updateCountdown();
   kroosQuestCountdownTimer = setInterval(updateCountdown, 30000);
 }
+// ===== 11th PROMO-Sonderaufgaben: same pattern again =====
+const NEYMAR_QUEST_START = new Date(2026, 7, 17, 0, 0, 0).getTime(); // Monday - available immediately
+const NEYMAR_QUEST_DEADLINE = new Date(2026, 7, 31, 0, 0, 0).getTime(); // 2 weeks later
+function neymarQuestActive(){ const t = Date.now(); return t>=NEYMAR_QUEST_START && t<NEYMAR_QUEST_DEADLINE; }
+const NEYMAR_QUEST_SBC_IDS = ['neymar_quest_kreativ', 'neymar_quest_fluegel', 'neymar_quest_squad1', 'neymar_quest_squad2', 'neymar_quest_nation'];
+const NEYMAR_QUEST_MATCHES = [
+  {id:1, flag:'neymarQuestMatch1Won', label:'PROMO-Test', targetOv:107},
+  {id:2, flag:'neymarQuestMatch2Won', label:'PROMO-Endspiel', targetOv:112},
+];
+function neymarQuestSbcsDone(){ return NEYMAR_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
+function neymarQuestMatchesDone(){ return NEYMAR_QUEST_MATCHES.every(m=>profile[m.flag]); }
+function neymarQuestAllDone(){ return neymarQuestSbcsDone() && neymarQuestMatchesDone(); }
+let neymarQuestCountdownTimer = null;
+async function playNeymarQuestMatch(m){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(profile[m.flag]){ toast('Diese Herausforderung ist bereits gewonnen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const opp = buildFixedRatingOpponent(m.targetOv);
+  const area = document.getElementById(`neymarquest-match${m.id}-area`);
+  const btn = document.getElementById(`neymarquest-match${m.id}-btn`);
+  if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      profile[m.flag] = true;
+      await sSet('profile', profile);
+      toast(`🏆 ${m.label} gewonnen!`);
+    } else {
+      toast('Verloren — versuch es jederzeit erneut.');
+    }
+    renderNeymarQuestSubgrid();
+  }});
+}
+async function claimNeymarQuestReward(){
+  if(!neymarQuestAllDone() || profile.neymarQuestCardClaimed || !NEYMAR_QUEST_CARD) return;
+  profile.neymarQuestCardClaimed = true;
+  collection.push({uid:genId(), cardId:NEYMAR_QUEST_CARD.id});
+  await sSet('collection', collection);
+  await sSet('profile', profile);
+  toast(`🏆 ${NEYMAR_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
+  showCutscene(NEYMAR_QUEST_CARD, ()=>{});
+  renderNeymarQuestSubgrid();
+}
+async function renderNeymarQuestSubgrid(){
+  const grid = document.getElementById('neymarquest-subgrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const squadLocked = new Set(Object.values(squad.slots));
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  NEYMAR_QUEST_SBC_IDS.forEach(id=>{
+    grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+  });
+  NEYMAR_QUEST_MATCHES.forEach(m=>{
+    const done = !!profile[m.flag];
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = '#009739';
+    tile.style.gridColumn = '1 / -1'; // full width - a live match (teams/score/commentary) doesn't fit the compact SBC tile size
+    tile.innerHTML = `
+      <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
+      <h3 class="sbc-name">${m.label}</h3>
+      <div class="sbc-desc">${m.id===1?'Ein hartes Match':'Ein extrem hartes Match'} gegen einen Fantasie-Gegner.</div>
+      ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
+      <div id="neymarquest-match${m.id}-area" style="text-align:center;"></div>
+      <button class="sbc-build-btn" id="neymarquest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
+    if(!done) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playNeymarQuestMatch(m));
+    grid.appendChild(tile);
+  });
+  const claimBtn = document.getElementById('neymarquest-claim-btn');
+  if(claimBtn){
+    const allDone = neymarQuestAllDone();
+    const claimed = profile.neymarQuestCardClaimed;
+    claimBtn.disabled = !allDone || claimed;
+    claimBtn.textContent = claimed ? 'Bereits abgeholt' : 'Neymar Jr (101 OVR) abholen';
+    claimBtn.onclick = (allDone && !claimed) ? claimNeymarQuestReward : null;
+  }
+}
+function openNeymarQuestDetail(){
+  if(neymarQuestCountdownTimer){ clearInterval(neymarQuestCountdownTimer); neymarQuestCountdownTimer = null; }
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>PROMO-Sonderaufgaben</h2><p>Schließe alle 7 Aufgaben ab und hol dir <b style="color:#009739;">${NEYMAR_QUEST_CARD?NEYMAR_QUEST_CARD.n:'Neymar Jr'}${untradableInlineIcon(NEYMAR_QUEST_CARD)} (101 OVR)</b> — sonst nirgends erhältlich.</p></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px;">
+      <div id="neymarquest-reward-card"></div>
+      ${profile.neymarQuestCardClaimed ? '' : '<div class="mono" style="font-size:10.5px;color:var(--muted);">Vorschau — erst nach Abschluss aller Aufgaben erhältlich</div>'}
+    </div>
+    <div class="toolbar"><button class="action-btn secondary" id="neymarquest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
+    <div id="neymarquest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
+    <div class="sbc-grid" id="neymarquest-subgrid" style="margin-bottom:18px;"></div>
+    <button class="action-btn" id="neymarquest-claim-btn" style="width:260px;"></button>`;
+  document.getElementById('neymarquest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const neymarRewardBox = document.getElementById('neymarquest-reward-card');
+  if(neymarRewardBox && NEYMAR_QUEST_CARD){
+    const cardNode = cardEl(NEYMAR_QUEST_CARD, 'mini');
+    if(!profile.neymarQuestCardClaimed) cardNode.style.opacity = '.8';
+    neymarRewardBox.appendChild(cardNode);
+  }
+  renderNeymarQuestSubgrid();
+  const updateCountdown = ()=>{
+    const el = document.getElementById('neymarquest-countdown');
+    if(!el){ if(neymarQuestCountdownTimer){ clearInterval(neymarQuestCountdownTimer); neymarQuestCountdownTimer=null; } return; }
+    if(!neymarQuestActive()){ currentTab='sbc'; renderNav(); renderView('sbc'); return; }
+    el.textContent = `⏳ Noch ${formatCountdown(NEYMAR_QUEST_DEADLINE - Date.now())} verfügbar`;
+  };
+  updateCountdown();
+  neymarQuestCountdownTimer = setInterval(updateCountdown, 30000);
+}
 // ===== O Rei Herausforderung: the ultimate capstone challenge =====
 const OREI_ENTRY = {wins:200, rating:105, netWorth:500000};
 function buildFixedRatingOpponent(targetOv){
@@ -17328,7 +17502,7 @@ async function playOReiChallenge(){
         let extra = '';
         if(streak===1 && !profile.oreiFirstWinClaimed){
           profile.oreiFirstWinClaimed = true;
-          await atomicCoinChange(30000);
+          await atomicCoinChange(30000, {}, {silentDisplay:true});
           extra = ' +30.000 Coins (einmalige Belohnung)!';
         }
         if(streak===2 && !profile.oreiSecondWinClaimed){
@@ -17352,6 +17526,7 @@ async function playOReiChallenge(){
       }
     },
     onComplete: ()=>{
+      updateCoinDisplay(); // O Rei's win rewards go through atomicCoinChange's silentDisplay before the animation - reveal now
       if(oreiOutcome.type==='blackoutPack'){
         const blackoutPack = PACKS.find(p=>p.id==='blackout');
         toast(`Sieg 2/3!${oreiOutcome.extra} Einmalige Belohnung: ein Blackout Pack!`);
@@ -17460,7 +17635,7 @@ async function playWinStreakMatch(){
         if(newStreak>=5){
           profile.winStreak = 0;
           await sSet('profile', profile);
-          await atomicCoinChange(3000);
+          await atomicCoinChange(3000, {}, {silentDisplay:true});
           streakOutcome = {type:'fiveWin'};
         } else {
           profile.winStreak = newStreak;
@@ -17474,6 +17649,7 @@ async function playWinStreakMatch(){
       }
     },
     onComplete: ()=>{
+      updateCoinDisplay(); // the 5-win bonus goes through atomicCoinChange's silentDisplay before the animation - reveal now
       if(streakOutcome.type==='fiveWin'){
         const pack = PACKS.find(p=>p.id==='iconmoment');
         toast('\ud83d\udd25 5 Siege in Folge! +3.000 Coins, \u00f6ffne dein Pack\u2026');
@@ -18662,7 +18838,10 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
   if(myGoals>0) questsChanged = bumpWeekPassQuest('scoreGoals', myGoals) || questsChanged;
   if(result==='WIN') questsChanged = bumpWeekPassQuest('winMatches', 1) || questsChanged;
   if(questsChanged) await sSet('profile', profile);
-  updateCoinDisplay();
+  // deliberately NOT calling updateCoinDisplay() here - profile.coins is updated in memory (needed
+  // for other logic that runs before the reveal), but the visible header coin counter must not
+  // change until revealMatchResultUI runs post-animation, otherwise watching it tick up/down gives
+  // the result away before the match animation ever shows it
   return {result, winnerSide, finalReward, catchUpPct, dailyMult, friendly:false};
 }
 // pure UI/sound reveal, run AFTER the match animation finishes - all real state was already written
@@ -18683,6 +18862,7 @@ function revealMatchResultUI(committed, wentToET, wentToPK){
     }
     return;
   }
+  updateCoinDisplay(); // the visible coin counter only ticks up/down here, at reveal time - see commitMatchResult
   const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses'), winrateEl=document.getElementById('stat-winrate');
   if(winsEl) winsEl.textContent = profile.wins;
   if(lossesEl) lossesEl.textContent = profile.losses;
