@@ -1222,6 +1222,29 @@ function applyAppLogo(){
   appleCapable.name = 'apple-mobile-web-app-capable';
   appleCapable.content = 'yes';
   document.head.appendChild(appleCapable);
+  // apple-mobile-web-app-capable alone is deprecated in newer browsers - the standard (non-Apple-
+  // prefixed) version is now the one that actually matters, iOS just still also wants its own copy.
+  const standardCapable = document.createElement('meta');
+  standardCapable.name = 'mobile-web-app-capable';
+  standardCapable.content = 'yes';
+  document.head.appendChild(standardCapable);
+  // Android Chrome's "Zum Startbildschirm hinzufügen" ignores apple-touch-icon/favicon entirely too -
+  // it only reads a Web App Manifest's icons[]. There's no manifest.json file to point to (this is a
+  // single HTML file), so build one in memory and link to it via a blob: URL instead.
+  try{
+    const manifest = {
+      name: 'FOIL ELEVEN', short_name: 'FOIL ELEVEN', start_url: '.', display: 'standalone',
+      icons: [
+        {src: APP_LOGO_DATA_URI, sizes: '256x256', type: 'image/png'},
+        {src: APP_LOGO_DATA_URI, sizes: '512x512', type: 'image/png'},
+      ],
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+    const manifestLink = document.createElement('link');
+    manifestLink.rel = 'manifest';
+    manifestLink.href = URL.createObjectURL(blob);
+    document.head.appendChild(manifestLink);
+  }catch(e){ console.warn('manifest injection failed', e); }
   document.querySelectorAll('.brand-mark').forEach(el=>{
     const img = document.createElement('img');
     img.src = APP_LOGO_DATA_URI;
