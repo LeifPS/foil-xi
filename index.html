@@ -12960,6 +12960,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
       <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
       <button class="action-btn secondary" id="admin-toggle-lb-ban" style="width:auto;color:${leaderboardBanned?'var(--turf-bright)':'var(--danger)'};">${leaderboardBanned?'Leaderboard-Sperre aufheben':'Tempor\u00e4r vom Leaderboard sperren'}</button>
+      <button class="action-btn secondary" id="admin-reset-orei" style="width:auto;border-color:#c98a3e;color:#c98a3e;">O Rei zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-reset-account" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Account zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-patch-missed-fields" style="width:auto;">Nur nachtr\u00e4glich hinzugef\u00fcgte Reset-Felder nachholen</button>
     </div>`;
@@ -13012,6 +13013,20 @@ async function loadAdminUserPanel(targetId){
       }, 4);
     }
   });
+  document.getElementById('admin-reset-orei').addEventListener('click', ()=>{
+    openModal(`
+      <h2 style="margin-bottom:10px;color:#c98a3e;">O Rei für ${targetId} zurücksetzen</h2>
+      <p class="hint" style="margin-top:0;margin-bottom:16px;">Setzt NUR den O-Rei-Fortschritt zurück — Siegesserie, die beiden einmaligen Zwischenbelohnungen (30.000 Coins beim 1. Sieg, Blackout Pack beim 2.) und die Freischaltung des Fußballgötter Packs im Kartenladen. Coins, Karten, Kader, sonstige Statistiken und alles andere bleiben völlig unverändert — ${targetId} kann O Rei damit komplett frisch neu angehen (inklusive erneuter einmaliger Belohnungen).</p>
+      <div style="display:flex;gap:10px;">
+        <button class="action-btn secondary" id="admin-reset-orei-cancel" style="flex:1;">Abbrechen</button>
+        <button class="action-btn" id="admin-reset-orei-confirm" style="flex:1;background:#c98a3e;">Zurücksetzen</button>
+      </div>`);
+    document.getElementById('admin-reset-orei-cancel').addEventListener('click', closeModal);
+    document.getElementById('admin-reset-orei-confirm').addEventListener('click', async ()=>{
+      closeModal();
+      await adminResetOrei(targetId, p);
+    });
+  });
   document.getElementById('admin-reset-account').addEventListener('click', ()=>{
     openModal(`
       <h2 style="margin-bottom:10px;color:#ff5f5f;">\u26a0 ${targetId} zur\u00fccksetzen</h2>
@@ -13034,6 +13049,20 @@ async function loadAdminUserPanel(targetId){
     toast(`${targetId}: SBCs und OG-Pack-Freischaltung nachträglich zurückgesetzt (Coins/Karten/Prestige unverändert).`);
     loadAdminUserPanel(targetId);
   });
+}
+// admin's O-Rei-only reset: touches ONLY the 4 fields the O Rei challenge itself owns (streak, the
+// 2 one-time intermediate-win reward flags, and the Fußballgötter Pack store-unlock flag it grants
+// at 3/3) - nothing else on the account (coins, cards, collection, other stats) is read or written,
+// so this is safe to use on an otherwise-normal, active account.
+async function adminResetOrei(targetId, p){
+  await fbReady;
+  if(!fb) return;
+  const newProfile = {...p, oreiStreak:0, oreiFirstWinClaimed:false, oreiSecondWinClaimed:false, ogPackUnlocked:false};
+  try{
+    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+  }catch(e){ console.warn('admin orei reset failed', e); toast('Reset fehlgeschlagen.'); return; }
+  toast(`O Rei für ${targetId} komplett zurückgesetzt.`);
+  loadAdminUserPanel(targetId);
 }
 // admin's targeted single-account reset - unlike triggerGreatReset (which flips a global switch
 // every player must individually confirm on their own next login), this writes the reset directly
@@ -15130,7 +15159,7 @@ function boostBotXI(xi, slots, forceManager){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id};
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
@@ -17177,7 +17206,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -17294,28 +17323,70 @@ function kickCouldDecideShootout(myScore, oppScore, myTaken, oppTaken, side, pan
   const decidedIfMissed = shootoutPanelDecided(myScore, oppScore, myTakenAfter, oppTakenAfter, panelLen);
   return decidedIfMade || decidedIfMissed;
 }
+// how good a player actually is at taking a penalty: shooting stat is the core signal, scaled by
+// position - strikers/attackers convert far more often than midfielders, who in turn convert more
+// than defenders; goalkeepers are essentially never real penalty takers (kept eligible only as a
+// last resort if a red card leaves a side with too few outfielders to fill a panel).
+function penaltyKickerSkill(p){
+  const pos = posGroup2(p.pos);
+  const posMult = pos==='FWD' ? 1.18 : pos==='MID' ? 1.0 : pos==='DEF' ? 0.78 : 0.35;
+  return (p.sho!=null ? p.sho : (p.ov||70)) * posMult;
+}
+// the automatic, pre-shootout kicker order: best takers step up first (exactly like a real captain/
+// coach would set the list), and - critically - every kicker is used at most once per full pass
+// through the XI before anyone repeats (so a shootout that runs long into sudden death cycles back
+// through the same ordered list rather than ever repeating someone early).
+function buildPenaltyOrder(players, sentOff){
+  const pool = sentOff && players && players.length>1
+    ? (players.filter(p=>p.n!==sentOff.n).length ? players.filter(p=>p.n!==sentOff.n) : players)
+    : players;
+  const outfield = pool.filter(p=>posGroup2(p.pos)!=='GK');
+  const base = outfield.length ? outfield : pool; // only dip into keepers if truly no one else is left
+  return base.slice().sort((a,b)=>penaltyKickerSkill(b)-penaltyKickerSkill(a));
+}
+// per-kick success chance: the taker's own penalty skill weighed against the specific goalkeeper
+// facing them, with only a small nudge from overall team strength - a placeholder star should score
+// far more often than a placeholder defender regardless of the two teams' ratings.
+function penaltyKickProb(shooter, keeper, teamDiff){
+  const shooterSkill = penaltyKickerSkill(shooter);
+  // a goalkeeper's DEF stat is their "Paraden" (saves) stat (see STAT_DE_GK) - the real save-relevant
+  // number, not their overall rating
+  const keeperAbility = keeper ? (keeper.defn!=null ? keeper.defn : (keeper.ov||75)) : 75;
+  const p = 0.76 + (shooterSkill-88)/260 - (keeperAbility-80)/260 + teamDiff/500;
+  return clamp(p, 0.35, 0.94);
+}
 function simulateShootout(myRating, oppRating, myPlayers, oppPlayers, mySentOff=null, oppSentOff=null){
   const diff = myRating-oppRating;
-  const myProb = clamp(0.72+diff/300, 0.55, 0.9);
-  const oppProb = clamp(0.72-diff/300, 0.55, 0.9);
-  // a player sent off in the match can't step up as a shootout kicker either
-  const myPool = mySentOff && myPlayers && myPlayers.length>1 ? (myPlayers.filter(p=>p.n!==mySentOff.n).length ? myPlayers.filter(p=>p.n!==mySentOff.n) : myPlayers) : myPlayers;
-  const oppPool = oppSentOff && oppPlayers && oppPlayers.length>1 ? (oppPlayers.filter(p=>p.n!==oppSentOff.n).length ? oppPlayers.filter(p=>p.n!==oppSentOff.n) : oppPlayers) : oppPlayers;
+  const myOrder = buildPenaltyOrder(myPlayers, mySentOff);
+  const oppOrder = buildPenaltyOrder(oppPlayers, oppSentOff);
+  const myKeeper = (myPlayers||[]).find(p=>posGroup2(p.pos)==='GK') || null;
+  const oppKeeper = (oppPlayers||[]).find(p=>posGroup2(p.pos)==='GK') || null;
+  const nextMyKicker = i => myOrder[i % myOrder.length];
+  const nextOppKicker = i => oppOrder[i % oppOrder.length];
   const myKicks=[], oppKicks=[];
   let myScore=0, oppScore=0;
   for(let round=0; round<5; round++){
     if(shootoutPanelDecided(myScore, oppScore, myKicks.length, oppKicks.length)) break;
-    const mk = Math.random()<myProb; myKicks.push({scorer:pickScorer(myPool), made:mk}); if(mk) myScore++;
+    const myShooter = nextMyKicker(myKicks.length);
+    const mk = Math.random()<penaltyKickProb(myShooter, oppKeeper, diff); myKicks.push({scorer:myShooter, made:mk}); if(mk) myScore++;
     if(shootoutPanelDecided(myScore, oppScore, myKicks.length, oppKicks.length)) break;
-    const ok = Math.random()<oppProb; oppKicks.push({scorer:pickScorer(oppPool), made:ok}); if(ok) oppScore++;
+    const oppShooter = nextOppKicker(oppKicks.length);
+    const ok = Math.random()<penaltyKickProb(oppShooter, myKeeper, -diff); oppKicks.push({scorer:oppShooter, made:ok}); if(ok) oppScore++;
   }
   // sudden death has no round cap in real football - it runs until someone actually settles it,
   // which is virtually always within a handful of rounds given both probabilities are <1
   while(myScore===oppScore){
-    const mk = Math.random()<myProb; myKicks.push({scorer:pickScorer(myPool), made:mk}); if(mk) myScore++;
-    const ok = Math.random()<oppProb; oppKicks.push({scorer:pickScorer(oppPool), made:ok}); if(ok) oppScore++;
+    const myShooter = nextMyKicker(myKicks.length);
+    const mk = Math.random()<penaltyKickProb(myShooter, oppKeeper, diff); myKicks.push({scorer:myShooter, made:mk}); if(mk) myScore++;
+    const oppShooter = nextOppKicker(oppKicks.length);
+    const ok = Math.random()<penaltyKickProb(oppShooter, myKeeper, -diff); oppKicks.push({scorer:oppShooter, made:ok}); if(ok) oppScore++;
   }
   const winner = myScore>oppScore ? 'me' : 'opp';
+  // myProb/oppProb are kept as a single representative number (the FIRST kicker's odds vs the
+  // opposing keeper) purely for the win-probability meter shown before/during the shootout, which
+  // has no per-kicker concept - the actual round-by-round sim above always uses the real per-kick math
+  const myProb = clamp(penaltyKickProb(myOrder[0], oppKeeper, diff), 0.35, 0.94);
+  const oppProb = clamp(penaltyKickProb(oppOrder[0], myKeeper, -diff), 0.35, 0.94);
   return {myKicks, oppKicks, myScore, oppScore, winner, myProb, oppProb};
 }
 function pkWinProbability(myScore, oppScore, myKicksTaken, oppKicksTaken, myProb, oppProb, totalPlanned=5){
@@ -18130,7 +18201,7 @@ function pickRealisticOpponent(targetRating){
     attempt = {xi: weakenedBase, chemPlayers: weakenedChem, rating: weakenedRating};
   }
   const {xi, chemPlayers, rating} = attempt;
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img, id:p.id}));
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img, id:p.id, sho:p.sho, defn:p.defn}));
   const cardRefs = xi.map((p,i)=>({id:p.id, pos:slots[i].label}));
   return {owner:chosen.club, rating, players, cardRefs, formation:'433', isBot:true, managerName: mgr?mgr.n:null};
 }
