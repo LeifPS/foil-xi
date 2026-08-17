@@ -6321,6 +6321,24 @@ const ZIDANE_MANAGER = {
   variant:'zidane_mgr', variantLabel:'Kapitäne-Trainer', theme:'wm_mgr',
 };
 MGR_BY_ID.set(ZIDANE_MANAGER.id, ZIDANE_MANAGER);
+// Hall of Fame Pack's ultra-rare manager pulls (0.1% each, see the 'hof' pack def) - real legendary
+// coaches, same plain-manager shape as PLAYERS_MANAGERS entries (no variant/theme needed, isManager
+// alone drives the correct card styling/pattern fallback).
+const HOF_WENGER_MANAGER = {
+  id: 9800120, n:'Arsène Wenger', club:'Arsenal', nat:'France', tier:'Legendär',
+  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+};
+MGR_BY_ID.set(HOF_WENGER_MANAGER.id, HOF_WENGER_MANAGER);
+const HOF_SACCHI_MANAGER = {
+  id: 9800121, n:'Arrigo Sacchi', club:'AC Milan', nat:'Italy', tier:'Legendär',
+  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+};
+MGR_BY_ID.set(HOF_SACCHI_MANAGER.id, HOF_SACCHI_MANAGER);
+const HOF_MOURINHO_MANAGER = {
+  id: 9800122, n:'José Mourinho', club:'Chelsea', nat:'Portugal', tier:'Legendär',
+  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+};
+MGR_BY_ID.set(HOF_MOURINHO_MANAGER.id, HOF_MOURINHO_MANAGER);
 const DERBY_SPECIALS = PLAYERS_DERBY;
 DERBY_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 const UNDERDOG_SPECIALS = PLAYERS_UNDERDOG;
@@ -7425,10 +7443,16 @@ const PACKS = [
     desc:'7 Spieler, alle garantiert mit Rating 88 oder h\u00f6her.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
   {id:'hof',name:'Hall of Fame Pack',cost:42000,tier:'ultimate',count:1,
-    desc:'1 Spieler, garantiert Ikone, Zenturio, Ruhmeshalle oder Gal\u00e1ctico \u2014 Rating 95+. Das einzige Pack mit diesen Karten.',
-    draw(){ const pool=specialsByVariant(['icon','centurion','hall_of_fame','galactico']).filter(c=>c.ov>=95);
-      return [pick(pool.length?pool:specialsByVariant(['icon','centurion','hall_of_fame','galactico']))]; }},
-  {id:'championspick',name:'Pick 3 of 6: Champions Select',cost:20000,tier:'ultimate',count:6,pickCount:3,
+    desc:'1 Spieler, garantiert Ikone, Zenturio, Ruhmeshalle oder Gal\u00e1ctico \u2014 Rating 95+. Winzige Chance (0,1% je Trainer) auf einen von drei legend\u00e4ren Trainern: Ars\u00e8ne Wenger, Arrigo Sacchi oder Jos\u00e9 Mourinho (je +11%). Das einzige Pack mit diesen Karten.',
+    draw(){
+      const r = Math.random();
+      if(r<0.001) return [HOF_WENGER_MANAGER];
+      if(r<0.002) return [HOF_SACCHI_MANAGER];
+      if(r<0.003) return [HOF_MOURINHO_MANAGER];
+      const pool=specialsByVariant(['icon','centurion','hall_of_fame','galactico']).filter(c=>c.ov>=95);
+      return [pick(pool.length?pool:specialsByVariant(['icon','centurion','hall_of_fame','galactico']))];
+    }},
+  {id:'championspick',name:'Pick 3 of 6: Champions Select',cost:4000,tier:'premium',count:6,pickCount:3,
     desc:'6 Spieler, Rating 82-90 (inkl. Chance auf Sonderkarten). W\u00e4hle 3 davon zum Behalten.',
     draw(){ const pool=poolByRange(82,90,true); return Array.from({length:6},()=>pick(pool)); }},
   {id:'mystery',name:'Mystery Elite Pack',cost:30000,tier:'ultimate',count:3,
@@ -7449,7 +7473,7 @@ const PACKS = [
   {id:'doubletrainer',name:'Double Trainer Pack',cost:7000,tier:'premium',count:2,
     desc:'2 Trainer garantiert, zuf\u00e4llig aus allen Vereinen.',
     draw(){ return [pick(MANAGERS), pick(MANAGERS)]; }},
-  {id:'twoof95',name:'Pick 2 of 4: 95+ Pack',cost:52000,tier:'ultimate',count:4,pickCount:2,
+  {id:'twoof95',name:'Pick 2 of 4: 95+ Pack',cost:25000,tier:'ultimate',count:4,pickCount:2,
     desc:'4 Spieler, alle mit Rating 95+. W\u00e4hle 2 davon zum Behalten.',
     draw(){ const ultra=poolByRange(95,99,true); return Array.from({length:4},()=>pick(ultra)); }},
   {id:'blackout',name:'Blackout Pack',cost:40000,tier:'ultimate',count:1,
@@ -7607,8 +7631,11 @@ const PACKS = [
     desc:'4 Kaderspieler, Rating 65-73. Der g\u00fcnstigste Einstieg ins Spiel.',
     draw(){ const pool=poolByRange(65,73,false); return Array.from({length:4},()=>pick(pool)); }},
   {id:'jackpot',name:'Jackpot Pack',cost:35000,tier:'ultimate',count:1,
-    desc:'1 Karte, garantiert Rating 90 oder h\u00f6her \u2014 die reine H\u00f6chstwert-Lotterie.',
-    draw(){ const pool=poolByRange(90,99,true); return [pick(pool)]; }},
+    desc:'1 Karte, garantiert Rating 90 oder h\u00f6her \u2014 die reine H\u00f6chstwert-Lotterie. Hauchd\u00fcnne Chance (0,2%) auf die absolute H\u00f6chstkarte: Pel\u00e9 mit 115 OVR.',
+    draw(){
+      if(JACKPOT_PELE_CARD && Math.random()<0.002) return [JACKPOT_PELE_CARD];
+      const pool=poolByRange(90,99,true); return [pick(pool)];
+    }},
   {id:'kronjuwelen',name:'Kronjuwelen Pack',cost:50000,tier:'ultimate',count:5,
     desc:'5 Karten, meistens Rating 80-96. Sehr selten erscheint eine Karte aus einem eigenen Kader bekannter Spieler, ausgew\u00e4hlt nach einer echten individuellen Auszeichnung: Saphir (101-104, Torsch\u00fctzenk\u00f6nig), Rubin (105-109, Weltfu\u00dfballer des Jahres) und, kaum erreichbar, Diamant (110-113, Ballon d\'Or) \u2014 die h\u00f6chsten Karten im Spiel. Teurer und deutlich seltener als das Zeitgeist Pack.',
     draw(){
@@ -7880,6 +7907,13 @@ BY_ID.set(KROOS_QUEST_CARD.id, KROOS_QUEST_CARD);
 // other way, so letting them be traded/sold away (and RAP-priced as if they were) would undercut the
 // whole point.
 [WM_QUEST_MBAPPE_CARD, OLISE_QUEST_CARD, ALISSON_QUEST_CARD, YAMAL_QUEST_CARD, RUDIGER_QUEST_CARD, HAALAND_QUEST_CARD, CHONG_QUEST_CARD, PINA_QUEST_CARD, KANE_QUEST_CARD, SYLLA_QUEST_CARD, KROOS_QUEST_CARD].forEach(c=>{ if(c) c.untradable = true; });
+// Jackpot Pack's ultra-rare 0.2% pull (see the 'jackpot' pack def below) - built from the existing
+// OG Icons Pelé card (id 9800300, 111 OV) boosted to exactly 115, the single highest-rated card in
+// the game. A normal pack pull like every other Jackpot card, so deliberately left tradable.
+const JACKPOT_PELE_BASE = findBaseCard(9800300);
+const JACKPOT_PELE_CARD = JACKPOT_PELE_BASE ? boostBaseToOv(JACKPOT_PELE_BASE, 115, 9792001, 'ogicon', 'OG Icons', 'ogicon') : null;
+if(JACKPOT_PELE_CARD) JACKPOT_PELE_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p67345931.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=74dddf76ca46aac3c73138904f7582b2';
+if(JACKPOT_PELE_CARD) BY_ID.set(JACKPOT_PELE_CARD.id, JACKPOT_PELE_CARD);
 // every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
 // exclusive-card ones above set maxCompletions:1) - see sbcCompletions()/sbcMaxCompletions() below.
 const SBC_DEFAULT_MAX_COMPLETIONS = 5;
