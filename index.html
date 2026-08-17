@@ -17643,11 +17643,14 @@ function showGoalCardFlash(scorer, side, teamName, isPenalty){
     // real XP level exactly. Everyone else (bots AND real opponents in an online match) - scorer.uid,
     // even when present, refers to a collection entry that only exists on THEIR client, not mine, so
     // looking it up here would either match nothing or (worse) coincidentally match one of MY OWN
-    // cards. Their card's real effective ov/level already traveled with the event itself (see
-    // pickScorer) - use that instead of re-resolving identity locally.
+    // cards - use the real card's OWN defined rating instead (never the match-simulation ov, which
+    // for a bot opponent has been artificially scaled to hit a target team average - e.g. a "112"
+    // Kane-quest opponent - and would show an absurdly inflated number that no real card actually
+    // has). Level still comes from the event (scorer.level, 0/no badge for bots - honest, they have
+    // no real XP).
     const myOwned = (side==='me' && scorer.uid) ? ownedCard(scorer.uid) : null;
     const base = scorer.id!=null ? BY_ID.get(scorer.id) : null;
-    const card = myOwned || (base ? {...base, ov: scorer.ov!=null ? scorer.ov : base.ov, level: scorer.level||0} : null);
+    const card = myOwned || (base ? {...base, level: scorer.level||0} : null);
     const overlay = document.createElement('div');
     overlay.className = 'goal-flash-overlay';
     overlay.innerHTML = `
