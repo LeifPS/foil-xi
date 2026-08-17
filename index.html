@@ -7812,10 +7812,17 @@ const PINA_QUEST_BASE = {id:9791208, n:'Claudia Pina', pos:'LW, LM, ST', ov:86, 
 const PINA_QUEST_CARD = boostBaseToOv(PINA_QUEST_BASE, 101, 9791008, 'promoquestreward', 'PROMO', 'promocard');
 PINA_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p184811907.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=7e3a4ed70548ac5213775031dd2231e6';
 BY_ID.set(PINA_QUEST_CARD.id, PINA_QUEST_CARD);
-// every PROMO/WM quest reward card (Mbappé, Olise, Alisson, Yamal, Rüdiger, Haaland, Chong, Pina) is
-// untradable - these only ever exist as the one quest's reward, never obtainable any other way, so
+// 8th PROMO-Sonderaufgaben limited event, but a short 2-day flash version (see KANE_QUEST_DEADLINE):
+// built from Harry Kane's real base card (id 202126, 89 OV) boosted to exactly 102, well into the
+// mythic (100+) reveal cutscene tier.
+const KANE_QUEST_BASE = findBaseCard(202126);
+const KANE_QUEST_CARD = KANE_QUEST_BASE ? boostBaseToOv(KANE_QUEST_BASE, 102, 9791009, 'promoquestreward', 'PROMO', 'promocard') : null;
+if(KANE_QUEST_CARD) KANE_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p151197070.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=7a8d9df8c5d8db55266f455440cc579b';
+if(KANE_QUEST_CARD) BY_ID.set(KANE_QUEST_CARD.id, KANE_QUEST_CARD);
+// every PROMO/WM quest reward card (Mbappé, Olise, Alisson, Yamal, Rüdiger, Haaland, Chong, Pina, Kane)
+// is untradable - these only ever exist as the one quest's reward, never obtainable any other way, so
 // letting them be traded/sold away (and RAP-priced as if they were) would undercut the whole point.
-[WM_QUEST_MBAPPE_CARD, OLISE_QUEST_CARD, ALISSON_QUEST_CARD, YAMAL_QUEST_CARD, RUDIGER_QUEST_CARD, HAALAND_QUEST_CARD, CHONG_QUEST_CARD, PINA_QUEST_CARD].forEach(c=>{ if(c) c.untradable = true; });
+[WM_QUEST_MBAPPE_CARD, OLISE_QUEST_CARD, ALISSON_QUEST_CARD, YAMAL_QUEST_CARD, RUDIGER_QUEST_CARD, HAALAND_QUEST_CARD, CHONG_QUEST_CARD, PINA_QUEST_CARD, KANE_QUEST_CARD].forEach(c=>{ if(c) c.untradable = true; });
 // every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
 // exclusive-card ones above set maxCompletions:1) - see sbcCompletions()/sbcMaxCompletions() below.
 const SBC_DEFAULT_MAX_COMPLETIONS = 5;
@@ -8102,6 +8109,20 @@ const SBC_DEFS = [
     desc:'7 Spieler, alle aus Spanien (Pinas Heimatland), mindestens 3 davon ab 90 OVR. Rating sonst egal. Belohnung: 2.000 Coins.',
     reqs:[ req('Alle aus Spanien', c=>c.every(x=>x.nat==='Spain'), c=>`${c.filter(x=>x.nat==='Spain').length} / 7 aus Spanien`),
            req('3+ ab 90 OVR', c=>c.filter(x=>x.ov>=90).length>=3, c=>`${c.filter(x=>x.ov>=90).length} / 3 ab 90 OVR`) ]},
+  // --- Kane-Sonderaufgaben limited event (see KANE_QUEST_DEADLINE): a short 2-day flash version of
+  // the PROMO-quest pattern above - 1 SBC + 1 match unlock today, the 2nd pair unlocks tomorrow.
+  {id:'kane_quest_day1', name:'Kane-Sturmreihe', coinReward:2500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
+    desc:'11 Spieler, Durchschnittsrating 92+, niemand unter 87 OVR, mindestens 5 Stürmer und 5 Sonderkarten. Belohnung: 2.500 Coins.',
+    reqs:[ req('Durchschnittsrating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`),
+           req('Kein Spieler unter 87 OVR', c=>c.every(x=>x.ov>=87), c=>`${c.filter(x=>x.ov<87).length} unter 87`),
+           req('5+ Stürmer', c=>c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length} / 5`),
+           req('5+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=5, c=>`${c.filter(x=>x.variant!=='base').length} / 5 Sonderkarten`) ]},
+  {id:'kane_quest_day2', name:'Kane-Krönung', coinReward:3500, size:11, tier:'Promo-Quest', maxCompletions:1, seedFilter:c=>cardInPosGroupPreferred(c,'FWD'),
+    desc:'11 Spieler, Durchschnittsrating 94+, niemand unter 90 OVR, mindestens 5 Stürmer und 6 Sonderkarten. Belohnung: 3.500 Coins.',
+    reqs:[ req('Durchschnittsrating 94+', c=>avgOv(c)>=94, c=>`${avgOv(c)} / 94`),
+           req('Kein Spieler unter 90 OVR', c=>c.every(x=>x.ov>=90), c=>`${c.filter(x=>x.ov<90).length} unter 90`),
+           req('5+ Stürmer', c=>c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length>=5, c=>`${c.filter(x=>cardInPosGroupPreferred(x,'FWD')).length} / 5`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
   {id:'goat_quest', name:'Die GOAT-Quest', reward:'goat', size:11, tier:'QUEST',
     desc:'Der schwerste Kader im gesamten Spiel. Belohnung: eine einzigartige Karte mit Rating \u00fcber 99 \u2014 sonst auf keinem Weg erh\u00e4ltlich.',
     reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
@@ -8248,7 +8269,7 @@ const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'
 // Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
 // opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
 function standaloneSbcDefs(){
-  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id));
+  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id) && !KANE_QUEST_SBC_IDS.includes(sbc.id));
 }
 const FEAS_INFO = {
   free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
@@ -8498,6 +8519,33 @@ async function renderChallengeGrid(){
        ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
     );
     tile.addEventListener('click', openPinaQuestDetail);
+    grid.appendChild(tile);
+  }
+  if(kaneQuestVisible()){
+    const active = kaneQuestActive();
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.borderLeftColor = '#dc052d';
+    tile.style.boxShadow = '0 0 18px -9px #dc052d';
+    if(active){
+      const doneCount = KANE_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + KANE_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
+      const claimed = profile.kaneQuestCardClaimed;
+      tile.style.cursor = 'pointer';
+      tile.innerHTML = challengeTileHTML(
+        {id:'kanequest', name:'Kane-Sonderaufgaben', pill:'2-Tage-Event', accent:'#dc052d',
+          desc:`Nur heute und morgen: 4 Aufgaben für ${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'} (102 OVR).`},
+        `<div class="sbc-progress-dots" title="${doneCount} / 4 abgeschlossen">${Array.from({length:4},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+         ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
+      );
+      tile.addEventListener('click', openKaneQuestDetail);
+    } else {
+      tile.style.opacity = '.6';
+      tile.innerHTML = `
+        <div class="sbc-card-head"><span class="sbc-tier-pill">2-Tage-Event</span></div>
+        <h3 class="sbc-name">Kane-Sonderaufgaben</h3>
+        <div class="sbc-desc">Nur heute und morgen: 4 Aufgaben für ${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'} (102 OVR).</div>
+        <button class="sbc-build-btn" disabled>Vorbei</button>`;
+    }
     grid.appendChild(tile);
   }
   CHALLENGE_DEFS.forEach(def=>{
@@ -10180,7 +10228,10 @@ async function sSet(key, value, shared=false){
       }
     }catch(e){}
     memoryStore[key] = value;
-    warnStorageOnce();
+    // only bail out to the down page when there's truly no backend at all (fb never came up) - a
+    // single transient write hiccup while Firebase IS connected (network blip, brief rate-limit)
+    // shouldn't boot the player to "Offline", it should just quietly fall back for this one write
+    if(!fb) warnStorageOnce();
     return null;
   }
   try{
@@ -10797,10 +10848,13 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${clubLogoUrl ? `<img class="nc-club" src="${clubLogoUrl}" alt="" title="${card.club}" loading="lazy" onerror="this.style.display='none'">` : `<div class="nc-club-mono" title="${card.club}">${initialsOf2(card.club)}</div>`}
   </div>`;
   const statLabels = (!card.isManager && mainPos(card.pos)==='GK') ? STAT_DE_GK : STAT_DE;
-  // untradable cards (e.g. PRIME) can be used in SBCs but never traded or sold - flagged with a
-  // bottom-right badge on the card itself (see .untradable-badge below).
+  // untradable cards (e.g. PRIME) can be used in SBCs but never traded or sold - the restriction
+  // itself always applies, but the visual bottom-right badge only shows for the player's OWN cards
+  // in "Mein Verein" (opts.showUntradableBadge, set only by drawClubGrid), never on cards belonging
+  // to someone else (opponent lineups, published squads, trade/market listings, ...) even if those
+  // happen to be untradable too - the badge is a personal reminder, not public information.
   const untradableIconImg = `<img class="untradable-inline-icon" src="https://images.zenithfcm.com/untradable-flag-player-card.png" alt="" title="Nicht handelbar">`;
-  const untradableBadge = card.untradable ? `<div class="untradable-badge" title="Nicht handelbar">${untradableIconImg}</div>` : '';
+  const untradableBadge = (card.untradable && opts.showUntradableBadge) ? `<div class="untradable-badge" title="Nicht handelbar">${untradableIconImg}</div>` : '';
   // player-toggled favorite star, bottom-left - only rendered where opts.onToggleFavorite is passed
   // (Mein Verein), never on cards shown elsewhere (SBC/trade/market pickers, match screens, ...)
   const favoriteStarSvg = `<svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7-5.4-4.7 7.1-.6z"/></svg>`;
@@ -13210,7 +13264,7 @@ function drawClubGrid(){
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap';
     wrap.style.cursor = 'pointer';
-    wrap.appendChild(cardEl(card, '', previewEffectiveOvsForCard(card, uid), null, {onToggleFavorite: toggleCardFavorite}));
+    wrap.appendChild(cardEl(card, '', previewEffectiveOvsForCard(card, uid), null, {onToggleFavorite: toggleCardFavorite, showUntradableBadge: true}));
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
@@ -15116,10 +15170,18 @@ function buildEliteOpponentXI(minOv, maxOv, opts={}){
   const slots = FORMATIONS['433'].slots; // 1 GK, 4 DEF, 3 MID, 3 FWD - a real, balanced shape
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
+  // dedupe by the real player's NAME - this pool mixes base cards with several special-variant tiers
+  // of the same real players, so picking by id alone could seat e.g. both a base and a Black Hole
+  // card of the exact same person in one XI
+  const usedNames = new Set();
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
-    const candidates = byGroup[group].length ? byGroup[group] : pool; // fall back to the whole pool if a group is too sparse
-    return pick(candidates);
+    const groupPool = byGroup[group].length ? byGroup[group] : pool; // fall back to the whole pool if a group is too sparse
+    let candidates = groupPool.filter(c=>!usedNames.has(c.n));
+    if(!candidates.length) candidates = groupPool;
+    const picked = pick(candidates);
+    usedNames.add(picked.n);
+    return picked;
   });
   const NAMES = ['Weltauswahl','All-Stars XI','Legenden-Elf','Superstar United','Elite FC'];
   const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
@@ -16338,6 +16400,147 @@ function openPinaQuestDetail(){
   updateCountdown();
   pinaQuestCountdownTimer = setInterval(updateCountdown, 30000);
 }
+// ===== Kane-Sonderaufgaben: a short 2-day flash event, same scaffolding as the WM quest above (day-
+// gated: 1 SBC + 1 match unlock today, the 2nd pair unlocks tomorrow), hard cutoff the day after. =====
+const KANE_QUEST_START = new Date(2026, 7, 17, 0, 0, 0).getTime(); // today (Monday) - available immediately
+const KANE_QUEST_DAY2 = new Date(2026, 7, 18, 0, 0, 0).getTime(); // tomorrow (Tuesday) 00:00
+const KANE_QUEST_DEADLINE = new Date(2026, 7, 19, 0, 0, 0).getTime(); // Wednesday 00:00
+function kaneQuestActive(){ const t = Date.now(); return t>=KANE_QUEST_START && t<KANE_QUEST_DEADLINE; }
+function kaneQuestVisible(){ return Date.now() < KANE_QUEST_DEADLINE; }
+const KANE_QUEST_SBC_IDS = ['kane_quest_day1', 'kane_quest_day2'];
+const KANE_QUEST_SBC_UNLOCK = {kane_quest_day1: KANE_QUEST_START, kane_quest_day2: KANE_QUEST_DAY2};
+const KANE_QUEST_MATCHES = [
+  {id:1, flag:'kaneQuestMatch1Won', label:'Kane-Test', targetOv:107, unlockAt:KANE_QUEST_START},
+  {id:2, flag:'kaneQuestMatch2Won', label:'Kane-Finale', targetOv:112, unlockAt:KANE_QUEST_DAY2},
+];
+function kaneQuestUnlockLabel(ts){ return ts===KANE_QUEST_START ? 'heute' : 'morgen'; }
+function kaneQuestSbcsDone(){ return KANE_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
+function kaneQuestMatchesDone(){ return KANE_QUEST_MATCHES.every(m=>profile[m.flag]); }
+function kaneQuestAllDone(){ return kaneQuestSbcsDone() && kaneQuestMatchesDone(); }
+let kaneQuestCountdownTimer = null;
+async function playKaneQuestMatch(m){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(Date.now() < m.unlockAt){ toast(`Schaltet sich ${kaneQuestUnlockLabel(m.unlockAt)} frei.`); return; }
+  if(profile[m.flag]){ toast('Diese Herausforderung ist bereits gewonnen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const opp = buildFixedRatingOpponent(m.targetOv);
+  const area = document.getElementById(`kanequest-match${m.id}-area`);
+  const btn = document.getElementById(`kanequest-match${m.id}-btn`);
+  if(btn) btn.style.display = 'none';
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      profile[m.flag] = true;
+      await sSet('profile', profile);
+      toast(`🏆 ${m.label} gewonnen!`);
+    } else {
+      toast('Verloren — versuch es jederzeit erneut.');
+    }
+    renderKaneQuestSubgrid();
+  }});
+}
+async function claimKaneQuestReward(){
+  if(!kaneQuestAllDone() || profile.kaneQuestCardClaimed || !KANE_QUEST_CARD) return;
+  profile.kaneQuestCardClaimed = true;
+  collection.push({uid:genId(), cardId:KANE_QUEST_CARD.id});
+  await sSet('collection', collection);
+  await sSet('profile', profile);
+  toast(`🏆 ${KANE_QUEST_CARD.n} (102 OVR) freigeschaltet!`);
+  showCutscene(KANE_QUEST_CARD, ()=>{});
+  renderKaneQuestSubgrid();
+}
+async function renderKaneQuestSubgrid(){
+  const grid = document.getElementById('kanequest-subgrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const squadLocked = new Set(Object.values(squad.slots));
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  const now = Date.now();
+  KANE_QUEST_SBC_IDS.forEach(id=>{
+    const unlockAt = KANE_QUEST_SBC_UNLOCK[id];
+    if(now < unlockAt){
+      const sbc = SBC_DEFS.find(s=>s.id===id);
+      const tile = document.createElement('div');
+      tile.className = 'sbc-card';
+      tile.style.opacity = '.6';
+      tile.innerHTML = `
+        <div class="sbc-card-head"><span class="sbc-tier-pill">${sbc.tier}</span><span class="sbc-size-pill">${sbc.size} Spieler</span></div>
+        <h3 class="sbc-name">${sbc.name}</h3>
+        <div class="sbc-desc">${sbc.desc}</div>
+        <div class="mono" style="font-size:10.5px;color:var(--muted);">🔒 Schaltet sich ${kaneQuestUnlockLabel(unlockAt)} frei</div>
+        <button class="sbc-build-btn" disabled>Noch nicht freigeschaltet</button>`;
+      grid.appendChild(tile);
+    } else {
+      grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+    }
+  });
+  KANE_QUEST_MATCHES.forEach(m=>{
+    const done = !!profile[m.flag];
+    const locked = now < m.unlockAt;
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card';
+    tile.style.gridColumn = '1 / -1';
+    if(locked) tile.style.opacity = '.6';
+    tile.innerHTML = `
+      <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
+      <h3 class="sbc-name">${m.label}</h3>
+      <div class="sbc-desc">${m.id===1?'Ein hartes Match':'Ein extrem hartes Match'} gegen einen Fantasie-Gegner.</div>
+      ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
+      ${locked ? `<div class="mono" style="font-size:10.5px;color:var(--muted);">🔒 Schaltet sich ${kaneQuestUnlockLabel(m.unlockAt)} frei</div>` : ''}
+      <div id="kanequest-match${m.id}-area" style="text-align:center;"></div>
+      <button class="sbc-build-btn" id="kanequest-match${m.id}-btn" ${(done||locked)?'disabled':''}>${done?'Gewonnen':locked?'Noch nicht freigeschaltet':'Herausforderung annehmen'}</button>`;
+    if(!done && !locked) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playKaneQuestMatch(m));
+    grid.appendChild(tile);
+  });
+  const claimBtn = document.getElementById('kanequest-claim-btn');
+  if(claimBtn){
+    const allDone = kaneQuestAllDone();
+    const claimed = profile.kaneQuestCardClaimed;
+    claimBtn.disabled = !allDone || claimed;
+    claimBtn.textContent = claimed ? 'Bereits abgeholt' : 'Harry Kane (102 OVR) abholen';
+    claimBtn.onclick = (allDone && !claimed) ? claimKaneQuestReward : null;
+  }
+}
+function openKaneQuestDetail(){
+  if(kaneQuestCountdownTimer){ clearInterval(kaneQuestCountdownTimer); kaneQuestCountdownTimer = null; }
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>Kane-Sonderaufgaben</h2><p>Nur heute und morgen: schließe alle 4 Aufgaben ab und hol dir <b style="color:#dc052d;">${KANE_QUEST_CARD?KANE_QUEST_CARD.n:'Harry Kane'}${untradableInlineIcon(KANE_QUEST_CARD)} (102 OVR)</b> — sonst nirgends erhältlich.</p></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px;">
+      <div id="kanequest-reward-card"></div>
+      ${profile.kaneQuestCardClaimed ? '' : '<div class="mono" style="font-size:10.5px;color:var(--muted);">Vorschau — erst nach Abschluss aller Aufgaben erhältlich</div>'}
+    </div>
+    <div class="toolbar"><button class="action-btn secondary" id="kanequest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
+    <div id="kanequest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
+    <div class="sbc-grid" id="kanequest-subgrid" style="margin-bottom:18px;"></div>
+    <button class="action-btn" id="kanequest-claim-btn" style="width:260px;"></button>`;
+  document.getElementById('kanequest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const kaneRewardBox = document.getElementById('kanequest-reward-card');
+  if(kaneRewardBox && KANE_QUEST_CARD){
+    const cardNode = cardEl(KANE_QUEST_CARD, 'mini');
+    if(!profile.kaneQuestCardClaimed) cardNode.style.opacity = '.8';
+    kaneRewardBox.appendChild(cardNode);
+  }
+  renderKaneQuestSubgrid();
+  const updateCountdown = ()=>{
+    const el = document.getElementById('kanequest-countdown');
+    if(!el){ if(kaneQuestCountdownTimer){ clearInterval(kaneQuestCountdownTimer); kaneQuestCountdownTimer=null; } return; }
+    if(!kaneQuestActive()){ currentTab='sbc'; renderNav(); renderView('sbc'); return; }
+    el.textContent = `⏳ Noch ${formatCountdown(KANE_QUEST_DEADLINE - Date.now())} (bis Mittwoch 00:00)`;
+  };
+  updateCountdown();
+  kaneQuestCountdownTimer = setInterval(updateCountdown, 30000);
+}
 // ===== O Rei Herausforderung: the ultimate capstone challenge =====
 const OREI_ENTRY = {wins:200, rating:105, netWorth:500000};
 function buildFixedRatingOpponent(targetOv){
@@ -16349,13 +16552,18 @@ function buildFixedRatingOpponent(targetOv){
   const slots = FORMATIONS['433'].slots;
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
+  // dedupe by the real player's NAME - see buildEliteOpponentXI's usedNames comment above, same issue
+  const usedNames = new Set();
   const pickNear = (candidatesAll)=>{
     let radius = 3, candidates = [];
     while(!candidates.length && radius<=60){
-      candidates = candidatesAll.filter(c=>Math.abs(c.ov-targetOv)<=radius);
+      candidates = candidatesAll.filter(c=>Math.abs(c.ov-targetOv)<=radius && !usedNames.has(c.n));
       radius += 3;
     }
-    return pick(candidates.length ? candidates : candidatesAll);
+    if(!candidates.length) candidates = candidatesAll.filter(c=>!usedNames.has(c.n));
+    const picked = pick(candidates.length ? candidates : candidatesAll);
+    usedNames.add(picked.n);
+    return picked;
   };
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
@@ -16958,7 +17166,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -17020,7 +17228,7 @@ function pickScorer(players){
   if(!players || !players.length){
     const pool = fallbackScorerPool();
     const p = pool[Math.floor(Math.random()*pool.length)];
-    return {n:p.n, img:p.img, id:p.id};
+    return {n:p.n, img:p.img, id:p.id, ov:p.ov};
   }
   const weighted = [];
   players.forEach(p=>{
@@ -17034,7 +17242,10 @@ function pickScorer(players){
     for(let i=0;i<reps;i++) weighted.push(p);
   });
   const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
-  return {n:chosen.n, img:chosen.img, id:chosen.id, uid:chosen.uid};
+  // ov (the real effective rating actually used in the match - chemistry/manager/position bonus
+  // already baked in) and level travel with the scorer so the goal-flash card (see showGoalCardFlash)
+  // can show the correct badge/rating for an opponent's card too, not just my own
+  return {n:chosen.n, img:chosen.img, id:chosen.id, uid:chosen.uid, ov:chosen.ov, level:chosen.level};
 }
 function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, myRedMinute=null, oppRedMinute=null, mySentOff=null, oppSentOff=null){
   const used = new Set();
@@ -17346,10 +17557,15 @@ function showGoalCardFlash(scorer, side, teamName, isPenalty){
   return new Promise(resolve=>{
     const host = document.getElementById('live-match');
     if(!host){ resolve(); return; }
-    // resolve the scorer's actual owned card (real XP level + rating) when it's one of my own squad's
-    // players, not the raw unleveled template - bots have no uid/collection entry, so they fall back
-    // to the plain base card as before
-    const card = scorer.uid ? (ownedCard(scorer.uid) || BY_ID.get(scorer.id)) : (scorer.id!=null ? BY_ID.get(scorer.id) : null);
+    // "me" scorers: resolve the actual owned card via my own collection, so it reflects my card's
+    // real XP level exactly. Everyone else (bots AND real opponents in an online match) - scorer.uid,
+    // even when present, refers to a collection entry that only exists on THEIR client, not mine, so
+    // looking it up here would either match nothing or (worse) coincidentally match one of MY OWN
+    // cards. Their card's real effective ov/level already traveled with the event itself (see
+    // pickScorer) - use that instead of re-resolving identity locally.
+    const myOwned = (side==='me' && scorer.uid) ? ownedCard(scorer.uid) : null;
+    const base = scorer.id!=null ? BY_ID.get(scorer.id) : null;
+    const card = myOwned || (base ? {...base, ov: scorer.ov!=null ? scorer.ov : base.ov, level: scorer.level||0} : null);
     const overlay = document.createElement('div');
     overlay.className = 'goal-flash-overlay';
     overlay.innerHTML = `
@@ -17831,22 +18047,24 @@ function pickRealisticOpponent(targetRating){
       // club is too small a roster to ever get chosen (Messi at Inter Miami) or has a club-name
       // mismatch, rather than depending entirely on the club draw lining up by coincidence
       if(cardTarget>=97 && Math.random()<0.01){
-        const kjCandidates = KRONJUWELEN_SPECIALS.filter(c=>!used.has(c.id) && positionEligibility(c, slot.label));
+        const kjCandidates = KRONJUWELEN_SPECIALS.filter(c=>!used.has(c.n) && positionEligibility(c, slot.label));
         if(kjCandidates.length){
           const picked = pick(kjCandidates);
-          used.add(picked.id);
+          used.add(picked.n);
           return picked;
         }
       }
       const group = posGroup2(slot.label);
-      let candidates = (byGroup[group].length ? byGroup[group] : clubCards).filter(c=>!used.has(c.id) && positionEligibility(c, slot.label));
-      if(!candidates.length) candidates = clubCards.filter(c=>!used.has(c.id));
+      // dedupe by the real player's NAME, not the card's id - otherwise a base card and a special
+      // variant of the exact same real player (different ids, same person) could both land in the XI
+      let candidates = (byGroup[group].length ? byGroup[group] : clubCards).filter(c=>!used.has(c.n) && positionEligibility(c, slot.label));
+      if(!candidates.length) candidates = clubCards.filter(c=>!used.has(c.n));
       const nonRepeatKontrahent = candidates.filter(c=>!(c.variant==='kontrahent' && usedKontrahentGroups.has(KONTRAHENT_GROUP_BY_THEME[c.theme])));
       if(nonRepeatKontrahent.length) candidates = nonRepeatKontrahent;
       if(!candidates.length) return null;
       candidates = candidates.slice().sort((a,b)=>Math.abs(a.ov-cardTarget)-Math.abs(b.ov-cardTarget));
       const picked = candidates[0];
-      used.add(picked.id);
+      used.add(picked.n);
       if(picked.variant==='kontrahent') usedKontrahentGroups.add(KONTRAHENT_GROUP_BY_THEME[picked.theme]);
       return picked;
     }).filter(Boolean);
