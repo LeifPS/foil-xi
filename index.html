@@ -6333,24 +6333,8 @@ function mostRecentMonday(d){
   const diffToMonday = (d.getDay()+6)%7; // Mon->0, Tue->1, ..., Sun->6
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()-diffToMonday, 0,0,0,0).getTime();
 }
-// One-off schedule change: the Mon-Sun pass active right now (started Mon 2026-08-10) does NOT reset
-// at its normal Mon 2026-08-17 00:00 point - it's extended two extra days, through 2026-08-19 00:00.
-// Then, ONE TIME ONLY, a short 2026-08-19 00:00 -> 2026-08-23 00:00 (Wed->Sun) pass runs. After that
-// one-off pass ends, the normal Mon-Sun weekly cadence resumes permanently, same as before this change.
-const WEEK_PASS_TRANSITION_END = new Date(2026,7,19,0,0,0,0).getTime(); // 2026-08-19 00:00 local
-const WEEK_PASS_ONE_OFF_END = new Date(2026,7,23,0,0,0,0).getTime(); // 2026-08-23 00:00 local
-function computeWeekPassWindow(){
-  const now = Date.now();
-  if(now < WEEK_PASS_TRANSITION_END){
-    return {start: mostRecentMonday(new Date(now)), end: WEEK_PASS_TRANSITION_END};
-  }
-  if(now < WEEK_PASS_ONE_OFF_END){
-    return {start: WEEK_PASS_TRANSITION_END, end: WEEK_PASS_ONE_OFF_END};
-  }
-  const start = mostRecentMonday(new Date(now));
-  return {start, end: start + 7*24*60*60*1000};
-}
-const {start:WEEK_PASS_START, end:WEEK_PASS_END} = computeWeekPassWindow();
+const WEEK_PASS_START = mostRecentMonday(new Date());
+const WEEK_PASS_END = WEEK_PASS_START + 7*24*60*60*1000;
 const WEEK_PASS_ID = 'wp-'+WEEK_PASS_START;
 // extended from 15 to 30 levels - levels 1-15 keep their exact original rewards (the level-15 card
 // check below is now hardcoded to 15 rather than tracking WEEK_PASS_MAX_LEVEL, specifically so it
