@@ -1035,8 +1035,18 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .winprob-fill{height:100%;background:var(--turf-bright);transition:width .4s ease;}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
-.leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';}
+.leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';font-weight:700;text-align:center;}
 .leader-crest{display:inline-flex;flex-shrink:0;margin-right:2px;}
+/* top-3 medal treatment on rank leaderboards - a colored circle behind the rank number plus a
+   faint tinted card background, purely cosmetic (rank order itself still comes from the sort). */
+.leader-row.medal-1{border-color:#e8c46866;background:linear-gradient(90deg, rgba(232,196,104,.12), var(--panel) 65%);}
+.leader-row.medal-2{border-color:#c9cfda66;background:linear-gradient(90deg, rgba(201,207,218,.10), var(--panel) 65%);}
+.leader-row.medal-3{border-color:#cd8a5b66;background:linear-gradient(90deg, rgba(205,138,91,.10), var(--panel) 65%);}
+.leader-row .rk.medal{border-radius:50%;width:22px;height:22px;line-height:22px;color:#0a0d12;}
+.leader-row .rk.medal-1{background:#e8c468;}
+.leader-row .rk.medal-2{background:#c9cfda;}
+.leader-row .rk.medal-3{background:#cd8a5b;}
+.leader-row .rating-decimal{color:var(--muted);font-size:10.5px;font-weight:400;}
 /* ---- Wochen Pass ---- */
 .wp-header{text-align:center;margin-bottom:18px;}
 .wp-badge{width:64px;height:64px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;
@@ -14317,7 +14327,7 @@ async function deleteSquadPreset(id){
 }
 function publishSquad(){
   const form = FORMATIONS[squad.formation];
-  const {rating, filled} = squadRating();
+  const {rating, filled, preciseRating} = squadRating();
   if(filled<11){ toast('F\u00fclle zuerst alle 11 Positionen.'); return; }
   const doPublish = async ()=>{
     // store the real card id (not a flattened snapshot) so viewers can resolve full card data -
@@ -14327,7 +14337,10 @@ function publishSquad(){
       return {pos:slot.label, cardId:card.id, variant:card.variant, uid:card.uid, xp:card.xp};
     });
     const mgr = getAssignedManager();
-    const payload = {owner:profile.displayName, userId:profile.userId, crest: profile.crest, rating, formation:squad.formation, players, managerId: mgr?mgr.id:null, updatedAt:Date.now()};
+    // preciseRating (unrounded) rides alongside the rounded rating so the leaderboard can break
+    // same-OVR ties and show a decimal - orderBy() in loadLeaderboard still uses the rounded
+    // `rating` field so squads published before this field existed don't vanish from the query.
+    const payload = {owner:profile.displayName, userId:profile.userId, crest: profile.crest, rating, preciseRating, formation:squad.formation, players, managerId: mgr?mgr.id:null, updatedAt:Date.now()};
     await fbReady;
     if(fb){
       try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); invalidateReadCache('squad-leaderboard'); toast('Kader online ver\u00f6ffentlicht!'); return; }
@@ -17948,15 +17961,22 @@ async function loadLeaderboard(){
     squads.sort((a,b)=>b.rating-a.rating);
     squads = squads.slice(0,8);
   }
+  // secondary sort by the unrounded rating so two squads at the same displayed OVR land in their
+  // real order instead of whatever order the query/local scan happened to return them in - older
+  // squads published before preciseRating existed just fall back to the rounded rating (no tiebreak).
+  squads.sort((a,b)=>(b.preciseRating??b.rating)-(a.preciseRating??a.rating));
   if(!squads.length){ box.innerHTML = `<p class="hint">Noch keine Kader ver\u00f6ffentlicht. Sei der Erste im Kader-Editor!</p>`; return; }
   box.innerHTML = '';
   squads.forEach((s,i)=>{
+    const rank = i+1;
+    const medal = rank<=3 ? ` medal-${rank}` : '';
     const row = document.createElement('div');
-    row.className = 'leader-row';
+    row.className = 'leader-row'+medal;
     row.style.flexWrap = 'wrap';
     const info = document.createElement('span');
     info.style.cssText = 'flex:1;cursor:pointer;display:flex;gap:8px;align-items:center;';
-    info.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(s.crest || fallbackCrestFor(s.owner), 20)}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating} OVR</span>`;
+    const decimal = s.preciseRating!=null ? `<span class="rating-decimal">${ratingDecimalSuffix(s.preciseRating)}</span>` : '';
+    info.innerHTML = `<span class="rk${medal?' medal'+medal:''}">${rank}</span><span class="leader-crest">${renderCrestSVG(s.crest || fallbackCrestFor(s.owner), 20)}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating}${decimal} OVR</span>`;
     info.addEventListener('click', ()=>showSquadModal(s));
     const challengeBtn = document.createElement('button');
     challengeBtn.className = 'action-btn secondary';
