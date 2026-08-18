@@ -1210,6 +1210,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     <div class="wallet">
       <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Verein wechseln</button>
       <button id="sound-toggle" title="Sound an/aus" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">\u{1F50A}</button>
+      <button id="pack-open-mode-toggle" title="Pack-Öffnungsmethode" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">✂️</button>
       <div class="coin-pill"><div class="coin-dot"></div><b class="mono" id="coin-display">0</b></div>
     </div>
   </div>
@@ -11004,6 +11005,21 @@ async function init(){
       if(soundEnabled) playSfx('click');
     });
   }
+  const packModeBtn = document.getElementById('pack-open-mode-toggle');
+  if(packModeBtn){
+    const applyPackModeIcon = ()=>{
+      const isClick = profile.packOpenMode==='click';
+      packModeBtn.textContent = isClick ? '\u{1F446}' : '✂️';
+      packModeBtn.title = isClick ? 'Packs öffnen per Klick (Standard: Wischen) - klicken zum Umschalten' : 'Packs öffnen per Wischen (Standard) - klicken zum Umschalten';
+    };
+    applyPackModeIcon();
+    packModeBtn.addEventListener('click', async ()=>{
+      profile.packOpenMode = profile.packOpenMode==='click' ? 'slice' : 'click';
+      applyPackModeIcon();
+      await sSet('profile', profile);
+      toast(profile.packOpenMode==='click' ? 'Packs öffnen jetzt per Klick.' : 'Packs öffnen jetzt per Wischen (Standard).');
+    });
+  }
   initGlobalSfxListeners();
 }
 
@@ -11722,14 +11738,18 @@ function showPackOpening(pack, drawn, opts={}){
     const bKey = b.ov + (ultraRareManager(b) ? 1000 : 0);
     return aKey-bKey;
   });
+  // pack-opening default is the swipe-to-slice gesture; profile.packOpenMode:'click' (toggled via the
+  // header button, see boot()/renderNav wiring) switches it to a plain tap instead, for players who
+  // find the swipe finicky - purely an input-method preference, the reveal flow after is identical.
+  const clickMode = profile.packOpenMode==='click';
   openModal(`
     <h2 style="text-align:center;margin-bottom:2px;">${pack.name}</h2>
-    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">\u00dcber das Pack wischen, um es aufzuschlitzen</p>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">${clickMode ? 'Auf das Pack tippen, um es zu \u00f6ffnen' : '\u00dcber das Pack wischen, um es aufzuschlitzen'}</p>
     <div class="pack-visual-wrap" id="pack-visual-wrap">
       <div class="pack-visual ${pack.tier}${pack.img?' has-img':''}" id="pack-visual">
         ${pack.img ? `<img src="${pack.img}" alt="">` : ''}
         <div class="pv-shine"></div>
-        <div class="pv-count">${drawn.length}</div><div class="pv-label">Spieler</div><div class="pv-tap">WISCHEN ZUM AUFSCHLITZEN</div>
+        <div class="pv-count">${drawn.length}</div><div class="pv-label">Spieler</div><div class="pv-tap">${clickMode ? 'TIPPEN ZUM \u00d6FFNEN' : 'WISCHEN ZUM AUFSCHLITZEN'}</div>
       </div>
       <div class="pack-slice-line" id="pack-slice-line"></div>
     </div>
@@ -11738,7 +11758,16 @@ function showPackOpening(pack, drawn, opts={}){
     <div class="collected-tray" id="collected-tray"></div>
     <button class="modal-close" id="modal-close-btn" style="display:none;">Weiter</button>
   `);
-  initPackSliceGesture(document.getElementById('pack-visual'), ()=>openPack());
+  if(clickMode){
+    let opened = false;
+    document.getElementById('pack-visual').addEventListener('click', ()=>{
+      if(opened) return;
+      opened = true;
+      openPack();
+    });
+  } else {
+    initPackSliceGesture(document.getElementById('pack-visual'), ()=>openPack());
+  }
   function openPack(){
     const wrapEl = document.getElementById('pack-visual-wrap');
     const visual = document.getElementById('pack-visual');
