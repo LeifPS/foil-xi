@@ -9192,6 +9192,7 @@ function renderMarketSection(el){
         <option value="rating_desc">Rating absteigend</option>
       </select>
     </div>
+    <div id="market-note"></div>
     <div class="club-grid" id="market-grid"><p class="hint">L\u00e4dt...</p></div>
   `;
   document.getElementById('market-pos').value = marketFilter.pos;
@@ -9245,16 +9246,11 @@ function drawMarketGrid(){
       return true;
     });
   }
-  grid.innerHTML = '';
-  if(!items.length){ grid.innerHTML = `<div class="empty-state" style="width:100%;"><h3>Keine Angebote</h3><p>Versuche einen anderen Filter oder verkaufe selbst eine Karte.</p></div>`; return; }
-  if(hiddenCount>0){
-    const note = document.createElement('p');
-    note.className = 'hint';
-    note.style.cssText = 'width:100%;margin-bottom:10px;';
-    note.textContent = `${hiddenCount} weitere Angebote ausgeblendet (max. ${MARKET_PER_SELLER_CAP} pro Verk\u00e4ufer gleichzeitig sichtbar, damit nicht ein einzelner Verk\u00e4ufer die Liste dominiert). Nutze die Suche, um gezielt nach mehr zu suchen.`;
-    grid.appendChild(note);
-  }
-  items.forEach(({listing,card,pack})=>{
+  const noteEl = document.getElementById('market-note');
+  if(noteEl) noteEl.innerHTML = hiddenCount>0
+    ? `<p class="hint" style="width:100%;margin-bottom:10px;">${hiddenCount} weitere Angebote ausgeblendet (max. ${MARKET_PER_SELLER_CAP} pro Verk\u00e4ufer gleichzeitig sichtbar, damit nicht ein einzelner Verk\u00e4ufer die Liste dominiert). Nutze die Suche, um gezielt nach mehr zu suchen.</p>`
+    : '';
+  renderLazyGrid(grid, items, ({listing,card,pack})=>{
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
     wrap.style.cursor = 'pointer';
@@ -9282,8 +9278,8 @@ function drawMarketGrid(){
       wrap.title = 'Klicken zum Kaufen';
       wrap.addEventListener('click', ()=>confirmBuyListing(listing, item));
     }
-    grid.appendChild(wrap);
-  });
+    return wrap;
+  }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Angebote</h3><p>Versuche einen anderen Filter oder verkaufe selbst eine Karte.</p></div>`});
 }
 async function getExternalLockedUids(){
   await fbReady;
