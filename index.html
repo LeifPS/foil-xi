@@ -1210,7 +1210,6 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     <div class="wallet">
       <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Verein wechseln</button>
       <button id="sound-toggle" title="Sound an/aus" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">\u{1F50A}</button>
-      <button id="pack-open-mode-toggle" title="Pack-Öffnungsmethode" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">✂️</button>
       <div class="coin-pill"><div class="coin-dot"></div><b class="mono" id="coin-display">0</b></div>
     </div>
   </div>
@@ -11005,21 +11004,6 @@ async function init(){
       if(soundEnabled) playSfx('click');
     });
   }
-  const packModeBtn = document.getElementById('pack-open-mode-toggle');
-  if(packModeBtn){
-    const applyPackModeIcon = ()=>{
-      const isClick = profile.packOpenMode==='click';
-      packModeBtn.textContent = isClick ? '\u{1F446}' : '✂️';
-      packModeBtn.title = isClick ? 'Packs öffnen per Klick (Standard: Wischen) - klicken zum Umschalten' : 'Packs öffnen per Wischen (Standard) - klicken zum Umschalten';
-    };
-    applyPackModeIcon();
-    packModeBtn.addEventListener('click', async ()=>{
-      profile.packOpenMode = profile.packOpenMode==='click' ? 'slice' : 'click';
-      applyPackModeIcon();
-      await sSet('profile', profile);
-      toast(profile.packOpenMode==='click' ? 'Packs öffnen jetzt per Klick.' : 'Packs öffnen jetzt per Wischen (Standard).');
-    });
-  }
   initGlobalSfxListeners();
 }
 
@@ -11738,18 +11722,23 @@ function showPackOpening(pack, drawn, opts={}){
     const bKey = b.ov + (ultraRareManager(b) ? 1000 : 0);
     return aKey-bKey;
   });
-  // pack-opening default is the swipe-to-slice gesture; profile.packOpenMode:'click' (toggled via the
-  // header button, see boot()/renderNav wiring) switches it to a plain tap instead, for players who
-  // find the swipe finicky - purely an input-method preference, the reveal flow after is identical.
-  const clickMode = profile.packOpenMode==='click';
+  // pack-opening default is the swipe-to-slice gesture; profile.packOpenMode:'click' switches it to
+  // a plain tap instead, for players who find the swipe finicky - purely an input-method preference,
+  // the reveal flow after is identical. Toggled in-modal (see bindOpenTrigger below), not globally
+  // in the topbar, so it stays out of the way for players who never touch it.
+  let clickMode = profile.packOpenMode==='click';
+  const modeLabel = ()=> clickMode ? 'Auf das Pack tippen, um es zu \u00f6ffnen' : '\u00dcber das Pack wischen, um es aufzuschlitzen';
+  const modeTapText = ()=> clickMode ? 'TIPPEN ZUM \u00d6FFNEN' : 'WISCHEN ZUM AUFSCHLITZEN';
+  const modeSwitchLabel = ()=> clickMode ? 'Stattdessen wischen' : 'Stattdessen klicken';
   openModal(`
     <h2 style="text-align:center;margin-bottom:2px;">${pack.name}</h2>
-    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">${clickMode ? 'Auf das Pack tippen, um es zu \u00f6ffnen' : '\u00dcber das Pack wischen, um es aufzuschlitzen'}</p>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:2px;" id="pack-sub">${modeLabel()}</p>
+    <p style="text-align:center;margin-bottom:4px;"><button id="pack-mode-switch" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0;">${modeSwitchLabel()}</button></p>
     <div class="pack-visual-wrap" id="pack-visual-wrap">
       <div class="pack-visual ${pack.tier}${pack.img?' has-img':''}" id="pack-visual">
         ${pack.img ? `<img src="${pack.img}" alt="">` : ''}
         <div class="pv-shine"></div>
-        <div class="pv-count">${drawn.length}</div><div class="pv-label">Spieler</div><div class="pv-tap">${clickMode ? 'TIPPEN ZUM \u00d6FFNEN' : 'WISCHEN ZUM AUFSCHLITZEN'}</div>
+        <div class="pv-count">${drawn.length}</div><div class="pv-label">Spieler</div><div class="pv-tap" id="pack-visual-tap">${modeTapText()}</div>
       </div>
       <div class="pack-slice-line" id="pack-slice-line"></div>
     </div>
@@ -11758,16 +11747,38 @@ function showPackOpening(pack, drawn, opts={}){
     <div class="collected-tray" id="collected-tray"></div>
     <button class="modal-close" id="modal-close-btn" style="display:none;">Weiter</button>
   `);
-  if(clickMode){
-    let opened = false;
-    document.getElementById('pack-visual').addEventListener('click', ()=>{
-      if(opened) return;
-      opened = true;
-      openPack();
-    });
-  } else {
-    initPackSliceGesture(document.getElementById('pack-visual'), ()=>openPack());
+  // (re)binds whichever open trigger matches the current mode to #pack-visual - an AbortController
+  // lets us cleanly tear down the previous mode's listeners (pointer* for slice, click for tap)
+  // when the player flips the in-modal switch, instead of stacking duplicate handlers.
+  let triggerAbort = null;
+  function bindOpenTrigger(){
+    if(triggerAbort) triggerAbort.abort();
+    triggerAbort = new AbortController();
+    const visual = document.getElementById('pack-visual');
+    if(!visual) return;
+    if(clickMode){
+      let opened = false;
+      visual.addEventListener('click', ()=>{
+        if(opened) return;
+        opened = true;
+        openPack();
+      }, {signal: triggerAbort.signal});
+    } else {
+      initPackSliceGesture(visual, ()=>openPack(), triggerAbort.signal);
+    }
   }
+  bindOpenTrigger();
+  const modeSwitchBtn = document.getElementById('pack-mode-switch');
+  if(modeSwitchBtn) modeSwitchBtn.addEventListener('click', async ()=>{
+    clickMode = !clickMode;
+    profile.packOpenMode = clickMode ? 'click' : 'slice';
+    await sSet('profile', profile);
+    const sub = document.getElementById('pack-sub'); if(sub) sub.textContent = modeLabel();
+    const tap = document.getElementById('pack-visual-tap'); if(tap) tap.textContent = modeTapText();
+    modeSwitchBtn.textContent = modeSwitchLabel();
+    const line = document.getElementById('pack-slice-line'); if(line) line.classList.remove('active');
+    bindOpenTrigger();
+  });
   function openPack(){
     const wrapEl = document.getElementById('pack-visual-wrap');
     const visual = document.getElementById('pack-visual');
@@ -11804,8 +11815,9 @@ function showPackOpening(pack, drawn, opts={}){
 }
 // swipe-to-slice: a left-right (or right-left) drag past the threshold "cuts" the pack open,
 // with a glowing blade-line tracking the pointer while dragging so it reads as an actual slice
-function initPackSliceGesture(el, onOpen){
+function initPackSliceGesture(el, onOpen, signal){
   if(!el) return;
+  const listenerOpts = signal ? {signal} : undefined;
   const line = document.getElementById('pack-slice-line');
   const THRESHOLD = 70;
   let dragging = false, startX = 0, startY = 0, opened = false;
@@ -11839,10 +11851,10 @@ function initPackSliceGesture(el, onOpen){
     dragging = false;
     if(line && !opened) line.classList.remove('active');
   };
-  el.addEventListener('pointerdown', onDown);
-  el.addEventListener('pointermove', onMove);
-  el.addEventListener('pointerup', onUp);
-  el.addEventListener('pointercancel', onUp);
+  el.addEventListener('pointerdown', onDown, listenerOpts);
+  el.addEventListener('pointermove', onMove, listenerOpts);
+  el.addEventListener('pointerup', onUp, listenerOpts);
+  el.addEventListener('pointercancel', onUp, listenerOpts);
 }
 function updatePackProgress(i, total){
   const el = document.getElementById('pack-progress');
