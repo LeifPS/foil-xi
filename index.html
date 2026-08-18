@@ -904,6 +904,14 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   background:linear-gradient(100deg, var(--cs-acc,#e8c468) 30%, #fff 50%, var(--cs-acc,#e8c468) 70%) !important;
   background-size:220% 100% !important;animation:csBannerIn .5s .25s forwards, futMythicTextShift 4s ease-in-out infinite !important;}
 
+/* ---- club settings menu ---- */
+.settings-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:2px 14px;margin-bottom:16px;}
+.settings-box summary{padding:10px 0;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--chalk);list-style:none;}
+.settings-box summary::-webkit-details-marker{display:none;}
+.settings-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:4px 0 14px;border-top:1px solid var(--line);flex-wrap:wrap;}
+.settings-label{font-size:13px;font-weight:600;}
+.settings-row select{background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 10px;border-radius:8px;font-size:13px;}
+
 /* ---- club grid ---- */
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
 .toolbar input,.toolbar select{background:var(--panel);border:1px solid var(--line);color:var(--chalk);padding:9px 12px;border-radius:8px;font-size:13px;}
@@ -11722,23 +11730,19 @@ function showPackOpening(pack, drawn, opts={}){
     const bKey = b.ov + (ultraRareManager(b) ? 1000 : 0);
     return aKey-bKey;
   });
-  // pack-opening default is the swipe-to-slice gesture; profile.packOpenMode:'click' switches it to
-  // a plain tap instead, for players who find the swipe finicky - purely an input-method preference,
-  // the reveal flow after is identical. Toggled in-modal (see bindOpenTrigger below), not globally
-  // in the topbar, so it stays out of the way for players who never touch it.
-  let clickMode = profile.packOpenMode==='click';
-  const modeLabel = ()=> clickMode ? 'Auf das Pack tippen, um es zu \u00f6ffnen' : '\u00dcber das Pack wischen, um es aufzuschlitzen';
-  const modeTapText = ()=> clickMode ? 'TIPPEN ZUM \u00d6FFNEN' : 'WISCHEN ZUM AUFSCHLITZEN';
-  const modeSwitchLabel = ()=> clickMode ? 'Stattdessen wischen' : 'Stattdessen klicken';
+  // pack-opening default is the swipe-to-slice gesture; profile.packOpenMode:'click' (set in the
+  // Einstellungen menu on the Mein-Verein page, see renderClub) switches it to a plain tap instead,
+  // for players who find the swipe finicky - purely an input-method preference, the reveal flow
+  // after is identical.
+  const clickMode = profile.packOpenMode==='click';
   openModal(`
     <h2 style="text-align:center;margin-bottom:2px;">${pack.name}</h2>
-    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:2px;" id="pack-sub">${modeLabel()}</p>
-    <p style="text-align:center;margin-bottom:4px;"><button id="pack-mode-switch" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0;">${modeSwitchLabel()}</button></p>
+    <p style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:4px;" id="pack-sub">${clickMode ? 'Auf das Pack tippen, um es zu \u00f6ffnen' : '\u00dcber das Pack wischen, um es aufzuschlitzen'}</p>
     <div class="pack-visual-wrap" id="pack-visual-wrap">
       <div class="pack-visual ${pack.tier}${pack.img?' has-img':''}" id="pack-visual">
         ${pack.img ? `<img src="${pack.img}" alt="">` : ''}
         <div class="pv-shine"></div>
-        <div class="pv-count">${drawn.length}</div><div class="pv-label">Spieler</div><div class="pv-tap" id="pack-visual-tap">${modeTapText()}</div>
+        <div class="pv-count">${drawn.length}</div><div class="pv-label">Spieler</div><div class="pv-tap">${clickMode ? 'TIPPEN ZUM \u00d6FFNEN' : 'WISCHEN ZUM AUFSCHLITZEN'}</div>
       </div>
       <div class="pack-slice-line" id="pack-slice-line"></div>
     </div>
@@ -11747,38 +11751,16 @@ function showPackOpening(pack, drawn, opts={}){
     <div class="collected-tray" id="collected-tray"></div>
     <button class="modal-close" id="modal-close-btn" style="display:none;">Weiter</button>
   `);
-  // (re)binds whichever open trigger matches the current mode to #pack-visual - an AbortController
-  // lets us cleanly tear down the previous mode's listeners (pointer* for slice, click for tap)
-  // when the player flips the in-modal switch, instead of stacking duplicate handlers.
-  let triggerAbort = null;
-  function bindOpenTrigger(){
-    if(triggerAbort) triggerAbort.abort();
-    triggerAbort = new AbortController();
-    const visual = document.getElementById('pack-visual');
-    if(!visual) return;
-    if(clickMode){
-      let opened = false;
-      visual.addEventListener('click', ()=>{
-        if(opened) return;
-        opened = true;
-        openPack();
-      }, {signal: triggerAbort.signal});
-    } else {
-      initPackSliceGesture(visual, ()=>openPack(), triggerAbort.signal);
-    }
+  if(clickMode){
+    let opened = false;
+    document.getElementById('pack-visual').addEventListener('click', ()=>{
+      if(opened) return;
+      opened = true;
+      openPack();
+    });
+  } else {
+    initPackSliceGesture(document.getElementById('pack-visual'), ()=>openPack());
   }
-  bindOpenTrigger();
-  const modeSwitchBtn = document.getElementById('pack-mode-switch');
-  if(modeSwitchBtn) modeSwitchBtn.addEventListener('click', async ()=>{
-    clickMode = !clickMode;
-    profile.packOpenMode = clickMode ? 'click' : 'slice';
-    await sSet('profile', profile);
-    const sub = document.getElementById('pack-sub'); if(sub) sub.textContent = modeLabel();
-    const tap = document.getElementById('pack-visual-tap'); if(tap) tap.textContent = modeTapText();
-    modeSwitchBtn.textContent = modeSwitchLabel();
-    const line = document.getElementById('pack-slice-line'); if(line) line.classList.remove('active');
-    bindOpenTrigger();
-  });
   function openPack(){
     const wrapEl = document.getElementById('pack-visual-wrap');
     const visual = document.getElementById('pack-visual');
@@ -11815,9 +11797,8 @@ function showPackOpening(pack, drawn, opts={}){
 }
 // swipe-to-slice: a left-right (or right-left) drag past the threshold "cuts" the pack open,
 // with a glowing blade-line tracking the pointer while dragging so it reads as an actual slice
-function initPackSliceGesture(el, onOpen, signal){
+function initPackSliceGesture(el, onOpen){
   if(!el) return;
-  const listenerOpts = signal ? {signal} : undefined;
   const line = document.getElementById('pack-slice-line');
   const THRESHOLD = 70;
   let dragging = false, startX = 0, startY = 0, opened = false;
@@ -11851,10 +11832,10 @@ function initPackSliceGesture(el, onOpen, signal){
     dragging = false;
     if(line && !opened) line.classList.remove('active');
   };
-  el.addEventListener('pointerdown', onDown, listenerOpts);
-  el.addEventListener('pointermove', onMove, listenerOpts);
-  el.addEventListener('pointerup', onUp, listenerOpts);
-  el.addEventListener('pointercancel', onUp, listenerOpts);
+  el.addEventListener('pointerdown', onDown);
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
 }
 function updatePackProgress(i, total){
   const el = document.getElementById('pack-progress');
@@ -13676,6 +13657,19 @@ function renderClub(view){
           <button class="action-btn secondary" id="rename-club" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button></p>
       </div>
     </div>
+    <details class="settings-box" id="club-settings">
+      <summary>\u2699 Einstellungen</summary>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Packs \u00f6ffnen per</div>
+          <div class="hint" style="margin-top:2px;">Wie sich ein Pack im \u00d6ffnungs-Bildschirm aufschlagen l\u00e4sst.</div>
+        </div>
+        <select id="pack-open-mode-select">
+          <option value="slice">Wischen (Standard)</option>
+          <option value="click">Klick</option>
+        </select>
+      </div>
+    </details>
     <div class="toolbar">
       <input id="club-search" placeholder="Spielername suchen..." value="${clubFilter.q}">
       <select id="club-pos">
@@ -13708,6 +13702,13 @@ function renderClub(view){
       toast('Anzeigename ge\u00e4ndert. Dein Login-Vereinsname bleibt unver\u00e4ndert.');
       renderClub(document.getElementById('view'));
     }, 24);
+  });
+  const packOpenModeSelect = document.getElementById('pack-open-mode-select');
+  packOpenModeSelect.value = profile.packOpenMode==='click' ? 'click' : 'slice';
+  packOpenModeSelect.addEventListener('change', async e=>{
+    profile.packOpenMode = e.target.value;
+    await sSet('profile', profile);
+    toast(profile.packOpenMode==='click' ? 'Packs öffnen jetzt per Klick.' : 'Packs öffnen jetzt per Wischen.');
   });
   document.getElementById('club-pos').value = clubFilter.pos;
   document.getElementById('club-sort').value = clubFilter.sort;
