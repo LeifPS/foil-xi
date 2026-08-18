@@ -8911,6 +8911,18 @@ async function openSBCBuilder(sbc){
   view.innerHTML = `<div class="view-head"><h2>${sbc.name}</h2><p class="hint">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p></div>`;
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
+  // pool computed up front (not just at grid-render time below) so the Nation/Liga/Club filter
+  // dropdowns can be populated with only the values actually present in the owned collection,
+  // instead of every value in the whole game's card database (most of which the player doesn't own).
+  const ownedPool = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited).sort((a,b)=>b.card.ov-a.card.ov);
+  const distinctSorted = (getValue, getLabel)=>{
+    const map = new Map();
+    ownedPool.forEach(x=>{ const v = getValue(x.card); if(v && !map.has(v)) map.set(v, getLabel(x.card)); });
+    return [...map.entries()].sort((a,b)=>a[1].localeCompare(b[1],'de'));
+  };
+  const natOptions = distinctSorted(c=>c.nat, c=>natDE(c.nat));
+  const lgOptions = distinctSorted(c=>c.lg, c=>c.lg);
+  const clubOptions = distinctSorted(c=>c.club, c=>c.club);
   view.innerHTML = `
     <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Spieler, die aktuell in deiner Kader-Editor-Aufstellung stehen, im Transfermarkt gelistet sind oder in einem Handelsangebot stecken, sind markiert und k\u00f6nnen hier nicht verwendet werden.</p></div>
     <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button></div>
@@ -8923,7 +8935,31 @@ async function openSBCBuilder(sbc){
     <div class="toolbar"><button class="action-btn secondary" id="sbc-autofill" style="width:auto;padding:9px 16px;">Automatisch ausf\u00fcllen</button></div>
     <div id="sbc-reqs" style="margin-bottom:14px;"></div>
     <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / ${sbc.size} ausgew\u00e4hlt</div>
-    <input id="sbc-card-search" placeholder="Spielername filtern..." style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 14px;border-radius:9px;margin-bottom:12px;">
+    <div class="toolbar" style="margin-bottom:12px;">
+      <input id="sbc-card-search" placeholder="Spielername filtern..." style="flex:1;min-width:160px;">
+      <select id="sbc-filter-pos">
+        <option value="ALL">Alle Positionen</option>
+        ${Object.entries(POS_DE).map(([k,label])=>`<option value="${k}">${label}</option>`).join('')}
+      </select>
+      <select id="sbc-filter-bonus" title="Nur zusammen mit einer gewählten Position aktiv - der Positions-Bonus hängt davon ab, auf welcher Position eine Karte eingesetzt wird.">
+        <option value="ALL">Bonus: beliebig</option>
+        <option value="2">++ (Hauptposition)</option>
+        <option value="1">+ (Nebenposition)</option>
+        <option value="0">o (kein Bonus)</option>
+      </select>
+      <select id="sbc-filter-nat">
+        <option value="ALL">Alle Nationen</option>
+        ${natOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+      <select id="sbc-filter-lg">
+        <option value="ALL">Alle Ligen</option>
+        ${lgOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+      <select id="sbc-filter-club">
+        <option value="ALL">Alle Vereine</option>
+        ${clubOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+    </div>
     <div class="club-grid" id="sbc-club-grid"></div>
     ${sbc.managerReq ? `
       <div class="lbl" style="margin:18px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer (Stufe ${sbc.managerReq.minTier}+ ben\u00f6tigt)</div>
@@ -8933,8 +8969,8 @@ async function openSBCBuilder(sbc){
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   const grid = document.getElementById('sbc-club-grid');
   const uidToEl = new Map();
-  const searchableWraps = []; // {wrap, name} - lets the search box filter without rebuilding the grid
-  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
+  const searchableWraps = []; // {wrap, card} - lets the filter bar re-filter without rebuilding the grid
+  ownedPool.forEach(({uid,card})=>{
     const inSquad = squadLocked.has(uid);
     const isListed = externalLocked.has(uid);
     const unavailable = inSquad || isListed;
@@ -8945,7 +8981,7 @@ async function openSBCBuilder(sbc){
     const el = cardEl(card, 'mini');
     wrap.appendChild(el);
     uidToEl.set(uid, el);
-    searchableWraps.push({wrap, name:card.n.toLowerCase()});
+    searchableWraps.push({wrap, card});
     if(unavailable){
       const badge = document.createElement('div');
       badge.className = 'sbc-inuse-badge';
@@ -8964,9 +9000,31 @@ async function openSBCBuilder(sbc){
     });
     grid.appendChild(wrap);
   });
-  document.getElementById('sbc-card-search').addEventListener('input', e=>{
-    const q = e.target.value.trim().toLowerCase();
-    searchableWraps.forEach(({wrap,name})=>{ wrap.style.display = (!q || name.includes(q)) ? '' : 'none'; });
+  // combined filter bar (name search + position/bonus/nation/liga/club) re-applies on every change of
+  // any field, purely by toggling wrap.style.display on the already-built cards - no rebuild needed.
+  const searchInput = document.getElementById('sbc-card-search');
+  const posSelect = document.getElementById('sbc-filter-pos');
+  const bonusSelect = document.getElementById('sbc-filter-bonus');
+  const natSelect = document.getElementById('sbc-filter-nat');
+  const lgSelect = document.getElementById('sbc-filter-lg');
+  const clubSelect = document.getElementById('sbc-filter-club');
+  const applySbcFilters = ()=>{
+    const q = searchInput.value.trim().toLowerCase();
+    const pos = posSelect.value, bonus = bonusSelect.value, nat = natSelect.value, lg = lgSelect.value, club = clubSelect.value;
+    searchableWraps.forEach(({wrap,card})=>{
+      let show = !q || card.n.toLowerCase().includes(q);
+      if(show && nat!=='ALL') show = card.nat===nat;
+      if(show && lg!=='ALL') show = card.lg===lg;
+      if(show && club!=='ALL') show = card.club===club;
+      if(show && pos!=='ALL'){
+        const elig = positionEligibility(card, pos);
+        show = !!elig && (bonus==='ALL' || String(elig.bonus)===bonus);
+      }
+      wrap.style.display = show ? '' : 'none';
+    });
+  };
+  [searchInput, posSelect, bonusSelect, natSelect, lgSelect, clubSelect].forEach(elm=>{
+    elm.addEventListener(elm===searchInput ? 'input' : 'change', applySbcFilters);
   });
   if(sbc.managerReq){
     const mgrGrid = document.getElementById('sbc-mgr-grid');
