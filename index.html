@@ -447,18 +447,33 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.7), 0 0 22px -2px #ffce00;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.7), 0 0 44px 1px #fff3b0;}
 }
-/* Ikone (rarest Deutsche-Legenden tier, 108-110 OV: Beckenbauer/Müller/Klose) had a pattern-legikonepattern
-   class wired up in PATTERN_FAMILY but no matching .pattern-layer rule anywhere - unlike every other
-   theme in the game, its pattern-layer rendered completely blank. Fills it with a slowly rotating gold
-   sunburst/halo behind the photo - reads as "icon status", distinct from the flag-stripe/star treatments
-   used by the lower WM-Legende/National-Legende tiers below. */
-.pcard.pattern-legikonepattern .pattern-layer{
-  background:
-    repeating-conic-gradient(from 0deg at 50% 29%, rgba(255,206,0,.16) 0deg 2.5deg, transparent 2.5deg 15deg),
-    radial-gradient(circle at 50% 29%, rgba(255,243,176,.24) 0%, transparent 48%);
-  animation: legikoneRotate 16s linear infinite;
-  transform-origin:50% 29%;}
-@keyframes legikoneRotate{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+/* Ikone (rarest Deutsche-Legenden tier, 108-110 OV: Beckenbauer/Müller/Klose - all three real World Cup
+   winners) gets its own bespoke effect instead of just a pattern-layer texture, same spirit as Black
+   Hole's swirl or Ratings Reload's arrow+shards: a pulsing gold halo behind the photo plus a continuous
+   rain of black/red/gold confetti strips - reads as "the moment they lifted the trophy", not a generic
+   sparkle. Own dedicated element (see cardEl's isLegikoneTier), not the shared .pattern-layer. */
+.pcard .legikone-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .legikone-halo{position:absolute;top:29%;left:50%;width:150%;height:150%;margin:-75% 0 0 -75%;
+  background:radial-gradient(circle, rgba(255,225,120,.42) 0%, rgba(255,206,0,.16) 42%, transparent 70%);
+  animation:legikoneHaloPulse 2.6s ease-in-out infinite;}
+@keyframes legikoneHaloPulse{0%,100%{opacity:.55;transform:scale(1);}50%{opacity:1;transform:scale(1.1);}}
+.pcard .confetti{position:absolute;top:-12%;width:5px;height:10px;border-radius:1px;opacity:0;animation:confettiFall linear infinite;}
+.pcard .confetti.c1{left:4%;background:#ffce00;animation-duration:3.2s;animation-delay:0s;}
+.pcard .confetti.c2{left:14%;background:#dd0000;animation-duration:3.8s;animation-delay:.5s;width:4px;height:8px;}
+.pcard .confetti.c3{left:24%;background:#fff3b0;animation-duration:2.9s;animation-delay:1.4s;}
+.pcard .confetti.c4{left:36%;background:#050403;animation-duration:3.5s;animation-delay:.2s;width:4px;height:9px;}
+.pcard .confetti.c5{left:48%;background:#ffce00;animation-duration:4.1s;animation-delay:1.9s;}
+.pcard .confetti.c6{left:58%;background:#dd0000;animation-duration:3s;animation-delay:.9s;width:4px;height:8px;}
+.pcard .confetti.c7{left:68%;background:#fff3b0;animation-duration:3.6s;animation-delay:2.3s;}
+.pcard .confetti.c8{left:78%;background:#050403;animation-duration:3.3s;animation-delay:.1s;width:4px;height:9px;}
+.pcard .confetti.c9{left:88%;background:#ffce00;animation-duration:4s;animation-delay:1.2s;}
+.pcard .confetti.c10{left:94%;background:#dd0000;animation-duration:3.7s;animation-delay:2.6s;width:4px;height:8px;}
+@keyframes confettiFall{
+  0%{top:-12%;opacity:0;transform:rotate(0deg);}
+  8%{opacity:1;}
+  85%{opacity:1;}
+  100%{top:112%;opacity:0;transform:rotate(360deg);}
+}
 /* WM-Legende and National-Legende: the flag graphics stay inside the photo area (top ~58% of the
    card) on purpose, so they never sit underneath the name or stat rows below. */
 .pcard.theme-legwm{--acc:#d4a017;border:2px solid #d4a017;
@@ -11379,6 +11394,14 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="refresh-arrow"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       ${Array.from({length:8},(_,i)=>`<i class="shard s${i+1}"></i>`).join('')}
     </div>` : '';
+  // Ikone (Beckenbauer/Müller/Klose): pulsing gold halo + continuous black/red/gold confetti rain,
+  // own element like the two above - not the shared .pattern-layer (see the CSS comment next to
+  // .legikone-fx for why).
+  const isLegikoneTier = card.theme==='legikone';
+  const legikoneFxHTML = isLegikoneTier ? `<div class="legikone-fx">
+      <div class="legikone-halo"></div>
+      ${Array.from({length:10},(_,i)=>`<i class="confetti c${i+1}"></i>`).join('')}
+    </div>` : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
@@ -11459,6 +11482,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${hasVariant || card.isManager ? '<div class="pattern-layer"></div>' : ''}
     ${gemFacetsHTML}
     ${refreshFxHTML}
+    ${legikoneFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
