@@ -282,6 +282,22 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #9aa7b5;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #e4e9ee;}
 }
+/* Ratings Reload (27 Ratings pack, rare +15 pull): an electric-cyan "live data refresh" look, reading
+   as "the numbers just updated" - a vertical scan sweep on the pattern-layer plus a cyan/white foil
+   border, distinct from every sparkle/gem/foil treatment used elsewhere. */
+.pcard.theme-ratings27reload{--acc:#37e6ff;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#08222b 0%,#0a0d12 55%,#071a22 100%) padding-box,
+    linear-gradient(160deg,#0d4a5c,#37e6ff,#d6fbff,#37e6ff,#0d4a5c) border-box !important;
+  background-size:100% 100%, 260% 260%;
+  animation: ratings27reloadGlow 2.6s ease-in-out infinite, ratings27reloadBorderShift 4s linear infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-ratings27reload::before{animation:autoShine 1.6s ease-in-out infinite;}
+.pcard.theme-ratings27reload .name{color:#d6fbff;text-shadow:0 0 8px rgba(55,230,255,.6);}
+@keyframes ratings27reloadBorderShift{0%{background-position:0% 0%,0% 50%;}100%{background-position:0% 0%,260% 50%;}}
+@keyframes ratings27reloadGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #37e6ff;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 42px 2px #d6fbff;}
+}
 /* Kronjuwelen cut-gem effect (Saphir/Rubin/Diamant only): real angular facets via animated clip-path
    polygons - not a gradient rotating in a circle - so the card looks like an actual cut stone slowly
    turning, plus a diagonal beam of light that visibly disperses into a rainbow as it crosses, the way
@@ -552,6 +568,12 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     radial-gradient(circle at 50% 10%, rgba(154,167,181,.25), transparent 55%);
     animation:kapitaenSparkle 2.6s ease-in-out infinite;}
 @keyframes kapitaenSparkle{0%,100%{opacity:.68;}50%{opacity:1;}}
+.pcard.pattern-ratings27reloadpattern .pattern-layer{background:
+    repeating-linear-gradient(180deg, rgba(55,230,255,.12) 0 2px, transparent 2px 14px),
+    linear-gradient(0deg, transparent 0%, rgba(55,230,255,.4) 48%, rgba(214,251,255,.6) 50%, rgba(55,230,255,.4) 52%, transparent 100%);
+    background-size:100% 100%, 100% 320%;
+    animation:ratings27reloadSweep 2.4s linear infinite;}
+@keyframes ratings27reloadSweep{0%{background-position:0 0, 0 100%;}100%{background-position:0 0, 0 -220%;}}
 /* ===== PRIME: the most spectacular card treatment in the game, reserved for all-time legends ===== */
 .pcard.theme-prime{
   border:2px solid transparent;
@@ -7463,6 +7485,54 @@ function genId(){ return 'c'+Date.now().toString(36)+Math.random().toString(36).
 
 function specialsByVariant(tags){ return ALL_SPECIAL.filter(c=>tags.includes(c.variant)); }
 
+// ===== "27 Ratings" pack: FC27 rating-refresh cards for the 27 players fut.gg's rating-predictions
+// page had confirmed/predicted as of 2026-08-19. These are their own standalone cards (fresh id block,
+// tradable, not tied to the players' normal PLAYERS_BASE entry) - a deliberate snapshot, so any FUTURE
+// rating refresh for these same players goes back to building on their normal base card again, not on
+// top of this one. baseId still points at each player's real PLAYERS_BASE id (img/foot/pos/nat/lg/club
+// all copied from there) purely for reference/img-override lookups, same convention as every other
+// boostBaseToOv-based card.
+const RATINGS27_ROSTER = [
+  {baseId:203376, n:'V. van Dijk', pos:'CB', nat:'Netherlands', lg:'Premier League', club:'Liverpool', foot:'Right', img:'https://cdn.sofifa.net/players/203/376/26_120.png', ov:88, pac:70, sho:60, pas:72, dri:70, defn:89, phy:85},
+  {baseId:235212, n:'A. Hakimi', pos:'RB, RM', nat:'Morocco', lg:'Ligue 1', club:'Paris Saint-Germain', foot:'Right', img:'https://cdn.sofifa.net/players/235/212/26_120.png', ov:88, pac:92, sho:79, pas:81, dri:82, defn:82, phy:81},
+  {baseId:212622, n:'J. Kimmich', pos:'CDM, RB, CM', nat:'Germany', lg:'Bundesliga', club:'FC Bayern München', foot:'Right', img:'https://cdn.sofifa.net/players/212/622/26_120.png', ov:88, pac:71, sho:73, pas:90, dri:84, defn:81, phy:79},
+  {baseId:200389, n:'J. Oblak', pos:'GK', nat:'Slovenia', lg:'La Liga', club:'Atlético Madrid', foot:'Right', img:'https://cdn.sofifa.net/players/200/389/26_120.png', gk:true, ov:88, pac:46, sho:79, pas:86, dri:87, defn:85, phy:90},
+  {baseId:243715, n:'W. Saliba', pos:'CB', nat:'France', lg:'Premier League', club:'Arsenal', foot:'Right', img:'https://cdn.sofifa.net/players/243/715/26_120.png', ov:88, pac:77, sho:41, pas:68, dri:73, defn:90, phy:82},
+  {baseId:234378, n:'D. Rice', pos:'CDM, CM', nat:'England', lg:'Premier League', club:'Arsenal', foot:'Right', img:'https://cdn.sofifa.net/players/234/378/26_120.png', ov:88, pac:72, sho:75, pas:86, dri:81, defn:85, phy:84},
+  {baseId:272834, n:'João Neves', pos:'CM, CDM', nat:'Portugal', lg:'Ligue 1', club:'Paris Saint-Germain', foot:'Right', img:'https://cdn.sofifa.net/players/272/834/26_120.png', ov:88, pac:72, sho:75, pas:84, dri:87, defn:86, phy:82},
+  {baseId:241084, n:'L. Díaz', pos:'LM, LW, ST', nat:'Colombia', lg:'Bundesliga', club:'FC Bayern München', foot:'Right', img:'https://cdn.sofifa.net/players/241/084/26_120.png', ov:88, pac:82, sho:82, pas:83, dri:87, defn:44, phy:74},
+  {baseId:238794, n:'Vini Jr.', pos:'LW, ST, LM', nat:'Brazil', lg:'La Liga', club:'Real Madrid', foot:'Right', img:'https://cdn.sofifa.net/players/238/794/26_120.png', ov:89, pac:93, sho:85, pas:80, dri:91, defn:31, phy:71},
+  {baseId:230621, n:'G. Donnarumma', pos:'GK', nat:'Italy', lg:'Premier League', club:'Manchester City', foot:'Right', img:'https://cdn.sofifa.net/players/230/621/26_120.png', gk:true, ov:89, pac:46, sho:72, pas:88, dri:90, defn:90, phy:83},
+  {baseId:232580, n:'Gabriel', pos:'CB', nat:'Brazil', lg:'Premier League', club:'Arsenal', foot:'Left', img:'https://cdn.sofifa.net/players/232/580/26_120.png', ov:89, pac:64, sho:44, pas:64, dri:66, defn:91, phy:84},
+  {baseId:247635, n:'K. Kvaratskhelia', pos:'LW, RW, LM', nat:'Georgia', lg:'Ligue 1', club:'Paris Saint-Germain', foot:'Right', img:'https://cdn.sofifa.net/players/247/635/26_120.png', ov:89, pac:86, sho:85, pas:84, dri:90, defn:59, phy:81},
+  {baseId:212198, n:'Bruno Fernandes', pos:'CAM, CM', nat:'Portugal', lg:'Premier League', club:'Manchester United', foot:'Right', img:'https://cdn.sofifa.net/players/212/198/26_120.png', ov:89, pac:67, sho:85, pas:92, dri:85, defn:68, phy:75},
+  {baseId:256196, n:'W. Pacho', pos:'CB', nat:'Ecuador', lg:'Ligue 1', club:'Paris Saint-Germain', foot:'Left', img:'https://cdn.sofifa.net/players/256/196/26_120.png', ov:89, pac:80, sho:34, pas:63, dri:65, defn:90, phy:86},
+  {baseId:252145, n:'Nuno Mendes', pos:'LB, LM', nat:'Portugal', lg:'Ligue 1', club:'Paris Saint-Germain', foot:'Left', img:'https://cdn.sofifa.net/players/252/145/26_120.png', ov:89, pac:94, sho:77, pas:80, dri:86, defn:84, phy:80},
+  {baseId:158023, n:'L. Messi', pos:'RW, ST, CAM, RM', nat:'Argentina', lg:'Major League Soccer', club:'Inter Miami', foot:'Left', img:'https://cdn.sofifa.net/players/158/023/26_120.png', ov:89, pac:76, sho:87, pas:89, dri:90, defn:33, phy:63},
+  {baseId:252371, n:'J. Bellingham', pos:'CAM, CM', nat:'England', lg:'La Liga', club:'Real Madrid', foot:'Right', img:'https://cdn.sofifa.net/players/252/371/26_120.png', ov:90, pac:79, sho:86, pas:83, dri:88, defn:79, phy:85},
+  {baseId:231866, n:'Rodri', pos:'CDM, CM', nat:'Spain', lg:'La Liga', club:'FC Barcelona', foot:'Right', img:'https://cdn.sofifa.net/players/231/866/26_120.png', ov:90, pac:62, sho:78, pas:86, dri:81, defn:85, phy:81},
+  {baseId:231443, n:'O. Dembélé', pos:'ST, RW, CAM', nat:'France', lg:'Ligue 1', club:'Paris Saint-Germain', foot:'Left', img:'https://cdn.sofifa.net/players/231/443/26_120.png', ov:90, pac:90, sho:89, pas:83, dri:93, defn:55, phy:70},
+  {baseId:277643, n:'Lamine Yamal', pos:'RM, RW', nat:'Spain', lg:'La Liga', club:'FC Barcelona', foot:'Left', img:'https://cdn.sofifa.net/players/277/643/26_120.png', ov:90, pac:86, sho:84, pas:87, dri:93, defn:38, phy:61},
+  {baseId:255253, n:'Vitinha', pos:'CM, CDM, CAM', nat:'Portugal', lg:'Ligue 1', club:'Paris Saint-Germain', foot:'Right', img:'https://cdn.sofifa.net/players/255/253/26_120.png', ov:90, pac:72, sho:81, pas:88, dri:91, defn:75, phy:70},
+  {baseId:251854, n:'Pedri', pos:'CM, CDM, CAM', nat:'Spain', lg:'La Liga', club:'FC Barcelona', foot:'Right', img:'https://cdn.sofifa.net/players/251/854/26_120.png', ov:90, pac:76, sho:75, pas:89, dri:91, defn:77, phy:75},
+  {baseId:202126, n:'H. Kane', pos:'ST', nat:'England', lg:'Bundesliga', club:'FC Bayern München', foot:'Right', img:'https://cdn.sofifa.net/players/202/126/26_120.png', ov:90, pac:62, sho:94, pas:83, dri:82, defn:49, phy:83},
+  {baseId:192119, n:'T. Courtois', pos:'GK', nat:'Belgium', lg:'La Liga', club:'Real Madrid', foot:'Left', img:'https://cdn.sofifa.net/players/192/119/26_120.png', gk:true, ov:90, pac:46, sho:78, pas:90, dri:90, defn:87, phy:89},
+  {baseId:247827, n:'M. Olise', pos:'RM, RW', nat:'France', lg:'Bundesliga', club:'FC Bayern München', foot:'Left', img:'https://cdn.sofifa.net/players/247/827/26_120.png', ov:90, pac:83, sho:82, pas:89, dri:91, defn:47, phy:69},
+  {baseId:231747, n:'K. Mbappé', pos:'ST, LW, LM', nat:'France', lg:'La Liga', club:'Real Madrid', foot:'Right', img:'https://cdn.sofifa.net/players/231/747/26_120.png', ov:91, pac:96, sho:91, pas:80, dri:92, defn:29, phy:76},
+  {baseId:239085, n:'E. Haaland', pos:'ST', nat:'Norway', lg:'Premier League', club:'Manchester City', foot:'Left', img:'https://cdn.sofifa.net/players/239/085/26_120.png', ov:91, pac:87, sho:92, pas:71, dri:80, defn:47, phy:89},
+];
+const RATINGS27_ID_BASE = 9794000, RATINGS27_RELOAD_ID_BASE = 9795000;
+const RATINGS27_CARDS = RATINGS27_ROSTER.map((p,i)=>({
+  id:RATINGS27_ID_BASE+i+1, n:p.n, pos:p.pos, ov:p.ov, pot:p.ov, nat:p.nat, lg:p.lg, club:p.club,
+  pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy, foot:p.foot, img:p.img, gk:!!p.gk,
+  baseId:p.baseId,
+}));
+RATINGS27_CARDS.forEach(c=>BY_ID.set(c.id,c));
+// rare pull: +15 OVR over the ABOVE (refreshed) values, not the player's old/original rating - the
+// substat gain is computed from RATINGS27_CARDS' own .ov, so it stacks on top of the FC27 refresh.
+const RATINGS27_RELOAD_CARDS = RATINGS27_CARDS.map((c,i)=>boostBaseToOv(c, c.ov+15, RATINGS27_RELOAD_ID_BASE+i+1, 'ratings27reload', 'Ratings Reload', 'ratings27reload'));
+RATINGS27_RELOAD_CARDS.forEach(c=>BY_ID.set(c.id,c));
+
 // ===== pack definitions =====
 const PACKS = [
   {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
@@ -7531,6 +7601,14 @@ const PACKS = [
   {id:'championspick',name:'Pick 3 of 6: Champions Select',cost:4000,tier:'premium',count:6,pickCount:3,
     desc:'6 Spieler, Rating 82-90 (inkl. Chance auf Sonderkarten). W\u00e4hle 3 davon zum Behalten.',
     draw(){ const pool=poolByRange(82,90,true); return Array.from({length:6},()=>pick(pool)); }},
+  {id:'ratings27',name:'27 Ratings',cost:25000,tier:'ultimate',count:9,
+    desc:'9 Spieler aus einem starken Rating-85-94-Pool, in den alle 27 frisch aufgewerteten FC27-Rating-Refresh-Karten der aktuell besten Profis eingemischt sind. Ca. 15% Chance pro Pack auf eine seltene „Ratings Reload“-Karte — +15 OVR obendrauf, Substats von den neuen Werten hochskaliert. Nur 14 Tage verfügbar.',
+    draw(){
+      const pool = poolByRange(85,94,true).concat(RATINGS27_CARDS);
+      const cards = Array.from({length:9},()=>pick(pool));
+      if(Math.random()<0.15) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_CARDS);
+      return cards;
+    }},
   {id:'mystery',name:'Mystery Elite Pack',cost:30000,tier:'ultimate',count:3,
     desc:'3 Spieler, Rating 75-99 \u2014 h\u00f6chste Schwankungsbreite aller Packs. Alles von Gold Rare bis Blackout ist m\u00f6glich. Sehr selten (insgesamt ca. 2% pro Karte) sprengt eine Karte diese Grenze komplett: eine von 5 besonderen \u201eMystery Elite\u201c-Karten im Rating-Bereich 104-108.',
     draw(){
@@ -11181,6 +11259,7 @@ const VARIANT_ICON = {
   blk:'<path d="M14 3a9 9 0 100 18 7 7 0 010-18z" fill="currentColor"/>',
   manager:'<rect x="5" y="4" width="14" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="2" width="6" height="4" rx="1" fill="currentColor"/><line x1="8" y1="11" x2="16" y2="11" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="15" x2="13" y2="15" stroke="currentColor" stroke-width="1.4"/>',
   meistertrainer:'<rect x="4" y="4" width="13" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="7" y1="10" x2="14" y2="10" stroke="currentColor" stroke-width="1.3"/><line x1="7" y1="14" x2="12" y2="14" stroke="currentColor" stroke-width="1.3"/><path d="M18 13l1 2.2 2.4.3-1.7 1.6.4 2.3-2.1-1.1-2.1 1.1.4-2.3-1.7-1.6 2.4-.3z" fill="currentColor"/>',
+  ratings27reload:'<path d="M3 17l6-6 4 4 8-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 6h6v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   goat:'<circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 5.5l1.9 4.8 5 .4-3.8 3.3 1.2 4.9L12 15.9l-4.3 2.9 1.2-4.9-3.8-3.3 5-.4z" fill="currentColor"/>',
   iconswap:'<path d="M4 9a8 8 0 0114-4.9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 15a8 8 0 01-14 4.9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M18 3.6V7h-3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 20.4V17h3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   wcchamp:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
@@ -11227,6 +11306,7 @@ const PATTERN_FAMILY = {
   poet:'poetpattern',
   promocard:'promocardpattern',
   kapitaen:'kapitaenpattern',
+  ratings27reload:'ratings27reloadpattern',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
@@ -11655,6 +11735,9 @@ function showPackOdds(pack){
 }
 // WM Winners Pack is only available this weekend - hard cutoff at Monday 00:00
 const WM_WINNERS_DEADLINE = new Date(2026, 6, 27, 0, 0, 0).getTime();
+// 27 Ratings Pack: only available for 14 days from launch (2026-08-19 -> cutoff 2026-09-02 00:00)
+const RATINGS27_DEADLINE = new Date(2026, 8, 2, 0, 0, 0).getTime();
+let ratings27CountdownTimer = null;
 let storeCountdownTimer = null;
 function formatCountdown(ms){
   if(ms<=0) return null;
@@ -11668,6 +11751,7 @@ function formatCountdown(ms){
 }
 function renderStore(view){
   if(storeCountdownTimer){ clearInterval(storeCountdownTimer); storeCountdownTimer = null; }
+  if(ratings27CountdownTimer){ clearInterval(ratings27CountdownTimer); ratings27CountdownTimer = null; }
   view.innerHTML = `
     <div class="view-head"><h2>Kartenladen</h2><p>\u00d6ffne Packs, um Spieler zu deinem Verein hinzuzuf\u00fcgen. Die angegebenen Werte sind garantierte Mindestwerte \u2014 jedes Pack kann auch mehr liefern.</p></div>
     ${renderDailyBanner()}
@@ -11682,7 +11766,8 @@ function renderStore(view){
   const TIER_LABEL = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
   const TIER_ORDER = ['', 'premium', 'ultimate'];
   const wmExpired = Date.now() >= WM_WINNERS_DEADLINE;
-  const visiblePacks = PACKS.filter(pack=>(!pack.hidden || (pack.id==='legendpack' && profile.ogPackUnlocked)) && !(pack.id==='wmwinners' && wmExpired));
+  const ratings27Expired = Date.now() >= RATINGS27_DEADLINE;
+  const visiblePacks = PACKS.filter(pack=>(!pack.hidden || (pack.id==='legendpack' && profile.ogPackUnlocked)) && !(pack.id==='wmwinners' && wmExpired) && !(pack.id==='ratings27' && ratings27Expired));
   TIER_ORDER.forEach(tier=>{
     const packsInTier = visiblePacks.filter(p=>(p.tier||'')===tier);
     if(!packsInTier.length) return;
@@ -11692,6 +11777,7 @@ function renderStore(view){
     const grid = section.querySelector('.pack-grid');
     packsInTier.forEach(pack=>{
       const isWM = pack.id==='wmwinners';
+      const isRatings27 = pack.id==='ratings27';
       const card = document.createElement('div');
       card.className = `pack-card ${pack.tier}`;
       card.innerHTML = `
@@ -11703,6 +11789,7 @@ function renderStore(view){
           <h3>${pack.name}</h3>
           <div class="desc">${pack.desc}</div>
           ${isWM ? `<div class="mono" id="wm-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur dieses Wochenende verf\u00fcgbar</div>` : ''}
+          ${isRatings27 ? `<div class="mono" id="ratings27-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur 14 Tage verf\u00fcgbar</div>` : ''}
           <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
           <div class="buyrow">
             <div class="price-pill"><div class="pdot"></div>${formatCoins(pack.cost)}</div>
@@ -11725,6 +11812,17 @@ function renderStore(view){
     };
     updateCountdown();
     storeCountdownTimer = setInterval(updateCountdown, 30000);
+  }
+  if(!ratings27Expired && PACKS.some(p=>p.id==='ratings27')){
+    const updateRatings27Countdown = ()=>{
+      const el = document.getElementById('ratings27-countdown');
+      if(!el) { if(ratings27CountdownTimer){ clearInterval(ratings27CountdownTimer); ratings27CountdownTimer=null; } return; }
+      const remaining = formatCountdown(RATINGS27_DEADLINE - Date.now());
+      if(!remaining){ renderStore(view); return; } // deadline just passed - re-render to remove the pack
+      el.textContent = `⏳ Noch ${remaining} verfügbar`;
+    };
+    updateRatings27Countdown();
+    ratings27CountdownTimer = setInterval(updateRatings27Countdown, 30000);
   }
   document.getElementById('redeem-btn').addEventListener('click', redeemCode);
   document.getElementById('redeem-input').addEventListener('keydown', e=>{ if(e.key==='Enter') redeemCode(); });
