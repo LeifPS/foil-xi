@@ -7550,6 +7550,10 @@ RATINGS27_CARDS.forEach(c=>BY_ID.set(c.id,c));
 // substat gain is computed from RATINGS27_CARDS' own .ov, so it stacks on top of the FC27 refresh.
 const RATINGS27_RELOAD_CARDS = RATINGS27_CARDS.map((c,i)=>boostBaseToOv(c, c.ov+15, RATINGS27_RELOAD_ID_BASE+i+1, 'ratings27reload', 'Ratings Reload', 'ratings27reload'));
 RATINGS27_RELOAD_CARDS.forEach(c=>BY_ID.set(c.id,c));
+// two-tier split for the pack odds: a 105+ Reload card (base 90/91 players) is rarer than a 103-104
+// one (base 88/89 players), even though both are "a Reload card" for the overall 15%-per-pack figure.
+const RATINGS27_RELOAD_HIGH = RATINGS27_RELOAD_CARDS.filter(c=>c.ov>=105);
+const RATINGS27_RELOAD_LOW = RATINGS27_RELOAD_CARDS.filter(c=>c.ov<105);
 
 // ===== pack definitions =====
 const PACKS = [
@@ -7620,11 +7624,13 @@ const PACKS = [
     desc:'6 Spieler, Rating 82-90 (inkl. Chance auf Sonderkarten). W\u00e4hle 3 davon zum Behalten.',
     draw(){ const pool=poolByRange(82,90,true); return Array.from({length:6},()=>pick(pool)); }},
   {id:'ratings27',name:'27 Ratings',cost:25000,tier:'ultimate',count:9,
-    desc:'9 Spieler aus einem starken Rating-85-94-Pool aus reinen Basis-Karten (keine Varianten), in den alle 27 frisch aufgewerteten FC27-Rating-Refresh-Karten der aktuell besten Profis eingemischt sind. Ca. 15% Chance pro Pack auf eine seltene „Ratings Reload“-Karte — +15 OVR obendrauf, Substats von den neuen Werten hochskaliert. Nur 14 Tage verfügbar.',
+    desc:'9 Spieler aus einem starken Rating-85-94-Pool aus reinen Basis-Karten (keine Varianten), in den alle 27 frisch aufgewerteten FC27-Rating-Refresh-Karten der aktuell besten Profis eingemischt sind. Ca. 15% Chance pro Pack auf eine seltene „Ratings Reload“-Karte (+15 OVR obendrauf, Substats von den neuen Werten hochskaliert) — davon ca. 2% auf eine 105+ Reload-Karte, der Rest auf 103-104.',
     draw(){
       const pool = poolByRange(85,94,false).concat(RATINGS27_CARDS);
       const cards = Array.from({length:9},()=>pick(pool));
-      if(Math.random()<0.15) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_CARDS);
+      const r = Math.random();
+      if(r<0.02) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_HIGH); // ~2% -> 105+
+      else if(r<0.15) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_LOW); // ~13% -> 103-104, 15% combined for any Reload
       return cards;
     }},
   {id:'mystery',name:'Mystery Elite Pack',cost:30000,tier:'ultimate',count:3,
@@ -11353,7 +11359,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // morphing ones (fits "numbers just refreshed" better than a single cut-stone effect would).
   const isRatings27ReloadTier = card.theme==='ratings27reload';
   const refreshFxHTML = isRatings27ReloadTier ? `<div class="refresh-fx">
-      <div class="refresh-arrow"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 106.36 2.64" fill="none" stroke="currentColor" stroke-width="2"/><path d="M21 3v6h-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+      <div class="refresh-arrow"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       ${Array.from({length:8},(_,i)=>`<i class="shard s${i+1}"></i>`).join('')}
     </div>` : '';
   const div = document.createElement('div');
