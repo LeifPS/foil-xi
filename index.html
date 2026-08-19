@@ -447,6 +447,18 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.7), 0 0 22px -2px #ffce00;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.7), 0 0 44px 1px #fff3b0;}
 }
+/* Ikone (rarest Deutsche-Legenden tier, 108-110 OV: Beckenbauer/Müller/Klose) had a pattern-legikonepattern
+   class wired up in PATTERN_FAMILY but no matching .pattern-layer rule anywhere - unlike every other
+   theme in the game, its pattern-layer rendered completely blank. Fills it with a slowly rotating gold
+   sunburst/halo behind the photo - reads as "icon status", distinct from the flag-stripe/star treatments
+   used by the lower WM-Legende/National-Legende tiers below. */
+.pcard.pattern-legikonepattern .pattern-layer{
+  background:
+    repeating-conic-gradient(from 0deg at 50% 29%, rgba(255,206,0,.16) 0deg 2.5deg, transparent 2.5deg 15deg),
+    radial-gradient(circle at 50% 29%, rgba(255,243,176,.24) 0%, transparent 48%);
+  animation: legikoneRotate 16s linear infinite;
+  transform-origin:50% 29%;}
+@keyframes legikoneRotate{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 /* WM-Legende and National-Legende: the flag graphics stay inside the photo area (top ~58% of the
    card) on purpose, so they never sit underneath the name or stat rows below. */
 .pcard.theme-legwm{--acc:#d4a017;border:2px solid #d4a017;
