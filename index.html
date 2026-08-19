@@ -1203,6 +1203,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 @keyframes trayIn{from{opacity:0;transform:translateY(10px) scale(.8);}to{opacity:1;transform:translateY(0) scale(1);}}
 .modal-close{display:block;margin:18px auto 0;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 22px;border-radius:9px;font-weight:600;}
 .toast-wrap{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;}
+/* ---- background music widget (Spotify embed) ---- */
+#bg-music-widget{position:fixed;bottom:16px;right:16px;z-index:190;width:300px;max-width:calc(100vw - 24px);background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;}
+#bg-music-widget .bgm-head{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+#bg-music-widget .bgm-close{background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;padding:0 2px;line-height:1;}
+#bg-music-widget iframe{display:block;width:100%;border:0;}
 .toast{background:var(--panel2);border:1px solid var(--line);padding:10px 18px;border-radius:100px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.4);animation:toastin .2s;}
 @keyframes toastin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 .picker-list{display:flex;flex-wrap:wrap;gap:12px;max-height:60vh;overflow:auto;padding:6px;}
@@ -1226,6 +1231,9 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 </div>
 <div id="modal-root"></div>
 <div class="toast-wrap" id="toast-wrap"></div>
+<div id="bg-music-widget" style="display:none;">
+  <div class="bgm-head"><span>Hintergrundmusik</span><button class="bgm-close" id="bgm-close" title="Ausblenden (in Mein Verein &gt; Einstellungen wieder aktivierbar)">✕</button></div>
+</div>
 <script>
 // real logo image (favicon + header brand mark) - base64 image data goes here once provided; until
 // then this silently does nothing and the existing text/CSS "FE" brand-mark stays as-is.
@@ -11070,6 +11078,13 @@ async function init(){
       if(soundEnabled) playSfx('click');
     });
   }
+  applyBgMusicWidget();
+  const bgmCloseBtn = document.getElementById('bgm-close');
+  if(bgmCloseBtn) bgmCloseBtn.addEventListener('click', async ()=>{
+    profile.bgMusicOn = false;
+    await sSet('profile', profile);
+    applyBgMusicWidget();
+  });
   initGlobalSfxListeners();
 }
 
@@ -11124,6 +11139,29 @@ function toast(msg){
   el.className='toast'; el.textContent=msg;
   wrap.appendChild(el);
   setTimeout(()=>el.remove(), 2600);
+}
+
+// ===== background music (Spotify embed widget) =====
+// Spotify doesn't allow embedding raw playback without every player having their own Premium
+// account + OAuth login, so this uses the public open.spotify.com/embed iframe widget instead -
+// no login needed, plays 30s previews for logged-out visitors and full tracks for anyone already
+// logged into Spotify in that browser. Purely opt-in (profile.bgMusicOn, toggled in Mein Verein >
+// Einstellungen) - the iframe is only created once the setting is actually on, so players who
+// never touch it never load anything from open.spotify.com.
+const BG_MUSIC_PLAYLIST_ID = '37i9dQZF1DX4vgOVqe6BJn';
+function applyBgMusicWidget(){
+  const widget = document.getElementById('bg-music-widget');
+  if(!widget) return;
+  const on = !!profile.bgMusicOn;
+  widget.style.display = on ? '' : 'none';
+  if(on && !widget.querySelector('iframe')){
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://open.spotify.com/embed/playlist/${BG_MUSIC_PLAYLIST_ID}?utm_source=generator`;
+    iframe.height = '152';
+    iframe.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
+    iframe.loading = 'lazy';
+    widget.appendChild(iframe);
+  }
 }
 
 // ===== modal =====
@@ -13727,6 +13765,16 @@ function renderClub(view){
           <option value="click">Klick</option>
         </select>
       </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Hintergrundmusik</div>
+          <div class="hint" style="margin-top:2px;">Blendet einen kleinen Spotify-Player unten rechts ein (Playlist, keine Anmeldung nötig - eingeloggte Spotify-Nutzer hören volle Tracks, sonst 30-Sekunden-Vorschauen).</div>
+        </div>
+        <select id="bg-music-select">
+          <option value="off">Aus (Standard)</option>
+          <option value="on">An</option>
+        </select>
+      </div>
     </details>
     <div class="toolbar">
       <input id="club-search" placeholder="Spielername suchen..." value="${clubFilter.q}">
@@ -13767,6 +13815,13 @@ function renderClub(view){
     profile.packOpenMode = e.target.value;
     await sSet('profile', profile);
     toast(profile.packOpenMode==='click' ? 'Packs öffnen jetzt per Klick.' : 'Packs öffnen jetzt per Wischen.');
+  });
+  const bgMusicSelect = document.getElementById('bg-music-select');
+  bgMusicSelect.value = profile.bgMusicOn ? 'on' : 'off';
+  bgMusicSelect.addEventListener('change', async e=>{
+    profile.bgMusicOn = e.target.value==='on';
+    await sSet('profile', profile);
+    applyBgMusicWidget();
   });
   document.getElementById('club-pos').value = clubFilter.pos;
   document.getElementById('club-sort').value = clubFilter.sort;
