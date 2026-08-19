@@ -574,6 +574,24 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     background-size:100% 100%, 100% 320%;
     animation:ratings27reloadSweep 2.4s linear infinite;}
 @keyframes ratings27reloadSweep{0%{background-position:0 0, 0 100%;}100%{background-position:0 0, 0 -220%;}}
+/* Ratings Reload extra FX (see cardEl's isRatings27ReloadTier): a big slowly-rotating circular
+   refresh-arrow icon behind the photo, plus 8 small shard fragments that independently fade in and
+   out at staggered timings - deliberately many-small-and-twinkling rather than the Kronjuwelen
+   gem-facets' 3-large-and-morphing look, on their own element like those facets are. */
+.pcard .refresh-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .refresh-arrow{position:absolute;top:50%;left:50%;width:160%;height:160%;margin:-80% 0 0 -80%;color:#37e6ff;opacity:.16;animation:refreshArrowSpin 9s linear infinite;}
+.pcard .refresh-arrow svg{width:100%;height:100%;}
+@keyframes refreshArrowSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.pcard .shard{position:absolute;width:10px;height:10px;background:linear-gradient(135deg,#d6fbff,#37e6ff);clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);opacity:0;animation:shardFade 3s ease-in-out infinite;}
+.pcard .shard.s1{top:10%;left:16%;width:8px;height:8px;animation-duration:2.6s;animation-delay:0s;}
+.pcard .shard.s2{top:22%;left:78%;width:11px;height:11px;animation-duration:3.4s;animation-delay:.4s;}
+.pcard .shard.s3{top:38%;left:8%;width:7px;height:7px;animation-duration:2.9s;animation-delay:1.1s;}
+.pcard .shard.s4{top:52%;left:88%;width:9px;height:9px;animation-duration:3.1s;animation-delay:.7s;}
+.pcard .shard.s5{top:66%;left:20%;width:10px;height:10px;animation-duration:3.6s;animation-delay:1.6s;}
+.pcard .shard.s6{top:74%;left:70%;width:8px;height:8px;animation-duration:2.7s;animation-delay:2.1s;}
+.pcard .shard.s7{top:86%;left:40%;width:12px;height:12px;animation-duration:3.3s;animation-delay:.2s;}
+.pcard .shard.s8{top:16%;left:48%;width:7px;height:7px;animation-duration:2.5s;animation-delay:1.8s;}
+@keyframes shardFade{0%,100%{opacity:0;transform:scale(.5);}50%{opacity:.85;transform:scale(1);}}
 /* ===== PRIME: the most spectacular card treatment in the game, reserved for all-time legends ===== */
 .pcard.theme-prime{
   border:2px solid transparent;
@@ -11329,6 +11347,15 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // conic-gradient sparkle.
   const isGemTier = card.theme==='saph' || card.theme==='rub' || card.theme==='dia';
   const gemFacetsHTML = isGemTier ? `<div class="gem-facets"><i class="gf1"></i><i class="gf2"></i><i class="gf3"></i></div>` : '';
+  // Ratings Reload: a big slowly-rotating circular refresh-arrow behind the photo, plus a field of small
+  // shard fragments that independently fade in/out - same "own element, not the shared pattern-layer"
+  // approach as the Kronjuwelen gem-facets above, but many small twinkling pieces instead of 3 large
+  // morphing ones (fits "numbers just refreshed" better than a single cut-stone effect would).
+  const isRatings27ReloadTier = card.theme==='ratings27reload';
+  const refreshFxHTML = isRatings27ReloadTier ? `<div class="refresh-fx">
+      <div class="refresh-arrow"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 106.36 2.64" fill="none" stroke="currentColor" stroke-width="2"/><path d="M21 3v6h-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+      ${Array.from({length:8},(_,i)=>`<i class="shard s${i+1}"></i>`).join('')}
+    </div>` : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
@@ -11408,6 +11435,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   div.innerHTML = `
     ${hasVariant || card.isManager ? '<div class="pattern-layer"></div>' : ''}
     ${gemFacetsHTML}
+    ${refreshFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
