@@ -16597,7 +16597,7 @@ const WM26_ENTRY_FEE = 10000;
 // older shape would otherwise crash renderWM26Panel the instant it tries to read a field the new code
 // expects but the old data never had - stamping/checking a version number turns that into a clean
 // "your last run doesn't carry over, start a fresh one" instead of a blank, broken tab.
-const WM26_SCHEMA_VERSION = 2;
+const WM26_SCHEMA_VERSION = 3;
 function wm26CurrentRun(){
   const t = profile.wm26;
   if(t && t.schemaVersion!==WM26_SCHEMA_VERSION){ profile.wm26 = null; sSet('profile', profile); return null; }
@@ -16618,9 +16618,13 @@ function wm26NationXI(nation){
   if(WM26_XI_CACHE.has(nation)) return WM26_XI_CACHE.get(nation);
   const globalPool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS).filter(c=>!c.isManager);
   const natPool = globalPool.filter(c=>c.nat===nation);
-  // fewer than 11 real cards for this nation (some smaller federations have none at all in this
-  // game's roster) - fall back to the full pool rather than crash on an unfillable position group.
-  const pool = natPool.length>=11 ? natPool : globalPool;
+  // A national team is built EXCLUSIVELY from that nation's own real players, strongest available -
+  // never a foreign star filling a gap (a thin position group falls back to that SAME nation's best
+  // remaining player at any position, not a different country's), even if that means reusing one
+  // player across two slots for a nation with barely any real cards at all. Only if this nation has
+  // LITERALLY ZERO real cards anywhere in the database (a handful of very small federations) is there
+  // nothing at all to build from - that's the one case that has to borrow from the full pool.
+  const pool = natPool.length ? natPool : globalPool;
   const slots = FORMATIONS['433'].slots;
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
@@ -16628,8 +16632,9 @@ function wm26NationXI(nation){
   const usedNames = new Set();
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
-    const groupPool = (byGroup[group].length ? byGroup[group] : pool).filter(c=>!usedNames.has(c.n));
-    const candidate = groupPool[0] || pool.find(c=>!usedNames.has(c.n)) || pool[0];
+    const candidate = byGroup[group].find(c=>!usedNames.has(c.n))
+      || pool.filter(c=>!usedNames.has(c.n)).sort((a,b)=>b.ov-a.ov)[0]
+      || pool[0];
     usedNames.add(candidate.n);
     return candidate;
   });
