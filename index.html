@@ -8664,7 +8664,7 @@ async function claimDraftReward(maxed){
   let msg = `Draft beendet mit ${draftState.wins}/4 Siegen: +${formatCoins(reward.coins)} Coins`;
   if(reward.packId){
     const pack = PACKS.find(p=>p.id===reward.packId);
-    if(pack){ msg += ` + ${pack.name}`; showPackOpening(pack, pack.draw()); }
+    if(pack){ msg += ` + ${pack.name}`; showPackOpening(pack, pack.draw(), {untradable:true}); }
   }
   toast(msg);
   draftState = null;
@@ -9328,7 +9328,7 @@ async function submitSBC(){
     const pack = PACKS.find(p=>p.id===activeSBC.reward);
     const drawn = pack.draw();
     toast(`SBC abgeschlossen! \u00d6ffne deine ${pack.name}-Belohnung\u2026`);
-    showPackOpening(pack, drawn);
+    showPackOpening(pack, drawn, {untradable:true});
   }
 }
 
@@ -16106,7 +16106,7 @@ async function playTournamentRound(){
       if(roundOutcome==='cupWin'){
         toast(`\ud83c\udfc6 Pokalsieger! \u00d6ffne dein UCL Winners Pack\u2026`);
         const cupPack = PACKS.find(p=>p.id==='uclwinners');
-        showPackOpening(cupPack, cupPack.draw());
+        showPackOpening(cupPack, cupPack.draw(), {untradable:true});
       } else if(roundOutcome==='advance'){
         toast(`${round.name} gewonnen! +${formatCoins(round.coins)} Coins. Weiter geht's.`);
       } else {
@@ -17852,7 +17852,7 @@ async function playOReiChallenge(){
       if(oreiOutcome.type==='blackoutPack'){
         const blackoutPack = PACKS.find(p=>p.id==='blackout');
         toast(`Sieg 2/3!${oreiOutcome.extra} Einmalige Belohnung: ein Blackout Pack!`);
-        showPackOpening(blackoutPack, blackoutPack.draw());
+        showPackOpening(blackoutPack, blackoutPack.draw(), {untradable:true});
       } else if(oreiOutcome.type==='oRei'){
         toast('\ud83d\udc51 O Rei! Drei Siege in Folge \u2014 das Fu\u00dfballg\u00f6tter Pack ist jetzt im Kartenladen freigeschaltet!');
       } else if(oreiOutcome.type==='win'){
@@ -17913,7 +17913,7 @@ async function playKontinentalpokal(){
       await atomicCoinChange(1500);
       const pack = PACKS.find(p=>p.id==='raregold');
       toast('Kontinentalpokal gewonnen! +1.500 Coins, \u00f6ffne dein Pack\u2026');
-      showPackOpening(pack, pack.draw());
+      showPackOpening(pack, pack.draw(), {untradable:true});
     } else {
       toast('Verloren \u2014 versuch es jederzeit erneut.');
     }
@@ -17975,7 +17975,7 @@ async function playWinStreakMatch(){
       if(streakOutcome.type==='fiveWin'){
         const pack = PACKS.find(p=>p.id==='iconmoment');
         toast('\ud83d\udd25 5 Siege in Folge! +3.000 Coins, \u00f6ffne dein Pack\u2026');
-        showPackOpening(pack, pack.draw());
+        showPackOpening(pack, pack.draw(), {untradable:true});
       } else if(streakOutcome.type==='win'){
         toast(`Sieg ${streakOutcome.newStreak}/5! Weiter so \u2014 eine Niederlage setzt die Serie zur\u00fcck.`);
       } else {
