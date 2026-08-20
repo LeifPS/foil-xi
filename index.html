@@ -7862,15 +7862,15 @@ const PACKS = [
       return [first, second, third];
     }},
   {id:'worldcuppack',name:'World Cup Pack',cost:0,tier:'ultimate',count:5,hidden:true,
-    desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit echter Chance auf einen WM-Kapitän (+13 OVR, ein Spieler pro Nation). Eine Karte ist garantiert der WM-Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
+    desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit einer 10%-Chance pro Pack auf einen WM-Kapitän (+13 OVR, ein Spieler pro Nation) - bevorzugt der Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
     draw(opts={}){
       const kapitaene = wm26KapitaenSpecials(), variante = wm26VarianteSpecials();
-      const finalCard = opts.finalNation ? kapitaene.find(c=>c.nat===opts.finalNation) : null;
-      // 10% chance PER PACK of one extra Kapitän beyond the guaranteed final-opponent one, not 10%
-      // independently per card slot (which would compound to a much higher chance across 4 rolls).
-      const bonusCaptainSlot = Math.random()<0.10 ? Math.floor(Math.random()*4) : -1;
-      const rest = Array.from({length:4}, (_,i)=> i===bonusCaptainSlot ? pick(kapitaene) : pick(variante));
-      return [finalCard || pick(kapitaene), ...rest];
+      // Exactly 10% chance PER PACK of containing a Kapitän at all - not guaranteed, and not rolled
+      // independently per card slot (which would compound to a much higher chance across 5 rolls).
+      // When it does hit, prefer the final opponent's own captain (a nice touch, if they have one).
+      const captainSlot = Math.random()<0.10 ? Math.floor(Math.random()*5) : -1;
+      const finalCaptain = opts.finalNation ? kapitaene.find(c=>c.nat===opts.finalNation) : null;
+      return Array.from({length:5}, (_,i)=> i===captainSlot ? (finalCaptain || pick(kapitaene)) : pick(variante));
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
     desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
@@ -15112,6 +15112,7 @@ function tournamentPrizeLabel(t){
 // unambiguously a valid 'coins' doc and removes that whole class of mistake.
 function normalizeTournamentDoc(t){
   if(!t) return t;
+  if(!Array.isArray(t.participantIds)) t.participantIds = (t.participants||[]).map(p=>p.userId);
   if(t.prizeType!=='card'){ t.prizeType='coins'; t.prizeCoins = t.prizeCoins||0; }
   if(!BOT_STRENGTH_TIERS[t.botStrength]) t.botStrength = HOSTED_TOURNAMENT_DEFAULT_BOT_STRENGTH;
   if(t.botStrength==='custom'){
@@ -15519,6 +15520,7 @@ async function hostTournamentPrompt(){
     const baseDoc = {
       id: genId(), hostUserId:profile.userId, hostName:profile.displayName||profile.userId,
       maxSlots, format, botStrength, participants:[{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:myPlayers}],
+      participantIds:[profile.userId],
       status:'registering', createdAt:Date.now()
     };
     if(botStrength==='custom'){
@@ -15600,7 +15602,7 @@ async function joinHostedTournament(id){
         const participants = t.participants.concat([{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()}]);
         if(participants.length>=t.maxSlots){
           const out = prepareHostedTournamentRun(t, participants);
-          tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
+          tx.update(ref, {participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
             winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
             prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
             prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
@@ -15609,7 +15611,7 @@ async function joinHostedTournament(id){
           }
           outcome='joined-and-running';
         } else {
-          tx.update(ref, {participants, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+          tx.update(ref, {participants, participantIds: participants.map(p=>p.userId), prizeType:t.prizeType, prizeCoins:t.prizeCoins});
           outcome='joined';
         }
       });
@@ -15627,7 +15629,7 @@ async function joinHostedTournament(id){
           t.participants.push({userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()});
           if(t.participants.length>=t.maxSlots){
             const out = resolveHostedTournamentOutcome(t, t.participants);
-            await fb.setDoc(ref, {...t, participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
+            await fb.setDoc(ref, {...t, participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
               winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
               winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
               prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
@@ -15636,6 +15638,7 @@ async function joinHostedTournament(id){
             }
             outcome='joined-and-running';
           } else {
+            t.participantIds = t.participants.map(p=>p.userId);
             await fb.setDoc(ref, t);
             outcome='joined';
           }
@@ -15674,7 +15677,7 @@ async function startHostedTournament(id){
         if(t.hostUserId!==profile.userId){ result='not-host'; return; }
         if(t.status!=='registering'){ result='already-running'; return; }
         const out = prepareHostedTournamentRun(t, t.participants);
-        tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
+        tx.update(ref, {participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
           winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
           prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
           prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
@@ -15692,7 +15695,7 @@ async function startHostedTournament(id){
         else if(t.status!=='registering'){ result='already-running'; }
         else{
           const out = resolveHostedTournamentOutcome(t, t.participants);
-          await fb.setDoc(ref, {...t, participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
+          await fb.setDoc(ref, {...t, participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
             winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
             winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
             prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
@@ -15725,11 +15728,13 @@ async function advanceHostedTournamentRound(id, opts={}){
         if(!snap.exists()){ result='gone'; return; }
         const t = normalizeTournamentDoc(snap.data());
         if(t.status!=='running'){ result='not-running'; return; }
-        // Anyone can push the reveal forward, not just the host: the entire bracket (every round,
-        // the eventual winner) is already fully computed the instant a tournament leaves
-        // 'registering'. "Advancing" only reveals more of an already-fixed result, so there's no
-        // fairness concern - and gating it to the host was what let an abandoned tournament get
-        // stuck in 'running' forever with nobody able to finish it.
+        // Host-only: revealing a round is now an explicit host action (see renderBracketModalContent's
+        // "Nächste Runde starten" button), not a shared free-for-all. It used to be "anyone can
+        // advance" so an abandoned tournament could never get stuck - but that meant ANY other
+        // participant's (or a stale/cached) browser tab, still running the old auto-reveal timer,
+        // could silently push rounds forward for everyone without the host ever clicking anything -
+        // exactly the "it keeps advancing on its own" bug this closes.
+        if(t.hostUserId!==profile.userId){ result='not-host'; return; }
         const totalRounds = (t.rounds||[]).length;
         const current = Math.min(Math.max(0, t.visibleRounds||0), totalRounds);
         if(current>=totalRounds){ result='already-complete'; return; }
@@ -15751,6 +15756,7 @@ async function advanceHostedTournamentRound(id, opts={}){
       else{
         const t = normalizeTournamentDoc(snap.data());
         if(t.status!=='running'){ result='not-running'; }
+        else if(t.hostUserId!==profile.userId){ result='not-host'; }
         else{
           const totalRounds = (t.rounds||[]).length;
           const current = Math.min(Math.max(0, t.visibleRounds||0), totalRounds);
@@ -15774,6 +15780,7 @@ async function advanceHostedTournamentRound(id, opts={}){
     if(!silent){
       if(result==='gone') toast('Turnier existiert nicht mehr.');
       else if(result==='not-running') toast('Turnier l\u00e4uft nicht (mehr).');
+      else if(result==='not-host') toast('Nur der Veranstalter kann die n\u00e4chste Runde enth\u00fcllen.');
       else if(result==='already-complete') toast('Turnier ist bereits abgeschlossen.');
       else if(result==='advanced') toast('N\u00e4chste Runde enth\u00fcllt.');
       else if(result==='completed') toast('Turnier abgeschlossen!');
@@ -16073,7 +16080,7 @@ function renderBracketModalContent(t){
       while(guard<64){
         guard++;
         lastResult = await advanceHostedTournamentRound(t.id, {silent:true});
-        if(lastResult==='completed' || lastResult==='already-complete' || lastResult==='gone' || lastResult==='not-running') break;
+        if(lastResult==='completed' || lastResult==='already-complete' || lastResult==='gone' || lastResult==='not-running' || lastResult==='not-host') break;
       }
       await fbReady;
       if(fb){
@@ -16255,8 +16262,16 @@ async function loadMyTournamentResults(){
   if(!fb){ box.innerHTML = ''; return; }
   try{
     const mine = await cachedRead('my-tournament-results:'+profile.userId, 20000, async ()=>{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','in',['running','completed']), fb.limit(25)));
-      return snap.docs.map(d=>normalizeTournamentDoc(d.data())).filter(t=>t.participants.some(p=>p.userId===profile.userId));
+      // Was status-in + limit(25) + client-side "is one of the participants" filter - once the
+      // tournaments collection has more than 25 running/completed docs system-wide (easily true with
+      // multiple hosts active at once), the user's OWN tournament could simply not be among the first
+      // 25 returned and would silently vanish from "Meine Turniere" - including any unclaimed prize,
+      // with no way to get back to it. Querying directly by participantIds (array-contains) instead
+      // guarantees every tournament the user is actually in gets found, regardless of how many other
+      // tournaments exist. See participantIds being written alongside participants everywhere a
+      // tournament doc's participants list changes (host create, join, bot-fill on start).
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('participantIds','array-contains',profile.userId), fb.limit(50)));
+      return snap.docs.map(d=>normalizeTournamentDoc(d.data())).filter(t=>t.status==='running'||t.status==='completed');
     });
     if(!box) return;
     if(!mine.length){ box.innerHTML = '<p class="hint">Noch keine Turniere \u2014 tritt einem bei oder veranstalte selbst eins!</p>'; return; }
