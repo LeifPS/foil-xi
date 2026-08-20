@@ -6910,12 +6910,37 @@ function wm26VarianteSpecials(){
 let WM26_KAPITAEN_SPECIALS_CACHE = null;
 // WM-Kapitän: +13 OVR, one flagship player per nation - the "captain" proxy is that nation's own
 // highest-rated real card, same convention already used for the Kapitäne pack above.
+// Each nation's real WM 2026 captain (researched, not guessed) - resolved to a real card by last-name
+// match against that nation's own pool. Some captains (weaker federations especially) simply aren't
+// in this game's roster at all - falls back to that nation's highest-rated real card in that case,
+// same as before this was researched.
+const WM26_REAL_CAPTAINS = {
+  'Mexico':'Edson Álvarez', 'South Africa':'Ronwen Williams', 'Korea Republic':'Son Heung-min', 'Czechia':'Ladislav Krejčí',
+  'Canada':'Alphonso Davies', 'Switzerland':'Granit Xhaka', 'Qatar':'Hassan Al-Haydos', 'Bosnia and Herzegovina':'Edin Džeko',
+  'Brazil':'Marquinhos', 'Morocco':'Achraf Hakimi', 'Scotland':'Andy Robertson', 'Haiti':'Johny Placide',
+  'United States':'Tim Ream', 'Paraguay':'Gustavo Gómez', 'Australia':'Mathew Ryan', 'Türkiye':'Hakan Çalhanoğlu',
+  'Germany':'Joshua Kimmich', 'Curacao':'Leandro Bacuna', 'Ecuador':'Enner Valencia', "Côte d'Ivoire":'Franck Kessié',
+  'Netherlands':'Virgil van Dijk', 'Japan':'Ko Itakura', 'Tunisia':'Ellyes Skhiri', 'Sweden':'Victor Lindelöf',
+  'Belgium':'Youri Tielemans', 'Egypt':'Mohamed Salah', 'Iran':'Alireza Jahanbakhsh', 'New Zealand':'Chris Wood',
+  'Spain':'Rodri', 'Cabo Verde':'Ryan Mendes', 'Saudi Arabia':'Salem Al-Dawsari', 'Uruguay':'José María Giménez',
+  'France':'Kylian Mbappé', 'Senegal':'Kalidou Koulibaly', 'Norway':'Martin Ødegaard', 'Iraq':'Jalal Hassan',
+  'Argentina':'Lionel Messi', 'Algeria':'Riyad Mahrez', 'Austria':'David Alaba', 'Jordan':'Ihsan Haddad',
+  'Portugal':'Cristiano Ronaldo', 'Colombia':'James Rodríguez', 'Uzbekistan':'Eldor Shomurodov', 'Congo DR':'Chancel Mbemba',
+  'England':'Harry Kane', 'Croatia':'Luka Modrić', 'Ghana':'Jordan Ayew', 'Panama':'Aníbal Godoy',
+};
+function wm26MatchesCaptainName(cardName, captainName){
+  const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ø/gi,'o').toLowerCase();
+  const lastName = norm(captainName).split(' ').filter(Boolean).pop();
+  return !!lastName && norm(cardName).includes(lastName);
+}
 function wm26KapitaenSpecials(){
   if(WM26_KAPITAEN_SPECIALS_CACHE) return WM26_KAPITAEN_SPECIALS_CACHE;
   WM26_KAPITAEN_SPECIALS_CACHE = WM26_ALL_NATIONS.map(nation=>{
     const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS).filter(c=>c.nat===nation && !c.isManager && (!c.variant || c.variant==='base'));
     if(!pool.length) return null;
-    const base = pool.reduce((best,c)=> c.ov>best.ov ? c : best, pool[0]);
+    const captainName = WM26_REAL_CAPTAINS[nation];
+    const captainMatches = captainName ? pool.filter(c=>wm26MatchesCaptainName(c.n, captainName)) : [];
+    const base = (captainMatches.length ? captainMatches : pool).reduce((best,c)=> c.ov>best.ov ? c : best, (captainMatches.length ? captainMatches : pool)[0]);
     return boostBaseToOv(base, base.ov+13, 60000000+base.id, 'wm26_kapitaen', 'WM-Kapitän', 'wm26k');
   }).filter(Boolean);
   WM26_KAPITAEN_SPECIALS_CACHE.forEach(p=>BY_ID.set(p.id,p));
