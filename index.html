@@ -16659,6 +16659,14 @@ function wm26NationXI(nation){
   WM26_XI_CACHE.set(nation, result);
   return result;
 }
+// {name,rating,crest,managerName,formation} descriptor for showMatchIntroCutscene's pre-match lineup
+// reveal - the same cutscene already used for bot/online matches (see startBotMatch), so a WM 2026
+// opponent gets shown card-by-card exactly like any other opponent before the match starts.
+function wm26OppSide(opp, nation){
+  return {name: opp.owner, rating: opp.rating, managerName: opp.managerName,
+    crest: {shape:'shield', primary:'#4dbf6f', secondary:'#0a0d12', letter:(natDE(nation)||'?')[0].toUpperCase()},
+    formation: '433'};
+}
 function wm26MatchResult(teamA, teamB, allowDraw){
   const aXI = wm26NationXI(teamA.nation);
   const bXI = wm26NationXI(teamB.nation);
@@ -16845,16 +16853,21 @@ async function playWM26GroupMatch(matchIdx){
   const myPlayers = getMySquadPlayers();
   const opp = wm26NationXI(oppTeam.nation);
   const area = document.getElementById('wm26-match-area');
-  if(area) area.innerHTML = `
-    <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
-      <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Gruppenphase)`)}
-    </div>
-    <div id="match-area"></div>
-    <div id="result-area"></div>`;
+  if(!area) return;
   inMatch = true;
   try{
+    const myMgr = getAssignedManager();
+    const meSide = {name: profile.displayName||'Dein Verein', rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
+    const oppSide = wm26OppSide(opp, oppTeam.nation);
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos})));
+    area.innerHTML = `
+      <div class="vs-teams">
+        ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+        <div class="vs-x">VS</div>
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Gruppenphase)`)}
+      </div>
+      <div id="match-area"></div>
+      <div id="result-area"></div>`;
     const md = buildDecisiveMatch(rating, opp.rating, myPlayers, opp.players, squad.tactics, null, {allowDraw:true});
     md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
     await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner);
@@ -16882,17 +16895,22 @@ async function playWM26KnockoutMatch(){
   const myPlayers = getMySquadPlayers();
   const opp = wm26NationXI(oppTeam.nation);
   const area = document.getElementById('wm26-match-area');
-  if(area) area.innerHTML = `
-    <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
-      <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${WM26_STAGE_LABEL[roundKey]})`)}
-    </div>
-    <div id="match-area"></div>
-    <div id="result-area"></div>`;
+  if(!area) return;
   inMatch = true;
   let won = false, md = null;
   try{
+    const myMgr = getAssignedManager();
+    const meSide = {name: profile.displayName||'Dein Verein', rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
+    const oppSide = wm26OppSide(opp, oppTeam.nation);
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos})));
+    area.innerHTML = `
+      <div class="vs-teams">
+        ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+        <div class="vs-x">VS</div>
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${WM26_STAGE_LABEL[roundKey]})`)}
+      </div>
+      <div id="match-area"></div>
+      <div id="result-area"></div>`;
     md = buildDecisiveMatch(rating, opp.rating, myPlayers, opp.players, squad.tactics, null, {allowDraw:false});
     md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
     await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner);
