@@ -16888,6 +16888,7 @@ async function wm26FinishRun(exitStage, won){
     profile.wm26 = {...t, stage:'done', wonCup:true};
     await sSet('profile', profile);
     await atomicCoinChange(WM26_WIN_REWARD, {}, {silentDisplay:true});
+    updateCoinDisplay();
     toast(`🏆 Weltmeister! +${formatCoins(WM26_WIN_REWARD)} Coins. Öffne dein Pack…`);
     const useWinnersPack = Math.random()<0.2;
     const pack = PACKS.find(p=>p.id===(useWinnersPack ? 'wmwinners' : 'worldcuppack'));
@@ -16900,7 +16901,7 @@ async function wm26FinishRun(exitStage, won){
     profile.wm26 = {...t, stage:'done', eliminatedAt:exitStage};
     await sSet('profile', profile);
     const reward = WM26_EXIT_REWARD[exitStage]||0;
-    if(reward>0) await atomicCoinChange(reward, {}, {silentDisplay:true});
+    if(reward>0){ await atomicCoinChange(reward, {}, {silentDisplay:true}); updateCoinDisplay(); }
     toast(`Ausgeschieden — ${WM26_STAGE_LABEL[exitStage]}. +${formatCoins(reward)} Coins.`);
   }
   renderWM26Panel();
