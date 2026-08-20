@@ -7850,7 +7850,10 @@ const PACKS = [
     draw(opts={}){
       const kapitaene = wm26KapitaenSpecials(), variante = wm26VarianteSpecials();
       const finalCard = opts.finalNation ? kapitaene.find(c=>c.nat===opts.finalNation) : null;
-      const rest = Array.from({length:4}, ()=> Math.random()<0.10 ? pick(kapitaene) : pick(variante));
+      // 10% chance PER PACK of one extra Kapitän beyond the guaranteed final-opponent one, not 10%
+      // independently per card slot (which would compound to a much higher chance across 4 rolls).
+      const bonusCaptainSlot = Math.random()<0.10 ? Math.floor(Math.random()*4) : -1;
+      const rest = Array.from({length:4}, (_,i)=> i===bonusCaptainSlot ? pick(kapitaene) : pick(variante));
       return [finalCard || pick(kapitaene), ...rest];
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
