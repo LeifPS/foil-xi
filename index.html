@@ -16671,11 +16671,10 @@ function wm26CurrentRun(){
 }
 const WM26_STAGE_LABEL = {groups:'Gruppenphase', ro32:'Runde der letzten 32', ro16:'Achtelfinale', qf:'Viertelfinale', sf:'Halbfinale', final:'Finale'};
 const WM26_KO_ORDER = ['ro32','ro16','qf','sf','final'];
-// "nicht gewinnt" rewards - the user left these to be designed; a coin ladder that climbs steeply
-// enough that even a modest run feels worth the 10.000-Coin Startgeld, without ever matching the
-// Pokalsieg's pack. Winning it all grants no coins here - same "the pack IS the reward" pattern as
-// Turnier-Modus's Finale (coins:0) - see wm26FinishRun's win branch.
-const WM26_EXIT_REWARD = {groups:500, ro32:2000, ro16:4500, qf:9000, sf:16000, final:26000};
+// Coin ladder for how far the run got. Winning it all also pays WM26_WIN_REWARD (see wm26FinishRun's
+// win branch) on top of a pack.
+const WM26_EXIT_REWARD = {groups:500, ro32:2000, ro16:4500, qf:10000, sf:15000, final:20000};
+const WM26_WIN_REWARD = 20000;
 // A national team is always the same fixed 4-3-3 of that country's own best available real cards -
 // not a random target-rating band. Computed once per nation and cached: every one of that nation's
 // matches for the rest of the session reuses the exact same XI/rating, exactly like a real team would.
@@ -16888,8 +16887,8 @@ async function wm26FinishRun(exitStage, won){
   if(won){
     profile.wm26 = {...t, stage:'done', wonCup:true};
     await sSet('profile', profile);
-    await atomicCoinChange(WM26_ENTRY_FEE, {}, {silentDisplay:true});
-    toast(`🏆 Weltmeister! ${formatCoins(WM26_ENTRY_FEE)} Startgeld zurück. Öffne dein Pack…`);
+    await atomicCoinChange(WM26_WIN_REWARD, {}, {silentDisplay:true});
+    toast(`🏆 Weltmeister! +${formatCoins(WM26_WIN_REWARD)} Coins. Öffne dein Pack…`);
     const useWinnersPack = Math.random()<0.2;
     const pack = PACKS.find(p=>p.id===(useWinnersPack ? 'wmwinners' : 'worldcuppack'));
     // the just-decided Finale is always the last round - the other side is whichever finalist isn't
