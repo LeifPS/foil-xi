@@ -1197,6 +1197,25 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 @keyframes live-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.7);}}
 .tourney-progress{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:7px;width:100%;}
 .tourney-progress > div{height:100%;border-radius:2px;transition:width .35s ease;}
+/* ---- tournament bracket tree (real bracket with connector lines, not a flat result list) ---- */
+.bracket-wrap{overflow:auto;margin:10px 0 6px;border-radius:10px;background:#0c0f16;padding:10px 6px;}
+.bracket-rounds{position:relative;}
+.bracket-col-title{position:absolute;top:0;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bracket-match{position:absolute;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:11.5px;display:flex;flex-direction:column;justify-content:center;gap:3px;box-sizing:border-box;}
+.bracket-match.bracket-match-me{border-color:var(--turf-bright);box-shadow:0 0 0 1px var(--turf-bright);}
+.bracket-side{display:flex;justify-content:space-between;align-items:center;gap:6px;color:var(--chalk);}
+.bracket-side-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bracket-side.bracket-winner{font-weight:700;color:var(--turf-bright);}
+.bracket-score{font-family:'JetBrains Mono';color:var(--muted);flex-shrink:0;}
+.bracket-side.bracket-winner .bracket-score{color:var(--turf-bright);}
+.bracket-lines{position:absolute;inset:0;pointer-events:none;}
+.bracket-line-h{position:absolute;height:1px;background:var(--line);}
+.bracket-line-v{position:absolute;width:1px;background:var(--line);}
+@keyframes bracketReveal{0%{opacity:0;transform:scale(.82) translateY(6px);}60%{opacity:1;transform:scale(1.06);}100%{opacity:1;transform:scale(1);}}
+.bracket-match.bracket-just-revealed{animation:bracketReveal .5s cubic-bezier(.34,1.56,.64,1);}
+.bracket-match.bracket-final-revealed{animation:bracketReveal .5s cubic-bezier(.34,1.56,.64,1), legikoneGlow 1.6s ease-in-out 2;border-color:var(--gold);}
+@keyframes tableRowIn{0%{opacity:0;transform:translateX(-8px);}100%{opacity:1;transform:translateX(0);}}
+.bracket-fresh-row{animation:tableRowIn .35s ease both;}
 .match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
 .goal-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:6px 10px;border-radius:8px;animation:trayIn .3s;}
 .goal-row.opp{border-left:2px solid var(--danger);}
@@ -14881,6 +14900,56 @@ function singleElimRoundNames(totalRounds){
   return names;
 }
 function isBotParticipantId(userId){ return typeof userId==='string' && userId.startsWith('bot_'); }
+function escBracketName(n){ return (n||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Renders a real visual bracket tree (rounds side by side, connector lines between a match and the
+// one it feeds into) for any cleanly-halving elimination sequence - single-elim, the K.O. tail of
+// group+K.o., and double-elim's winners side. Positions are computed here in JS rather than via
+// CSS-only connector tricks, since the classic bracket layout needs each round's matches vertically
+// centered exactly between the two matches that fed into them - centers[r][i] is the average of
+// centers[r-1][2i] and centers[r-1][2i+1], which also happens to be exactly where that pair's
+// connector lines should meet.
+const BRACKET_MATCH_H = 56, BRACKET_ROW_GAP = 14, BRACKET_COL_W = 168, BRACKET_COL_GAP = 32, BRACKET_TITLE_H = 22;
+function buildBracketTreeHTML(rounds, roundNamesFallback, myUserId, highlightLastRound){
+  if(!rounds.length) return '';
+  const totalRounds = rounds.length;
+  const centers = [];
+  centers[0] = rounds[0].matches.map((_,i)=> i*(BRACKET_MATCH_H+BRACKET_ROW_GAP) + BRACKET_MATCH_H/2);
+  for(let r=1;r<totalRounds;r++){
+    const prev = centers[r-1];
+    centers[r] = rounds[r].matches.map((_,i)=> (prev[2*i]+prev[2*i+1])/2);
+  }
+  const totalHeight = BRACKET_TITLE_H + centers[0][centers[0].length-1] + BRACKET_MATCH_H/2 + 6;
+  const totalWidth = totalRounds*BRACKET_COL_W + (totalRounds-1)*BRACKET_COL_GAP;
+  let cols = '', lines = '';
+  for(let r=0;r<totalRounds;r++){
+    const colLeft = r*(BRACKET_COL_W+BRACKET_COL_GAP);
+    cols += `<div class="bracket-col-title" style="left:${colLeft}px;width:${BRACKET_COL_W}px;">${escBracketName(rounds[r].stage || roundNamesFallback[r] || ('Runde '+(r+1)))}</div>`;
+    const isLastRound = r===totalRounds-1;
+    rounds[r].matches.forEach((m,i)=>{
+      const cy = BRACKET_TITLE_H + centers[r][i];
+      const top = cy - BRACKET_MATCH_H/2;
+      const aWon = m.winnerName===m.aName;
+      const isMe = myUserId && (m.aUserId===myUserId || m.bUserId===myUserId);
+      const justRevealed = highlightLastRound && isLastRound;
+      const cls = ['bracket-match', isMe?'bracket-match-me':'', justRevealed?(isLastRound&&totalRounds>1?'bracket-final-revealed':'bracket-just-revealed'):''].filter(Boolean).join(' ');
+      cols += `<div class="${cls}" style="left:${colLeft}px;top:${top}px;width:${BRACKET_COL_W}px;height:${BRACKET_MATCH_H}px;">
+        <div class="bracket-side${aWon?' bracket-winner':''}"><span class="bracket-side-name">${escBracketName(m.aName)}</span><span class="bracket-score">${m.aGoals}</span></div>
+        <div class="bracket-side${!aWon?' bracket-winner':''}"><span class="bracket-side-name">${escBracketName(m.bName)}</span><span class="bracket-score">${m.bGoals}</span></div>
+      </div>`;
+      if(r<totalRounds-1){
+        lines += `<div class="bracket-line-h" style="left:${colLeft+BRACKET_COL_W}px;top:${cy}px;width:${BRACKET_COL_GAP/2}px;"></div>`;
+        if(i%2===1){
+          const topC = BRACKET_TITLE_H+centers[r][i-1], botC = cy;
+          const midX = colLeft+BRACKET_COL_W+BRACKET_COL_GAP/2;
+          lines += `<div class="bracket-line-v" style="left:${midX}px;top:${topC}px;height:${botC-topC}px;"></div>`;
+          const parentCy = BRACKET_TITLE_H+centers[r+1][(i-1)/2];
+          lines += `<div class="bracket-line-h" style="left:${midX}px;top:${parentCy}px;width:${BRACKET_COL_GAP/2}px;"></div>`;
+        }
+      }
+    });
+  }
+  return `<div class="bracket-wrap"><div class="bracket-rounds" style="width:${totalWidth}px;height:${totalHeight}px;">${cols}<div class="bracket-lines">${lines}</div></div></div>`;
+}
 const RUNNER_UP_PRIZE_SHARE = 0.35;
 // splits a coin prize pot 65/35 winner/runner-up - the remainder (from flooring the runner-up share)
 // goes to the winner so the two shares always sum to exactly the original pot, never leaking a coin.
@@ -15659,64 +15728,105 @@ function stopBracketAutoAdvance(){
   bracketAutoAdvanceTimer = null;
   bracketAutoAdvanceTournamentId = null;
 }
+// Buckets the currently-revealed rounds by presentation kind: a real bracket tree for anything that
+// halves cleanly round to round (single-elim, the group stage's K.O. tail, double-elim's winners
+// side); a running standings table for round-robin; boxed group tables; and a plain sequential list
+// for double-elim's losers bracket + grand finals, whose match counts don't halve like a real tree
+// does (they keep receiving fresh losers dropping in from the winners side each round).
+function bucketRevealedRounds(t, visibleRounds){
+  const groupTables = [], winnersTree = [], losersList = [];
+  let roundRobinLatest = null;
+  const roundRobinHistory = [];
+  visibleRounds.forEach(round=>{
+    if(t.format==='roundRobin' && round.standings){ roundRobinLatest = round; roundRobinHistory.push(round); return; }
+    if(round.isGroupStage){ groupTables.push(round); return; }
+    if((round.matches||[]).some(m=>m.type==='losers') || round.stage==='Grand Finals'){ losersList.push(round); return; }
+    winnersTree.push(round);
+  });
+  return {groupTables, winnersTree, losersList, roundRobinLatest, roundRobinHistory};
+}
+function renderStandingsTableHTML(standings, freshRowUserId){
+  let html = `<div style="margin-bottom:12px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;overflow:hidden;">
+    <div style="display:grid;grid-template-columns:1fr 26px 56px 40px 40px;gap:0;font-size:11.5px;font-weight:600;background:var(--line);padding:8px;color:var(--muted);text-align:center;">
+      <div style="text-align:left;padding:0 8px;">Team</div><div>S</div><div>Tore</div><div>Diff</div><div>Pkte</div>
+    </div>`;
+  standings.forEach((p, idx)=>{
+    const goalsFor = p.goals||0, goalsAgainst = p.goalsAgainst||0;
+    const diff = goalsFor-goalsAgainst;
+    const points = (p.wins||0) * 3;
+    const highlight = idx < 2 ? 'background:rgba(95,225,201,0.08);' : '';
+    const fresh = freshRowUserId && p.userId===freshRowUserId ? ' bracket-fresh-row' : '';
+    html += `<div class="${fresh}" style="display:grid;grid-template-columns:1fr 26px 56px 40px 40px;gap:0;padding:8px;border-top:1px solid var(--line);${highlight}align-items:center;font-size:11px;">
+      <div style="text-align:left;padding:0 8px;color:${idx===0?'var(--gold)':'var(--chalk)'};">${escBracketName(p.name)}</div>
+      <div style="text-align:center;color:var(--teal);">${p.wins||0}</div>
+      <div style="text-align:center;color:var(--muted);" class="mono">${goalsFor}:${goalsAgainst}</div>
+      <div style="text-align:center;color:var(--muted);">${diff>=0?'+':''}${diff}</div>
+      <div style="text-align:center;font-weight:600;color:var(--gold);">${points}</div>
+    </div>`;
+  });
+  return html+`</div>`;
+}
+function renderMatchListHTML(matches, freshList){
+  return matches.map(m=>`<div class="leader-row${freshList?' bracket-fresh-row':''}" style="font-size:12px;padding:6px 0;">
+    <span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${escBracketName(m.aName)}</span>
+    <span class="mono">${m.aGoals}:${m.bGoals}${m.wentToPK?' n.E.':''}</span>
+    <span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${escBracketName(m.bName)}</span>
+  </div>`).join('');
+}
 function renderBracketModalContent(t){
   const roundNames = singleElimRoundNames(t.rounds.length);
   const isCompleted = t.status==='completed';
   const isRunning = t.status==='running';
   const totalRounds = t.rounds.length;
   const visibleRoundsCount = isCompleted ? totalRounds : (t.visibleRounds||0);
-  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:4px;">Format: ${(TOURNAMENT_FORMATS[t.format]?.name || 'Einfach-K.o.')} \u00b7 Preis: ${tournamentPrizeLabel(t)}${isCompleted ? ` \u2014 Sieger: <b style="color:var(--gold);">${t.winnerName}</b>` : ''}</p>`;
+  const visibleRounds = t.rounds.slice(0, visibleRoundsCount);
+  const newestRound = isRunning && visibleRounds.length ? visibleRounds[visibleRounds.length-1] : null;
+
+  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:4px;">Format: ${(TOURNAMENT_FORMATS[t.format]?.name || 'Einfach-K.o.')} \u00b7 Preis: ${tournamentPrizeLabel(t)}</p>`;
+  if(isCompleted){
+    html += `<p style="margin-top:0;margin-bottom:10px;">\ud83c\udfc6 Sieger: <b style="color:var(--gold);">${t.winnerName}</b>${t.runnerUpName?` <span class="hint" style="margin:0;">\u00b7 2. Platz: <b style="color:var(--chalk);">${t.runnerUpName}</b></span>`:''}</p>`;
+  }
   if(isRunning){
     const pct = totalRounds ? Math.round((visibleRoundsCount/totalRounds)*100) : 0;
     html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">${liveBadgeHtml()}<span class="hint" style="margin:0;">Runde ${visibleRoundsCount} von ${totalRounds} enth\u00fcllt</span></div>
       <div class="tourney-progress"><div style="width:${pct}%;background:#ff6b57;"></div></div>
       <p class="hint" style="margin:8px 0 14px;">Enth\u00fcllt sich von selbst, solange diese Ansicht ge\u00f6ffnet ist \u2014 oder <span id="bracket-skip-end" style="text-decoration:underline;cursor:pointer;color:var(--chalk);">sofort das Endergebnis anzeigen</span>.</p>`;
   }
-  t.rounds.slice(0, visibleRoundsCount).forEach((round,i)=>{
-    const matches = Array.isArray(round) ? round : (round.matches||[]);
-    const stageName = round.stage || roundNames[i] || ('Runde '+(i+1));
-    html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${stageName}</div>`;
 
-    // Show standings table for group stage and round robin
-    if(round.standings && round.standings.length>0){
-      html += `<div style="margin-bottom:12px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;overflow:hidden;">
-        <div style="display:grid;grid-template-columns:1fr 26px 56px 40px 40px;gap:0;font-size:11.5px;font-weight:600;background:var(--line);padding:8px;color:var(--muted);text-align:center;">
-          <div style="text-align:left;padding:0 8px;">Team</div>
-          <div>S</div>
-          <div>Tore</div>
-          <div>Diff</div>
-          <div>Pkte</div>
-        </div>`;
-      round.standings.forEach((p, idx)=>{
-        const goalsFor = p.goals||0, goalsAgainst = p.goalsAgainst||0;
-        const diff = goalsFor-goalsAgainst;
-        const points = (p.wins||0) * 3;
-        const highlight = idx < 2 ? 'background:rgba(95,225,201,0.08);' : '';
-        html += `<div style="display:grid;grid-template-columns:1fr 26px 56px 40px 40px;gap:0;padding:8px;border-top:1px solid var(--line);${highlight}align-items:center;font-size:11px;">
-          <div style="text-align:left;padding:0 8px;color:${idx===0?'var(--gold)':'var(--chalk)'};">${p.name}</div>
-          <div style="text-align:center;color:var(--teal);">${p.wins||0}</div>
-          <div style="text-align:center;color:var(--muted);" class="mono">${goalsFor}:${goalsAgainst}</div>
-          <div style="text-align:center;color:var(--muted);">${diff>=0?'+':''}${diff}</div>
-          <div style="text-align:center;font-weight:600;color:var(--gold);">${points}</div>
-        </div>`;
-      });
-      html += `</div>`;
+  const {groupTables, winnersTree, losersList, roundRobinLatest, roundRobinHistory} = bucketRevealedRounds(t, visibleRounds);
 
-      // Show matches below standings
-      if(matches.length>0){
-        html += `<div style="margin-top:8px;">`;
-        matches.forEach(m=>{
-          html += `<div class="leader-row" style="font-size:12px;padding:6px 0;"><span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${m.aName}</span><span class="mono">${m.aGoals}:${m.bGoals}</span><span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${m.bName}</span></div>`;
-        });
-        html += `</div>`;
-      }
-    } else {
-      // Standard bracket display
-      matches.forEach(m=>{
-        html += `<div class="leader-row"><span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${m.aName} (${m.aRating})</span><span class="mono">${m.aGoals}:${m.bGoals}${m.wentToPK?' n.E.':''}</span><span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${m.bName} (${m.bRating})</span></div>`;
-      });
-    }
-  });
+  if(roundRobinLatest){
+    html += `<div class="lbl" style="margin:12px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Tabelle nach ${roundRobinLatest.stage}</div>`;
+    html += renderStandingsTableHTML(roundRobinLatest.standings);
+    html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Spieltage</div>`;
+    roundRobinHistory.slice().reverse().forEach(round=>{
+      const fresh = round===newestRound;
+      html += `<div class="hint" style="margin:${fresh?'10px':'8px'} 0 4px;${fresh?'color:var(--turf-bright);':''}">${round.stage}</div>`;
+      html += renderMatchListHTML(round.matches, fresh);
+    });
+  }
+
+  if(groupTables.length){
+    groupTables.forEach(round=>{
+      html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${round.stage}</div>`;
+      html += renderStandingsTableHTML(round.standings);
+      if(round.matches.length) html += `<div style="margin-top:8px;">${renderMatchListHTML(round.matches, round===newestRound)}</div>`;
+    });
+  }
+
+  if(winnersTree.length){
+    if(losersList.length) html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">\ud83c\udfc6 Winners Bracket</div>`;
+    html += buildBracketTreeHTML(winnersTree, roundNames, profile.userId, !!newestRound && winnersTree.includes(newestRound));
+  }
+
+  if(losersList.length){
+    html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">\ud83d\udd01 Losers Bracket & Finale</div>`;
+    losersList.forEach(round=>{
+      html += `<div class="hint" style="margin:10px 0 4px;${round===newestRound?'color:var(--turf-bright);':''}">${round.stage}</div>`;
+      html += renderMatchListHTML(round.matches, round===newestRound);
+    });
+  }
+
   openModal(html + `<button class="modal-close" id="bracket-close" style="margin-top:16px;">Schlie\u00dfen</button>`);
   document.getElementById('bracket-close').addEventListener('click', ()=>{ closeModal(); stopBracketAutoAdvance(); });
   const skipBtn = document.getElementById('bracket-skip-end');
