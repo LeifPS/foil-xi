@@ -16597,7 +16597,7 @@ const WM26_ENTRY_FEE = 10000;
 // older shape would otherwise crash renderWM26Panel the instant it tries to read a field the new code
 // expects but the old data never had - stamping/checking a version number turns that into a clean
 // "your last run doesn't carry over, start a fresh one" instead of a blank, broken tab.
-const WM26_SCHEMA_VERSION = 3;
+const WM26_SCHEMA_VERSION = 5;
 function wm26CurrentRun(){
   const t = profile.wm26;
   if(t && t.schemaVersion!==WM26_SCHEMA_VERSION){ profile.wm26 = null; sSet('profile', profile); return null; }
@@ -16616,7 +16616,16 @@ const WM26_EXIT_REWARD = {groups:500, ro32:2000, ro16:4500, qf:9000, sf:16000, f
 const WM26_XI_CACHE = new Map();
 function wm26NationXI(nation){
   if(WM26_XI_CACHE.has(nation)) return WM26_XI_CACHE.get(nation);
-  const globalPool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS).filter(c=>!c.isManager);
+  // every real-player card pool in the game, not just a subset - "strongest possible team" has to
+  // mean the true strongest, including every named-pack variant tier (Kapitäne, UCL Winners, Kronjuwelen,
+  // OG Icons, Legenden, Derby, Underdog, Signature Season, Poeten, Icon Swap, Wochen Pass, ...).
+  // WEEK_PASS_CARDS isn't a flat card array like every other pool here - each entry is a
+  // {lvl15, lvl30} pair of two separate level-unlock cards, so it needs flattening first.
+  const globalPool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS,
+    KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS, KAPITAENE_SPECIALS, UCLW_SPECIALS, OGICON_CARDS, LEGENDS_SPECIALS,
+    DERBY_SPECIALS, UNDERDOG_SPECIALS, SIGNATURE_SEASON_CARDS, POETEN_CARDS, ICONSWAP_CARDS,
+    WEEK_PASS_CARDS.flatMap(w=>[w.lvl15, w.lvl30])
+  ).filter(c=>c && !c.isManager);
   const natPool = globalPool.filter(c=>c.nat===nation);
   // A national team is built EXCLUSIVELY from that nation's own real players, strongest available -
   // never a foreign star filling a gap (a thin position group falls back to that SAME nation's best
@@ -16629,13 +16638,19 @@ function wm26NationXI(nation){
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
   Object.values(byGroup).forEach(arr=>arr.sort((a,b)=>b.ov-a.ov));
-  const usedNames = new Set();
+  const usedNames = new Set(), usedIds = new Set();
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
+    // 1) best unused real person in the right position group, 2) best unused real person anywhere
+    // in the pool, 3) for a nation with fewer unique real people than 11 positions - the next-best
+    // still-unused CARD (a different variant of an already-picked player, rather than nobody left at
+    // all), and only as an absolute last resort (fewer than 11 cards exist for this nation, period)
+    // repeat a card outright, always the strongest one rather than always the exact same fixed pick.
     const candidate = byGroup[group].find(c=>!usedNames.has(c.n))
       || pool.filter(c=>!usedNames.has(c.n)).sort((a,b)=>b.ov-a.ov)[0]
-      || pool[0];
-    usedNames.add(candidate.n);
+      || pool.filter(c=>!usedIds.has(c.id)).sort((a,b)=>b.ov-a.ov)[0]
+      || pool.slice().sort((a,b)=>b.ov-a.ov)[0];
+    usedNames.add(candidate.n); usedIds.add(candidate.id);
     return candidate;
   });
   const {players, managerName} = boostBotXI(xi, slots);
