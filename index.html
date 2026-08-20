@@ -6924,7 +6924,7 @@ function wm26VarianteSpecials(){
   return WM26_VARIANTE_SPECIALS_CACHE;
 }
 let WM26_KAPITAEN_SPECIALS_CACHE = null;
-// WM-Kapitän: +5 OVR, one flagship player per nation - the "captain" proxy is that nation's own
+// WM-Kapitän: +18 OVR, one flagship player per nation - the "captain" proxy is that nation's own
 // highest-rated real card, same convention already used for the Kapitäne pack above.
 // Each nation's real WM 2026 captain (researched, not guessed) - resolved to a real card by last-name
 // match against that nation's own pool. Some captains (weaker federations especially) simply aren't
@@ -6957,7 +6957,7 @@ function wm26KapitaenSpecials(){
     const captainName = WM26_REAL_CAPTAINS[nation];
     const captainMatches = captainName ? pool.filter(c=>wm26MatchesCaptainName(c.n, captainName)) : [];
     const base = (captainMatches.length ? captainMatches : pool).reduce((best,c)=> c.ov>best.ov ? c : best, (captainMatches.length ? captainMatches : pool)[0]);
-    return boostBaseToOv(base, base.ov+5, 60000000+base.id, 'wm26_kapitaen', 'WM-Kapitän', 'wm26k');
+    return boostBaseToOv(base, base.ov+18, 60000000+base.id, 'wm26_kapitaen', 'WM-Kapitän', 'wm26k');
   }).filter(Boolean);
   WM26_KAPITAEN_SPECIALS_CACHE.forEach(p=>BY_ID.set(p.id,p));
   return WM26_KAPITAEN_SPECIALS_CACHE;
@@ -7862,7 +7862,7 @@ const PACKS = [
       return [first, second, third];
     }},
   {id:'worldcuppack',name:'World Cup Pack',cost:0,tier:'ultimate',count:5,hidden:true,
-    desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit einer 10%-Chance pro Pack auf einen WM-Kapitän (+5 OVR, ein Spieler pro Nation) - bevorzugt der Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
+    desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit einer 10%-Chance pro Pack auf einen WM-Kapitän (+18 OVR, ein Spieler pro Nation) - bevorzugt der Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
     draw(opts={}){
       const kapitaene = wm26KapitaenSpecials(), variante = wm26VarianteSpecials();
       // Exactly 10% chance PER PACK of containing a Kapitän at all - not guaranteed, and not rolled
@@ -17110,7 +17110,7 @@ function renderWM26Panel(){
       : `<p style="margin-top:0;">Deine letzte WM endete: <b style="color:var(--chalk);">Aus in der ${WM26_STAGE_LABEL[t.eliminatedAt]}</b></p>`) : '';
     box.innerHTML = `
       ${banner}
-      <p class="hint" style="margin-top:0;">Die echte WM 2026 nachgespielt: 48 Teams, 12 Gruppen à 4, danach K.o.-Runde ab den letzten 32 (Gruppensieger + -zweite plus die 8 besten Gruppendritten). Du übernimmst zufällig den Platz einer echten Nation. Startgeld: <b style="color:var(--gold);">${formatCoins(WM26_ENTRY_FEE)} Coins</b>. Scheiterst du, gibt's Trostpreis-Coins je nach Runde. Gewinnst du: 20% WM Winners Pack, 80% <b style="color:var(--gold);">World Cup Pack</b> (neue WM-Variante +5 OVR und WM-Kapitän +5 OVR, aus allen 48 Teams).</p>
+      <p class="hint" style="margin-top:0;">Die echte WM 2026 nachgespielt: 48 Teams, 12 Gruppen à 4, danach K.o.-Runde ab den letzten 32 (Gruppensieger + -zweite plus die 8 besten Gruppendritten). Du übernimmst zufällig den Platz einer echten Nation. Startgeld: <b style="color:var(--gold);">${formatCoins(WM26_ENTRY_FEE)} Coins</b>. Scheiterst du, gibt's Trostpreis-Coins je nach Runde. Gewinnst du: 20% WM Winners Pack, 80% <b style="color:var(--gold);">World Cup Pack</b> (neue WM-Variante +5 OVR und WM-Kapitän +18 OVR, aus allen 48 Teams).</p>
       <p class="hint" style="margin:0 0 10px;">Teilnahmen heute: <b style="color:var(--chalk);">${wm26RunsToday()}/${WM26_DAILY_LIMIT}</b></p>
       ${wm26RunsToday()>=WM26_DAILY_LIMIT
         ? `<button class="action-btn" style="width:220px;" disabled>Tageslimit erreicht</button>`
