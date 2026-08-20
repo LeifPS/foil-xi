@@ -14905,7 +14905,7 @@ const BOT_STRENGTH_TIERS = {
   custom: {label:'Eigener Bereich', min:65, max:99}
 };
 const HOSTED_TOURNAMENT_DEFAULT_BOT_STRENGTH = 'auto';
-const BOT_STRENGTH_ABSOLUTE_MIN = 50, BOT_STRENGTH_ABSOLUTE_MAX = 150;
+const BOT_STRENGTH_ABSOLUTE_MIN = 50;
 function botStrengthTierLabel(t){
   const tier = BOT_STRENGTH_TIERS[t.botStrength] || BOT_STRENGTH_TIERS.auto;
   if(t.botStrength==='custom') return `Eigener Bereich (${t.botStrengthMin}-${t.botStrengthMax})`;
@@ -15010,9 +15010,9 @@ function normalizeTournamentDoc(t){
   if(t.botStrength==='custom'){
     let lo = Number(t.botStrengthMin), hi = Number(t.botStrengthMax);
     if(!Number.isFinite(lo)) lo = BOT_STRENGTH_ABSOLUTE_MIN;
-    if(!Number.isFinite(hi)) hi = BOT_STRENGTH_ABSOLUTE_MAX;
-    lo = clamp(Math.round(lo), BOT_STRENGTH_ABSOLUTE_MIN, BOT_STRENGTH_ABSOLUTE_MAX);
-    hi = clamp(Math.round(hi), BOT_STRENGTH_ABSOLUTE_MIN, BOT_STRENGTH_ABSOLUTE_MAX);
+    if(!Number.isFinite(hi)) hi = BOT_STRENGTH_ABSOLUTE_MIN;
+    lo = Math.max(BOT_STRENGTH_ABSOLUTE_MIN, Math.round(lo));
+    hi = Math.max(BOT_STRENGTH_ABSOLUTE_MIN, Math.round(hi));
     if(lo>hi){ const tmp=lo; lo=hi; hi=tmp; }
     t.botStrengthMin = lo; t.botStrengthMax = hi;
   }
@@ -15340,11 +15340,11 @@ async function hostTournamentPrompt(){
     </div>
     <div id="bot-strength-custom" style="display:none;margin-bottom:14px;">
       <div style="display:flex;gap:10px;align-items:center;">
-        <input id="bot-strength-min" type="number" min="${BOT_STRENGTH_ABSOLUTE_MIN}" max="${BOT_STRENGTH_ABSOLUTE_MAX}" value="65" placeholder="Min OVR" style="flex:1;">
+        <input id="bot-strength-min" type="number" min="${BOT_STRENGTH_ABSOLUTE_MIN}" value="65" placeholder="Min OVR" style="flex:1;">
         <span class="hint" style="margin:0;">bis</span>
-        <input id="bot-strength-max" type="number" min="${BOT_STRENGTH_ABSOLUTE_MIN}" max="${BOT_STRENGTH_ABSOLUTE_MAX}" value="99" placeholder="Max OVR" style="flex:1;">
+        <input id="bot-strength-max" type="number" min="${BOT_STRENGTH_ABSOLUTE_MIN}" value="99" placeholder="Max OVR" style="flex:1;">
       </div>
-      <p class="hint" style="margin:6px 0 0;">OVR zwischen ${BOT_STRENGTH_ABSOLUTE_MIN} und ${BOT_STRENGTH_ABSOLUTE_MAX}.</p>
+      <p class="hint" style="margin:6px 0 0;">Ab OVR ${BOT_STRENGTH_ABSOLUTE_MIN}, nach oben offen.</p>
     </div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Preis</div>
     <div class="toolbar" style="margin-bottom:14px;">
@@ -15418,8 +15418,8 @@ async function hostTournamentPrompt(){
       let lo = Math.round(parseFloat(document.getElementById('bot-strength-min').value));
       let hi = Math.round(parseFloat(document.getElementById('bot-strength-max').value));
       if(!Number.isFinite(lo) || !Number.isFinite(hi)){ toast('Bitte gültige CPU-Stärke-Grenzen angeben.'); e.target.disabled=false; return; }
-      lo = clamp(lo, BOT_STRENGTH_ABSOLUTE_MIN, BOT_STRENGTH_ABSOLUTE_MAX);
-      hi = clamp(hi, BOT_STRENGTH_ABSOLUTE_MIN, BOT_STRENGTH_ABSOLUTE_MAX);
+      lo = Math.max(BOT_STRENGTH_ABSOLUTE_MIN, lo);
+      hi = Math.max(BOT_STRENGTH_ABSOLUTE_MIN, hi);
       if(lo>hi){ const tmp=lo; lo=hi; hi=tmp; }
       baseDoc.botStrengthMin = lo; baseDoc.botStrengthMax = hi;
     }
