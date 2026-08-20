@@ -14881,9 +14881,20 @@ function singleElimRoundNames(totalRounds){
   return names;
 }
 function isBotParticipantId(userId){ return typeof userId==='string' && userId.startsWith('bot_'); }
+const RUNNER_UP_PRIZE_SHARE = 0.35;
+// splits a coin prize pot 65/35 winner/runner-up - the remainder (from flooring the runner-up share)
+// goes to the winner so the two shares always sum to exactly the original pot, never leaking a coin.
+function computeCoinPrizeSplit(totalCoins){
+  const runnerUpPrizeCoins = Math.floor((totalCoins||0) * RUNNER_UP_PRIZE_SHARE);
+  const winnerPrizeCoins = (totalCoins||0) - runnerUpPrizeCoins;
+  return {winnerPrizeCoins, runnerUpPrizeCoins};
+}
 function tournamentPrizeLabel(t){
   if(t.prizeType==='card' && t.prizeCard) return `Karte: ${t.prizeCard.n} (${t.prizeCard.ov} OVR)`;
-  return `${formatCoins((t.prizeCoins||0))} Coins`;
+  const total = t.prizeCoins||0;
+  const runnerUpShare = t.runnerUpPrizeCoins!=null ? t.runnerUpPrizeCoins : Math.floor(total*RUNNER_UP_PRIZE_SHARE);
+  const winnerShare = t.winnerPrizeCoins!=null ? t.winnerPrizeCoins : (total-runnerUpShare);
+  return `${formatCoins(total)} Coins (1. Platz ${formatCoins(winnerShare)} / 2. Platz ${formatCoins(runnerUpShare)})`;
 }
 // Migrates a tournament doc read from Firestore into the current shape. Docs created before the
 // card-prize feature existed have no prizeType field at all (they only ever had prizeCoins), and
@@ -14916,7 +14927,36 @@ function normalizeTournamentDoc(t){
   } else {
     t.visibleRounds = Math.min(t.visibleRounds, t.rounds.length);
   }
+  // Docs created before podium payouts existed have none of these fields - default them to "nothing
+  // to claim, whole pot to the winner" so an old tournament doesn't suddenly owe a runner-up money
+  // nobody ever budgeted for.
+  if(t.runnerUpUserId===undefined) t.runnerUpUserId = null;
+  if(t.runnerUpName===undefined) t.runnerUpName = null;
+  if(t.winnerPrizeCoins==null) t.winnerPrizeCoins = t.prizeType!=='card' ? (t.prizeCoins||0) : 0;
+  if(t.runnerUpPrizeCoins==null) t.runnerUpPrizeCoins = 0;
+  if(t.runnerUpPrizeClaimed===undefined) t.runnerUpPrizeClaimed = true;
   return t;
+}
+// shared match-record builder for every bracket simulator below - always keeps both aUserId/bUserId
+// (not just the winner's id), which the podium/runner-up logic and the bracket-tree renderer both
+// need to resolve "who was on each side", not just "who won".
+function mkMatchRecord(a, b, md, extra={}){
+  const winnerIsA = md.winnerSide==='me';
+  return {
+    aName:a.name, bName:b.name, aUserId:a.userId, bUserId:b.userId, aRating:a.rating, bRating:b.rating,
+    aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
+    winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, ...extra
+  };
+}
+// the runner-up of any elimination-style bracket is simply the loser of its very last match (the
+// final) - works identically for single-elim, the group stage's KO tail, and double-elim's grand
+// finals, as long as that last round has exactly one match.
+function runnerUpFromFinalMatch(rounds){
+  const last = rounds[rounds.length-1];
+  const m = last && last.matches && last.matches.length===1 ? last.matches[0] : null;
+  if(!m) return {runnerUpUserId:null, runnerUpName:null};
+  const loserIsA = m.winnerName!==m.aName;
+  return loserIsA ? {runnerUpUserId:m.aUserId, runnerUpName:m.aName} : {runnerUpUserId:m.bUserId, runnerUpName:m.bName};
 }
 function simulateSingleElimBracket(participants){
   const shuffled = participants.slice();
@@ -14929,18 +14969,13 @@ function simulateSingleElimBracket(participants){
     for(let i=0;i<round.length;i+=2){
       const a=round[i], b=round[i+1];
       const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
-      const winnerIsA = md.winnerSide==='me';
-      matches.push({
-        aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
-        aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
-        winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId
-      });
-      nextRound.push(winnerIsA ? a : b);
+      matches.push(mkMatchRecord(a,b,md));
+      nextRound.push(md.winnerSide==='me' ? a : b);
     }
     rounds.push({matches});
     round = nextRound;
   }
-  return {rounds, winnerUserId:round[0].userId, winnerName:round[0].name};
+  return {rounds, winnerUserId:round[0].userId, winnerName:round[0].name, ...runnerUpFromFinalMatch(rounds)};
 }
 function simulateDoubleElimBracket(participants){
   const shuffled = participants.slice();
@@ -14958,12 +14993,8 @@ function simulateDoubleElimBracket(participants){
       const a=winnersRound[i], b=winnersRound[i+1];
       if(!b) { winnersNext.push(a); continue; } // Bye if odd number
       const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
+      winnerMatches.push(mkMatchRecord(a,b,md,{type:'winners'}));
       const winnerIsA = md.winnerSide==='me';
-      winnerMatches.push({
-        aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
-        aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
-        winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, type:'winners'
-      });
       winnersNext.push(winnerIsA ? a : b);
       losersRound.push(winnerIsA ? b : a);
     }
@@ -14977,13 +15008,8 @@ function simulateDoubleElimBracket(participants){
         const a=losersRound[i], b=losersRound[i+1];
         if(!b) { losersNext.push(a); continue; } // Bye if odd number
         const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
-        const winnerIsA = md.winnerSide==='me';
-        loserMatches.push({
-          aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
-          aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
-          winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, type:'losers'
-        });
-        losersNext.push(winnerIsA ? a : b);
+        loserMatches.push(mkMatchRecord(a,b,md,{type:'losers'}));
+        losersNext.push(md.winnerSide==='me' ? a : b);
       }
       if(loserMatches.length>0) rounds.push({matches: loserMatches, stage: 'Losers R'+roundNum});
       losersRound = losersNext;
@@ -14992,13 +15018,8 @@ function simulateDoubleElimBracket(participants){
       const a=winnersRound[0], b=losersRound[0];
       if(a && b){
         const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
-        const winnerIsA = md.winnerSide==='me';
-        rounds.push({matches: [{
-          aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
-          aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
-          winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId, type:'grand'
-        }], stage: 'Grand Finals'});
-        winnersRound = winnerIsA ? [a] : [b];
+        rounds.push({matches: [mkMatchRecord(a,b,md,{type:'grand'})], stage: 'Grand Finals'});
+        winnersRound = md.winnerSide==='me' ? [a] : [b];
         losersRound = [];
       } else {
         break;
@@ -15007,7 +15028,7 @@ function simulateDoubleElimBracket(participants){
       break;
     }
   }
-  return {rounds, winnerUserId:winnersRound[0]?.userId, winnerName:winnersRound[0]?.name};
+  return {rounds, winnerUserId:winnersRound[0]?.userId, winnerName:winnersRound[0]?.name, ...runnerUpFromFinalMatch(rounds)};
 }
 function simulateGroupStageBracket(participants){
   const numGroups = participants.length<=8 ? 2 : 4;
@@ -15036,11 +15057,7 @@ function simulateGroupStageBracket(participants){
         standings[j].goals += md.oppGoals;
         standings[i].goalsAgainst += md.oppGoals;
         standings[j].goalsAgainst += md.myGoals;
-        groupMatches.push({
-          aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
-          aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
-          winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId
-        });
+        groupMatches.push(mkMatchRecord(a,b,md));
       }
     }
     standings.sort((a,b)=>b.wins-a.wins || (b.goals-b.goalsAgainst)-(a.goals-a.goalsAgainst));
@@ -15052,64 +15069,61 @@ function simulateGroupStageBracket(participants){
   if(knockoutParticipants.length>1){
     const koResult = simulateSingleElimBracket(knockoutParticipants);
     rounds.push(...koResult.rounds.map((r,i)=>({...r, stage:'K.O. Runde '+(i+1)})));
-    return {rounds, winnerUserId:koResult.winnerUserId, winnerName:koResult.winnerName};
+    return {rounds, winnerUserId:koResult.winnerUserId, winnerName:koResult.winnerName, runnerUpUserId:koResult.runnerUpUserId, runnerUpName:koResult.runnerUpName};
   }
-  return {rounds, winnerUserId:knockoutParticipants[0]?.userId, winnerName:knockoutParticipants[0]?.name};
+  return {rounds, winnerUserId:knockoutParticipants[0]?.userId, winnerName:knockoutParticipants[0]?.name, runnerUpUserId:null, runnerUpName:null};
+}
+// standard circle-method round-robin scheduler: every unique pair gets assigned to exactly one
+// matchday, and no participant plays twice on the same day. An odd participant count gets a virtual
+// "bye" slot that simply produces no match for whoever draws it that day. Replaces the previous
+// ad-hoc (day % numMatchdays === (aIdx+bIdx) % numMatchdays) scheme, which silently DROPPED some
+// pairings for several participant counts - they were still folded into the final standings tally,
+// but never appeared in any displayed matchday, so the shown match list didn't add up to the table.
+function circleMethodSchedule(n){
+  const hasBye = n % 2 !== 0;
+  const size = hasBye ? n+1 : n;
+  const totalRounds = size-1;
+  let idxs = Array.from({length:size}, (_,i)=>i);
+  const schedule = [];
+  for(let r=0;r<totalRounds;r++){
+    const pairs = [];
+    for(let i=0;i<size/2;i++){
+      const a = idxs[i], b = idxs[size-1-i];
+      if(a<n && b<n) pairs.push([a,b]);
+    }
+    schedule.push(pairs);
+    const fixed = idxs[0];
+    const rest = idxs.slice(1);
+    rest.unshift(rest.pop());
+    idxs = [fixed, ...rest];
+  }
+  return schedule;
 }
 function simulateRoundRobinBracket(participants){
   const standings = participants.map(p=>({...p, wins:0, goals:0, goalsAgainst:0}));
+  const schedule = circleMethodSchedule(participants.length);
   const rounds = [];
-  
-  // Create matches list
-  const matches = [];
-  for(let i=0;i<participants.length;i++){
-    for(let j=i+1;j<participants.length;j++){
-      const a=standings[i], b=standings[j];
+  schedule.forEach((pairs, dayIdx)=>{
+    if(!pairs.length) return;
+    const dayMatches = [];
+    pairs.forEach(([i,j])=>{
+      const a = standings[i], b = standings[j];
       const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
       const winnerIsA = md.winnerSide==='me';
-      if(winnerIsA){ standings[i].wins++; } else { standings[j].wins++; }
-      standings[i].goals += md.myGoals;
-      standings[j].goals += md.oppGoals;
-      standings[i].goalsAgainst += md.oppGoals;
-      standings[j].goalsAgainst += md.myGoals;
-      matches.push({
-        aIdx: i, bIdx: j,
-        aName:a.name, bName:b.name, aRating:a.rating, bRating:b.rating,
-        aGoals:md.myGoals, bGoals:md.oppGoals, wentToPK:md.wentToPK,
-        winnerName: winnerIsA?a.name:b.name, winnerUserId: winnerIsA?a.userId:b.userId
-      });
-    }
-  }
-  
-  // Distribute matches into matchdays where each participant plays at most 1 game per day
-  const numParticipants = participants.length;
-  const numMatchdays = numParticipants % 2 === 0 ? numParticipants - 1 : numParticipants;
-  const matchdays = Array.from({length: numMatchdays}, () => []);
-  
-  // Use circular rotation algorithm to create balanced matchdays
-  const positions = Array.from({length: numParticipants}, (_, i) => i);
-  for(let day = 0; day < numMatchdays; day++){
-    const dayMatches = [];
-    const used = new Set();
-    
-    // For each participant, find their match on this day
-    for(let m of matches){
-      if(day % numMatchdays === (m.aIdx + m.bIdx) % numMatchdays && !used.has(m.aIdx) && !used.has(m.bIdx)){
-        dayMatches.push(m);
-        used.add(m.aIdx);
-        used.add(m.bIdx);
-      }
-    }
-    
-    if(dayMatches.length > 0){
-      rounds.push({matches: dayMatches, stage: `Spieltag ${day + 1}`, standings: standings.slice()});
-    }
-  }
-  
-  // Sort standings by wins and goal difference
-  standings.sort((a,b)=>b.wins-a.wins || (b.goals-b.goalsAgainst)-(a.goals-a.goalsAgainst));
-  
-  return {rounds, winnerUserId:standings[0].userId, winnerName:standings[0].name};
+      if(winnerIsA) standings[i].wins++; else standings[j].wins++;
+      standings[i].goals += md.myGoals; standings[j].goals += md.oppGoals;
+      standings[i].goalsAgainst += md.oppGoals; standings[j].goalsAgainst += md.myGoals;
+      dayMatches.push(mkMatchRecord(a,b,md));
+    });
+    // snapshot taken AFTER this matchday's results are folded in, so the table shown alongside a
+    // given matchday is the real standings-as-of-then - not a preview of the eventual final table
+    // (the old bug: every match and the final table were computed up front, then that same final
+    // snapshot got reused on every single matchday regardless of how far the reveal had progressed).
+    const snapshot = standings.map(p=>({...p})).sort((x,y)=>y.wins-x.wins || (y.goals-y.goalsAgainst)-(x.goals-x.goalsAgainst));
+    rounds.push({matches: dayMatches, stage: `Spieltag ${dayIdx+1}`, standings: snapshot});
+  });
+  const finalStandings = rounds.length ? rounds[rounds.length-1].standings : standings.slice().sort((a,b)=>b.wins-a.wins || (b.goals-b.goalsAgainst)-(a.goals-a.goalsAgainst));
+  return {rounds, winnerUserId:finalStandings[0]?.userId, winnerName:finalStandings[0]?.name, runnerUpUserId:finalStandings[1]?.userId, runnerUpName:finalStandings[1]?.name};
 }
 function simulateHostedBracket(participants, format='singleElim'){
   switch(format){
@@ -15133,8 +15147,8 @@ function fillAndSimulateHostedTournament(t){
       participants.push({userId:'bot_'+genId(), name:bot.owner+' (CPU)', rating:bot.rating, players:bot.players, isBot:true});
     }
   }
-  const {rounds, winnerUserId, winnerName} = simulateHostedBracket(participants, t.format||'singleElim');
-  return {participants, rounds, winnerUserId, winnerName};
+  const {rounds, winnerUserId, winnerName, runnerUpUserId, runnerUpName} = simulateHostedBracket(participants, t.format||'singleElim');
+  return {participants, rounds, winnerUserId, winnerName, runnerUpUserId, runnerUpName};
 }
 // Computes the final bracket/winner for a hosted tournament and figures out whether the prize is
 // already settled or needs an immediate refund to the host. Does NOT perform any writes itself -
@@ -15142,16 +15156,27 @@ function fillAndSimulateHostedTournament(t){
 // same resolution logic is needed both when a join fills the last slot and when the host manually
 // starts the tournament with bots.
 function prepareHostedTournamentRun(t, participantsBeforeBots){
-  const {participants, rounds, winnerUserId, winnerName} = fillAndSimulateHostedTournament({...t, participants: participantsBeforeBots});
+  const {participants, rounds, winnerUserId, winnerName, runnerUpUserId, runnerUpName} = fillAndSimulateHostedTournament({...t, participants: participantsBeforeBots});
+  const isCard = t.prizeType==='card';
+  const {winnerPrizeCoins, runnerUpPrizeCoins} = isCard ? {winnerPrizeCoins:0, runnerUpPrizeCoins:0} : computeCoinPrizeSplit(t.prizeCoins||0);
   const botWon = isBotParticipantId(winnerUserId);
-  const hostSelfWonCard = !botWon && winnerUserId===t.hostUserId && t.prizeType==='card';
-  const hostRefundCoins = (botWon && t.prizeType!=='card') ? (t.prizeCoins||0) : 0;
+  const runnerUpIsBot = isBotParticipantId(runnerUpUserId);
+  const hostSelfWonCard = !botWon && winnerUserId===t.hostUserId && isCard;
+  // the two prize shares settle completely independently: a bot winning doesn't affect whether the
+  // runner-up share (if any human holds it) gets refunded or paid out, and vice versa.
+  const hostRefundCoins = (!isCard && botWon ? winnerPrizeCoins : 0) + (!isCard && runnerUpIsBot ? runnerUpPrizeCoins : 0);
   const prizeClaimed = botWon || hostSelfWonCard;
-  return {participants, rounds, winnerUserId, winnerName, botWon, hostSelfWonCard, prizeClaimed, hostRefundCoins};
+  // a card prize never has a runner-up payout at all (nothing to split), so its claim is always
+  // already "settled" - same idea as a bot winning a coin share needing no separate claim step.
+  const runnerUpPrizeClaimed = isCard || runnerUpIsBot;
+  return {participants, rounds, winnerUserId, winnerName, runnerUpUserId, runnerUpName, botWon, hostSelfWonCard, prizeClaimed, runnerUpPrizeClaimed, hostRefundCoins, winnerPrizeCoins, runnerUpPrizeCoins};
 }
 function resolveHostedTournamentOutcome(t, participantsBeforeBots){
   const run = prepareHostedTournamentRun(t, participantsBeforeBots);
-  return {participants: run.participants, rounds: run.rounds, winnerUserId: run.winnerUserId, winnerName: run.winnerName, prizeClaimed: run.prizeClaimed, hostRefundCoins: run.hostRefundCoins};
+  return {participants: run.participants, rounds: run.rounds, winnerUserId: run.winnerUserId, winnerName: run.winnerName,
+    runnerUpUserId: run.runnerUpUserId, runnerUpName: run.runnerUpName,
+    prizeClaimed: run.prizeClaimed, runnerUpPrizeClaimed: run.runnerUpPrizeClaimed, hostRefundCoins: run.hostRefundCoins,
+    winnerPrizeCoins: run.winnerPrizeCoins, runnerUpPrizeCoins: run.runnerUpPrizeCoins};
 }
 let hostPrizeCardUid = null; // card selected in the currently-open host-tournament modal, if any
 async function hostTournamentPrompt(){
@@ -15309,7 +15334,10 @@ async function joinHostedTournament(id){
         const participants = t.participants.concat([{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()}]);
         if(participants.length>=t.maxSlots){
           const out = prepareHostedTournamentRun(t, participants);
-          tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+          tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
+            winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
+            prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
+            prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
           if(out.hostRefundCoins>0 && fb.increment){
             tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
           }
@@ -15333,7 +15361,10 @@ async function joinHostedTournament(id){
           t.participants.push({userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()});
           if(t.participants.length>=t.maxSlots){
             const out = resolveHostedTournamentOutcome(t, t.participants);
-            await fb.setDoc(ref, {...t, participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
+            await fb.setDoc(ref, {...t, participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
+              winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
+              winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
+              prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
             if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
               try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
             }
@@ -15377,7 +15408,10 @@ async function startHostedTournament(id){
         if(t.hostUserId!==profile.userId){ result='not-host'; return; }
         if(t.status!=='registering'){ result='already-running'; return; }
         const out = prepareHostedTournamentRun(t, t.participants);
-        tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeType:t.prizeType, prizeCoins:t.prizeCoins});
+        tx.update(ref, {participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
+          winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
+          prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
+          prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
         if(out.hostRefundCoins>0 && fb.increment){
           tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
         }
@@ -15392,7 +15426,10 @@ async function startHostedTournament(id){
         else if(t.status!=='registering'){ result='already-running'; }
         else{
           const out = resolveHostedTournamentOutcome(t, t.participants);
-          await fb.setDoc(ref, {...t, participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length), winnerUserId:out.winnerUserId, winnerName:out.winnerName, prizeClaimed:out.prizeClaimed});
+          await fb.setDoc(ref, {...t, participants:out.participants, status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
+            winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
+            winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
+            prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
           if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
             try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
           }
@@ -15431,16 +15468,14 @@ async function advanceHostedTournamentRound(id, opts={}){
         const current = Math.min(Math.max(0, t.visibleRounds||0), totalRounds);
         if(current>=totalRounds){ result='already-complete'; return; }
         const nextVisible = current + 1;
+        // Prize settlement (bot refunds, prizeClaimed/runnerUpPrizeClaimed) already happened the
+        // instant the tournament left 'registering' (see prepareHostedTournamentRun's callers) - the
+        // whole bracket, winner and runner-up included, is fully decided at that point already.
+        // "Advancing" here only reveals more of an already-settled result, so this must NOT touch
+        // coins or claimed-flags again: doing so used to pay a bot-won prize out to the host TWICE
+        // (once at the running transition, once more here on completion) for exactly the same win.
         const updates = {visibleRounds: nextVisible};
-        if(nextVisible>=totalRounds){
-          updates.status = 'completed';
-          const botWon = isBotParticipantId(t.winnerUserId);
-          const hostSelfWonCard = !botWon && t.prizeType==='card' && t.winnerUserId===t.hostUserId;
-          updates.prizeClaimed = botWon || hostSelfWonCard;
-          if(botWon && t.prizeType!=='card' && fb.increment){
-            tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(t.prizeCoins||0)});
-          }
-        }
+        if(nextVisible>=totalRounds) updates.status = 'completed';
         tx.update(ref, updates);
         result = nextVisible>=totalRounds ? 'completed' : 'advanced';
       });
@@ -15456,14 +15491,14 @@ async function advanceHostedTournamentRound(id, opts={}){
           if(current>=totalRounds){ result='already-complete'; }
           else{
             const nextVisible = current + 1;
+            // Settlement already happened at the running-transition (see joinHostedTournament/
+            // startHostedTournament) - nothing prize-related to do here, just reveal the next round.
+            // The old version re-settled here too, via atomicCoinChange(), which credits the
+            // currently logged-in caller's OWN account - since anyone (not just the host) can trigger
+            // this tick, that paid a bot-won prize to whoever happened to click "next round" instead
+            // of the host, on top of already double-paying the host via the transaction path above.
             const updates = {...t, visibleRounds: nextVisible};
-            if(nextVisible>=totalRounds){
-              updates.status='completed';
-              const botWon = isBotParticipantId(t.winnerUserId);
-              const hostSelfWonCard = !botWon && t.prizeType==='card' && t.winnerUserId===t.hostUserId;
-              updates.prizeClaimed = botWon || hostSelfWonCard;
-              if(botWon && t.prizeType!=='card') await atomicCoinChange(t.prizeCoins||0);
-            }
+            if(nextVisible>=totalRounds) updates.status='completed';
             await fb.setDoc(ref, updates);
             result = nextVisible>=totalRounds ? 'completed' : 'advanced';
           }
@@ -15534,7 +15569,9 @@ async function cancelHostedTournament(id){
     loadOpenTournaments();
   }catch(e){ console.warn('cancel tournament failed', e); toast('Turnier konnte nicht abgesagt werden.'); }
 }
-async function claimTournamentPrize(id){
+// role: 'winner' (default - coins or the staked card) or 'runnerup' (coin share only, card prizes
+// have no runner-up payout at all since a single staked card can't be split).
+async function claimTournamentPrize(id, role='winner'){
   await fbReady;
   if(!fb) return;
   const ref = fb.doc(fb.db,'tournaments', id);
@@ -15543,13 +15580,21 @@ async function claimTournamentPrize(id){
   try{
     if(fb.runTransaction && clubId){
       // Transaction closes a duplicate-payout bug: without it, claiming from two sessions (e.g. two
-      // open tabs) could both read prizeClaimed:false and both trigger a payout before either write
-      // landed. Marking prizeClaimed and granting the reward happen together atomically here.
+      // open tabs) could both read the claimed-flag as false and both trigger a payout before either
+      // write landed. Marking the flag and granting the reward happen together atomically here.
       const saveRef = fb.doc(fb.db,'saves',clubId);
       await fb.runTransaction(fb.db, async (tx)=>{
         const snap = await tx.get(ref);
         if(!snap.exists()) return;
         const t = normalizeTournamentDoc(snap.data());
+        if(role==='runnerup'){
+          if(t.runnerUpUserId!==profile.userId || t.runnerUpPrizeClaimed || !t.runnerUpPrizeCoins) return;
+          if(!fb.increment) return;
+          tx.update(ref, {runnerUpPrizeClaimed:true});
+          tx.update(saveRef, {'profile.coins': fb.increment(t.runnerUpPrizeCoins)});
+          claimed = true; prizeCoins = t.runnerUpPrizeCoins;
+          return;
+        }
         if(t.winnerUserId!==profile.userId || t.prizeClaimed) return;
         tx.update(ref, {prizeClaimed:true, prizeType:t.prizeType});
         if(t.prizeType==='card' && t.prizeCard){
@@ -15563,8 +15608,8 @@ async function claimTournamentPrize(id){
           // if the host won their own staked card back, it never left their collection - nothing to move
           claimed = true; prizeCardName = t.prizeCard.n;
         } else if(fb.increment) {
-          tx.update(saveRef, {'profile.coins': fb.increment(t.prizeCoins)});
-          claimed = true; prizeCoins = t.prizeCoins;
+          tx.update(saveRef, {'profile.coins': fb.increment(t.winnerPrizeCoins)});
+          claimed = true; prizeCoins = t.winnerPrizeCoins;
         }
       });
       if(claimed && prizeCoins>0){ profile.coins += prizeCoins; updateCoinDisplay(); }
@@ -15575,7 +15620,14 @@ async function claimTournamentPrize(id){
       const snap = await fb.getDoc(ref);
       if(snap.exists()){
         const t = normalizeTournamentDoc(snap.data());
-        if(t.winnerUserId===profile.userId && !t.prizeClaimed){
+        if(role==='runnerup'){
+          if(t.runnerUpUserId===profile.userId && !t.runnerUpPrizeClaimed && t.runnerUpPrizeCoins){
+            await atomicCoinChange(t.runnerUpPrizeCoins);
+            prizeCoins = t.runnerUpPrizeCoins;
+            await fb.setDoc(ref, {...t, runnerUpPrizeClaimed:true});
+            claimed = true;
+          }
+        } else if(t.winnerUserId===profile.userId && !t.prizeClaimed){
           if(t.prizeType==='card' && t.prizeCard){
             if(t.winnerUserId!==t.hostUserId){
               try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {collection: fb.arrayRemove({uid:t.prizeCard.stakedUid, cardId:t.prizeCard.cardId})}); }catch(_){}
@@ -15584,8 +15636,8 @@ async function claimTournamentPrize(id){
             }
             prizeCardName = t.prizeCard.n;
           } else {
-            await atomicCoinChange(t.prizeCoins);
-            prizeCoins = t.prizeCoins;
+            await atomicCoinChange(t.winnerPrizeCoins);
+            prizeCoins = t.winnerPrizeCoins;
           }
           await fb.setDoc(ref, {...t, prizeClaimed:true});
           claimed = true;
@@ -15814,6 +15866,7 @@ async function loadMyTournamentResults(){
     mine.slice(0,10).forEach(t=>{
       const isRunning = t.status==='running';
       const won = t.winnerUserId===profile.userId;
+      const isRunnerUp = t.runnerUpUserId===profile.userId;
       const row = document.createElement('div');
       row.className = 'leader-row';
       row.style.flexWrap = 'wrap';
@@ -15821,7 +15874,7 @@ async function loadMyTournamentResults(){
       info.style.cssText = 'flex:1;cursor:pointer;';
       info.innerHTML = isRunning
         ? `${liveBadgeHtml()}${t.hostName}s Turnier \u2014 Preis: ${tournamentPrizeLabel(t)} \u2014 Runde ${t.visibleRounds||0}/${(t.rounds||[]).length}`
-        : `${t.hostName}s Turnier \u2014 Preis: ${tournamentPrizeLabel(t)} \u2014 Sieger: <b style="${won?'color:var(--gold);':''}">${t.winnerName}</b>${won?' \ud83c\udfc6':''}`;
+        : `${t.hostName}s Turnier \u2014 Preis: ${tournamentPrizeLabel(t)} \u2014 Sieger: <b style="${won?'color:var(--gold);':''}">${t.winnerName}</b>${won?' \ud83c\udfc6':''}${t.runnerUpName?` \u00b7 2. Platz: <b style="${isRunnerUp?'color:var(--turf-bright);':''}">${t.runnerUpName}</b>`:''}`;
       info.addEventListener('click', ()=>showBracketModal(t));
       row.appendChild(info);
       if(isRunning){
@@ -15833,8 +15886,14 @@ async function loadMyTournamentResults(){
       } else if(won && !t.prizeClaimed){
         const claimBtn = document.createElement('button');
         claimBtn.className='action-btn'; claimBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;';
-        claimBtn.textContent = t.prizeType==='card' && t.prizeCard ? `Karte abholen: ${t.prizeCard.n}` : `Preis abholen (${formatCoins((t.prizeCoins||0))})`;
-        claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id); });
+        claimBtn.textContent = t.prizeType==='card' && t.prizeCard ? `Karte abholen: ${t.prizeCard.n}` : `Preis abholen (${formatCoins((t.winnerPrizeCoins||0))})`;
+        claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id,'winner'); });
+        row.appendChild(claimBtn);
+      } else if(isRunnerUp && !t.runnerUpPrizeClaimed && t.runnerUpPrizeCoins>0){
+        const claimBtn = document.createElement('button');
+        claimBtn.className='action-btn'; claimBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;';
+        claimBtn.textContent = `Preis abholen (${formatCoins(t.runnerUpPrizeCoins)})`;
+        claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id,'runnerup'); });
         row.appendChild(claimBtn);
       }
       box.appendChild(row);
