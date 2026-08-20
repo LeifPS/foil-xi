@@ -15043,7 +15043,13 @@ function runnerUpFromFinalMatch(rounds){
 function liveRevealExtra(a, b, md, tier){
   const humanInvolved = !a.isBot || !b.isBot;
   if(!humanInvolved) return {};
-  return {needsLiveReveal:true, liveRevealed:false, tier, liveMd:md, mid:genId()};
+  // Firestore rejects any field holding an explicit `undefined` (throws on the whole write, not just
+  // that field) - a bot's squad players have no uid/level (those only exist on real owned cards), so
+  // their scorer objects inside events90/eventsET/shootout carry undefined for those keys. The
+  // JSON round-trip drops every such key entirely (JSON.stringify simply omits undefined values),
+  // which is exactly what Firestore needs, without having to hand-walk the whole match-event tree.
+  const liveMd = JSON.parse(JSON.stringify(md));
+  return {needsLiveReveal:true, liveRevealed:false, tier, liveMd, mid:genId()};
 }
 function simulateSingleElimBracket(participants){
   const shuffled = participants.slice();
