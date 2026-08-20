@@ -16888,7 +16888,8 @@ async function wm26FinishRun(exitStage, won){
   if(won){
     profile.wm26 = {...t, stage:'done', wonCup:true};
     await sSet('profile', profile);
-    toast(`🏆 Weltmeister! Öffne dein Pack…`);
+    await atomicCoinChange(WM26_ENTRY_FEE, {}, {silentDisplay:true});
+    toast(`🏆 Weltmeister! ${formatCoins(WM26_ENTRY_FEE)} Startgeld zurück. Öffne dein Pack…`);
     const useWinnersPack = Math.random()<0.2;
     const pack = PACKS.find(p=>p.id===(useWinnersPack ? 'wmwinners' : 'worldcuppack'));
     // the just-decided Finale is always the last round - the other side is whichever finalist isn't
