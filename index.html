@@ -1214,6 +1214,9 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 @keyframes bracketReveal{0%{opacity:0;transform:scale(.82) translateY(6px);}60%{opacity:1;transform:scale(1.06);}100%{opacity:1;transform:scale(1);}}
 .bracket-match.bracket-just-revealed{animation:bracketReveal .5s cubic-bezier(.34,1.56,.64,1);}
 .bracket-match.bracket-final-revealed{animation:bracketReveal .5s cubic-bezier(.34,1.56,.64,1), legikoneGlow 1.6s ease-in-out 2;border-color:var(--gold);}
+.bracket-match.bracket-match-pending{display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;animation:legikoneGlow 1.6s ease-in-out infinite;}
+.bracket-live-btn{background:var(--turf-bright);color:#04140f;border:none;border-radius:6px;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;width:100%;height:100%;}
+.bracket-live-btn:hover{filter:brightness(1.08);}
 @keyframes tableRowIn{0%{opacity:0;transform:translateX(-8px);}100%{opacity:1;transform:translateX(0);}}
 .bracket-fresh-row{animation:tableRowIn .35s ease both;}
 .match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
@@ -14930,9 +14933,14 @@ function buildBracketTreeHTML(rounds, roundNamesFallback, myUserId, highlightLas
       const top = cy - BRACKET_MATCH_H/2;
       const aWon = m.winnerName===m.aName;
       const isMe = myUserId && (m.aUserId===myUserId || m.bUserId===myUserId);
+      const pending = isMe && m.needsLiveReveal && !m.liveRevealed;
       const justRevealed = highlightLastRound && isLastRound;
-      const cls = ['bracket-match', isMe?'bracket-match-me':'', justRevealed?(isLastRound&&totalRounds>1?'bracket-final-revealed':'bracket-just-revealed'):''].filter(Boolean).join(' ');
-      cols += `<div class="${cls}" style="left:${colLeft}px;top:${top}px;width:${BRACKET_COL_W}px;height:${BRACKET_MATCH_H}px;">
+      const cls = ['bracket-match', isMe?'bracket-match-me':'', pending?'bracket-match-pending':'', justRevealed?(isLastRound&&totalRounds>1?'bracket-final-revealed':'bracket-just-revealed'):''].filter(Boolean).join(' ');
+      cols += pending
+        ? `<div class="${cls}" style="left:${colLeft}px;top:${top}px;width:${BRACKET_COL_W}px;height:${BRACKET_MATCH_H}px;" data-live-mid="${m.mid}">
+          <button class="bracket-live-btn" type="button">▶ ${escBracketName(m.tier||'Spiel')} live spielen</button>
+        </div>`
+        : `<div class="${cls}" style="left:${colLeft}px;top:${top}px;width:${BRACKET_COL_W}px;height:${BRACKET_MATCH_H}px;">
         <div class="bracket-side${aWon?' bracket-winner':''}"><span class="bracket-side-name">${escBracketName(m.aName)}</span><span class="bracket-score">${m.aGoals}</span></div>
         <div class="bracket-side${!aWon?' bracket-winner':''}"><span class="bracket-side-name">${escBracketName(m.bName)}</span><span class="bracket-score">${m.bGoals}</span></div>
       </div>`;
@@ -15027,18 +15035,30 @@ function runnerUpFromFinalMatch(rounds){
   const loserIsA = m.winnerName!==m.aName;
   return loserIsA ? {runnerUpUserId:m.aUserId, runnerUpName:m.aName} : {runnerUpUserId:m.bUserId, runnerUpName:m.bName};
 }
+// A match "needs live reveal" when at least one real human (not a bot filler) is playing it, in the
+// final or semifinal round - those two are singled out as the ones worth watching live instead of
+// just reading off a number, per the "besondere Spiele wie das Finale" request. The full buildDecisiveMatch
+// output (liveMd) travels with the match record so the participant can replay it later, exactly as
+// decided here, through the same live-ticker presentation as a normal match (see playTournamentLiveMatch).
+function liveRevealExtra(a, b, md, tier){
+  const humanInvolved = !a.isBot || !b.isBot;
+  if(!humanInvolved) return {};
+  return {needsLiveReveal:true, liveRevealed:false, tier, liveMd:md, mid:genId()};
+}
 function simulateSingleElimBracket(participants){
   const shuffled = participants.slice();
   for(let i=shuffled.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]; }
   let round = shuffled;
   const rounds = [];
   while(round.length>1){
+    const isFinal = round.length===2, isSemi = round.length===4;
     const matches = [];
     const nextRound = [];
     for(let i=0;i<round.length;i+=2){
       const a=round[i], b=round[i+1];
       const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
-      matches.push(mkMatchRecord(a,b,md));
+      const extra = isFinal ? liveRevealExtra(a,b,md,'Finale') : isSemi ? liveRevealExtra(a,b,md,'Halbfinale') : {};
+      matches.push(mkMatchRecord(a,b,md,extra));
       nextRound.push(md.winnerSide==='me' ? a : b);
     }
     rounds.push({matches});
@@ -15087,7 +15107,7 @@ function simulateDoubleElimBracket(participants){
       const a=winnersRound[0], b=losersRound[0];
       if(a && b){
         const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players);
-        rounds.push({matches: [mkMatchRecord(a,b,md,{type:'grand'})], stage: 'Grand Finals'});
+        rounds.push({matches: [mkMatchRecord(a,b,md,{type:'grand', ...liveRevealExtra(a,b,md,'Finale')})], stage: 'Grand Finals'});
         winnersRound = md.winnerSide==='me' ? [a] : [b];
         losersRound = [];
       } else {
@@ -15766,12 +15786,21 @@ function renderStandingsTableHTML(standings, freshRowUserId){
   });
   return html+`</div>`;
 }
-function renderMatchListHTML(matches, freshList){
-  return matches.map(m=>`<div class="leader-row${freshList?' bracket-fresh-row':''}" style="font-size:12px;padding:6px 0;">
+function renderMatchListHTML(matches, freshList, myUserId){
+  return matches.map(m=>{
+    const isMe = myUserId && (m.aUserId===myUserId || m.bUserId===myUserId);
+    if(isMe && m.needsLiveReveal && !m.liveRevealed){
+      return `<div class="leader-row${freshList?' bracket-fresh-row':''}" style="font-size:12px;padding:6px 0;justify-content:space-between;">
+        <span>${escBracketName(m.aName)} vs ${escBracketName(m.bName)}</span>
+        <button class="bracket-live-btn" type="button" data-live-mid="${m.mid}" style="padding:4px 10px;font-size:11px;">▶ ${escBracketName(m.tier||'Spiel')} live spielen</button>
+      </div>`;
+    }
+    return `<div class="leader-row${freshList?' bracket-fresh-row':''}" style="font-size:12px;padding:6px 0;">
     <span style="flex:1;${m.winnerName===m.aName?'font-weight:700;color:var(--turf-bright);':''}">${escBracketName(m.aName)}</span>
     <span class="mono">${m.aGoals}:${m.bGoals}${m.wentToPK?' n.E.':''}</span>
     <span style="flex:1;text-align:right;${m.winnerName===m.bName?'font-weight:700;color:var(--turf-bright);':''}">${escBracketName(m.bName)}</span>
-  </div>`).join('');
+  </div>`;
+  }).join('');
 }
 function renderBracketModalContent(t){
   const roundNames = singleElimRoundNames(t.rounds.length);
@@ -15802,7 +15831,7 @@ function renderBracketModalContent(t){
     roundRobinHistory.slice().reverse().forEach(round=>{
       const fresh = round===newestRound;
       html += `<div class="hint" style="margin:${fresh?'10px':'8px'} 0 4px;${fresh?'color:var(--turf-bright);':''}">${round.stage}</div>`;
-      html += renderMatchListHTML(round.matches, fresh);
+      html += renderMatchListHTML(round.matches, fresh, profile.userId);
     });
   }
 
@@ -15810,7 +15839,7 @@ function renderBracketModalContent(t){
     groupTables.forEach(round=>{
       html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${round.stage}</div>`;
       html += renderStandingsTableHTML(round.standings);
-      if(round.matches.length) html += `<div style="margin-top:8px;">${renderMatchListHTML(round.matches, round===newestRound)}</div>`;
+      if(round.matches.length) html += `<div style="margin-top:8px;">${renderMatchListHTML(round.matches, round===newestRound, profile.userId)}</div>`;
     });
   }
 
@@ -15823,12 +15852,15 @@ function renderBracketModalContent(t){
     html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">\ud83d\udd01 Losers Bracket & Finale</div>`;
     losersList.forEach(round=>{
       html += `<div class="hint" style="margin:10px 0 4px;${round===newestRound?'color:var(--turf-bright);':''}">${round.stage}</div>`;
-      html += renderMatchListHTML(round.matches, round===newestRound);
+      html += renderMatchListHTML(round.matches, round===newestRound, profile.userId);
     });
   }
 
   openModal(html + `<button class="modal-close" id="bracket-close" style="margin-top:16px;">Schlie\u00dfen</button>`);
   document.getElementById('bracket-close').addEventListener('click', ()=>{ closeModal(); stopBracketAutoAdvance(); });
+  document.querySelectorAll('#modal-root [data-live-mid]').forEach(el=>{
+    el.addEventListener('click', ()=> playTournamentLiveMatch(t.id, el.dataset.liveMid));
+  });
   const skipBtn = document.getElementById('bracket-skip-end');
   if(skipBtn){
     skipBtn.addEventListener('click', async ()=>{
@@ -15875,6 +15907,61 @@ function showBracketModal(t){
       }catch(e){ console.warn('bracket auto-advance refresh failed', e); }
     }, 3200);
   }
+}
+// The live-ticker presentation (animateTimedMatch) always writes into whatever element currently
+// has id="match-area" - every tab template already carries an (otherwise empty/inert) one, so at
+// most one exists at a time. The bracket modal isn't one of those tabs, so before reusing that same
+// presentation here, clear out any stray one and give the modal its own - guarantees the ticker
+// writes into the match we're actually showing, not a hidden tab's leftover placeholder.
+function ensureMatchAreaHost(container){
+  document.querySelectorAll('#match-area').forEach(el=>el.remove());
+  const div = document.createElement('div');
+  div.id = 'match-area';
+  if(container) container.appendChild(div);
+  return div;
+}
+// Plays out a pre-decided tournament final/semifinal live, through the exact same ticker presentation
+// as a normal match (see playFullMatch), instead of just revealing the number. The outcome was already
+// fully determined the moment the bracket was simulated (liveMd) - this doesn't re-roll anything, it
+// just presents that already-decided result to whichever participant opens it, with them always shown
+// as "me" regardless of which side they were simulated as (see flipMatchDataSides). No coins/XP are
+// awarded here - tournament prize money is settled separately via claimTournamentPrize.
+async function playTournamentLiveMatch(tournamentId, mid){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  await fbReady;
+  if(!fb) return;
+  const ref = fb.doc(fb.db,'tournaments', tournamentId);
+  let snap;
+  try{ snap = await fb.getDoc(ref); }catch(e){ toast('Turnier konnte nicht geladen werden.'); return; }
+  if(!snap.exists()){ toast('Turnier existiert nicht mehr.'); return; }
+  const t = normalizeTournamentDoc(snap.data());
+  let roundIdx=-1, matchIdx=-1, m=null;
+  t.rounds.forEach((round,ri)=>(round.matches||[]).forEach((match,mi)=>{ if(match.mid===mid){ roundIdx=ri; matchIdx=mi; m=match; } }));
+  if(!m || !m.needsLiveReveal || !m.liveMd){ showBracketModal(t); return; }
+  if(m.liveRevealed){ showBracketModal(t); return; }
+  const viewerIsA = m.aUserId===profile.userId, viewerIsB = m.bUserId===profile.userId;
+  if(!viewerIsA && !viewerIsB){ toast('Nur die Teilnehmer dieses Spiels können es live starten.'); return; }
+  const md = viewerIsA ? {...m.liveMd} : flipMatchDataSides(m.liveMd);
+  md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+  const myName = viewerIsA ? m.aName : m.bName;
+  const oppName = viewerIsA ? m.bName : m.aName;
+  inMatch = true;
+  openModal(`<h2 style="margin-bottom:4px;">${escBracketName(m.tier||'Spiel')}</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${escBracketName(myName)} vs ${escBracketName(oppName)}</p>`);
+  const box = document.querySelector('#modal-root .modal-box');
+  ensureMatchAreaHost(box);
+  try{
+    await playFullMatch(md, myName, oppName);
+    toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`);
+  } finally {
+    inMatch = false;
+  }
+  try{
+    const rounds2 = t.rounds.map((round,ri)=> ri!==roundIdx ? round : {...round, matches: round.matches.map((mm,mi)=> mi!==matchIdx ? mm : {...mm, liveRevealed:true})});
+    await fb.setDoc(ref, {rounds: rounds2}, {merge:true});
+    invalidateReadCache('open-tournaments');
+    const freshSnap = await fb.getDoc(ref);
+    showBracketModal(freshSnap.exists() ? normalizeTournamentDoc(freshSnap.data()) : t);
+  }catch(e){ console.warn('mark liveRevealed failed', e); showBracketModal(t); }
 }
 function showParticipantsModal(t){
   let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:14px;">Preis: ${tournamentPrizeLabel(t)} \u2014 ${t.participants.length}/${t.maxSlots} angemeldet</p>`;
@@ -19030,6 +19117,29 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide,
     myProfile: myProfileRaw, oppProfile: oppProfileRaw, incidents,
     myRedMinute: myIncidents.redMinute, oppRedMinute: oppIncidents.redMinute};
+}
+// A pre-simulated match's outcome is stored from the perspective of whichever side was passed as
+// "a"/first into buildDecisiveMatch, labeled me/opp - that's arbitrary relative to any particular
+// human viewer. This mirrors every me/opp-tagged field so the SAME stored outcome can be replayed
+// with the viewing participant always shown as "me", regardless of which side they actually were.
+function flipMatchDataSides(md){
+  const flipSide = e => ({...e, side: e.side==='me'?'opp':'me'});
+  return {
+    ...md,
+    myGoals: md.oppGoals, oppGoals: md.myGoals,
+    events90: (md.events90||[]).map(flipSide),
+    eventsET: md.eventsET ? md.eventsET.map(flipSide) : null,
+    incidents: (md.incidents||[]).map(flipSide),
+    myProfile: md.oppProfile, oppProfile: md.myProfile,
+    myRedMinute: md.oppRedMinute, oppRedMinute: md.myRedMinute,
+    winnerSide: md.winnerSide==='me' ? 'opp' : 'me',
+    shootout: md.shootout ? {
+      myKicks: md.shootout.oppKicks, oppKicks: md.shootout.myKicks,
+      myScore: md.shootout.oppScore, oppScore: md.shootout.myScore,
+      myProb: md.shootout.oppProb, oppProb: md.shootout.myProb,
+      winner: md.shootout.winner==='me' ? 'opp' : 'me'
+    } : null
+  };
 }
 function goalRowHTML(minute, scorer, teamName, side){
   const initials = initialsOf(scorer.n || '??');
