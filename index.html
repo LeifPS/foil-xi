@@ -8729,11 +8729,11 @@ const CHALLENGE_DEFS = [
     desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
     desc:'Ein einzelnes, extrem hartes Match. Sieg bringt die einzigartige Ballon d\u2019Or-Karte \u2014 und schaltet danach eine noch h\u00e4rtere zweite Ballon d\u2019Or-Herausforderung frei.',
-    doneCheck:()=>collection.some(c=>c.cardId===BALLONDOR_CARD.id)},
+    doneCheck:()=>!!profile.ballondorClaimed},
   {id:'ballondor-rodri', name:"Ballon d'Or Herausforderung: Rodri", pill:'Match', accent:'var(--gold)', contentId:'ballondor-rodri-content', renderFn:()=>renderBallonDorRodriPanel(),
     desc:'Die noch h\u00e4rtere Fortsetzung nach Demb\u00e9l\u00e9s Ballon d\u2019Or. Sieg bringt die einzigartige Rodri-Karte. Erst ab 250 Gesamtsiegen verf\u00fcgbar.',
     requires:'ballondor', minWins:250,
-    doneCheck:()=>RODRI_BALLONDOR_CARD && collection.some(c=>c.cardId===RODRI_BALLONDOR_CARD.id)},
+    doneCheck:()=>!!profile.ballondorRodriClaimed},
   {id:'prime-ronaldo', name:'PRIME Cristiano Ronaldo', pill:'Match', accent:'#ffd76a', contentId:'prime-ronaldo-content', renderFn:()=>renderPrimeChallengePanel(PRIME_CHALLENGES[0]),
     desc:'Die schwerste Herausforderung im Spiel \u2014 Gegner-Rating ~110. Sieg bringt PRIME Ronaldo (109 OVR).',
     doneCheck:()=>collection.some(c=>c.cardId===PRIME_CHALLENGES[0].card.id)},
@@ -16119,7 +16119,11 @@ async function playTournamentRound(){
 // ===== Ballon d'Or Challenge: the single hardest one-off match in the game =====
 async function playBallonDorChallenge(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
-  if(collection.some(c=>c.cardId===BALLONDOR_CARD.id)){ toast('Du besitzt die Ballon d\u2019Or-Karte bereits.'); return; }
+  // profile.ballondorClaimed (not collection ownership) gates this - the card is untradable but still
+  // usable in SBCs, so a collection-based check let players spend the card into an SBC and re-unlock
+  // the "beliebig oft versuchbar" challenge for another free copy, over and over. One win, ever, is all
+  // this challenge grants now, regardless of what happens to the card afterward.
+  if(profile.ballondorClaimed){ toast('Du hast diese Herausforderung bereits gewonnen \u2014 sie ist nur einmal pro Verein m\u00f6glich.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const opp = buildEliteOpponentXI(102, 105);
@@ -16132,10 +16136,12 @@ async function playBallonDorChallenge(){
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  await runLocalMatch(rating, opp, {friendly:true, onComplete: (outcome)=>{
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
     if(outcome.result==='WIN'){
       collection.push({uid:genId(), cardId:BALLONDOR_CARD.id});
-      sSet('collection', collection);
+      profile.ballondorClaimed = true;
+      await sSet('collection', collection);
+      await sSet('profile', profile);
       toast('\ud83c\udfc6 Unglaublich! Du hast die Ballon d\u2019Or-Karte gewonnen!');
       showCutscene(BALLONDOR_CARD, ()=>{});
     } else {
@@ -16147,18 +16153,18 @@ async function playBallonDorChallenge(){
 function renderBallonDorPanel(){
   const box = document.getElementById('ballondor-content');
   if(!box) return;
-  const owned = collection.some(c=>c.cardId===BALLONDOR_CARD.id);
-  if(owned){
+  if(profile.ballondorClaimed){
+    const stillOwned = collection.some(c=>c.cardId===BALLONDOR_CARD.id);
     box.innerHTML = `
       <div style="display:flex;justify-content:center;margin-bottom:14px;" id="ballondor-owned-preview"></div>
-      <p class="hint" style="margin-top:0;">Du besitzt bereits die Ballon d'Or-Karte von O. Dembélé${untradableInlineIcon(BALLONDOR_CARD)} (100 OVR) — den amtierenden Sieger des prestigeträchtigsten Einzelpreises im Fußball.</p>`;
+      <p class="hint" style="margin-top:0;">Du hast diese Herausforderung bereits gewonnen und die Ballon d'Or-Karte von O. Dembélé${untradableInlineIcon(BALLONDOR_CARD)} (100 OVR) erhalten${stillOwned ? ' — den amtierenden Sieger des prestigeträchtigsten Einzelpreises im Fußball.' : ', auch wenn die Karte inzwischen anderweitig verbraucht wurde.'} Nur einmal pro Verein möglich.</p>`;
     const ownedPreviewBox = document.getElementById('ballondor-owned-preview');
     if(ownedPreviewBox) ownedPreviewBox.appendChild(cardEl(BALLONDOR_CARD, 'mini'));
     return;
   }
   box.innerHTML = `
     <div style="display:flex;justify-content:center;margin-bottom:14px;" id="ballondor-preview"></div>
-    <p class="hint" style="margin-top:0;">Die härteste Einzelherausforderung im Spiel: ein Spiel gegen eine Fantasie-Weltauswahl auf GOAT-Niveau (Rating 102-105) — noch stärker als das Turnier-Finale. Sieg bringt die exklusive <b style="color:var(--gold);">Ballon d'Or</b>-Karte von O. Dembélé${untradableInlineIcon(BALLONDOR_CARD)} (100 OVR, amtierender Sieger) — und schaltet danach eine noch härtere zweite Ballon d'Or-Herausforderung um die Rodri-Karte frei. Kein Coin-Einsatz, keine Statistik-Auswirkung — beliebig oft versuchbar.</p>
+    <p class="hint" style="margin-top:0;">Die härteste Einzelherausforderung im Spiel: ein Spiel gegen eine Fantasie-Weltauswahl auf GOAT-Niveau (Rating 102-105) — noch stärker als das Turnier-Finale. Sieg bringt die exklusive <b style="color:var(--gold);">Ballon d'Or</b>-Karte von O. Dembélé${untradableInlineIcon(BALLONDOR_CARD)} (100 OVR, amtierender Sieger) — und schaltet danach eine noch härtere zweite Ballon d'Or-Herausforderung um die Rodri-Karte frei. Kein Coin-Einsatz, bei Niederlage beliebig oft versuchbar — bei Sieg aber nur einmal pro Verein möglich.</p>
     <button class="action-btn" id="ballondor-play" style="width:260px;background:linear-gradient(135deg,var(--gold),#c9971f);color:#1a1200;">Herausforderung annehmen</button>
     <div id="ballondor-match-area" style="margin-top:14px;"></div>`;
   const previewBox = document.getElementById('ballondor-preview');
@@ -16169,7 +16175,7 @@ async function playBallonDorRodriChallenge(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
   if(!RODRI_BALLONDOR_CARD) return;
   if((profile.wins||0)<250){ toast(`Erst ab 250 Gesamtsiegen verfügbar (aktuell ${profile.wins||0}).`); return; }
-  if(collection.some(c=>c.cardId===RODRI_BALLONDOR_CARD.id)){ toast('Du besitzt die Rodri Ballon d’Or-Karte bereits.'); return; }
+  if(profile.ballondorRodriClaimed){ toast('Du hast diese Herausforderung bereits gewonnen — sie ist nur einmal pro Verein möglich.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const opp = buildEliteOpponentXI(111, 114);
@@ -16182,10 +16188,12 @@ async function playBallonDorRodriChallenge(){
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  await runLocalMatch(rating, opp, {friendly:true, onComplete: (outcome)=>{
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
     if(outcome.result==='WIN'){
       collection.push({uid:genId(), cardId:RODRI_BALLONDOR_CARD.id});
-      sSet('collection', collection);
+      profile.ballondorRodriClaimed = true;
+      await sSet('collection', collection);
+      await sSet('profile', profile);
       toast('🏆 Unglaublich! Du hast die Rodri Ballon d’Or-Karte gewonnen!');
       showCutscene(RODRI_BALLONDOR_CARD, ()=>{});
     } else {
@@ -16197,18 +16205,17 @@ async function playBallonDorRodriChallenge(){
 function renderBallonDorRodriPanel(){
   const box = document.getElementById('ballondor-rodri-content');
   if(!box || !RODRI_BALLONDOR_CARD) return;
-  const owned = collection.some(c=>c.cardId===RODRI_BALLONDOR_CARD.id);
-  if(owned){
+  if(profile.ballondorRodriClaimed){
     box.innerHTML = `
       <div style="display:flex;justify-content:center;margin-bottom:14px;" id="ballondor-rodri-owned-preview"></div>
-      <p class="hint" style="margin-top:0;">Du besitzt bereits die Ballon d'Or-Karte von Rodri${untradableInlineIcon(RODRI_BALLONDOR_CARD)} (100 OVR).</p>`;
+      <p class="hint" style="margin-top:0;">Du hast diese Herausforderung bereits gewonnen und die Ballon d'Or-Karte von Rodri${untradableInlineIcon(RODRI_BALLONDOR_CARD)} (100 OVR) erhalten. Nur einmal pro Verein möglich.</p>`;
     const ownedPreviewBox = document.getElementById('ballondor-rodri-owned-preview');
     if(ownedPreviewBox) ownedPreviewBox.appendChild(cardEl(RODRI_BALLONDOR_CARD, 'mini'));
     return;
   }
   box.innerHTML = `
     <div style="display:flex;justify-content:center;margin-bottom:14px;" id="ballondor-rodri-preview"></div>
-    <p class="hint" style="margin-top:0;">Die Fortsetzung nach Dembelés Ballon d'Or — ein noch härteres Match gegen eine Fantasie-Weltauswahl (Rating 111-114). Sieg bringt die exklusive <b style="color:var(--gold);">Ballon d'Or</b>-Karte von Rodri${untradableInlineIcon(RODRI_BALLONDOR_CARD)} (100 OVR). Kein Coin-Einsatz, keine Statistik-Auswirkung — beliebig oft versuchbar.</p>
+    <p class="hint" style="margin-top:0;">Die Fortsetzung nach Dembelés Ballon d'Or — ein noch härteres Match gegen eine Fantasie-Weltauswahl (Rating 111-114). Sieg bringt die exklusive <b style="color:var(--gold);">Ballon d'Or</b>-Karte von Rodri${untradableInlineIcon(RODRI_BALLONDOR_CARD)} (100 OVR). Kein Coin-Einsatz, bei Niederlage beliebig oft versuchbar — bei Sieg aber nur einmal pro Verein möglich.</p>
     <button class="action-btn" id="ballondor-rodri-play" style="width:260px;background:linear-gradient(135deg,var(--gold),#c9971f);color:#1a1200;">Herausforderung annehmen</button>
     <div id="ballondor-rodri-match-area" style="margin-top:14px;"></div>`;
   const previewBox = document.getElementById('ballondor-rodri-preview');
