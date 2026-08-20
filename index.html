@@ -11192,6 +11192,14 @@ async function init(){
     if(!squad.tactics) squad.tactics = {...DEFAULT_TACTICS};
   }
   if(migrateSquadPositions()) await sSet('squad', squad);
+  // one-time migration: before profile.ballondorClaimed existed, owning the card WAS the completion
+  // signal for these challenges. Anyone who already won one under the old rules (and still has the
+  // profile field unset) should see it marked done immediately, not have the challenge re-offered
+  // just because the new flag hasn't been backfilled onto their profile yet.
+  let ballondorMigrated = false;
+  if(!profile.ballondorClaimed && collection.some(c=>c.cardId===BALLONDOR_CARD.id)){ profile.ballondorClaimed = true; ballondorMigrated = true; }
+  if(!profile.ballondorRodriClaimed && RODRI_BALLONDOR_CARD && collection.some(c=>c.cardId===RODRI_BALLONDOR_CARD.id)){ profile.ballondorRodriClaimed = true; ballondorMigrated = true; }
+  if(ballondorMigrated) await sSet('profile', profile);
   squadPresets = await sGet('squadPresets');
   if(!squadPresets) squadPresets = [];
   renderNav();
