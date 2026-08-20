@@ -15821,11 +15821,20 @@ function renderBracketModalContent(t){
   if(isCompleted){
     html += `<p style="margin-top:0;margin-bottom:10px;">\ud83c\udfc6 Sieger: <b style="color:var(--gold);">${t.winnerName}</b>${t.runnerUpName?` <span class="hint" style="margin:0;">\u00b7 2. Platz: <b style="color:var(--chalk);">${t.runnerUpName}</b></span>`:''}</p>`;
   }
+  const isHost = t.hostUserId===profile.userId;
+  const roundsLeft = totalRounds - visibleRoundsCount;
   if(isRunning){
     const pct = totalRounds ? Math.round((visibleRoundsCount/totalRounds)*100) : 0;
     html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">${liveBadgeHtml()}<span class="hint" style="margin:0;">Runde ${visibleRoundsCount} von ${totalRounds} enth\u00fcllt</span></div>
-      <div class="tourney-progress"><div style="width:${pct}%;background:#ff6b57;"></div></div>
-      <p class="hint" style="margin:8px 0 14px;">Enth\u00fcllt sich von selbst, solange diese Ansicht ge\u00f6ffnet ist \u2014 oder <span id="bracket-skip-end" style="text-decoration:underline;cursor:pointer;color:var(--chalk);">sofort das Endergebnis anzeigen</span>.</p>`;
+      <div class="tourney-progress"><div style="width:${pct}%;background:#ff6b57;"></div></div>`;
+    if(roundsLeft>0){
+      if(isHost){
+        html += `<button class="action-btn" id="bracket-next-round" style="width:100%;margin:10px 0 4px;">N\u00e4chste Runde starten (${roundsLeft} \u00fcbrig)</button>
+          <p class="hint" style="margin:4px 0 14px;text-align:center;">Oder <span id="bracket-skip-end" style="text-decoration:underline;cursor:pointer;color:var(--chalk);">alle restlichen Runden sofort zeigen</span>.</p>`;
+      } else {
+        html += `<p class="hint" style="margin:8px 0 14px;">Der Veranstalter enth\u00fcllt die n\u00e4chste Runde, wenn er bereit ist.</p>`;
+      }
+    }
   }
 
   const {groupTables, winnersTree, losersList, roundRobinLatest, roundRobinHistory} = bucketRevealedRounds(t, visibleRounds);
@@ -15867,6 +15876,22 @@ function renderBracketModalContent(t){
   document.querySelectorAll('#modal-root [data-live-mid]').forEach(el=>{
     el.addEventListener('click', ()=> playTournamentLiveMatch(t.id, el.dataset.liveMid));
   });
+  const nextRoundBtn = document.getElementById('bracket-next-round');
+  if(nextRoundBtn){
+    nextRoundBtn.addEventListener('click', async ()=>{
+      nextRoundBtn.disabled = true; nextRoundBtn.textContent = 'Runde wird enth\u00fcllt\u2026';
+      await advanceHostedTournamentRound(t.id, {silent:true});
+      await fbReady;
+      if(fb){
+        try{
+          const snap = await fb.getDoc(fb.doc(fb.db,'tournaments', t.id));
+          if(snap.exists() && document.getElementById('bracket-close')) showBracketModal(normalizeTournamentDoc(snap.data()));
+        }catch(e){ console.warn('next round refresh failed', e); }
+      }
+      invalidateReadCache('open-tournaments'); loadOpenTournaments();
+      invalidateReadCache('my-tournament-results:'+profile.userId); loadMyTournamentResults();
+    });
+  }
   const skipBtn = document.getElementById('bracket-skip-end');
   if(skipBtn){
     skipBtn.addEventListener('click', async ()=>{
@@ -15892,15 +15917,19 @@ function renderBracketModalContent(t){
   }
 }
 function showBracketModal(t){
-  // Only one bracket modal (and one auto-advance loop) is ever meaningfully open at a time -
-  // stop any previous loop before starting fresh, so re-rendering never stacks up timers.
+  // Only one bracket modal (and one refresh loop) is ever meaningfully open at a time - stop any
+  // previous loop before starting fresh, so re-rendering never stacks up timers.
   stopBracketAutoAdvance();
   renderBracketModalContent(t);
   if(t.status==='running'){
+    // This loop only ever RE-READS and re-renders - it never calls advanceHostedTournamentRound
+    // itself. Revealing a round is now an explicit host action (the "Nächste Runde starten" button
+    // in renderBracketModalContent), not something that happens on its own - this timer exists purely
+    // so a spectator watching the bracket sees the host's own clicks land, without needing to
+    // close and reopen the modal themselves.
     bracketAutoAdvanceTournamentId = t.id;
     bracketAutoAdvanceTimer = setInterval(async ()=>{
       if(!document.getElementById('bracket-close') || bracketAutoAdvanceTournamentId!==t.id){ stopBracketAutoAdvance(); return; }
-      await advanceHostedTournamentRound(t.id, {silent:true});
       await fbReady;
       if(!fb || !document.getElementById('bracket-close') || bracketAutoAdvanceTournamentId!==t.id){ stopBracketAutoAdvance(); return; }
       try{
@@ -15910,8 +15939,8 @@ function showBracketModal(t){
           renderBracketModalContent(fresh);
           if(fresh.status==='completed') stopBracketAutoAdvance();
         }
-      }catch(e){ console.warn('bracket auto-advance refresh failed', e); }
-    }, 3200);
+      }catch(e){ console.warn('bracket refresh failed', e); }
+    }, 4000);
   }
 }
 // The live-ticker presentation (animateTimedMatch) always writes into whatever element currently
