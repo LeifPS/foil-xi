@@ -209,7 +209,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.theme-cent{--acc:#ffd76a;}
 .pcard.theme-phenom{--acc:#6ee7d8;} .pcard.theme-setpiece{--acc:#ffcf5c;} .pcard.theme-derby{--acc:#ff8f6b;}
 .pcard.theme-iron{--acc:#7d94ad;} .pcard.theme-wonder{--acc:#8ee6a3;} .pcard.theme-hof{--acc:#e8b74a;}
-.pcard.theme-gal{--acc:#ff9ff0;} .pcard.theme-gg{--acc:#5cc9ff;}
+.pcard.theme-gal{--acc:#ff9ff0;} .pcard.theme-gg{--acc:#5cc9ff;} .pcard.theme-laendercup{--acc:#4dbf6f;}
 .pcard.theme-wc{--acc:#ffd700;box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 30px -4px #ffd700;}
 .pcard.theme-blk{--acc:#c9a8ff;background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.04) 0 2px, transparent 2px 9px),
@@ -6869,6 +6869,21 @@ const KAPITAENE_SPECIALS = KAPITAENE_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KAPITAENE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// ===== Länder-Cup Sieger: one flagship real player per featured nation, boosted a few OVR above
+// their own current base card - reward for the Länder-Cup game mode below. Unlike Kronjuwelen/
+// Kapitäne above (a hand-picked id list, since those need a specific real-world honor per card),
+// this resolves "whichever real player currently has this nation's highest base rating" at load
+// time instead - there's no single fixed trivia fact per nation to hand-curate here, and resolving
+// it dynamically means it never goes stale as the base roster/ratings get updated over time.
+const LAENDERCUP_NATIONS = ['Brazil','France','Argentina','Germany','England','Spain','Portugal','Italy','Netherlands','Belgium'];
+const LAENDERCUP_SPECIALS = LAENDERCUP_NATIONS.map((nation, i)=>{
+  const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS).filter(c=>c.nat===nation && !c.isManager && !c.variant);
+  if(!pool.length) return null;
+  const base = pool.reduce((best,c)=> c.ov>best.ov ? c : best, pool[0]);
+  const targetOv = Math.min(99, base.ov+6);
+  return boostBaseToOv(base, targetOv, 9762000+i, 'laendercup_sieger', 'Länder-Cup-Sieger', 'laendercup');
+}).filter(Boolean);
+LAENDERCUP_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme===tier); }
 // ===== Wochen Pass exclusive cards: the actual grind incentive, not another pack/coin payout - the
 // level-15 and level-30 rewards only ever exist as these specific rewards, nowhere else. A new real
@@ -7767,6 +7782,18 @@ const PACKS = [
       });
       const third = (UCLW_MANAGER && Math.random()<0.05) ? UCLW_MANAGER : weighted[Math.floor(Math.random()*weighted.length)];
       return [first, second, third];
+    }},
+  {id:'laendercupsieger',name:'Länder-Cup Sieger Pack',cost:0,tier:'ultimate',count:3,hidden:true,
+    desc:'3 Karten der Länder-Cup-Sieger-Variante — die aktuell bestbewerteten realen Spieler ihrer Nation, leicht über ihr eigenes Rating hinaus geboostet. Eine Karte stammt garantiert von der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg im Länder-Cup erhältlich.',
+    draw(opts={}){
+      const finalCard = opts.finalNation ? LAENDERCUP_SPECIALS.find(c=>c.nat===opts.finalNation) : null;
+      const pool = LAENDERCUP_SPECIALS.filter(c=>c!==finalCard);
+      const others = [];
+      for(let i=0;i<2 && pool.length;i++){
+        const idx = Math.floor(Math.random()*pool.length);
+        others.push(pool[idx]); pool.splice(idx,1);
+      }
+      return [finalCard || pick(LAENDERCUP_SPECIALS), ...others];
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
     desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
@@ -8747,6 +8774,8 @@ function buildSbcTile(sbc, poolFree, poolWithSquad){
 const CHALLENGE_DEFS = [
   {id:'tournament', name:'Turnier-Modus', pill:'Match', accent:'var(--muted)', contentId:'tournament-content', renderFn:()=>renderTournamentPanel(),
     desc:'3 Runden gegen wachsend starke Fantasie-Auswahlteams. Verlierst du, ist das Turnier vorbei. Pokalsieg bringt das UCL Winners Pack.'},
+  {id:'laendercup', name:'Länder-Cup', pill:'Match', accent:'#4dbf6f', contentId:'laendercup-content', renderFn:()=>renderLaenderCupPanel(),
+    desc:'3 Runden gegen echte Fantasie-Nationalmannschaften wachsender Stärke. Verlierst du, ist der Cup vorbei. Pokalsieg bringt das Länder-Cup Sieger Pack.'},
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
     desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
@@ -16387,14 +16416,20 @@ function scaleTeamToExactAvg(players, targetAvg){
 }
 function buildEliteOpponentXI(minOv, maxOv, opts={}){
   const fullPool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS).filter(c=>!c.isManager);
-  let pool = fullPool.filter(c=>c.ov>=minOv && c.ov<=maxOv);
+  // opts.nation (Länder-Cup): restrict the pool to one nation's real players so the opponent is a
+  // genuine "national team" XI - but only if that nation's pool is actually deep enough to plausibly
+  // fill all 11 positions (a small federation's pool could otherwise force heavy repetition or empty
+  // groups); falls back to the full pool rather than risk that.
+  const basePool = opts.nation ? fullPool.filter(c=>c.nat===opts.nation) : fullPool;
+  const nationPool = opts.nation && basePool.length>=14 ? basePool : fullPool;
+  let pool = nationPool.filter(c=>c.ov>=minOv && c.ov<=maxOv);
   // if the requested range sits above (or below) every real card this pool actually has - e.g. a
   // target range past PRIME's 107 ceiling - fall back to the closest real cards instead of an empty
   // pool. scaleTeamToExactAvg() below still forces the final average onto the exact target regardless
   // of where these starting players' own ov sits, so this only needs *some* real players to scale from.
   if(!pool.length){
     const mid = (minOv+maxOv)/2;
-    pool = fullPool.slice().sort((a,b)=>Math.abs(a.ov-mid)-Math.abs(b.ov-mid)).slice(0, 40);
+    pool = nationPool.slice().sort((a,b)=>Math.abs(a.ov-mid)-Math.abs(b.ov-mid)).slice(0, 40);
   }
   const slots = FORMATIONS['433'].slots; // 1 GK, 4 DEF, 3 MID, 3 FWD - a real, balanced shape
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
@@ -16413,7 +16448,7 @@ function buildEliteOpponentXI(minOv, maxOv, opts={}){
     return picked;
   });
   const NAMES = ['Weltauswahl','All-Stars XI','Legenden-Elf','Superstar United','Elite FC'];
-  const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
+  const owner = opts.nation ? `Nationalmannschaft ${natDE(opts.nation)}` : NAMES[Math.floor(Math.random()*NAMES.length)];
   const {players, managerName} = boostBotXI(xi, slots, opts.forceManager);
   // force the boosted lineup's average to land EXACTLY on a random integer inside [minOv,maxOv] - callers
   // advertise this range verbatim in their UI text (e.g. "Viertelfinale (Rating 90-94)") and it must
@@ -16510,6 +16545,113 @@ async function playTournamentRound(){
         toast(`Ausgeschieden im ${round.name}. Versuch's noch mal!`);
       }
       renderTournamentPanel();
+    }
+  });
+}
+// ===== Länder-Cup: same principle as Turnier-Modus (3 K.o.-Runden, 1 Leben, Startgeld, Pokal-Pack
+// am Ende) - just themed around real fantasy national teams instead of fantasy all-star club XIs.
+// The opponent nation for each round is drawn once at cup-start (profile.laenderCup.nations) and
+// stays fixed for that whole run, so the panel can advertise "Runde 2 gegen Frankreich" up front
+// instead of only revealing the opponent's identity right as the match starts. =====
+const LAENDERCUP_ROUNDS = [
+  {name:'Achtelfinale', minOv:88, maxOv:92, coins:250},
+  {name:'Halbfinale', minOv:93, maxOv:97, coins:1300},
+  {name:'Finale', minOv:98, maxOv:103, coins:0},
+];
+const LAENDERCUP_ENTRY_FEE = 1200;
+function pickLaenderCupNations(){
+  const pool = LAENDERCUP_NATIONS.slice();
+  const picked = [];
+  for(let i=0;i<LAENDERCUP_ROUNDS.length && pool.length;i++){
+    const idx = Math.floor(Math.random()*pool.length);
+    picked.push(pool[idx]); pool.splice(idx,1);
+  }
+  return picked;
+}
+async function startLaenderCup(){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  const {filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  if((profile.coins||0) < LAENDERCUP_ENTRY_FEE){ toast(`Du brauchst ${formatCoins(LAENDERCUP_ENTRY_FEE)} Coins Startgeld für einen neuen Länder-Cup.`); return; }
+  await atomicCoinChange(-LAENDERCUP_ENTRY_FEE);
+  profile.laenderCup = {round: 1, nations: pickLaenderCupNations()};
+  await sSet('profile', profile);
+  toast(`${formatCoins(LAENDERCUP_ENTRY_FEE)} Coins Startgeld bezahlt.`);
+  renderLaenderCupPanel();
+}
+function renderLaenderCupPanel(){
+  const box = document.getElementById('laendercup-content');
+  if(!box) return;
+  const t = profile.laenderCup;
+  if(!t){
+    box.innerHTML = `
+      <p class="hint" style="margin-top:0;">3 Runden gegen echte Fantasie-Nationalmannschaften wachsender Stärke — Achtelfinale (Rating 88-92), Halbfinale (93-97), Finale (98-103). Die Gegner-Nation wird pro Runde zufällig ausgelost. Verlierst du, ist der Cup vorbei. Startgeld: <b style="color:var(--gold);">${formatCoins(LAENDERCUP_ENTRY_FEE)} Coins</b> pro neuem Cup. Belohnung: 250 Coins (Achtelfinale), 1.300 Coins (Halbfinale), <b style="color:var(--gold);">Länder-Cup Sieger Pack</b> für den Pokalsieg — garantiert mit dem Star der im Finale besiegten Nation.</p>
+      <button class="action-btn" id="laendercup-start" style="width:220px;">Länder-Cup starten</button>
+      <div id="laendercup-match-area" style="margin-top:14px;"></div>`;
+    document.getElementById('laendercup-start').addEventListener('click', startLaenderCup);
+    return;
+  }
+  const round = LAENDERCUP_ROUNDS[t.round-1];
+  const nation = t.nations[t.round-1];
+  box.innerHTML = `
+    <div class="formation-select" style="margin-bottom:14px;">
+      ${LAENDERCUP_ROUNDS.map((r,i)=>`<div class="chip ${i+1<t.round?'active':''}" style="${i+1===t.round?'border-color:var(--gold);color:var(--gold);':''}">${r.name}</div>`).join('')}
+    </div>
+    <p class="hint" style="margin-top:0;">Aktuelle Runde: <b style="color:var(--chalk);">${round.name}</b> gegen <b style="color:var(--chalk);">${natDE(nation)}</b> (Gegner-Rating ${round.minOv}-${round.maxOv}). Belohnung bei Sieg: ${round.coins>0?formatCoins(round.coins)+' Coins':'<b style="color:var(--gold);">Länder-Cup Sieger Pack</b> — der Pokal!'}</p>
+    <button class="action-btn" id="laendercup-play" style="width:220px;">Spiel starten</button>
+    <div id="laendercup-match-area" style="margin-top:14px;"></div>`;
+  document.getElementById('laendercup-play').addEventListener('click', playLaenderCupRound);
+}
+async function playLaenderCupRound(){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  lastQueueWasManual = true;
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const t = profile.laenderCup;
+  if(!t) return;
+  const round = LAENDERCUP_ROUNDS[t.round-1];
+  const nation = t.nations[t.round-1];
+  const opp = buildEliteOpponentXI(round.minOv, round.maxOv, {nation});
+  const area = document.getElementById('laendercup-match-area');
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${round.name})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  let roundOutcome = null;
+  await runLocalMatch(rating, opp, {
+    onOutcomeDecided: async (outcome)=>{
+      if(outcome.result==='WIN'){
+        if(t.round>=LAENDERCUP_ROUNDS.length){
+          profile.laenderCup = null;
+          await sSet('profile', profile);
+          roundOutcome = 'cupWin';
+        } else {
+          await atomicCoinChange(round.coins, {}, {silentDisplay:true});
+          profile.laenderCup = {round: t.round+1, nations: t.nations};
+          await sSet('profile', profile);
+          roundOutcome = 'advance';
+        }
+      } else {
+        profile.laenderCup = null;
+        await sSet('profile', profile);
+        roundOutcome = 'eliminated';
+      }
+    },
+    onComplete: ()=>{
+      if(roundOutcome==='cupWin'){
+        toast(`🏆 Pokalsieger! Öffne dein Länder-Cup Sieger Pack…`);
+        const cupPack = PACKS.find(p=>p.id==='laendercupsieger');
+        showPackOpening(cupPack, cupPack.draw({finalNation: nation}), {untradable:true});
+      } else if(roundOutcome==='advance'){
+        toast(`${round.name} gegen ${natDE(nation)} gewonnen! +${formatCoins(round.coins)} Coins. Weiter geht's.`);
+      } else {
+        toast(`Ausgeschieden im ${round.name} gegen ${natDE(nation)}. Versuch's noch mal!`);
+      }
+      renderLaenderCupPanel();
     }
   });
 }
