@@ -14889,6 +14889,18 @@ const TOURNAMENT_FORMATS = {
 };
 const HOSTED_TOURNAMENT_DEFAULT_FORMAT = 'singleElim';
 const HOSTED_TOURNAMENT_DEFAULT_SIZE = 8;
+// Host-chosen CPU-filler strength for a tournament's empty slots. 'auto' keeps the original behaviour
+// (bots roughly match the average rating of whoever actually joined, ±5) - every other tier pins bots
+// to a fixed OVR band regardless of who joined, e.g. deliberately hosting an "Elite"-tier bracket even
+// with a weak squad of your own, or a "Schwach" one to guarantee an easy run for newer players.
+const BOT_STRENGTH_TIERS = {
+  auto:   {label:'Automatisch (an Teilnehmer angepasst)', min:null, max:null},
+  weak:   {label:'Schwach (65-75)', min:65, max:75},
+  medium: {label:'Mittel (76-85)', min:76, max:85},
+  strong: {label:'Stark (86-93)', min:86, max:93},
+  elite:  {label:'Elite (94-99)', min:94, max:99}
+};
+const HOSTED_TOURNAMENT_DEFAULT_BOT_STRENGTH = 'auto';
 function liveBadgeHtml(){ return `<span class="live-badge"><span class="live-dot"></span>Live</span>`; }
 // German round names for single elimination, generic for any bracket size (4..64 participants).
 // Index 0 = the round right before the final; the array is read from the end so it lines up
@@ -14984,6 +14996,7 @@ function tournamentPrizeLabel(t){
 function normalizeTournamentDoc(t){
   if(!t) return t;
   if(t.prizeType!=='card'){ t.prizeType='coins'; t.prizeCoins = t.prizeCoins||0; }
+  if(!BOT_STRENGTH_TIERS[t.botStrength]) t.botStrength = HOSTED_TOURNAMENT_DEFAULT_BOT_STRENGTH;
   if(Array.isArray(t.rounds)){
     if(t.rounds.length && Array.isArray(t.rounds[0])){
       t.rounds = t.rounds.map(matches=>({matches}));
@@ -15236,9 +15249,11 @@ function fillAndSimulateHostedTournament(t){
   const participants = t.participants.slice(0, t.maxSlots);
   const botsNeeded = t.maxSlots - participants.length;
   if(botsNeeded>0){
+    const tier = BOT_STRENGTH_TIERS[t.botStrength] || BOT_STRENGTH_TIERS.auto;
     const avgRating = Math.round(participants.reduce((s,p)=>s+p.rating,0)/participants.length);
     for(let i=0;i<botsNeeded;i++){
-      const bot = pickRealisticOpponent(avgRating + Math.round(Math.random()*10-5));
+      const target = tier.min!=null ? Math.round(tier.min + Math.random()*(tier.max-tier.min)) : (avgRating + Math.round(Math.random()*10-5));
+      const bot = pickRealisticOpponent(target);
       participants.push({userId:'bot_'+genId(), name:bot.owner+' (CPU)', rating:bot.rating, players:bot.players, isBot:true});
     }
   }
@@ -15297,6 +15312,12 @@ async function hostTournamentPrompt(){
         ${TOURNAMENT_FORMATS[HOSTED_TOURNAMENT_DEFAULT_FORMAT].validSizes.map(n=>`<option value="${n}" ${n===HOSTED_TOURNAMENT_DEFAULT_SIZE?'selected':''}>${n} Teilnehmer</option>`).join('')}
       </select>
     </div>
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">CPU-Stärke (für freie Plätze)</div>
+    <div class="toolbar" style="margin-bottom:14px;">
+      <select id="bot-strength">
+        ${Object.entries(BOT_STRENGTH_TIERS).map(([key, tier]) => `<option value="${key}" ${key===HOSTED_TOURNAMENT_DEFAULT_BOT_STRENGTH?'selected':''}>${tier.label}</option>`).join('')}
+      </select>
+    </div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Preis</div>
     <div class="toolbar" style="margin-bottom:14px;">
       <select id="prize-type">
@@ -15352,11 +15373,12 @@ async function hostTournamentPrompt(){
     if(!fb){ toast('Turniere ben\u00f6tigen das Online-Backend.'); e.target.disabled=false; return; }
     const maxSlots = Number(document.getElementById('bracket-size').value) || HOSTED_TOURNAMENT_DEFAULT_SIZE;
     const format = formatSelect.value || HOSTED_TOURNAMENT_DEFAULT_FORMAT;
+    const botStrength = BOT_STRENGTH_TIERS[document.getElementById('bot-strength').value] ? document.getElementById('bot-strength').value : HOSTED_TOURNAMENT_DEFAULT_BOT_STRENGTH;
     const prizeType = typeSelect.value;
     const myPlayers = getMySquadPlayers();
     const baseDoc = {
       id: genId(), hostUserId:profile.userId, hostName:profile.displayName||profile.userId,
-      maxSlots, format, participants:[{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:myPlayers}],
+      maxSlots, format, botStrength, participants:[{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:myPlayers}],
       status:'registering', createdAt:Date.now()
     };
     if(prizeType==='card'){
@@ -15817,7 +15839,8 @@ function renderBracketModalContent(t){
   const visibleRounds = t.rounds.slice(0, visibleRoundsCount);
   const newestRound = isRunning && visibleRounds.length ? visibleRounds[visibleRounds.length-1] : null;
 
-  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:4px;">Format: ${(TOURNAMENT_FORMATS[t.format]?.name || 'Einfach-K.o.')} \u00b7 Preis: ${tournamentPrizeLabel(t)}</p>`;
+  const botTierLabel = t.botStrength && BOT_STRENGTH_TIERS[t.botStrength] ? BOT_STRENGTH_TIERS[t.botStrength].label : BOT_STRENGTH_TIERS.auto.label;
+  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:4px;">Format: ${(TOURNAMENT_FORMATS[t.format]?.name || 'Einfach-K.o.')} \u00b7 Preis: ${tournamentPrizeLabel(t)} \u00b7 CPU-St\u00e4rke: ${botTierLabel}</p>`;
   if(isCompleted){
     html += `<p style="margin-top:0;margin-bottom:10px;">\ud83c\udfc6 Sieger: <b style="color:var(--gold);">${t.winnerName}</b>${t.runnerUpName?` <span class="hint" style="margin:0;">\u00b7 2. Platz: <b style="color:var(--chalk);">${t.runnerUpName}</b></span>`:''}</p>`;
   }
@@ -16033,7 +16056,8 @@ async function loadOpenTournaments(){
       const info = document.createElement('span');
       info.style.flex = '1';
       const formatName = TOURNAMENT_FORMATS[t.format]?.name || 'Einfach-K.o.';
-      info.innerHTML = `${isRunning ? liveBadgeHtml() : ''}<b>${t.hostName}</b>s Turnier (${formatName}) \u2014 <span class="mono" style="color:var(--gold);">${tournamentPrizeLabel(t)}</span> \u2014 `;
+      const botTag = t.botStrength && t.botStrength!=='auto' ? ` \u00b7 CPU: ${BOT_STRENGTH_TIERS[t.botStrength].label.split(' (')[0]}` : '';
+      info.innerHTML = `${isRunning ? liveBadgeHtml() : ''}<b>${t.hostName}</b>s Turnier (${formatName}${botTag}) \u2014 <span class="mono" style="color:var(--gold);">${tournamentPrizeLabel(t)}</span> \u2014 `;
       const participantsSpan = document.createElement('span');
       participantsSpan.className = 'mono';
       participantsSpan.style.cssText = 'text-decoration:underline;cursor:pointer;';
