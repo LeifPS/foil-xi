@@ -16592,6 +16592,17 @@ async function playTournamentRound(){
 // cache) and cheap to rebuild on demand every time that nation's match needs simulating, which keeps
 // profile.wm26 tiny regardless of how many of the other 47 teams' matches happen along the way.
 const WM26_ENTRY_FEE = 10000;
+// profile.wm26's internal shape changed more than once while this mode was being built (the group/
+// knockout data structures were reworked after the first version shipped). A save made under an
+// older shape would otherwise crash renderWM26Panel the instant it tries to read a field the new code
+// expects but the old data never had - stamping/checking a version number turns that into a clean
+// "your last run doesn't carry over, start a fresh one" instead of a blank, broken tab.
+const WM26_SCHEMA_VERSION = 2;
+function wm26CurrentRun(){
+  const t = profile.wm26;
+  if(t && t.schemaVersion!==WM26_SCHEMA_VERSION){ profile.wm26 = null; sSet('profile', profile); return null; }
+  return t;
+}
 const WM26_STAGE_LABEL = {groups:'Gruppenphase', ro32:'Runde der letzten 32', ro16:'Achtelfinale', qf:'Viertelfinale', sf:'Halbfinale', final:'Finale'};
 const WM26_KO_ORDER = ['ro32','ro16','qf','sf','final'];
 // "nicht gewinnt" rewards - the user left these to be designed; a coin ladder that climbs steeply
@@ -16758,13 +16769,14 @@ async function startWM26(){
     otherGroups[letter] = wm26PlayGroupRoundRobin(teams);
   });
   const {teams, matches} = wm26SetupPlayerGroup(otherNations, rating);
-  profile.wm26 = {stage:'groups', groupId, replacedNation:dropped, teams, matches, otherGroups, eliminatedAt:null, wonCup:false};
+  profile.wm26 = {schemaVersion:WM26_SCHEMA_VERSION, stage:'groups', groupId, replacedNation:dropped, teams, matches, otherGroups, eliminatedAt:null, wonCup:false};
   await sSet('profile', profile);
   toast(`${formatCoins(WM26_ENTRY_FEE)} Coins Startgeld bezahlt. Du übernimmst den Platz von ${natDE(dropped)} in Gruppe ${groupId}.`);
   renderWM26Panel();
 }
 async function wm26FinishRun(exitStage, won){
-  const t = profile.wm26;
+  const t = wm26CurrentRun();
+  if(!t) return;
   if(won){
     profile.wm26 = {...t, stage:'done', wonCup:true};
     await sSet('profile', profile);
@@ -16786,8 +16798,8 @@ async function wm26FinishRun(exitStage, won){
   renderWM26Panel();
 }
 async function wm26ResolveGroupIfDone(){
-  const t = profile.wm26;
-  if(t.matches.some(m=>m.pending)) return;
+  const t = wm26CurrentRun();
+  if(!t || t.matches.some(m=>m.pending)) return;
   const standings = wm26ComputeStandings(t.teams, t.matches);
   const myRow = standings.find(r=>r.isPlayer);
   const groupsByLetter = {...t.otherGroups, [t.groupId]: {standings}};
@@ -16805,7 +16817,7 @@ async function playWM26GroupMatch(matchIdx){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
-  const t = profile.wm26;
+  const t = wm26CurrentRun();
   if(!t || t.stage!=='groups') return;
   const m = t.matches[matchIdx];
   if(!m || !m.pending) return;
@@ -16841,7 +16853,7 @@ async function playWM26KnockoutMatch(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
-  const t = profile.wm26;
+  const t = wm26CurrentRun();
   if(!t || t.stage!=='knockout') return;
   const {roundIdx, matchIdx} = t.knockout.playerLoc;
   const m = t.knockout.rounds[roundIdx].matches[matchIdx];
@@ -16973,7 +16985,7 @@ function renderWM26BracketHTML(rounds, playerLoc){
 function renderWM26Panel(){
   const box = document.getElementById('wm26-content');
   if(!box) return;
-  const t = profile.wm26;
+  const t = wm26CurrentRun();
   if(!t || t.stage==='done'){
     const banner = t && t.stage==='done' ? (t.wonCup
       ? `<p style="margin-top:0;">🏆 Deine letzte WM: <b style="color:var(--gold);">Weltmeister!</b></p>`
