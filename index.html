@@ -13286,7 +13286,7 @@ function showCutscene(card, onDone){
 }
 
 // ===== CLUB =====
-let clubFilter = {q:'', pos:'ALL', sort:'ov'};
+let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL'};
 async function renderAdminPanel(view){
   view.innerHTML = `
     <div class="view-head"><h2>\u2699 Admin-Panel</h2><p>Eingeloggt als Administrator (${clubId}). Mit gro\u00dfer Macht kommt gro\u00dfe Verantwortung.</p></div>
@@ -13911,6 +13911,18 @@ function renderLazyGrid(container, items, renderItem, opts={}){
   observer.observe(sentinel);
 }
 function renderClub(view){
+  // Nation/Liga/Verein filter dropdowns only offer values actually present in the owned collection
+  // (not every value in the whole game's card database) - same helper/reasoning as the SBC builder's
+  // filter bar (see openSBCBuilder).
+  const ownedForFilters = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  const distinctSorted = (getValue, getLabel)=>{
+    const map = new Map();
+    ownedForFilters.forEach(x=>{ const v = getValue(x.card); if(v && !map.has(v)) map.set(v, getLabel(x.card)); });
+    return [...map.entries()].sort((a,b)=>a[1].localeCompare(b[1],'de'));
+  };
+  const clubNatOptions = distinctSorted(c=>c.nat, c=>natDE(c.nat));
+  const clubLgOptions = distinctSorted(c=>c.lg, c=>c.lg);
+  const clubClubOptions = distinctSorted(c=>c.club, c=>c.club);
   view.innerHTML = `
     <div class="view-head" style="display:flex;align-items:center;gap:16px;">
       <div id="club-crest-display" style="cursor:pointer;flex-shrink:0;"></div>
@@ -13942,6 +13954,18 @@ function renderClub(view){
         <option value="DEF">Verteidiger</option>
         <option value="MID">Mittelfeldspieler</option>
         <option value="FWD">St\u00fcrmer</option>
+      </select>
+      <select id="club-nat">
+        <option value="ALL">Alle Nationen</option>
+        ${clubNatOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+      <select id="club-lg">
+        <option value="ALL">Alle Ligen</option>
+        ${clubLgOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+      <select id="club-club">
+        <option value="ALL">Alle Vereine</option>
+        ${clubClubOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
       </select>
       <select id="club-sort">
         <option value="ov">Sortierung: Rating (hoch\u2192niedrig)</option>
@@ -13975,9 +13999,15 @@ function renderClub(view){
     toast(profile.packOpenMode==='click' ? 'Packs öffnen jetzt per Klick.' : 'Packs öffnen jetzt per Wischen.');
   });
   document.getElementById('club-pos').value = clubFilter.pos;
+  document.getElementById('club-nat').value = clubFilter.nat;
+  document.getElementById('club-lg').value = clubFilter.lg;
+  document.getElementById('club-club').value = clubFilter.club;
   document.getElementById('club-sort').value = clubFilter.sort;
   document.getElementById('club-search').addEventListener('input', e=>{ clubFilter.q=e.target.value; drawClubGrid(); });
   document.getElementById('club-pos').addEventListener('change', e=>{ clubFilter.pos=e.target.value; drawClubGrid(); });
+  document.getElementById('club-nat').addEventListener('change', e=>{ clubFilter.nat=e.target.value; drawClubGrid(); });
+  document.getElementById('club-lg').addEventListener('change', e=>{ clubFilter.lg=e.target.value; drawClubGrid(); });
+  document.getElementById('club-club').addEventListener('change', e=>{ clubFilter.club=e.target.value; drawClubGrid(); });
   document.getElementById('club-sort').addEventListener('change', e=>{ clubFilter.sort=e.target.value; drawClubGrid(); });
   drawClubGrid();
   if(managerCollection.length) drawManagerClubGrid();
@@ -14050,6 +14080,9 @@ function drawClubGrid(){
   let items = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   if(clubFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(clubFilter.q.toLowerCase()));
   if(clubFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===clubFilter.pos);
+  if(clubFilter.nat!=='ALL') items = items.filter(x=>x.card.nat===clubFilter.nat);
+  if(clubFilter.lg!=='ALL') items = items.filter(x=>x.card.lg===clubFilter.lg);
+  if(clubFilter.club!=='ALL') items = items.filter(x=>x.card.club===clubFilter.club);
   items.sort((a,b)=> clubFilter.sort==='ov' ? b.card.ov-a.card.ov : a.card.n.localeCompare(b.card.n));
   renderLazyGrid(grid, items, ({uid,card})=>{
     const wrap = document.createElement('div');
