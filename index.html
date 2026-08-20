@@ -13602,12 +13602,18 @@ async function loadAdminUserPanel(targetId){
   const p = data.profile || {};
   const ban = banSnap.exists() ? banSnap.data() : null;
   const leaderboardBanned = !!(ban && ban.until > Date.now());
+  // "Bereits aktiv" login-lock (see claimSession()/showSessionBlockedModal): normally clears itself
+  // once SESSION_STALE_MS passes since the last heartbeat, but a crashed tab/browser or a device that
+  // never got to fire pagehide can leave it stuck well past that if the player just can't get back
+  // online to let it expire - an admin override to force it open again.
+  const activeSession = data.session && data.session.id && (Date.now()-data.session.ts) < SESSION_STALE_MS ? data.session : null;
   box.innerHTML = `
     <div style="margin-bottom:14px;">
       <div style="font-weight:700;font-size:16px;">${p.displayName||targetId} <span class="mono" style="color:var(--muted);font-size:12px;">(${targetId})</span></div>
       <div class="hint" style="margin-top:2px;">Coins: <b style="color:var(--gold);">${formatCoins((p.coins||0))}</b> \u00b7 Siege: ${p.wins||0} \u00b7 Niederlagen: ${p.losses||0}
       ${p.banned ? ' \u00b7 <b style="color:var(--danger);">GESPERRT</b>' : ''}
-      ${leaderboardBanned ? ` \u00b7 <b style="color:var(--danger);">Leaderboard-gesperrt bis ${new Date(ban.until).toLocaleString('de-DE')}</b>` : ''}</div>
+      ${leaderboardBanned ? ` \u00b7 <b style="color:var(--danger);">Leaderboard-gesperrt bis ${new Date(ban.until).toLocaleString('de-DE')}</b>` : ''}
+      ${activeSession ? ` \u00b7 <b style="color:var(--danger);">Sitzung aktiv seit ${new Date(activeSession.ts).toLocaleString('de-DE')}</b>` : ''}</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="action-btn secondary" id="admin-give-coins" style="width:auto;">Coins geben</button>
@@ -13618,6 +13624,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
       <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
       <button class="action-btn secondary" id="admin-toggle-lb-ban" style="width:auto;color:${leaderboardBanned?'var(--turf-bright)':'var(--danger)'};">${leaderboardBanned?'Leaderboard-Sperre aufheben':'Tempor\u00e4r vom Leaderboard sperren'}</button>
+      <button class="action-btn secondary" id="admin-clear-session" style="width:auto;${activeSession?'border-color:var(--turf-bright);color:var(--turf-bright);':'opacity:.5;'}" ${activeSession?'':'disabled'}>Sitzungssperre aufheben (Login von anderem Ger\u00e4t erzwingen)</button>
       <button class="action-btn secondary" id="admin-reset-orei" style="width:auto;border-color:#c98a3e;color:#c98a3e;">O Rei zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-reset-account" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Account zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-patch-missed-fields" style="width:auto;">Nur nachtr\u00e4glich hinzugef\u00fcgte Reset-Felder nachholen</button>
@@ -13631,6 +13638,12 @@ async function loadAdminUserPanel(targetId){
       toast(`${amount>=0?'+':''}${formatCoins(amount)} Coins f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
     }, 12);
+  });
+  const clearSessionBtn = document.getElementById('admin-clear-session');
+  if(clearSessionBtn && activeSession) clearSessionBtn.addEventListener('click', async ()=>{
+    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {session:{id:null, ts:0}}, {merge:true});
+    toast(`Sitzungssperre für ${targetId} aufgehoben - Login von einem anderen Gerät ist jetzt sofort möglich.`);
+    loadAdminUserPanel(targetId);
   });
   document.getElementById('admin-give-card').addEventListener('click', ()=>openAdminSendCardModal(targetId, data));
   document.getElementById('admin-give-pack').addEventListener('click', ()=>openAdminSendPackModal(targetId, data));
