@@ -209,7 +209,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard.theme-cent{--acc:#ffd76a;}
 .pcard.theme-phenom{--acc:#6ee7d8;} .pcard.theme-setpiece{--acc:#ffcf5c;} .pcard.theme-derby{--acc:#ff8f6b;}
 .pcard.theme-iron{--acc:#7d94ad;} .pcard.theme-wonder{--acc:#8ee6a3;} .pcard.theme-hof{--acc:#e8b74a;}
-.pcard.theme-gal{--acc:#ff9ff0;} .pcard.theme-gg{--acc:#5cc9ff;} .pcard.theme-laendercup{--acc:#4dbf6f;}
+.pcard.theme-gal{--acc:#ff9ff0;} .pcard.theme-gg{--acc:#5cc9ff;} .pcard.theme-wm26v{--acc:#4dbf6f;} .pcard.theme-wm26k{--acc:#ffd76a;}
 .pcard.theme-wc{--acc:#ffd700;box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 30px -4px #ffd700;}
 .pcard.theme-blk{--acc:#c9a8ff;background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.04) 0 2px, transparent 2px 9px),
@@ -6869,21 +6869,54 @@ const KAPITAENE_SPECIALS = KAPITAENE_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KAPITAENE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
-// ===== Länder-Cup Sieger: one flagship real player per featured nation, boosted a few OVR above
-// their own current base card - reward for the Länder-Cup game mode below. Unlike Kronjuwelen/
-// Kapitäne above (a hand-picked id list, since those need a specific real-world honor per card),
-// this resolves "whichever real player currently has this nation's highest base rating" at load
-// time instead - there's no single fixed trivia fact per nation to hand-curate here, and resolving
-// it dynamically means it never goes stale as the base roster/ratings get updated over time.
-const LAENDERCUP_NATIONS = ['Brazil','France','Argentina','Germany','England','Spain','Portugal','Italy','Netherlands','Belgium'];
-const LAENDERCUP_SPECIALS = LAENDERCUP_NATIONS.map((nation, i)=>{
+// ===== WM 2026: the real 48-team World Cup, exactly as it lined up (see WM26_GROUPS below - the
+// game mode itself lives further down, near Turnier-Modus). Two reward-variant tiers, both resolved
+// dynamically at load time from the existing real-player pool rather than a hand-picked id list -
+// with 48 nations there's no single fixed trivia fact worth hand-curating per card, and resolving
+// dynamically means it never goes stale as the base roster/ratings change over time. Ids use the
+// same "large fixed offset + real source id" scheme as Kontrahent (see getKontrahentRoster below)
+// so they can never collide with any hand-picked magic-number id range elsewhere in the file.
+const WM26_GROUPS = {
+  A: ['Mexico','South Africa','Korea Republic','Czechia'],
+  B: ['Canada','Switzerland','Qatar','Bosnia and Herzegovina'],
+  C: ['Brazil','Morocco','Scotland','Haiti'],
+  D: ['United States','Paraguay','Australia','Türkiye'],
+  E: ['Germany','Curacao','Costa Rica','Ecuador'],
+  F: ['Netherlands','Japan','Tunisia','Sweden'],
+  G: ['Belgium','Egypt','Iran','New Zealand'],
+  H: ['Spain','Cabo Verde','Saudi Arabia','Uruguay'],
+  I: ['France','Senegal','Norway','Iraq'],
+  J: ['Argentina','Algeria','Austria','Jordan'],
+  K: ['Portugal','Colombia','Uzbekistan','Congo DR'],
+  L: ['England','Croatia','Ghana','Panama'],
+};
+const WM26_ALL_NATIONS = Object.values(WM26_GROUPS).flat();
+// rough real-world strength bands, used only to pick a plausible opponent-rating range per nation -
+// an approximation for game balance/flavor, not a scouting report.
+const WM26_TIER_ELITE = ['Brazil','Argentina','France','England','Spain','Germany','Portugal','Netherlands','Belgium'];
+const WM26_TIER_STRONG = ['Mexico','United States','Uruguay','Croatia','Morocco','Colombia','Japan','Switzerland','Senegal','Ecuador','Egypt','Austria','Canada'];
+const WM26_TIER_MID = ['Australia','Sweden','Scotland','Ghana','Tunisia','Iran','Qatar','Saudi Arabia','Algeria','Paraguay','Costa Rica','Panama','Norway','Türkiye','South Africa','Korea Republic','Czechia','Bosnia and Herzegovina'];
+const WM26_TIER_WEAK = ['Curacao','New Zealand','Cabo Verde','Haiti','Jordan','Uzbekistan','Congo DR','Iraq'];
+const WM26_NATION_RANGE = {};
+WM26_TIER_ELITE.forEach(n=>WM26_NATION_RANGE[n]=[90,96]);
+WM26_TIER_STRONG.forEach(n=>WM26_NATION_RANGE[n]=[83,90]);
+WM26_TIER_MID.forEach(n=>WM26_NATION_RANGE[n]=[76,84]);
+WM26_TIER_WEAK.forEach(n=>WM26_NATION_RANGE[n]=[70,79]);
+// WM-Variante: +5 OVR over their own base card, every eligible real player from any of the 48 WM
+// nations - a big pool by design (hundreds of players), so the pack has real depth beyond just stars.
+const WM26_VARIANTE_SPECIALS = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS)
+  .filter(c=>!c.isManager && !c.variant && WM26_ALL_NATIONS.includes(c.nat))
+  .map(base=> boostBaseToOv(base, base.ov+5, 50000000+base.id, 'wm26_variante', 'WM-Variante', 'wm26v'));
+WM26_VARIANTE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// WM-Kapitän: +13 OVR, one flagship player per nation - the "captain" proxy is that nation's own
+// highest-rated real card, same convention already used for the Kapitäne pack above.
+const WM26_KAPITAEN_SPECIALS = WM26_ALL_NATIONS.map(nation=>{
   const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS).filter(c=>c.nat===nation && !c.isManager && !c.variant);
   if(!pool.length) return null;
   const base = pool.reduce((best,c)=> c.ov>best.ov ? c : best, pool[0]);
-  const targetOv = Math.min(99, base.ov+6);
-  return boostBaseToOv(base, targetOv, 9762000+i, 'laendercup_sieger', 'Länder-Cup-Sieger', 'laendercup');
+  return boostBaseToOv(base, base.ov+13, 60000000+base.id, 'wm26_kapitaen', 'WM-Kapitän', 'wm26k');
 }).filter(Boolean);
-LAENDERCUP_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+WM26_KAPITAEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme===tier); }
 // ===== Wochen Pass exclusive cards: the actual grind incentive, not another pack/coin payout - the
 // level-15 and level-30 rewards only ever exist as these specific rewards, nowhere else. A new real
@@ -7783,17 +7816,12 @@ const PACKS = [
       const third = (UCLW_MANAGER && Math.random()<0.05) ? UCLW_MANAGER : weighted[Math.floor(Math.random()*weighted.length)];
       return [first, second, third];
     }},
-  {id:'laendercupsieger',name:'Länder-Cup Sieger Pack',cost:0,tier:'ultimate',count:3,hidden:true,
-    desc:'3 Karten der Länder-Cup-Sieger-Variante — die aktuell bestbewerteten realen Spieler ihrer Nation, leicht über ihr eigenes Rating hinaus geboostet. Eine Karte stammt garantiert von der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg im Länder-Cup erhältlich.',
+  {id:'worldcuppack',name:'World Cup Pack',cost:0,tier:'ultimate',count:5,hidden:true,
+    desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit echter Chance auf einen WM-Kapitän (+13 OVR, ein Spieler pro Nation). Eine Karte ist garantiert der WM-Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
     draw(opts={}){
-      const finalCard = opts.finalNation ? LAENDERCUP_SPECIALS.find(c=>c.nat===opts.finalNation) : null;
-      const pool = LAENDERCUP_SPECIALS.filter(c=>c!==finalCard);
-      const others = [];
-      for(let i=0;i<2 && pool.length;i++){
-        const idx = Math.floor(Math.random()*pool.length);
-        others.push(pool[idx]); pool.splice(idx,1);
-      }
-      return [finalCard || pick(LAENDERCUP_SPECIALS), ...others];
+      const finalCard = opts.finalNation ? WM26_KAPITAEN_SPECIALS.find(c=>c.nat===opts.finalNation) : null;
+      const rest = Array.from({length:4}, ()=> Math.random()<0.12 ? pick(WM26_KAPITAEN_SPECIALS) : pick(WM26_VARIANTE_SPECIALS));
+      return [finalCard || pick(WM26_KAPITAEN_SPECIALS), ...rest];
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
     desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
@@ -8774,8 +8802,8 @@ function buildSbcTile(sbc, poolFree, poolWithSquad){
 const CHALLENGE_DEFS = [
   {id:'tournament', name:'Turnier-Modus', pill:'Match', accent:'var(--muted)', contentId:'tournament-content', renderFn:()=>renderTournamentPanel(),
     desc:'3 Runden gegen wachsend starke Fantasie-Auswahlteams. Verlierst du, ist das Turnier vorbei. Pokalsieg bringt das UCL Winners Pack.'},
-  {id:'laendercup', name:'Länder-Cup', pill:'Match', accent:'#4dbf6f', contentId:'laendercup-content', renderFn:()=>renderLaenderCupPanel(),
-    desc:'3 Runden gegen echte Fantasie-Nationalmannschaften wachsender Stärke. Verlierst du, ist der Cup vorbei. Pokalsieg bringt das Länder-Cup Sieger Pack.'},
+  {id:'wm26', name:'WM 2026', pill:'Match', accent:'#4dbf6f', contentId:'wm26-content', renderFn:()=>renderWM26Panel(),
+    desc:'Die echte WM 2026 nachgespielt — 48 Teams, 12 Gruppen, K.o.-Runde ab den letzten 32. Preise je nach Abschneiden, Pokalsieg bringt das World Cup Pack.'},
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
     desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
@@ -16548,112 +16576,322 @@ async function playTournamentRound(){
     }
   });
 }
-// ===== Länder-Cup: same principle as Turnier-Modus (3 K.o.-Runden, 1 Leben, Startgeld, Pokal-Pack
-// am Ende) - just themed around real fantasy national teams instead of fantasy all-star club XIs.
-// The opponent nation for each round is drawn once at cup-start (profile.laenderCup.nations) and
-// stays fixed for that whole run, so the panel can advertise "Runde 2 gegen Frankreich" up front
-// instead of only revealing the opponent's identity right as the match starts. =====
-const LAENDERCUP_ROUNDS = [
-  {name:'Achtelfinale', minOv:88, maxOv:92, coins:250},
-  {name:'Halbfinale', minOv:93, maxOv:97, coins:1300},
-  {name:'Finale', minOv:98, maxOv:103, coins:0},
-];
-const LAENDERCUP_ENTRY_FEE = 1200;
-function pickLaenderCupNations(){
-  const pool = LAENDERCUP_NATIONS.slice();
-  const picked = [];
-  for(let i=0;i<LAENDERCUP_ROUNDS.length && pool.length;i++){
-    const idx = Math.floor(Math.random()*pool.length);
-    picked.push(pool[idx]); pool.splice(idx,1);
+// ===== WM 2026: the real 48-team format end to end - 12 groups of 4, top 2 plus the best 8 thirds
+// advance to a 32-team knockout (round of 32 -> round of 16 -> Viertelfinale -> Halbfinale -> Finale).
+// The player takes over one random real nation's slot; every OTHER match (all 44 remaining group
+// games, and every knockout pair the player isn't in) is bulk-simulated instantly in the background,
+// exactly like the hosted-tournament bracket's "already-decided, revealed as you go" principle - only
+// the player's OWN matches are actually played live, one at a time, via wm26PlayLiveMatch below.
+// Persisted state only ever stores {nation, rating} per team, never full 11-player rosters (see
+// buildFixedRatingOpponent's opts.nation) - a fresh throwaway XI is built on demand every time a
+// given nation's match actually needs to be simulated, which keeps profile.wm26 tiny regardless of
+// how many of the other 47 teams' matches happen along the way.
+const WM26_ENTRY_FEE = 10000;
+const WM26_STAGE_LABEL = {groups:'Gruppenphase', ro32:'Runde der letzten 32', ro16:'Achtelfinale', qf:'Viertelfinale', sf:'Halbfinale', final:'Finale'};
+const WM26_KO_ORDER = ['ro32','ro16','qf','sf','final'];
+// "nicht gewinnt" rewards - the user left these to be designed; a coin ladder that climbs steeply
+// enough that even a modest run feels worth the 10.000-Coin Startgeld, without ever matching the
+// Pokalsieg's pack. Winning it all grants no coins here - same "the pack IS the reward" pattern as
+// Turnier-Modus's Finale (coins:0) - see wm26FinishRun's win branch.
+const WM26_EXIT_REWARD = {groups:500, ro32:2000, ro16:4500, qf:9000, sf:16000, final:26000};
+function wm26RandRating(nation){
+  const [lo,hi] = WM26_NATION_RANGE[nation] || [72,85];
+  return lo + Math.floor(Math.random()*(hi-lo+1));
+}
+// throwaway XI for ONE match's simulation only - never persisted, see the file-level comment above.
+function wm26TeamXI(nation, rating){ return buildFixedRatingOpponent(rating, {nation}); }
+function wm26MatchResult(teamA, teamB, allowDraw){
+  const aXI = wm26TeamXI(teamA.nation, teamA.rating);
+  const bXI = wm26TeamXI(teamB.nation, teamB.rating);
+  return buildDecisiveMatch(teamA.rating, teamB.rating, aXI.players, bXI.players, null, null, {allowDraw});
+}
+function wm26StandingsSort(a,b){ return b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || (Math.random()-0.5); }
+// full 6-match round robin among 4 teams (indices 0-3) - used for every group the player isn't in.
+function wm26PlayGroupRoundRobin(teams){
+  const pairs = [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];
+  const table = teams.map(t=>({nation:t.nation, isPlayer:!!t.isPlayer, rating:t.rating, pts:0, gf:0, ga:0, w:0, d:0, l:0}));
+  const matches = pairs.map(([i,j])=>{
+    const md = wm26MatchResult(teams[i], teams[j], true);
+    table[i].gf+=md.myGoals; table[i].ga+=md.oppGoals; table[j].gf+=md.oppGoals; table[j].ga+=md.myGoals;
+    if(md.winnerSide==='draw'){ table[i].pts+=1; table[j].pts+=1; table[i].d++; table[j].d++; }
+    else if(md.winnerSide==='me'){ table[i].pts+=3; table[i].w++; table[j].l++; }
+    else { table[j].pts+=3; table[j].w++; table[i].l++; }
+    return {aIdx:i, bIdx:j, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide, pending:false};
+  });
+  table.forEach(t=>t.gd=t.gf-t.ga);
+  return {matches, standings: table.slice().sort(wm26StandingsSort)};
+}
+// the player's own group: the 3 matches among the OTHER 3 teams are simulated right away (their
+// outcome never depends on the player), the player's 3 matches stay pending until played live.
+function wm26SetupPlayerGroup(nations, myRating){
+  const teams = [{nation:'__PLAYER__', isPlayer:true, rating:myRating}, ...nations.map(n=>({nation:n, isPlayer:false, rating:wm26RandRating(n)}))];
+  const matches = [1,2,3].map(i=>({aIdx:0, bIdx:i, pending:true}));
+  for(let i=1;i<4;i++) for(let j=i+1;j<4;j++){
+    const md = wm26MatchResult(teams[i], teams[j], true);
+    matches.push({aIdx:i, bIdx:j, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide, pending:false});
   }
-  return picked;
+  return {teams, matches};
 }
-async function startLaenderCup(){
-  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
-  const {filled} = squadRating();
-  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
-  if((profile.coins||0) < LAENDERCUP_ENTRY_FEE){ toast(`Du brauchst ${formatCoins(LAENDERCUP_ENTRY_FEE)} Coins Startgeld für einen neuen Länder-Cup.`); return; }
-  await atomicCoinChange(-LAENDERCUP_ENTRY_FEE);
-  profile.laenderCup = {round: 1, nations: pickLaenderCupNations()};
-  await sSet('profile', profile);
-  toast(`${formatCoins(LAENDERCUP_ENTRY_FEE)} Coins Startgeld bezahlt.`);
-  renderLaenderCupPanel();
+// recomputes the table from whatever matches are already resolved - safe to call mid-group, before
+// the player's own games are all played, to show a live partial standing.
+function wm26ComputeStandings(teams, matches){
+  const table = teams.map(t=>({nation:t.nation, isPlayer:!!t.isPlayer, rating:t.rating, pts:0, gf:0, ga:0, w:0, d:0, l:0}));
+  matches.filter(m=>!m.pending).forEach(m=>{
+    table[m.aIdx].gf+=m.aGoals; table[m.aIdx].ga+=m.bGoals; table[m.bIdx].gf+=m.bGoals; table[m.bIdx].ga+=m.aGoals;
+    if(m.winnerSide==='draw'){ table[m.aIdx].pts+=1; table[m.bIdx].pts+=1; table[m.aIdx].d++; table[m.bIdx].d++; }
+    else if(m.winnerSide==='me'){ table[m.aIdx].pts+=3; table[m.aIdx].w++; table[m.bIdx].l++; }
+    else { table[m.bIdx].pts+=3; table[m.bIdx].w++; table[m.aIdx].l++; }
+  });
+  table.forEach(t=>t.gd=t.gf-t.ga);
+  return table.sort(wm26StandingsSort);
 }
-function renderLaenderCupPanel(){
-  const box = document.getElementById('laendercup-content');
-  if(!box) return;
-  const t = profile.laenderCup;
-  if(!t){
-    box.innerHTML = `
-      <p class="hint" style="margin-top:0;">3 Runden gegen echte Fantasie-Nationalmannschaften wachsender Stärke — Achtelfinale (Rating 88-92), Halbfinale (93-97), Finale (98-103). Die Gegner-Nation wird pro Runde zufällig ausgelost. Verlierst du, ist der Cup vorbei. Startgeld: <b style="color:var(--gold);">${formatCoins(LAENDERCUP_ENTRY_FEE)} Coins</b> pro neuem Cup. Belohnung: 250 Coins (Achtelfinale), 1.300 Coins (Halbfinale), <b style="color:var(--gold);">Länder-Cup Sieger Pack</b> für den Pokalsieg — garantiert mit dem Star der im Finale besiegten Nation.</p>
-      <button class="action-btn" id="laendercup-start" style="width:220px;">Länder-Cup starten</button>
-      <div id="laendercup-match-area" style="margin-top:14px;"></div>`;
-    document.getElementById('laendercup-start').addEventListener('click', startLaenderCup);
-    return;
+// unified across all 12 groups: top 2 of each (24) plus the best 8 of the 12 third-placed teams (the
+// other 4 thirds miss out) - the exact real WM 2026 qualification rule.
+function wm26DetermineQualifiers(groupsByLetter){
+  const direct = [], thirds = [];
+  Object.entries(groupsByLetter).forEach(([letter, g])=>{
+    direct.push({...g.standings[0], groupId:letter}, {...g.standings[1], groupId:letter});
+    thirds.push({...g.standings[2], groupId:letter});
+  });
+  thirds.sort(wm26StandingsSort);
+  return direct.concat(thirds.slice(0,8));
+}
+// simplified fair draw (not the real, far more complex FIFA position table): random pairing, then a
+// greedy fix-up pass so no round-of-32 pair ever repeats a group-stage meeting.
+function wm26SeedKnockoutBracket(qualifiers){
+  const arr = qualifiers.slice();
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  for(let i=0;i<arr.length;i+=2){
+    if(arr[i].groupId===arr[i+1].groupId){
+      for(let j=i+2;j<arr.length;j++){
+        if(arr[j].groupId!==arr[i].groupId && arr[j].groupId!==arr[i+1].groupId){
+          [arr[i+1], arr[j]] = [arr[j], arr[i+1]];
+          break;
+        }
+      }
+    }
   }
-  const round = LAENDERCUP_ROUNDS[t.round-1];
-  const nation = t.nations[t.round-1];
-  box.innerHTML = `
-    <div class="formation-select" style="margin-bottom:14px;">
-      ${LAENDERCUP_ROUNDS.map((r,i)=>`<div class="chip ${i+1<t.round?'active':''}" style="${i+1===t.round?'border-color:var(--gold);color:var(--gold);':''}">${r.name}</div>`).join('')}
-    </div>
-    <p class="hint" style="margin-top:0;">Aktuelle Runde: <b style="color:var(--chalk);">${round.name}</b> gegen <b style="color:var(--chalk);">${natDE(nation)}</b> (Gegner-Rating ${round.minOv}-${round.maxOv}). Belohnung bei Sieg: ${round.coins>0?formatCoins(round.coins)+' Coins':'<b style="color:var(--gold);">Länder-Cup Sieger Pack</b> — der Pokal!'}</p>
-    <button class="action-btn" id="laendercup-play" style="width:220px;">Spiel starten</button>
-    <div id="laendercup-match-area" style="margin-top:14px;"></div>`;
-  document.getElementById('laendercup-play').addEventListener('click', playLaenderCupRound);
+  return arr;
 }
-async function playLaenderCupRound(){
+// simulates every pair in the current knockout round EXCEPT the player's own - that one stays open
+// until wm26PlayKnockoutMatch resolves it live.
+function wm26SimulateRoundExceptPlayer(teams){
+  const winners = new Array(teams.length).fill(null);
+  for(let i=0;i<teams.length;i+=2){
+    if(teams[i].isPlayer || teams[i+1].isPlayer) continue;
+    const md = wm26MatchResult(teams[i], teams[i+1], false);
+    winners[i] = md.winnerSide==='me' ? teams[i] : teams[i+1];
+  }
+  return winners;
+}
+async function startWM26(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
-  lastQueueWasManual = true;
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
-  const t = profile.laenderCup;
-  if(!t) return;
-  const round = LAENDERCUP_ROUNDS[t.round-1];
-  const nation = t.nations[t.round-1];
-  const opp = buildEliteOpponentXI(round.minOv, round.maxOv, {nation});
-  const area = document.getElementById('laendercup-match-area');
+  if((profile.coins||0) < WM26_ENTRY_FEE){ toast(`Du brauchst ${formatCoins(WM26_ENTRY_FEE)} Coins Startgeld für eine neue WM.`); return; }
+  await atomicCoinChange(-WM26_ENTRY_FEE);
+  const dropped = WM26_ALL_NATIONS[Math.floor(Math.random()*WM26_ALL_NATIONS.length)];
+  let groupId = null, otherNations = null;
+  Object.entries(WM26_GROUPS).forEach(([letter, nations])=>{
+    if(nations.includes(dropped)){ groupId = letter; otherNations = nations.filter(n=>n!==dropped); }
+  });
+  const otherGroups = {};
+  Object.entries(WM26_GROUPS).forEach(([letter, nations])=>{
+    if(letter===groupId) return;
+    const teams = nations.map(n=>({nation:n, rating: wm26RandRating(n)}));
+    otherGroups[letter] = wm26PlayGroupRoundRobin(teams);
+  });
+  const {teams, matches} = wm26SetupPlayerGroup(otherNations, rating);
+  profile.wm26 = {stage:'groups', groupId, replacedNation:dropped, teams, matches, otherGroups, eliminatedAt:null, wonCup:false};
+  await sSet('profile', profile);
+  toast(`${formatCoins(WM26_ENTRY_FEE)} Coins Startgeld bezahlt. Du übernimmst den Platz von ${natDE(dropped)} in Gruppe ${groupId}.`);
+  renderWM26Panel();
+}
+async function wm26FinishRun(exitStage, won){
+  const t = profile.wm26;
+  if(won){
+    profile.wm26 = {...t, stage:'done', wonCup:true};
+    await sSet('profile', profile);
+    toast(`🏆 Weltmeister! Öffne dein Pack…`);
+    const useWinnersPack = Math.random()<0.2;
+    const pack = PACKS.find(p=>p.id===(useWinnersPack ? 'wmwinners' : 'worldcuppack'));
+    // the final is always a 2-team round by construction (see playWM26KnockoutMatch) - the other
+    // entry is whichever finalist isn't the player.
+    const finalOpp = t.knockout.teams.find(x=>!x.isPlayer);
+    showPackOpening(pack, useWinnersPack ? pack.draw() : pack.draw({finalNation: finalOpp?.nation}), {untradable:true});
+  } else {
+    profile.wm26 = {...t, stage:'done', eliminatedAt:exitStage};
+    await sSet('profile', profile);
+    const reward = WM26_EXIT_REWARD[exitStage]||0;
+    if(reward>0) await atomicCoinChange(reward, {}, {silentDisplay:true});
+    toast(`Ausgeschieden — ${WM26_STAGE_LABEL[exitStage]}. +${formatCoins(reward)} Coins.`);
+  }
+  renderWM26Panel();
+}
+async function wm26ResolveGroupIfDone(){
+  const t = profile.wm26;
+  if(t.matches.some(m=>m.pending)) return;
+  const standings = wm26ComputeStandings(t.teams, t.matches);
+  const myRow = standings.find(r=>r.isPlayer);
+  const groupsByLetter = {...t.otherGroups, [t.groupId]: {standings}};
+  const qualifiers = wm26DetermineQualifiers(groupsByLetter);
+  const myQualifier = qualifiers.find(q=>q.isPlayer);
+  if(!myQualifier){ await wm26FinishRun('groups', false); return; }
+  const bracket = wm26SeedKnockoutBracket(qualifiers);
+  const playerIdx = bracket.findIndex(q=>q.isPlayer);
+  profile.wm26 = {...t, stage:'knockout', knockout:{roundKey:'ro32', teams:bracket, playerIdx, winners:wm26SimulateRoundExceptPlayer(bracket)}};
+  await sSet('profile', profile);
+  toast(`Gruppenphase geschafft (${myRow.pts} Punkte)! Weiter geht's in der ${WM26_STAGE_LABEL.ro32}.`);
+  renderWM26Panel();
+}
+async function playWM26GroupMatch(matchIdx){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const t = profile.wm26;
+  if(!t || t.stage!=='groups') return;
+  const m = t.matches[matchIdx];
+  if(!m || !m.pending) return;
+  const oppTeam = t.teams[m.aIdx===0 ? m.bIdx : m.aIdx];
+  const myPlayers = getMySquadPlayers();
+  const opp = wm26TeamXI(oppTeam.nation, oppTeam.rating);
+  const area = document.getElementById('wm26-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${round.name})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Gruppenphase)`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  let roundOutcome = null;
-  await runLocalMatch(rating, opp, {
-    onOutcomeDecided: async (outcome)=>{
-      if(outcome.result==='WIN'){
-        if(t.round>=LAENDERCUP_ROUNDS.length){
-          profile.laenderCup = null;
-          await sSet('profile', profile);
-          roundOutcome = 'cupWin';
-        } else {
-          await atomicCoinChange(round.coins, {}, {silentDisplay:true});
-          profile.laenderCup = {round: t.round+1, nations: t.nations};
-          await sSet('profile', profile);
-          roundOutcome = 'advance';
-        }
-      } else {
-        profile.laenderCup = null;
-        await sSet('profile', profile);
-        roundOutcome = 'eliminated';
-      }
-    },
-    onComplete: ()=>{
-      if(roundOutcome==='cupWin'){
-        toast(`🏆 Pokalsieger! Öffne dein Länder-Cup Sieger Pack…`);
-        const cupPack = PACKS.find(p=>p.id==='laendercupsieger');
-        showPackOpening(cupPack, cupPack.draw({finalNation: nation}), {untradable:true});
-      } else if(roundOutcome==='advance'){
-        toast(`${round.name} gegen ${natDE(nation)} gewonnen! +${formatCoins(round.coins)} Coins. Weiter geht's.`);
-      } else {
-        toast(`Ausgeschieden im ${round.name} gegen ${natDE(nation)}. Versuch's noch mal!`);
-      }
-      renderLaenderCupPanel();
-    }
+  inMatch = true;
+  try{
+    const md = buildDecisiveMatch(rating, opp.rating, myPlayers, opp.players, squad.tactics, null, {allowDraw:true});
+    md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+    await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner);
+    const resultLabel = md.winnerSide==='draw' ? 'Unentschieden' : md.winnerSide==='me' ? 'Sieg' : 'Niederlage';
+    toast(`${resultLabel} gegen ${natDE(oppTeam.nation)}: ${md.myGoals}:${md.oppGoals}`);
+    const newMatches = t.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide, pending:false});
+    profile.wm26 = {...t, matches:newMatches};
+    await sSet('profile', profile);
+  } finally {
+    inMatch = false;
+  }
+  renderWM26Panel();
+  await wm26ResolveGroupIfDone();
+}
+async function playWM26KnockoutMatch(){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const t = profile.wm26;
+  if(!t || t.stage!=='knockout') return;
+  const k = t.knockout;
+  const pairStart = k.playerIdx % 2===0 ? k.playerIdx : k.playerIdx-1;
+  const oppIdx = pairStart===k.playerIdx ? pairStart+1 : pairStart;
+  const oppTeam = k.teams[oppIdx];
+  const myPlayers = getMySquadPlayers();
+  const opp = wm26TeamXI(oppTeam.nation, oppTeam.rating);
+  const area = document.getElementById('wm26-match-area');
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${WM26_STAGE_LABEL[k.roundKey]})`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  inMatch = true;
+  let won = false;
+  try{
+    const md = buildDecisiveMatch(rating, opp.rating, myPlayers, opp.players, squad.tactics, null, {allowDraw:false});
+    md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+    await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner);
+    won = md.winnerSide==='me';
+    toast(`${won?'Sieg':'Niederlage'} gegen ${natDE(oppTeam.nation)}: ${md.myGoals}:${md.oppGoals}${md.wentToPK?' n.E.':md.wentToET?' n.V.':''}`);
+  } finally {
+    inMatch = false;
+  }
+  if(!won){ await wm26FinishRun(k.roundKey, false); return; }
+  // k.winners already holds every non-player pair's winner - fill in the player's own pair with the
+  // player's entry (just-won), then collapse each surviving pair down to the next round's team list.
+  const playerEntry = k.teams[k.playerIdx];
+  const resolvedWinners = k.winners.slice();
+  resolvedWinners[pairStart] = playerEntry;
+  const advancing = [];
+  for(let i=0;i<resolvedWinners.length;i+=2) advancing.push(resolvedWinners[i]);
+  if(advancing.length===1){ await wm26FinishRun(null, true); return; }
+  const newPlayerIdx = advancing.findIndex(x=>x.isPlayer);
+  const nextRoundKey = WM26_KO_ORDER[WM26_KO_ORDER.indexOf(k.roundKey)+1];
+  profile.wm26 = {...t, knockout:{roundKey:nextRoundKey, teams:advancing, playerIdx:newPlayerIdx, winners:wm26SimulateRoundExceptPlayer(advancing)}};
+  await sSet('profile', profile);
+  renderWM26Panel();
+}
+// dedicated renderer (not the shared renderStandingsTableHTML, which only knows win/loss records and
+// derives points as wins*3 - WM group tables need real W-D-L points, since group matches allow draws).
+function renderWM26StandingsHTML(standings){
+  let html = `<div style="margin-bottom:12px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;overflow:hidden;">
+    <div style="display:grid;grid-template-columns:1fr 22px 22px 22px 56px 40px 40px;gap:0;font-size:11px;font-weight:600;background:var(--line);padding:8px;color:var(--muted);text-align:center;">
+      <div style="text-align:left;padding:0 8px;">Team</div><div>S</div><div>U</div><div>N</div><div>Tore</div><div>Diff</div><div>Pkt</div>
+    </div>`;
+  standings.forEach((r,idx)=>{
+    const highlight = idx<2 ? 'background:rgba(95,225,201,0.08);' : (idx===2 ? 'background:rgba(255,215,0,0.05);' : '');
+    const label = r.isPlayer ? (profile.displayName||'Du') : natDE(r.nation);
+    html += `<div style="display:grid;grid-template-columns:1fr 22px 22px 22px 56px 40px 40px;gap:0;padding:8px;border-top:1px solid var(--line);${highlight}align-items:center;font-size:11px;">
+      <div style="text-align:left;padding:0 8px;color:${r.isPlayer?'var(--turf-bright)':'var(--chalk)'};font-weight:${r.isPlayer?'700':'400'};">${escBracketName(label)}</div>
+      <div style="text-align:center;color:var(--muted);">${r.w}</div>
+      <div style="text-align:center;color:var(--muted);">${r.d}</div>
+      <div style="text-align:center;color:var(--muted);">${r.l}</div>
+      <div style="text-align:center;color:var(--muted);" class="mono">${r.gf}:${r.ga}</div>
+      <div style="text-align:center;color:var(--muted);">${r.gd>=0?'+':''}${r.gd}</div>
+      <div style="text-align:center;font-weight:600;color:var(--gold);">${r.pts}</div>
+    </div>`;
   });
+  return html+`</div>`;
+}
+function renderWM26Panel(){
+  const box = document.getElementById('wm26-content');
+  if(!box) return;
+  const t = profile.wm26;
+  if(!t || t.stage==='done'){
+    const banner = t && t.stage==='done' ? (t.wonCup
+      ? `<p style="margin-top:0;">🏆 Deine letzte WM: <b style="color:var(--gold);">Weltmeister!</b></p>`
+      : `<p style="margin-top:0;">Deine letzte WM endete: <b style="color:var(--chalk);">Aus in der ${WM26_STAGE_LABEL[t.eliminatedAt]}</b></p>`) : '';
+    box.innerHTML = `
+      ${banner}
+      <p class="hint" style="margin-top:0;">Die echte WM 2026 nachgespielt: 48 Teams, 12 Gruppen à 4, danach K.o.-Runde ab den letzten 32 (Gruppensieger + -zweite plus die 8 besten Gruppendritten). Du übernimmst zufällig den Platz einer echten Nation. Startgeld: <b style="color:var(--gold);">${formatCoins(WM26_ENTRY_FEE)} Coins</b>. Scheiterst du, gibt's Trostpreis-Coins je nach Runde. Gewinnst du: 20% WM Winners Pack, 80% <b style="color:var(--gold);">World Cup Pack</b> (neue WM-Variante +5 OVR und WM-Kapitän +13 OVR, aus allen 48 Teams).</p>
+      <button class="action-btn" id="wm26-start" style="width:220px;">WM 2026 starten</button>
+      <div id="wm26-match-area" style="margin-top:14px;"></div>`;
+    document.getElementById('wm26-start').addEventListener('click', startWM26);
+    return;
+  }
+  if(t.stage==='groups'){
+    const standings = wm26ComputeStandings(t.teams, t.matches);
+    const nextMatchIdx = t.matches.findIndex(m=>m.pending);
+    const playedCount = t.matches.filter(m=>!m.pending && (m.aIdx===0||m.bIdx===0)).length;
+    box.innerHTML = `
+      <p class="hint" style="margin-top:0;">Gruppe ${t.groupId} — du ersetzt <b style="color:var(--chalk);">${natDE(t.replacedNation)}</b>. Gruppenspiel ${Math.min(playedCount+1,3)} von 3.</p>
+      ${renderWM26StandingsHTML(standings)}
+      <p class="hint" style="margin:8px 0;">Platz 1-2 der Gruppe qualifizieren sich direkt, dazu die 8 besten Gruppendritten von allen 12 Gruppen.</p>
+      ${nextMatchIdx>=0 ? `<button class="action-btn" id="wm26-play-group" style="width:220px;">Spiel starten</button>` : ''}
+      <div id="wm26-match-area" style="margin-top:14px;"></div>`;
+    const btn = document.getElementById('wm26-play-group');
+    if(btn) btn.addEventListener('click', ()=>playWM26GroupMatch(nextMatchIdx));
+    return;
+  }
+  // knockout
+  const k = t.knockout;
+  const pairStart = k.playerIdx % 2===0 ? k.playerIdx : k.playerIdx-1;
+  const oppIdx = pairStart===k.playerIdx ? pairStart+1 : pairStart;
+  const oppTeam = k.teams[oppIdx];
+  box.innerHTML = `
+    <div class="formation-select" style="margin-bottom:14px;">
+      ${WM26_KO_ORDER.map(key=>`<div class="chip ${WM26_KO_ORDER.indexOf(key)<WM26_KO_ORDER.indexOf(k.roundKey)?'active':''}" style="${key===k.roundKey?'border-color:var(--gold);color:var(--gold);':''}">${WM26_STAGE_LABEL[key]}</div>`).join('')}
+    </div>
+    <p class="hint" style="margin-top:0;">Aktuelle Runde: <b style="color:var(--chalk);">${WM26_STAGE_LABEL[k.roundKey]}</b> gegen <b style="color:var(--chalk);">${natDE(oppTeam.nation)}</b>. Sieg bringt dich in die nächste Runde${k.roundKey==='final'?' — und den Pokal!':''}.</p>
+    <button class="action-btn" id="wm26-play-ko" style="width:220px;">Spiel starten</button>
+    <div id="wm26-match-area" style="margin-top:14px;"></div>`;
+  document.getElementById('wm26-play-ko').addEventListener('click', playWM26KnockoutMatch);
 }
 // ===== Ballon d'Or Challenge: the single hardest one-off match in the game =====
 async function playBallonDorChallenge(){
@@ -18296,12 +18534,18 @@ function openNeymarQuestDetail(){
 }
 // ===== O Rei Herausforderung: the ultimate capstone challenge =====
 const OREI_ENTRY = {wins:200, rating:105, netWorth:500000};
-function buildFixedRatingOpponent(targetOv){
+function buildFixedRatingOpponent(targetOv, opts={}){
   // built the same way as buildEliteOpponentXI: real cards picked by their own genuine ov, never
   // force-overwritten - so the intro screen shows the actual squad that's playing, and only players
   // who are genuinely that strong can end up scoring. Search outward from targetOv in each position
   // group until real cards are found, since an exact rating may not exist at every position.
-  const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, UCLW_SPECIALS, KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS);
+  const fullPool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS, UCLW_SPECIALS, KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS);
+  // opts.nation (WM 2026): restrict to one nation's real players, same "only if the pool is deep
+  // enough" fallback as buildEliteOpponentXI - a fresh XI is (re)built from this on demand every time
+  // this nation plays a match, rather than persisting a full 11-player roster in save state, so only
+  // the far smaller {nation, rating} pair needs to be remembered between matches.
+  const nationPool = opts.nation ? fullPool.filter(c=>c.nat===opts.nation) : null;
+  const pool = nationPool && nationPool.length>=14 ? nationPool : fullPool;
   const slots = FORMATIONS['433'].slots;
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
@@ -18324,7 +18568,7 @@ function buildFixedRatingOpponent(targetOv){
     return pickNear(groupPool);
   });
   const NAMES = ['Legenden-Auswahl','Unschlagbare Elf','Die Unm\u00f6glichen','Weltauswahl Prime'];
-  const owner = NAMES[Math.floor(Math.random()*NAMES.length)];
+  const owner = opts.nation ? `Nationalmannschaft ${natDE(opts.nation)}` : NAMES[Math.floor(Math.random()*NAMES.length)];
   const {players, managerName} = boostBotXI(xi, slots);
   // force the average to land EXACTLY on targetOv every time - previously this only landed "close to"
   // targetOv (e.g. a "118" opponent could show up as 111), see scaleTeamToExactAvg.
@@ -19294,7 +19538,7 @@ function updateWinProbEl(pct){
   if(fill) fill.style.width = p+'%';
   if(txt) txt.textContent = p+'%';
 }
-function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactics=null, oppTactics=null){
+function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactics=null, oppTactics=null, opts={}){
   const myT = myTactics || DEFAULT_TACTICS;
   const oppT = oppTactics || DEFAULT_TACTICS;
   const myMent = TACTIC_MENTALITY[myT.mentality] || TACTIC_MENTALITY.balanced;
@@ -19343,7 +19587,10 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   incidents.sort((a,b)=>a.minute-b.minute);
 
   let eventsET=null, shootout=null, wentToET=false, wentToPK=false;
-  if(myGoals===oppGoals){
+  // opts.allowDraw (World Cup group-stage matches): a 90-minute tie stays a tie, same as real group
+  // football - every other caller (knockout rounds, online matches, ...) needs a definite winner, so
+  // this only skips extra time/penalties when explicitly asked to.
+  if(myGoals===oppGoals && !opts.allowDraw){
     wentToET = true;
     const myExpET = clamp(myExp*(30/90), 0.05, 2);
     const oppExpET = clamp(oppExp*(30/90), 0.05, 2);
@@ -19355,7 +19602,7 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
       shootout = simulateShootout(myRating, oppRating, myPlayers, oppPlayers, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
     }
   }
-  const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':'opp');
+  const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':(myGoals<oppGoals?'opp':'draw'));
   return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide,
     myProfile: myProfileRaw, oppProfile: oppProfileRaw, incidents,
     myRedMinute: myIncidents.redMinute, oppRedMinute: oppIncidents.redMinute};
