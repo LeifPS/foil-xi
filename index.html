@@ -6891,21 +6891,36 @@ const WM26_GROUPS = {
   L: ['England','Croatia','Ghana','Panama'],
 };
 const WM26_ALL_NATIONS = Object.values(WM26_GROUPS).flat();
+// Both card pools below are lazy + cached (built once, on first actual use) rather than eagerly at
+// page load - thousands of boostBaseToOv calls on every single page load, for the vast majority of
+// players who never even open the WM 2026 mode, is pure waste and unnecessarily slows down startup.
+let WM26_VARIANTE_SPECIALS_CACHE = null;
 // WM-Variante: +5 OVR over their own base card, every eligible real player from any of the 48 WM
-// nations - a big pool by design (hundreds of players), so the pack has real depth beyond just stars.
-const WM26_VARIANTE_SPECIALS = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS)
-  .filter(c=>!c.isManager && !c.variant && WM26_ALL_NATIONS.includes(c.nat))
-  .map(base=> boostBaseToOv(base, base.ov+5, 50000000+base.id, 'wm26_variante', 'WM-Variante', 'wm26v'));
-WM26_VARIANTE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// nations - a big pool by design (thousands of players), so the pack has real depth beyond just stars.
+function wm26VarianteSpecials(){
+  if(WM26_VARIANTE_SPECIALS_CACHE) return WM26_VARIANTE_SPECIALS_CACHE;
+  WM26_VARIANTE_SPECIALS_CACHE = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS)
+    // a plain base card carries variant:'base' (not undefined/falsy) - !c.variant alone would wrongly
+    // exclude every single one of them, leaving only already-special cards (or nothing at all).
+    .filter(c=>!c.isManager && (!c.variant || c.variant==='base') && WM26_ALL_NATIONS.includes(c.nat))
+    .map(base=> boostBaseToOv(base, base.ov+5, 50000000+base.id, 'wm26_variante', 'WM-Variante', 'wm26v'));
+  WM26_VARIANTE_SPECIALS_CACHE.forEach(p=>BY_ID.set(p.id,p));
+  return WM26_VARIANTE_SPECIALS_CACHE;
+}
+let WM26_KAPITAEN_SPECIALS_CACHE = null;
 // WM-Kapitän: +13 OVR, one flagship player per nation - the "captain" proxy is that nation's own
 // highest-rated real card, same convention already used for the Kapitäne pack above.
-const WM26_KAPITAEN_SPECIALS = WM26_ALL_NATIONS.map(nation=>{
-  const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS).filter(c=>c.nat===nation && !c.isManager && !c.variant);
-  if(!pool.length) return null;
-  const base = pool.reduce((best,c)=> c.ov>best.ov ? c : best, pool[0]);
-  return boostBaseToOv(base, base.ov+13, 60000000+base.id, 'wm26_kapitaen', 'WM-Kapitän', 'wm26k');
-}).filter(Boolean);
-WM26_KAPITAEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+function wm26KapitaenSpecials(){
+  if(WM26_KAPITAEN_SPECIALS_CACHE) return WM26_KAPITAEN_SPECIALS_CACHE;
+  WM26_KAPITAEN_SPECIALS_CACHE = WM26_ALL_NATIONS.map(nation=>{
+    const pool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS).filter(c=>c.nat===nation && !c.isManager && (!c.variant || c.variant==='base'));
+    if(!pool.length) return null;
+    const base = pool.reduce((best,c)=> c.ov>best.ov ? c : best, pool[0]);
+    return boostBaseToOv(base, base.ov+13, 60000000+base.id, 'wm26_kapitaen', 'WM-Kapitän', 'wm26k');
+  }).filter(Boolean);
+  WM26_KAPITAEN_SPECIALS_CACHE.forEach(p=>BY_ID.set(p.id,p));
+  return WM26_KAPITAEN_SPECIALS_CACHE;
+}
 function kronjuwelenByTier(tier){ return KRONJUWELEN_SPECIALS.filter(c=>c.theme===tier); }
 // ===== Wochen Pass exclusive cards: the actual grind incentive, not another pack/coin payout - the
 // level-15 and level-30 rewards only ever exist as these specific rewards, nowhere else. A new real
@@ -7808,9 +7823,10 @@ const PACKS = [
   {id:'worldcuppack',name:'World Cup Pack',cost:0,tier:'ultimate',count:5,hidden:true,
     desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit echter Chance auf einen WM-Kapitän (+13 OVR, ein Spieler pro Nation). Eine Karte ist garantiert der WM-Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
     draw(opts={}){
-      const finalCard = opts.finalNation ? WM26_KAPITAEN_SPECIALS.find(c=>c.nat===opts.finalNation) : null;
-      const rest = Array.from({length:4}, ()=> Math.random()<0.12 ? pick(WM26_KAPITAEN_SPECIALS) : pick(WM26_VARIANTE_SPECIALS));
-      return [finalCard || pick(WM26_KAPITAEN_SPECIALS), ...rest];
+      const kapitaene = wm26KapitaenSpecials(), variante = wm26VarianteSpecials();
+      const finalCard = opts.finalNation ? kapitaene.find(c=>c.nat===opts.finalNation) : null;
+      const rest = Array.from({length:4}, ()=> Math.random()<0.12 ? pick(kapitaene) : pick(variante));
+      return [finalCard || pick(kapitaene), ...rest];
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
     desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
