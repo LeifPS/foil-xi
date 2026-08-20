@@ -6881,7 +6881,7 @@ const WM26_GROUPS = {
   B: ['Canada','Switzerland','Qatar','Bosnia and Herzegovina'],
   C: ['Brazil','Morocco','Scotland','Haiti'],
   D: ['United States','Paraguay','Australia','Türkiye'],
-  E: ['Germany','Curacao','Costa Rica','Ecuador'],
+  E: ['Germany','Curacao','Ecuador',"Côte d'Ivoire"],
   F: ['Netherlands','Japan','Tunisia','Sweden'],
   G: ['Belgium','Egypt','Iran','New Zealand'],
   H: ['Spain','Cabo Verde','Saudi Arabia','Uruguay'],
@@ -7825,7 +7825,7 @@ const PACKS = [
     draw(opts={}){
       const kapitaene = wm26KapitaenSpecials(), variante = wm26VarianteSpecials();
       const finalCard = opts.finalNation ? kapitaene.find(c=>c.nat===opts.finalNation) : null;
-      const rest = Array.from({length:4}, ()=> Math.random()<0.12 ? pick(kapitaene) : pick(variante));
+      const rest = Array.from({length:4}, ()=> Math.random()<0.10 ? pick(kapitaene) : pick(variante));
       return [finalCard || pick(kapitaene), ...rest];
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
@@ -16597,7 +16597,7 @@ const WM26_ENTRY_FEE = 10000;
 // older shape would otherwise crash renderWM26Panel the instant it tries to read a field the new code
 // expects but the old data never had - stamping/checking a version number turns that into a clean
 // "your last run doesn't carry over, start a fresh one" instead of a blank, broken tab.
-const WM26_SCHEMA_VERSION = 5;
+const WM26_SCHEMA_VERSION = 6;
 function wm26CurrentRun(){
   const t = profile.wm26;
   if(t && t.schemaVersion!==WM26_SCHEMA_VERSION){ profile.wm26 = null; sSet('profile', profile); return null; }
@@ -16630,26 +16630,37 @@ function wm26NationXI(nation){
   // A national team is built EXCLUSIVELY from that nation's own real players, strongest available -
   // never a foreign star filling a gap (a thin position group falls back to that SAME nation's best
   // remaining player at any position, not a different country's), even if that means reusing one
-  // player across two slots for a nation with barely any real cards at all. Only if this nation has
-  // LITERALLY ZERO real cards anywhere in the database (a handful of very small federations) is there
-  // nothing at all to build from - that's the one case that has to borrow from the full pool.
-  const pool = natPool.length ? natPool : globalPool;
+  // player across two slots for a nation with barely any real cards at all.
+  //
+  // The one case with nothing at all to build from is a nation with LITERALLY ZERO real cards
+  // anywhere in the database (a handful of very small federations, e.g. Iraq isn't in this game's
+  // roster at all) - that HAS to borrow from the full pool. But borrowing the single best players in
+  // the entire game (Messi, Pelé, Ronaldo, ...) turned every one of these data-less nations into the
+  // strongest, most unbeatable team in the tournament, which is backwards - a nation nobody has real
+  // card data for should play like an unheralded modest side, not an unstoppable all-star XI. So this
+  // fallback instead ranks the full pool by closeness to a modest target rating, not by raw strength.
+  const hasOwnCards = natPool.length>0;
+  const pool = hasOwnCards ? natPool : globalPool;
+  const NO_DATA_FALLBACK_TARGET_OV = 68;
+  const rank = hasOwnCards
+    ? (a,b)=>b.ov-a.ov
+    : (a,b)=>Math.abs(a.ov-NO_DATA_FALLBACK_TARGET_OV)-Math.abs(b.ov-NO_DATA_FALLBACK_TARGET_OV);
   const slots = FORMATIONS['433'].slots;
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
-  Object.values(byGroup).forEach(arr=>arr.sort((a,b)=>b.ov-a.ov));
+  Object.values(byGroup).forEach(arr=>arr.sort(rank));
   const usedNames = new Set(), usedIds = new Set();
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
-    // 1) best unused real person in the right position group, 2) best unused real person anywhere
-    // in the pool, 3) for a nation with fewer unique real people than 11 positions - the next-best
-    // still-unused CARD (a different variant of an already-picked player, rather than nobody left at
-    // all), and only as an absolute last resort (fewer than 11 cards exist for this nation, period)
-    // repeat a card outright, always the strongest one rather than always the exact same fixed pick.
+    // 1) best-ranked unused real person in the right position group, 2) best-ranked unused real
+    // person anywhere in the pool, 3) for a nation with fewer unique real people than 11 positions -
+    // the next-best-ranked still-unused CARD (a different variant of an already-picked player, rather
+    // than nobody left at all), and only as an absolute last resort (fewer than 11 cards exist for
+    // this nation, period) repeat a card outright, always the best-ranked one available.
     const candidate = byGroup[group].find(c=>!usedNames.has(c.n))
-      || pool.filter(c=>!usedNames.has(c.n)).sort((a,b)=>b.ov-a.ov)[0]
-      || pool.filter(c=>!usedIds.has(c.id)).sort((a,b)=>b.ov-a.ov)[0]
-      || pool.slice().sort((a,b)=>b.ov-a.ov)[0];
+      || pool.filter(c=>!usedNames.has(c.n)).sort(rank)[0]
+      || pool.filter(c=>!usedIds.has(c.id)).sort(rank)[0]
+      || pool.slice().sort(rank)[0];
     usedNames.add(candidate.n); usedIds.add(candidate.id);
     return candidate;
   });
