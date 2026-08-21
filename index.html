@@ -7195,9 +7195,21 @@ async function initFirebase(){
     const app = appMod.initializeApp(FIREBASE_CONFIG);
     const db = fsMod.getFirestore(app);
     const auth = authMod.getAuth(app);
-    // connectivity probe - if this fails/hangs we fall back to local mode. Firestore's limit()
-    // requires a positive integer (limit(0) throws), so this costs at most 1 read per session.
-    await withTimeout(fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1))), 6000);
+    // connectivity probe - if this fails/hangs we fall back to local mode for the rest of the
+    // session (there's no later retry). A single 6s attempt meant one transient blip (a slow cold
+    // connection, a brief network hiccup) was enough to drop the whole session into offline mode
+    // even though the backend was actually fine a moment later - "goes down for no reason". One
+    // retry after a short pause absorbs exactly that kind of one-off flakiness while still failing
+    // fast on a genuine outage. Firestore's limit() requires a positive integer (limit(0) throws),
+    // so this costs at most 2 reads per session.
+    const probe = ()=> fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1)));
+    try{
+      await withTimeout(probe(), 7000);
+    }catch(e){
+      console.warn('Firestore connectivity probe failed once, retrying:', e);
+      await new Promise(r=>setTimeout(r, 1200));
+      await withTimeout(probe(), 7000);
+    }
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
       getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
       updateDoc:fsMod.updateDoc, increment:fsMod.increment, runTransaction:fsMod.runTransaction,
@@ -10856,21 +10868,28 @@ function allSquadNames(excludeSlotKey){ // name -> uid, across the starting XI, 
 
 
 // ===== single-device session lock =====
-// Prevents the same club account being played on two devices/tabs at once, which causes save
+// Prevents the same club account being played on two devices/browsers at once, which causes save
 // conflicts (last write wins, so simultaneous play silently drops progress on one side). Whoever
-// signs in writes {id, ts} to the 'session' key and refreshes ts on a heartbeat; a second device
-// signing in sees a fresh, different id and is blocked. If a session goes stale (tab closed/crashed,
-// no heartbeat for a while) it's considered abandoned and the next sign-in is allowed to take over.
-// The id is persisted in sessionStorage (survives a reload of THIS tab, never carries over to a new
-// tab/device) so reloading the page reclaims the same session instantly instead of looking like a
-// second device and having to wait out the full staleness window - releaseSession() on pagehide is
-// only best-effort (the write is often cut off mid-flight by the navigation), so without this a plain
-// refresh routinely got stuck behind SESSION_STALE_MS.
+// signs in writes {id, ts} to the 'session' key and refreshes ts on a heartbeat; a genuinely
+// different device/browser signing in sees a fresh, different id and is blocked. If a session goes
+// stale (tab closed/crashed, no heartbeat for a while) it's considered abandoned and the next
+// sign-in is allowed to take over.
+// The id is persisted in localStorage (shared by every tab of this SAME browser on this SAME
+// device, and survives reloads) rather than sessionStorage (which is scoped to one single tab) -
+// this used to mean opening the game in a fresh tab, or any reload that lands in what the browser
+// treats as a "new" tab (bookmark opened in a new tab, a backgrounded mobile tab getting discarded
+// and reloaded, restoring tabs after a browser restart...), generated a brand new id and looked
+// exactly like a second device, throwing up "Bereits aktiv" and forcing a manual unlock even though
+// it was still just the one person on the one device. localStorage fixes that false-positive while
+// still blocking an actually different device/browser (which has its own separate localStorage).
+// The one thing this gives up is detecting two tabs of the SAME browser open at once - both now
+// share this same id and heartbeat together instead of the second one being blocked - a much rarer
+// and lower-stakes case than the reload false-positive this was actually causing daily friction with.
 function genSessionId(){ return crypto.randomUUID ? crypto.randomUUID() : 'sess-'+Date.now()+'-'+Math.random().toString(36).slice(2); }
 const mySessionId = (function(){
   try{
-    let id = sessionStorage.getItem('foil11-session-id');
-    if(!id){ id = genSessionId(); sessionStorage.setItem('foil11-session-id', id); }
+    let id = localStorage.getItem('foil11-session-id');
+    if(!id){ id = genSessionId(); localStorage.setItem('foil11-session-id', id); }
     return id;
   }catch(e){ return genSessionId(); }
 })();
