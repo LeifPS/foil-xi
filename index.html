@@ -1285,6 +1285,23 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 /* ---- modal / pack opening ---- */
 .modal-overlay{position:fixed;inset:0;background:rgba(4,5,8,.86);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
 .modal-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:960px;width:100%;max-height:88vh;overflow:auto;}
+
+/* ---- login / entry gate ---- */
+.gate-overlay{background:radial-gradient(circle at 50% 20%,#132018 0%,#080a0f 62%);}
+.gate-box{background:linear-gradient(180deg,var(--panel),var(--void));border:1px solid var(--line);border-radius:20px;padding:32px 28px 26px;max-width:380px;width:100%;text-align:center;box-shadow:0 30px 70px -25px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.02) inset;}
+.gate-mark{width:56px;height:56px;margin:0 auto 16px;border-radius:14px;background:linear-gradient(145deg,var(--turf-bright),var(--turf));display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:26px;color:#eafff2;box-shadow:0 0 0 1px rgba(255,255,255,.1) inset,0 10px 24px -10px rgba(47,157,103,.6);}
+.gate-box h2{font-size:22px;letter-spacing:.02em;margin-bottom:6px;}
+.gate-box .hint{color:var(--muted);font-size:13px;line-height:1.5;}
+.gate-field{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:10px;transition:border-color .15s,box-shadow .15s;}
+.gate-field:focus{outline:none;border-color:var(--turf-bright);box-shadow:0 0 0 3px rgba(47,157,103,.18);}
+.gate-btn{width:100%;background:linear-gradient(145deg,var(--turf-bright),var(--turf));color:#eafff2;padding:12px;border-radius:10px;font-weight:700;font-size:14px;text-align:center;letter-spacing:.01em;transition:filter .15s,transform .15s;}
+.gate-btn:hover:not(:disabled){filter:brightness(1.08);}
+.gate-btn:disabled{opacity:.6;cursor:default;}
+.gate-btn-secondary{width:100%;margin-top:8px;background:transparent;border:1px solid var(--line);color:var(--muted);padding:11px;border-radius:10px;font-weight:600;font-size:13px;text-align:center;}
+.gate-btn-secondary:hover{color:var(--chalk);border-color:var(--muted);}
+.gate-check{display:flex;align-items:center;gap:8px;margin:2px 0 14px;text-align:left;font-size:12.5px;color:var(--muted);cursor:pointer;user-select:none;}
+.gate-check input{accent-color:var(--turf-bright);width:15px;height:15px;cursor:pointer;flex-shrink:0;}
+.gate-err{color:var(--danger);min-height:14px;font-size:12.5px;margin-top:10px;}
 .reveal-strip{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;padding:20px 0;}
 .pack-visual-wrap{display:flex;justify-content:center;padding:18px 0 14px;position:relative;}
 .pack-visual{width:240px;height:324px;border-radius:18px;position:relative;cursor:pointer;overflow:hidden;
@@ -7153,6 +7170,7 @@ const FIREBASE_CONFIG = {
 };
 const FB_VERSION = '10.13.2';
 let fb = null; // set to {db, collection, doc, setDoc, getDoc, getDocs, query, orderBy, limit} when available
+let restoredAuthUser = null; // Firebase's own already-persisted signed-in user (or null), set once initFirebase resolves
 // ===== read cache: dedupes Firestore reads within a short TTL window (rapid tab-switching, repeated
 // calls to things like getExternalLockedUids) without ever serving genuinely stale data for long =====
 const _readCache = new Map(); // key -> {ts, data}
@@ -7185,7 +7203,21 @@ async function initFirebase(){
       updateDoc:fsMod.updateDoc, increment:fsMod.increment, runTransaction:fsMod.runTransaction,
       arrayUnion:fsMod.arrayUnion, arrayRemove:fsMod.arrayRemove,
       auth, createUserWithEmailAndPassword:authMod.createUserWithEmailAndPassword,
-      signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signOut:authMod.signOut};
+      signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signOut:authMod.signOut,
+      setPersistence:authMod.setPersistence, browserLocalPersistence:authMod.browserLocalPersistence,
+      browserSessionPersistence:authMod.browserSessionPersistence, onAuthStateChanged:authMod.onAuthStateChanged};
+    // Firebase already persists a signed-in session across reloads on its own (indexedDB, not
+    // anything this app writes) - this app just never checked for it before booting, so it re-asked
+    // for the password on every single visit even though the browser was already holding a valid
+    // session. restoredAuthUser resolves once with whatever Firebase already had on disk (or null),
+    // so boot() can skip straight past the password screen for a "kept me signed in" browser -
+    // exactly what was being asked for via a "remember credentials" checkbox, but without ever
+    // putting the actual password into localStorage/anywhere JS-readable (a real XSS or malicious
+    // extension there would mean full account takeover; letting Firebase's own auth SDK hold the
+    // session is the standard, safe way to do this).
+    restoredAuthUser = await new Promise(res=>{
+      const unsub = authMod.onAuthStateChanged(auth, user=>{ unsub(); res(user); });
+    });
     return true;
   }catch(e){
     console.warn('Firebase backend unavailable, using local shared storage fallback:', e);
@@ -11099,14 +11131,15 @@ function showEntryGate(prefill){
   const root = document.getElementById('modal-root');
   const nosaveBanner = NOSAVE_MODE ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);">Ohne-Speicherung-Modus: nur Test-Accounts k\u00f6nnen sich anmelden.</p>` : '';
   root.innerHTML = `
-    <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
-      <div class="modal-box" style="max-width:380px;text-align:center;">
-        <h2 style="margin-bottom:8px;">Willkommen bei FOIL ELEVEN</h2>
+    <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
+      <div class="gate-box">
+        <div class="gate-mark">11</div>
+        <h2>Willkommen bei FOIL ELEVEN</h2>
         ${nosaveBanner}
-        <p class="hint" style="margin-top:0;margin-bottom:16px;">W\u00e4hle einen Vereinsnamen. Er wird Teil deiner Seiten-URL, damit ein Lesezeichen oder Neuladen dieser genauen Seite automatisch denselben Spielstand l\u00e4dt \u2014 ganz ohne Browser-Speicher.</p>
-        <input id="gate-input" placeholder="z. B. galaxyfc92" value="${prefill||''}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
-        <button class="action-btn" id="gate-submit" style="width:100%;">Verein betreten</button>
-        <p class="hint" id="gate-err" style="color:var(--danger);min-height:14px;"></p>
+        <p class="hint" style="margin-top:0;margin-bottom:18px;">W\u00e4hle einen Vereinsnamen. Er wird Teil deiner Seiten-URL, damit ein Lesezeichen oder Neuladen dieser genauen Seite automatisch denselben Spielstand l\u00e4dt.</p>
+        <input id="gate-input" class="gate-field" placeholder="z. B. galaxyfc92" value="${prefill||''}" autocomplete="username">
+        <button class="gate-btn" id="gate-submit">Verein betreten</button>
+        <p class="gate-err" id="gate-err"></p>
       </div>
     </div>`;
   const submit = async ()=>{
@@ -11118,6 +11151,46 @@ function showEntryGate(prefill){
   document.getElementById('gate-submit').addEventListener('click', submit);
   document.getElementById('gate-input').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
   document.getElementById('gate-input').focus();
+}
+// Applies the "Angemeldet bleiben" choice before the actual sign-in/sign-up call: local persistence
+// (Firebase's own indexedDB-backed session, survives closing the browser) when checked, session-only
+// (cleared the moment the tab/browser closes) when not. Either way the real password itself is never
+// written anywhere by this app - Firebase's SDK is the only thing holding the credential.
+async function applyGatePersistence(keepSignedIn){
+  if(!fb.setPersistence) return;
+  try{ await fb.setPersistence(fb.auth, keepSignedIn ? fb.browserLocalPersistence : fb.browserSessionPersistence); }
+  catch(e){ console.warn('setPersistence failed', e); }
+}
+// Shared tail end of both sign-up and sign-in: claim the single-session lock, start the heartbeat,
+// and boot into the actual game. Returns false (without starting init()) if another tab/device
+// already holds this club's session.
+async function finishSignIn(id){
+  if(!(await claimSession())){
+    try{ await fb.signOut(fb.auth); }catch(e2){}
+    showSessionBlockedModal(id);
+    return false;
+  }
+  startSessionHeartbeat();
+  document.getElementById('modal-root').innerHTML = '';
+  await init();
+  return true;
+}
+// Called once at boot when Firebase already had a persisted, still-valid signed-in session on disk
+// (see restoredAuthUser in initFirebase) - skips the club-name AND password screens entirely and
+// drops straight into the game, exactly like a "remember me" checkbox would, without this app ever
+// having touched the password itself.
+async function resumeAuthedSession(user){
+  const email = user.email || '';
+  if(!email.endsWith(CLUB_AUTH_DOMAIN)){ showEntryGate(); return; }
+  const id = email.slice(0, -CLUB_AUTH_DOMAIN.length);
+  if(NOSAVE_MODE && !NOSAVE_ALLOWED_IDS.has(id)){
+    try{ await fb.signOut(fb.auth); }catch(e){}
+    showEntryGate();
+    return;
+  }
+  clubId = id;
+  try{ history.replaceState(null, '', location.pathname + '?club=' + encodeURIComponent(id)); }catch(e){}
+  await finishSignIn(id);
 }
 async function proceedWithClubId(id){
   if(NOSAVE_MODE && !NOSAVE_ALLOWED_IDS.has(id)){
@@ -11148,35 +11221,32 @@ async function proceedWithClubId(id){
 function showSetPasswordModal(id){
   const root = document.getElementById('modal-root');
   root.innerHTML = `
-    <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
-      <div class="modal-box" style="max-width:380px;text-align:center;">
-        <h2 style="margin-bottom:8px;">Passwort f\u00fcr "${id}" festlegen</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:16px;">Dieser Verein hat noch kein Passwort \u2014 lege jetzt eins fest, um ihn ab sofort zu sch\u00fctzen. Merke es dir gut, es gibt keine Wiederherstellung.</p>
-        <input id="pw-input1" type="password" placeholder="Neues Passwort (mind. 6 Zeichen)" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:10px;">
-        <input id="pw-input2" type="password" placeholder="Passwort wiederholen" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
-        <button class="action-btn" id="pw-submit" style="width:100%;">Passwort festlegen</button>
-        <button class="action-btn secondary" id="pw-back" style="width:100%;margin-top:8px;">Anderen Verein w\u00e4hlen</button>
-        <p class="hint" id="pw-err" style="color:var(--danger);min-height:14px;"></p>
+    <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
+      <div class="gate-box">
+        <div class="gate-mark">11</div>
+        <h2>Passwort f\u00fcr "${id}" festlegen</h2>
+        <p class="hint" style="margin-top:6px;margin-bottom:16px;">Dieser Verein hat noch kein Passwort \u2014 lege jetzt eins fest, um ihn ab sofort zu sch\u00fctzen. Merke es dir gut, es gibt keine Wiederherstellung.</p>
+        <input id="pw-input1" type="password" class="gate-field" placeholder="Neues Passwort (mind. 6 Zeichen)" autocomplete="new-password">
+        <input id="pw-input2" type="password" class="gate-field" placeholder="Passwort wiederholen" autocomplete="new-password">
+        <label class="gate-check"><input type="checkbox" id="pw-remember" checked> Angemeldet bleiben (auf diesem Ger\u00e4t nicht erneut nach dem Passwort fragen)</label>
+        <button class="gate-btn" id="pw-submit">Passwort festlegen</button>
+        <button class="gate-btn-secondary" id="pw-back">Anderen Verein w\u00e4hlen</button>
+        <p class="gate-err" id="pw-err"></p>
       </div>
     </div>`;
   document.getElementById('pw-back').addEventListener('click', ()=>showEntryGate(id));
   const submit = async (e)=>{
     const p1 = document.getElementById('pw-input1').value;
     const p2 = document.getElementById('pw-input2').value;
+    const keepSignedIn = document.getElementById('pw-remember').checked;
     const errEl = document.getElementById('pw-err');
     if(p1.length<6){ errEl.textContent = 'Passwort muss mindestens 6 Zeichen haben.'; return; }
     if(p1!==p2){ errEl.textContent = 'Die Passw\u00f6rter stimmen nicht \u00fcberein.'; return; }
     e.target.disabled = true;
     try{
+      await applyGatePersistence(keepSignedIn);
       await fb.createUserWithEmailAndPassword(fb.auth, clubAuthEmail(id), p1);
-      if(!(await claimSession())){
-        try{ await fb.signOut(fb.auth); }catch(e2){}
-        showSessionBlockedModal(id);
-        return;
-      }
-      startSessionHeartbeat();
-      document.getElementById('modal-root').innerHTML = '';
-      await init();
+      if(!(await finishSignIn(id))) return;
       profile.hasPassword = true;
       await sSet('profile', profile);
       try{ await fb.setDoc(fb.doc(fb.db,'clubRegistry',id), {hasPassword:true}); }catch(e){ console.warn('registry write failed', e); }
@@ -11195,32 +11265,29 @@ function showSetPasswordModal(id){
 function showSignInModal(id){
   const root = document.getElementById('modal-root');
   root.innerHTML = `
-    <div class="modal-overlay" id="gate-overlay" style="cursor:default;">
-      <div class="modal-box" style="max-width:380px;text-align:center;">
-        <h2 style="margin-bottom:8px;">"${id}" \u2014 Passwort eingeben</h2>
-        <p class="hint" style="margin-top:0;margin-bottom:16px;">Dieser Verein ist passwortgesch\u00fctzt.</p>
-        <input id="pw-input" type="password" placeholder="Passwort" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:11px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
-        <button class="action-btn" id="pw-submit" style="width:100%;">Anmelden</button>
-        <button class="action-btn secondary" id="pw-back" style="width:100%;margin-top:8px;">Anderen Verein w\u00e4hlen</button>
-        <p class="hint" id="pw-err" style="color:var(--danger);min-height:14px;"></p>
+    <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
+      <div class="gate-box">
+        <div class="gate-mark">11</div>
+        <h2>"${id}" \u2014 Passwort eingeben</h2>
+        <p class="hint" style="margin-top:6px;margin-bottom:16px;">Dieser Verein ist passwortgesch\u00fctzt.</p>
+        <input id="pw-input" type="password" class="gate-field" placeholder="Passwort" autocomplete="current-password">
+        <label class="gate-check"><input type="checkbox" id="pw-remember" checked> Angemeldet bleiben (auf diesem Ger\u00e4t nicht erneut nach dem Passwort fragen)</label>
+        <button class="gate-btn" id="pw-submit">Anmelden</button>
+        <button class="gate-btn-secondary" id="pw-back">Anderen Verein w\u00e4hlen</button>
+        <p class="gate-err" id="pw-err"></p>
       </div>
     </div>`;
   document.getElementById('pw-back').addEventListener('click', ()=>showEntryGate(id));
   const submit = async (e)=>{
     const pw = document.getElementById('pw-input').value;
+    const keepSignedIn = document.getElementById('pw-remember').checked;
     const errEl = document.getElementById('pw-err');
     if(!pw){ errEl.textContent = 'Bitte Passwort eingeben.'; return; }
     e.target.disabled = true;
     try{
+      await applyGatePersistence(keepSignedIn);
       await fb.signInWithEmailAndPassword(fb.auth, clubAuthEmail(id), pw);
-      if(!(await claimSession())){
-        try{ await fb.signOut(fb.auth); }catch(e2){}
-        showSessionBlockedModal(id);
-        return;
-      }
-      startSessionHeartbeat();
-      document.getElementById('modal-root').innerHTML = '';
-      await init();
+      if(!(await finishSignIn(id))) return;
       // self-heal: if an earlier registry write failed (e.g. the rule wasn't live yet), fix it now that we're authenticated
       try{ await fb.setDoc(fb.doc(fb.db,'clubRegistry',id), {hasPassword:true}); }catch(e){ console.warn('registry heal failed', e); }
     }catch(err){
@@ -11240,7 +11307,12 @@ async function switchClub(){
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
   showEntryGate();
 }
-function boot(){
+async function boot(){
+  await fbReady;
+  // If the browser already holds a valid Firebase-persisted session (see restoredAuthUser in
+  // initFirebase), resume it straight away - overrides any ?club= in the URL, since a kept-signed-in
+  // browser should never be dropped back to a stale bookmarked club or the empty entry gate.
+  if(fb && restoredAuthUser){ await resumeAuthedSession(restoredAuthUser); return; }
   let fromUrl = null;
   try{ fromUrl = new URLSearchParams(location.search).get('club'); }catch(e){}
   if(fromUrl){
