@@ -15191,10 +15191,57 @@ function liveRevealExtra(a, b, md, tier){
   const liveMd = JSON.parse(JSON.stringify(md));
   return {needsLiveReveal:true, liveRevealed:false, tier, liveMd, mid:genId()};
 }
+// Classic tournament-seeding placement (the same scheme real cup draws and tennis brackets use):
+// seed 1 and seed 2 can only ever meet in the final, seeds {1,2,3,4} land in four different quarters,
+// and so on recursively - the strongest entrants are mathematically as far apart as the bracket size
+// allows. Only valid for a power-of-two n (true for every singleElim/doubleElim/groupToElim KO size).
+function standardSeedOrder(n){
+  let seeds = [1];
+  while(seeds.length < n){
+    const m = seeds.length*2;
+    const next = [];
+    seeds.forEach(s=> next.push(s, m+1-s));
+    seeds = next;
+  }
+  return seeds;
+}
+// Ranks participants for seeding: real humans first (by their own rating, strongest first), then bot
+// fillers (also by rating). Combined with standardSeedOrder, this gives humans the most-separated seed
+// slots FIRST - so real players land in different bracket quarters/eighths before rating is even
+// considered - while still seeding within each group by strength, so the strongest entrants (bot or
+// human) meet as late as possible exactly as requested: "echte Spieler besser durchmischen... die
+// besten Spieler (auch CPUs) möglichst spät aufeinandertreffen".
+function rankParticipantsForSeeding(participants){
+  const humans = participants.filter(p=>!p.isBot).sort((a,b)=>b.rating-a.rating);
+  const bots = participants.filter(p=>p.isBot).sort((a,b)=>b.rating-a.rating);
+  return humans.concat(bots);
+}
+function seedParticipantsForBracket(participants){
+  const ranked = rankParticipantsForSeeding(participants);
+  const order = standardSeedOrder(participants.length);
+  return order.map(seedRank => ranked[seedRank-1]);
+}
+// Snake-draft group assignment (the same "pot" method real World Cup draws use): pass 1 hands out
+// ranks 1..numGroups to different groups, pass 2 continues in reverse group order, etc. - since
+// rankParticipantsForSeeding puts every human ahead of every bot, this guarantees each group gets at
+// most one human before any group gets a second, and groups are balanced by strength on top of that.
+function seedIntoGroups(participants, numGroups){
+  const ranked = rankParticipantsForSeeding(participants);
+  const groups = Array.from({length:numGroups}, ()=>[]);
+  const groupOrder = Array.from({length:numGroups}, (_,g)=>g);
+  let i = 0, pass = 0;
+  while(i < ranked.length){
+    const order = pass%2===0 ? groupOrder : groupOrder.slice().reverse();
+    for(const g of order){
+      if(i>=ranked.length) break;
+      groups[g].push(ranked[i]); i++;
+    }
+    pass++;
+  }
+  return groups;
+}
 function simulateSingleElimBracket(participants){
-  const shuffled = participants.slice();
-  for(let i=shuffled.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]; }
-  let round = shuffled;
+  let round = seedParticipantsForBracket(participants);
   const rounds = [];
   while(round.length>1){
     const isFinal = round.length===2, isSemi = round.length===4;
@@ -15213,10 +15260,8 @@ function simulateSingleElimBracket(participants){
   return {rounds, winnerUserId:round[0].userId, winnerName:round[0].name, ...runnerUpFromFinalMatch(rounds)};
 }
 function simulateDoubleElimBracket(participants){
-  const shuffled = participants.slice();
-  for(let i=shuffled.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]; }
   const rounds = [];
-  let winnersRound = shuffled;
+  let winnersRound = seedParticipantsForBracket(participants);
   let losersRound = [];
   let roundNum = 0;
   while(winnersRound.length>1 || losersRound.length>0){
@@ -15267,16 +15312,7 @@ function simulateDoubleElimBracket(participants){
 }
 function simulateGroupStageBracket(participants){
   const numGroups = participants.length<=8 ? 2 : 4;
-  const groupSize = Math.ceil(participants.length / numGroups);
-  const groups = [];
-  let idx = 0;
-  for(let g=0;g<numGroups;g++){
-    const group = [];
-    for(let i=0;i<groupSize && idx<participants.length;i++, idx++){
-      group.push(participants[idx]);
-    }
-    groups.push(group);
-  }
+  const groups = seedIntoGroups(participants, numGroups);
   const rounds = [];
   const groupRoundResults = [];
   groups.forEach((group, groupIdx)=>{
@@ -15297,7 +15333,7 @@ function simulateGroupStageBracket(participants){
     }
     standings.sort((a,b)=>b.wins-a.wins || (b.goals-b.goalsAgainst)-(a.goals-a.goalsAgainst));
     groupRoundResults.push({groupIdx, standings, groupMatches});
-    rounds.push({matches: groupMatches, stage: `Gruppe ${String.fromCharCode(65+groupIdx)}`, standings: standings.slice(0, 3), isGroupStage: true});
+    rounds.push({matches: groupMatches, stage: `Gruppe ${String.fromCharCode(65+groupIdx)}`, standings, isGroupStage: true});
   });
   // Knockout from top 2 of each group
   const knockoutParticipants = groupRoundResults.flatMap(r=>r.standings.slice(0, 2));
@@ -15715,6 +15751,12 @@ async function startHostedTournament(id){
     loadMyTournamentResults();
   }catch(e){ console.warn('start tournament failed', e); toast('Turnier konnte nicht gestartet werden.'); }
 }
+// True while at least one needsLiveReveal match among the given rounds hasn't actually been played
+// yet - used to hold a tournament back from 'completed' (and its winner banner) until every human
+// gets to click through their own live final/semifinal, not just see the number appear.
+function hasPendingLiveMatches(rounds){
+  return (rounds||[]).some(r=>(r.matches||[]).some(m=>m.needsLiveReveal && !m.liveRevealed));
+}
 async function advanceHostedTournamentRound(id, opts={}){
   const silent = !!opts.silent;
   await fbReady;
@@ -15737,7 +15779,7 @@ async function advanceHostedTournamentRound(id, opts={}){
         if(t.hostUserId!==profile.userId){ result='not-host'; return; }
         const totalRounds = (t.rounds||[]).length;
         const current = Math.min(Math.max(0, t.visibleRounds||0), totalRounds);
-        if(current>=totalRounds){ result='already-complete'; return; }
+        if(current>=totalRounds){ result = hasPendingLiveMatches(t.rounds) ? 'waiting-live' : 'already-complete'; return; }
         const nextVisible = current + 1;
         // Prize settlement (bot refunds, prizeClaimed/runnerUpPrizeClaimed) already happened the
         // instant the tournament left 'registering' (see prepareHostedTournamentRun's callers) - the
@@ -15745,10 +15787,16 @@ async function advanceHostedTournamentRound(id, opts={}){
         // "Advancing" here only reveals more of an already-settled result, so this must NOT touch
         // coins or claimed-flags again: doing so used to pay a bot-won prize out to the host TWICE
         // (once at the running transition, once more here on completion) for exactly the same win.
+        // A round is only allowed to close out the tournament (status:'completed', winner banner
+        // shown everywhere) once every needsLiveReveal match up to and including it has actually been
+        // played - otherwise the outcome would leak to spectators before anyone clicks "live spielen"
+        // on their own final/semifinal. playTournamentLiveMatch flips it to 'completed' once that
+        // last pending live match finally gets played.
+        const stillPending = hasPendingLiveMatches(t.rounds.slice(0, nextVisible));
         const updates = {visibleRounds: nextVisible};
-        if(nextVisible>=totalRounds) updates.status = 'completed';
+        if(nextVisible>=totalRounds && !stillPending) updates.status = 'completed';
         tx.update(ref, updates);
-        result = nextVisible>=totalRounds ? 'completed' : 'advanced';
+        result = nextVisible>=totalRounds ? (stillPending ? 'waiting-live' : 'completed') : 'advanced';
       });
     } else {
       const snap = await fb.getDoc(ref);
@@ -15760,7 +15808,7 @@ async function advanceHostedTournamentRound(id, opts={}){
         else{
           const totalRounds = (t.rounds||[]).length;
           const current = Math.min(Math.max(0, t.visibleRounds||0), totalRounds);
-          if(current>=totalRounds){ result='already-complete'; }
+          if(current>=totalRounds){ result = hasPendingLiveMatches(t.rounds) ? 'waiting-live' : 'already-complete'; }
           else{
             const nextVisible = current + 1;
             // Settlement already happened at the running-transition (see joinHostedTournament/
@@ -15769,10 +15817,11 @@ async function advanceHostedTournamentRound(id, opts={}){
             // currently logged-in caller's OWN account - since anyone (not just the host) can trigger
             // this tick, that paid a bot-won prize to whoever happened to click "next round" instead
             // of the host, on top of already double-paying the host via the transaction path above.
+            const stillPending = hasPendingLiveMatches(t.rounds.slice(0, nextVisible));
             const updates = {...t, visibleRounds: nextVisible};
-            if(nextVisible>=totalRounds) updates.status='completed';
+            if(nextVisible>=totalRounds && !stillPending) updates.status='completed';
             await fb.setDoc(ref, updates);
-            result = nextVisible>=totalRounds ? 'completed' : 'advanced';
+            result = nextVisible>=totalRounds ? (stillPending ? 'waiting-live' : 'completed') : 'advanced';
           }
         }
       }
@@ -15783,6 +15832,7 @@ async function advanceHostedTournamentRound(id, opts={}){
       else if(result==='not-host') toast('Nur der Veranstalter kann die n\u00e4chste Runde enth\u00fcllen.');
       else if(result==='already-complete') toast('Turnier ist bereits abgeschlossen.');
       else if(result==='advanced') toast('N\u00e4chste Runde enth\u00fcllt.');
+      else if(result==='waiting-live') toast('Alle Runden enth\u00fcllt \u2014 wartet noch auf die Live-Spiele.');
       else if(result==='completed') toast('Turnier abgeschlossen!');
     }
     invalidateReadCache('open-tournaments');
@@ -16012,6 +16062,8 @@ function renderBracketModalContent(t){
       } else {
         html += `<p class="hint" style="margin:8px 0 14px;">Der Veranstalter enth\u00fcllt die n\u00e4chste Runde, wenn er bereit ist.</p>`;
       }
+    } else if(hasPendingLiveMatches(visibleRounds)){
+      html += `<p class="hint" style="margin:8px 0 14px;">Alle Runden enth\u00fcllt \u2014 der Sieger steht erst fest, sobald die letzten Live-Spiele gespielt wurden.</p>`;
     }
   }
 
@@ -16094,17 +16146,29 @@ function renderBracketModalContent(t){
     });
   }
 }
+// Cheap fingerprint of everything renderBracketModalContent actually depends on - used so the auto-
+// refresh loop below can skip re-rendering (and thus skip resetting the modal's scroll position back
+// to the top) on every single poll, and only rebuild the DOM when the host has genuinely revealed a
+// round, the status changed, or a live match got played.
+function bracketRenderSignature(t){
+  return t.status+'|'+(t.visibleRounds||0)+'|'+(t.rounds||[]).map(r=>(r.matches||[]).map(m=>m.liveRevealed?'1':'0').join('')).join(';');
+}
+let bracketAutoAdvanceSignature = null;
 function showBracketModal(t){
   // Only one bracket modal (and one refresh loop) is ever meaningfully open at a time - stop any
   // previous loop before starting fresh, so re-rendering never stacks up timers.
   stopBracketAutoAdvance();
   renderBracketModalContent(t);
+  bracketAutoAdvanceSignature = bracketRenderSignature(t);
   if(t.status==='running'){
     // This loop only ever RE-READS and re-renders - it never calls advanceHostedTournamentRound
     // itself. Revealing a round is now an explicit host action (the "Nächste Runde starten" button
     // in renderBracketModalContent), not something that happens on its own - this timer exists purely
     // so a spectator watching the bracket sees the host's own clicks land, without needing to
-    // close and reopen the modal themselves.
+    // close and reopen the modal themselves. It used to re-render UNCONDITIONALLY every 4s, which blew
+    // away the modal's scroll position (and any open sub-state) even when literally nothing had
+    // changed since the last poll - the "keeps refreshing and jumping back up" complaint. Now it only
+    // rebuilds the DOM when the fetched doc's fingerprint actually differs from what's on screen.
     bracketAutoAdvanceTournamentId = t.id;
     bracketAutoAdvanceTimer = setInterval(async ()=>{
       if(!document.getElementById('bracket-close') || bracketAutoAdvanceTournamentId!==t.id){ stopBracketAutoAdvance(); return; }
@@ -16114,7 +16178,11 @@ function showBracketModal(t){
         const snap = await fb.getDoc(fb.doc(fb.db,'tournaments', t.id));
         if(snap.exists() && document.getElementById('bracket-close') && bracketAutoAdvanceTournamentId===t.id){
           const fresh = normalizeTournamentDoc(snap.data());
-          renderBracketModalContent(fresh);
+          const sig = bracketRenderSignature(fresh);
+          if(sig!==bracketAutoAdvanceSignature){
+            bracketAutoAdvanceSignature = sig;
+            renderBracketModalContent(fresh);
+          }
           if(fresh.status==='completed') stopBracketAutoAdvance();
         }
       }catch(e){ console.warn('bracket refresh failed', e); }
@@ -16169,9 +16237,33 @@ async function playTournamentLiveMatch(tournamentId, mid){
     inMatch = false;
   }
   try{
-    const rounds2 = t.rounds.map((round,ri)=> ri!==roundIdx ? round : {...round, matches: round.matches.map((mm,mi)=> mi!==matchIdx ? mm : {...mm, liveRevealed:true})});
-    await fb.setDoc(ref, {rounds: rounds2}, {merge:true});
+    // Marking this match liveRevealed AND deciding whether it was the LAST pending live match (in
+    // which case the tournament can finally flip to 'completed') needs to happen against the latest
+    // doc, inside one transaction - two finalists clicking "live spielen" for their own final within
+    // moments of each other must not race and leave the tournament stuck 'running' forever, or one of
+    // them silently overwrite the other's liveRevealed flag.
+    if(fb.runTransaction){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const freshSnap = await tx.get(ref);
+        if(!freshSnap.exists()) return;
+        const fresh = normalizeTournamentDoc(freshSnap.data());
+        const rounds2 = fresh.rounds.map((round,ri)=> ri!==roundIdx ? round : {...round, matches: round.matches.map((mm,mi)=> mi!==matchIdx ? mm : {...mm, liveRevealed:true})});
+        const totalRounds = rounds2.length;
+        const allRevealed = (fresh.visibleRounds||0) >= totalRounds;
+        const updates = {rounds: rounds2};
+        if(allRevealed && !hasPendingLiveMatches(rounds2)) updates.status = 'completed';
+        tx.update(ref, updates);
+      });
+    } else {
+      const rounds2 = t.rounds.map((round,ri)=> ri!==roundIdx ? round : {...round, matches: round.matches.map((mm,mi)=> mi!==matchIdx ? mm : {...mm, liveRevealed:true})});
+      const totalRounds = rounds2.length;
+      const allRevealed = (t.visibleRounds||0) >= totalRounds;
+      const updates = {rounds: rounds2};
+      if(allRevealed && !hasPendingLiveMatches(rounds2)) updates.status = 'completed';
+      await fb.setDoc(ref, updates, {merge:true});
+    }
     invalidateReadCache('open-tournaments');
+    invalidateReadCache('my-tournament-results:'+profile.userId);
     const freshSnap = await fb.getDoc(ref);
     showBracketModal(freshSnap.exists() ? normalizeTournamentDoc(freshSnap.data()) : t);
   }catch(e){ console.warn('mark liveRevealed failed', e); showBracketModal(t); }
