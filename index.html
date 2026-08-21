@@ -10868,28 +10868,21 @@ function allSquadNames(excludeSlotKey){ // name -> uid, across the starting XI, 
 
 
 // ===== single-device session lock =====
-// Prevents the same club account being played on two devices/browsers at once, which causes save
+// Prevents the same club account being played on two tabs or two devices at once, which causes save
 // conflicts (last write wins, so simultaneous play silently drops progress on one side). Whoever
-// signs in writes {id, ts} to the 'session' key and refreshes ts on a heartbeat; a genuinely
-// different device/browser signing in sees a fresh, different id and is blocked. If a session goes
-// stale (tab closed/crashed, no heartbeat for a while) it's considered abandoned and the next
-// sign-in is allowed to take over.
-// The id is persisted in localStorage (shared by every tab of this SAME browser on this SAME
-// device, and survives reloads) rather than sessionStorage (which is scoped to one single tab) -
-// this used to mean opening the game in a fresh tab, or any reload that lands in what the browser
-// treats as a "new" tab (bookmark opened in a new tab, a backgrounded mobile tab getting discarded
-// and reloaded, restoring tabs after a browser restart...), generated a brand new id and looked
-// exactly like a second device, throwing up "Bereits aktiv" and forcing a manual unlock even though
-// it was still just the one person on the one device. localStorage fixes that false-positive while
-// still blocking an actually different device/browser (which has its own separate localStorage).
-// The one thing this gives up is detecting two tabs of the SAME browser open at once - both now
-// share this same id and heartbeat together instead of the second one being blocked - a much rarer
-// and lower-stakes case than the reload false-positive this was actually causing daily friction with.
+// signs in writes {id, ts} to the 'session' key and refreshes ts on a heartbeat; a second tab or a
+// different device signing in sees a fresh, different id and is blocked - deliberately, that's the
+// whole point of this lock. If a session goes stale (tab closed/crashed, no heartbeat for a while)
+// it's considered abandoned and the next sign-in is allowed to take over.
+// The id is persisted in sessionStorage, which is scoped to exactly one tab but SURVIVES a reload of
+// that same tab - so a plain page reload reads back the very same id it had before and reclaims
+// instantly (existing.id===mySessionId, never even hits the block check), while an actual second tab
+// or device gets its own fresh id and is correctly blocked, exactly as intended.
 function genSessionId(){ return crypto.randomUUID ? crypto.randomUUID() : 'sess-'+Date.now()+'-'+Math.random().toString(36).slice(2); }
 const mySessionId = (function(){
   try{
-    let id = localStorage.getItem('foil11-session-id');
-    if(!id){ id = genSessionId(); localStorage.setItem('foil11-session-id', id); }
+    let id = sessionStorage.getItem('foil11-session-id');
+    if(!id){ id = genSessionId(); sessionStorage.setItem('foil11-session-id', id); }
     return id;
   }catch(e){ return genSessionId(); }
 })();
