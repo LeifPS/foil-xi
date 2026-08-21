@@ -16823,12 +16823,6 @@ async function playTournamentRound(){
 // cache) and cheap to rebuild on demand every time that nation's match needs simulating, which keeps
 // profile.wm26 tiny regardless of how many of the other 47 teams' matches happen along the way.
 const WM26_ENTRY_FEE = 10000;
-const WM26_DAILY_LIMIT = 3;
-function wm26RunsToday(){
-  const today = localDateStr(new Date());
-  const tr = profile.wm26DailyTracker;
-  return (tr && tr.date===today) ? (tr.count||0) : 0;
-}
 // profile.wm26's internal shape changed more than once while this mode was being built (the group/
 // knockout data structures were reworked after the first version shipped). A save made under an
 // older shape would otherwise crash renderWM26Panel the instant it tries to read a field the new code
@@ -17031,10 +17025,7 @@ async function startWM26(){
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   if((profile.coins||0) < WM26_ENTRY_FEE){ toast(`Du brauchst ${formatCoins(WM26_ENTRY_FEE)} Coins Startgeld für eine neue WM.`); return; }
-  const today = localDateStr(new Date());
-  if(wm26RunsToday()>=WM26_DAILY_LIMIT){ toast(`Du hast dein Tageslimit von ${WM26_DAILY_LIMIT} WM-Teilnahmen erreicht. Versuch's morgen wieder.`); return; }
   await atomicCoinChange(-WM26_ENTRY_FEE);
-  profile.wm26DailyTracker = {date:today, count:wm26RunsToday()+1};
   const dropped = WM26_ALL_NATIONS[Math.floor(Math.random()*WM26_ALL_NATIONS.length)];
   let groupId = null, otherNations = null;
   Object.entries(WM26_GROUPS).forEach(([letter, nations])=>{
@@ -17283,12 +17274,9 @@ function renderWM26Panel(){
     box.innerHTML = `
       ${banner}
       <p class="hint" style="margin-top:0;">Die echte WM 2026 nachgespielt: 48 Teams, 12 Gruppen à 4, danach K.o.-Runde ab den letzten 32 (Gruppensieger + -zweite plus die 8 besten Gruppendritten). Du übernimmst zufällig den Platz einer echten Nation. Startgeld: <b style="color:var(--gold);">${formatCoins(WM26_ENTRY_FEE)} Coins</b>. Scheiterst du, gibt's Trostpreis-Coins je nach Runde. Gewinnst du: 20% WM Winners Pack, 80% <b style="color:var(--gold);">World Cup Pack</b> (neue WM-Variante +5 OVR und WM-Kapitän +18 OVR, aus allen 48 Teams).</p>
-      <p class="hint" style="margin:0 0 10px;">Teilnahmen heute: <b style="color:var(--chalk);">${wm26RunsToday()}/${WM26_DAILY_LIMIT}</b></p>
-      ${wm26RunsToday()>=WM26_DAILY_LIMIT
-        ? `<button class="action-btn" style="width:220px;" disabled>Tageslimit erreicht</button>`
-        : `<button class="action-btn" id="wm26-start" style="width:220px;">WM 2026 starten</button>`}
+      <button class="action-btn" id="wm26-start" style="width:220px;">WM 2026 starten</button>
       <div id="wm26-match-area" style="margin-top:14px;"></div>`;
-    if(wm26RunsToday()<WM26_DAILY_LIMIT) document.getElementById('wm26-start').addEventListener('click', startWM26);
+    document.getElementById('wm26-start').addEventListener('click', startWM26);
     return;
   }
   if(t.stage==='groups'){
