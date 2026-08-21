@@ -1289,7 +1289,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 /* ---- login / entry gate ---- */
 .gate-overlay{background:radial-gradient(circle at 50% 20%,#132018 0%,#080a0f 62%);}
 .gate-box{background:linear-gradient(180deg,var(--panel),var(--void));border:1px solid var(--line);border-radius:20px;padding:32px 28px 26px;max-width:380px;width:100%;text-align:center;box-shadow:0 30px 70px -25px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.02) inset;}
-.gate-mark{width:56px;height:56px;margin:0 auto 16px;border-radius:14px;background:linear-gradient(145deg,var(--turf-bright),var(--turf));display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:26px;color:#eafff2;box-shadow:0 0 0 1px rgba(255,255,255,.1) inset,0 10px 24px -10px rgba(47,157,103,.6);}
+.gate-mark{width:56px;height:56px;margin:0 auto 16px;border-radius:14px;background:linear-gradient(145deg,var(--turf-bright),var(--turf));display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:26px;color:#eafff2;box-shadow:0 0 0 1px rgba(255,255,255,.1) inset,0 10px 24px -10px rgba(47,157,103,.6);object-fit:cover;}
 .gate-box h2{font-size:22px;letter-spacing:.02em;margin-bottom:6px;}
 .gate-box .hint{color:var(--muted);font-size:13px;line-height:1.5;}
 .gate-field{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:10px;transition:border-color .15s,box-shadow .15s;}
@@ -11127,13 +11127,20 @@ async function awardCardXP(matchRatings){
 }
 
 
+// Same mark used top-left in the topbar's .brand-mark once the app has a real logo (see
+// applyAppLogo) - that swap only runs once at script load against elements already in the DOM, so
+// the login screens (built later, on demand) need their own copy of the same logic instead of
+// relying on that one-time querySelectorAll to ever reach them.
+function gateMarkHTML(){
+  return APP_LOGO_DATA_URI ? `<img class="gate-mark" src="${APP_LOGO_DATA_URI}" alt="">` : `<div class="gate-mark">FE</div>`;
+}
 function showEntryGate(prefill){
   const root = document.getElementById('modal-root');
   const nosaveBanner = NOSAVE_MODE ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);">Ohne-Speicherung-Modus: nur Test-Accounts k\u00f6nnen sich anmelden.</p>` : '';
   root.innerHTML = `
     <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
       <div class="gate-box">
-        <div class="gate-mark">11</div>
+        ${gateMarkHTML()}
         <h2>Willkommen bei FOIL ELEVEN</h2>
         ${nosaveBanner}
         <p class="hint" style="margin-top:0;margin-bottom:18px;">W\u00e4hle einen Vereinsnamen. Er wird Teil deiner Seiten-URL, damit ein Lesezeichen oder Neuladen dieser genauen Seite automatisch denselben Spielstand l\u00e4dt.</p>
@@ -11223,7 +11230,7 @@ function showSetPasswordModal(id){
   root.innerHTML = `
     <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
       <div class="gate-box">
-        <div class="gate-mark">11</div>
+        ${gateMarkHTML()}
         <h2>Passwort f\u00fcr "${id}" festlegen</h2>
         <p class="hint" style="margin-top:6px;margin-bottom:16px;">Dieser Verein hat noch kein Passwort \u2014 lege jetzt eins fest, um ihn ab sofort zu sch\u00fctzen. Merke es dir gut, es gibt keine Wiederherstellung.</p>
         <input id="pw-input1" type="password" class="gate-field" placeholder="Neues Passwort (mind. 6 Zeichen)" autocomplete="new-password">
@@ -11267,7 +11274,7 @@ function showSignInModal(id){
   root.innerHTML = `
     <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
       <div class="gate-box">
-        <div class="gate-mark">11</div>
+        ${gateMarkHTML()}
         <h2>"${id}" \u2014 Passwort eingeben</h2>
         <p class="hint" style="margin-top:6px;margin-bottom:16px;">Dieser Verein ist passwortgesch\u00fctzt.</p>
         <input id="pw-input" type="password" class="gate-field" placeholder="Passwort" autocomplete="current-password">
