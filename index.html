@@ -7783,9 +7783,19 @@ const RATINGS27_ROSTER = [
   {baseId:239085, n:'E. Haaland', pos:'ST', nat:'Norway', lg:'Premier League', club:'Manchester City', foot:'Left', img:'https://cdn.sofifa.net/players/239/085/26_120.png', ov:91, pac:87, sho:92, pas:71, dri:80, defn:47, phy:89},
 ];
 const RATINGS27_ID_BASE = 9794000, RATINGS27_RELOAD_ID_BASE = 9795000;
+// Real action photos for specific "27 Ratings"/"Ratings Reload" cards, keyed by baseId - same override
+// pattern as KRONJUWELEN_IMG_OVERRIDE/WM26_KAPITAEN_IMG_OVERRIDE. Applied once here, in RATINGS27_CARDS
+// itself, so the Reload card (built FROM these via boostBaseToOv's {...withStats} spread) inherits it
+// automatically rather than needing its own separate override map.
+const RATINGS27_IMG_OVERRIDE = {
+  239085: 'https://cdn3.futbin.com/content/fifa26/img/players/p117679597.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=987db8edd417d816291bc7ceeb1e98c6', // E. Haaland
+  231747: 'https://cdn3.futbin.com/content/fifa26/img/players/p151226691.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=46c61f6450347940fa452c131fbe0ed7', // K. Mbappé
+  247827: 'https://cdn3.futbin.com/content/fifa26/img/players/p84133907.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=70a4625684946ad4e256ed677a45cef6', // M. Olise
+};
 const RATINGS27_CARDS = RATINGS27_ROSTER.map((p,i)=>({
   id:RATINGS27_ID_BASE+i+1, n:p.n, pos:p.pos, ov:p.ov, pot:p.ov, nat:p.nat, lg:p.lg, club:p.club,
-  pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy, foot:p.foot, img:p.img, gk:!!p.gk,
+  pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy, foot:p.foot,
+  img:RATINGS27_IMG_OVERRIDE[p.baseId] || p.img, gk:!!p.gk,
   baseId:p.baseId, variant:'ratings27', variantLabel:'27 Ratings', theme:'ratings27',
 }));
 RATINGS27_CARDS.forEach(c=>BY_ID.set(c.id,c));
