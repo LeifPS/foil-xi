@@ -13561,6 +13561,7 @@ async function renderAdminPanel(view){
         <button class="action-btn secondary" id="admin-add-coins" style="width:auto;">+100.000 Coins (mir)</button>
         <button class="action-btn secondary" id="admin-open-any-pack" style="width:auto;">Beliebiges Pack kostenlos \u00f6ffnen</button>
         <button class="action-btn secondary" id="admin-add-card" style="width:auto;">Karte direkt hinzuf\u00fcgen</button>
+        <button class="action-btn secondary" id="admin-add-all-cards" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Alle Karten hinzuf\u00fcgen (mir)</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
         <input id="admin-custom-coins" type="number" placeholder="Beliebige Anzahl..." style="width:180px;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 12px;border-radius:9px;">
@@ -13600,6 +13601,7 @@ async function renderAdminPanel(view){
   });
   document.getElementById('admin-open-any-pack').addEventListener('click', openAdminPackPicker);
   document.getElementById('admin-add-card').addEventListener('click', openAdminAddCardModal);
+  document.getElementById('admin-add-all-cards').addEventListener('click', openAdminGiveAllCardsModal);
   document.getElementById('admin-team-sim').addEventListener('click', openAdminTeamSimBuilder);
   const doLoad = ()=>loadAdminUserPanel(document.getElementById('admin-user-search').value.trim());
   document.getElementById('admin-user-load').addEventListener('click', doLoad);
@@ -13609,7 +13611,12 @@ function adminFullCardPool(){
   // every player card that exists gets registered into BY_ID at boot (see the many BY_ID.set(...) calls
   // scattered across the card-definition sections) - reading straight from there instead of listing each
   // source array by hand means this never again silently misses a newly added card category/roster.
-  return Array.from(BY_ID.values());
+  // Two pools are built LAZILY on first real use though (see wm26VarianteSpecials/wm26KapitaenSpecials -
+  // the World Cup Pack's WM-Variante/WM-Kapitän cards), so BY_ID simply doesn't have them yet if nobody's
+  // opened that pack this session - force-build both here so "every card" is actually every card, not
+  // just whatever happened to already be touched.
+  wm26VarianteSpecials(); wm26KapitaenSpecials();
+  return Array.from(BY_ID.values()).filter(c=>!c.isManager);
 }
 function openAdminPackPicker(){
   openModal(`
@@ -13649,6 +13656,30 @@ function openAdminAddCardModal(){
       });
       results.appendChild(wrap);
     });
+  });
+}
+// Grants every card that doesn't already have a matching cardId in the admin's own collection - not a
+// blind re-run of the whole pool each time, so clicking this again after a new card category gets added
+// to the game only tops up the difference instead of duplicating everything already owned.
+function openAdminGiveAllCardsModal(){
+  const pool = adminFullCardPool();
+  const owned = new Set(collection.map(c=>c.cardId));
+  const missing = pool.filter(c=>!owned.has(c.id));
+  openModal(`
+    <h2 style="margin-bottom:10px;color:#ff5f5f;">⚠ Alle Karten hinzufügen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Fügt jede der ${missing.length} Karten hinzu, die du noch nicht besitzt (von insgesamt ${pool.length} Karten im Spiel - ${pool.length-missing.length} hast du schon). Das umfasst wirklich jede Kategorie, inklusive WM Winners, World Cup Pack und aller anderen Spezial-Pools.</p>
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="admin-all-cards-cancel" style="flex:1;">Abbrechen</button>
+      <button class="action-btn" id="admin-all-cards-confirm" style="flex:1;background:#ff5f5f;" ${missing.length?'':'disabled'}>${missing.length ? 'Hinzufügen' : 'Bereits vollständig'}</button>
+    </div>`);
+  document.getElementById('admin-all-cards-cancel').addEventListener('click', closeModal);
+  const confirmBtn = document.getElementById('admin-all-cards-confirm');
+  if(missing.length) confirmBtn.addEventListener('click', async ()=>{
+    confirmBtn.disabled = true; confirmBtn.textContent = 'Wird hinzugefügt…';
+    missing.forEach(card=>{ collection.push({uid:genId(), cardId:card.id}); });
+    await sSet('collection', collection);
+    toast(`${missing.length} Karten hinzugefügt — du besitzt jetzt alle ${pool.length}.`);
+    closeModal();
   });
 }
 // ===== Admin: build 2 full, real squads (formation, position eligibility + bonus, chemistry, optional
