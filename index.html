@@ -11400,6 +11400,16 @@ async function init(){
     collection = buildStarterCollection();
     await sSet('collection', collection);
   }
+  // WM26_VARIANTE_SPECIALS/WM26_KAPITAEN_SPECIALS (World Cup Pack cards, ids 50000000+/60000000+) are
+  // built LAZILY on first use (opening that pack, or the admin card tools) to avoid thousands of
+  // wasted boostBaseToOv calls at every single page load for the vast majority of players who never
+  // touch WM 2026 - but that meant a player who actually OWNS one of these cards from a past WM 2026
+  // win got BY_ID.get(cardId) back as undefined on any later page load where nothing had happened to
+  // build the pool yet (a fresh session, a different device, ...), breaking collection/squad/card
+  // rendering wherever that card showed up. Building both pools right here costs nothing for everyone
+  // else (only runs when the player's own saved collection actually contains one of these ids) while
+  // guaranteeing an owned World Cup Pack card always resolves, every session, from now on.
+  if(collection.some(c=>c.cardId>=50000000)){ wm26VarianteSpecials(); wm26KapitaenSpecials(); }
   managerCollection = await sGet('managerCollection');
   if(!managerCollection) managerCollection = [];
   packCollection = await sGet('packCollection');
