@@ -9717,11 +9717,19 @@ async function getExternalLockedUids(){
       // winner) is already fully decided the instant registration closes, rounds are just revealed one
       // at a time from there (see advanceHostedTournamentRound), so releasing the lock mid-tournament
       // let a host sell/trade the card away before claimTournamentPrize() ever ran, leaving the
-      // eventual winner's payout as a duplicate mint instead of a real transfer
+      // eventual winner's payout as a duplicate mint instead of a real transfer.
+      // The SAME problem exists right after 'completed' too: the card only actually moves out of the
+      // host's collection once the real winner visits "Meine Turniere" and clicks "Karte abholen"
+      // (prizeClaimed flips true there) - a completed tournament used to release the lock immediately,
+      // so a host could keep using/selling/trading their staked card in the entire window between the
+      // tournament finishing and the winner getting around to claiming it, which looked exactly like
+      // "the card never got taken away". Keep it locked through 'completed' too until prizeClaimed.
       const tourneySnap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('hostUserId','==',profile.userId)));
       tourneySnap.docs.forEach(d=>{
         const t = d.data();
-        if((t.status==='registering' || t.status==='running') && t.prizeType==='card' && t.prizeCard) locked.add(t.prizeCard.stakedUid);
+        if(t.prizeType!=='card' || !t.prizeCard) return;
+        const stillPending = t.status==='registering' || t.status==='running' || (t.status==='completed' && !t.prizeClaimed);
+        if(stillPending) locked.add(t.prizeCard.stakedUid);
       });
     }catch(e){ console.warn('tournament card lock check failed', e); }
     return locked;
