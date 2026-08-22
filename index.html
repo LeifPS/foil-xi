@@ -15645,7 +15645,7 @@ async function hostTournamentPrompt(){
   hostPrizeCardUid = null;
   openModal(`<h2 style="margin-bottom:10px;">Turnier veranstalten</h2><p class="hint" style="margin-top:0;">Kader wird gepr\u00fcft\u2026</p>`);
   const locked = await getLockedUids();
-  const eligibleCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.untradable && !x.card.favorited && !locked.has(x.uid));
+  const eligibleCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.untradable && !x.card.favorited && !locked.has(x.uid)).sort((a,b)=>b.card.ov-a.card.ov);
   openModal(`
     <h2 style="margin-bottom:4px;">Turnier veranstalten</h2>
     <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle Format, Teilnehmerzahl und Preis. Sobald das Turnier voll ist, startet es automatisch \u2014 du musst nicht dabei sein. Freie Pl\u00e4tze werden mit echten CPU-Vereinen aufgef\u00fcllt.</p>
