@@ -6973,6 +6973,7 @@ const WM26_KAPITAEN_IMG_OVERRIDE = {
   207865: 'https://cdn3.futbin.com/content/fifa26/img/players/p67316729.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=ea52512c03532040cdab556a41cb4d9a', // Marquinhos
   209331: 'https://cdn3.futbin.com/content/fifa25/img/players/p167981491.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=b39fe08f57f009f708e0692a314f062e', // M. Salah
   231747: 'https://cdn3.futbin.com/content/fifa25/img/players/p117672259.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=5d70dca040ad0375b6502665f8db0efd', // K. Mbappé
+  222665: 'https://cdn3.futbin.com/content/fifa26/img/players/p117663177.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=57eb4528dac7eb632db55d30fa8c5ebf', // M. Ødegaard
 };
 function wm26KapitaenSpecials(){
   if(WM26_KAPITAEN_SPECIALS_CACHE) return WM26_KAPITAEN_SPECIALS_CACHE;
@@ -11643,6 +11644,23 @@ const PATTERN_FAMILY = {
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
 }
+// Every player photo normally loads through the wsrv.nl resizing proxy above - but that's one single
+// third-party domain every image on the entire site depends on, and it's exactly the kind of generic
+// image-proxy service some ad-blockers/DNS filters and school/tablet MDM profiles block outright
+// (reported: images loading fine on most devices but falling back to initials-only on iPad/Android
+// tablets - consistent with the proxy itself being blocked there, not the underlying source images).
+// Before giving up and showing initials, this tries the original un-proxied URL directly first - costs
+// nothing when the proxy works fine (the vast majority of devices), but recovers automatically on a
+// device where wsrv.nl specifically is unreachable. Only falls through to initials if BOTH fail.
+function handleFacePhotoError(img){
+  if(!img.dataset.fallbackTried){
+    img.dataset.fallbackTried = '1';
+    img.src = img.dataset.raw;
+    return;
+  }
+  img.style.display = 'none';
+  img.nextElementSibling.style.display = 'flex';
+}
 function initialsOf(name){
   const parts = name.replace(/\./g,'').trim().split(/\s+/);
   if(parts.length===1) return parts[0].slice(0,2).toUpperCase();
@@ -11697,7 +11715,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const photoInner = card.isManager
     ? `<div class="avatar">${initialsOf(card.n)}</div>`
     : (card.img
-        ? `<img class="face-photo" src="${proxyImg(card.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        ? `<img class="face-photo" src="${proxyImg(card.img)}" data-raw="${card.img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">
            <div class="avatar" style="display:none;">${initialsOf(card.n)}</div>`
         : `<div class="avatar">${initialsOf(card.n)}</div>`);
   // effOvs: one entry per listed position (see previewEffectiveOvsForCard), null/undefined for a
@@ -20157,7 +20175,7 @@ function flipMatchDataSides(md){
 function goalRowHTML(minute, scorer, teamName, side){
   const initials = initialsOf(scorer.n || '??');
   const imgTag = scorer.img
-    ? `<img src="${proxyImg(scorer.img)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">`
+    ? `<img src="${proxyImg(scorer.img)}" data-raw="${scorer.img}" alt="" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">`
     : '';
   return `<div class="goal-row ${side}">
       <span class="gm">${minute}'</span>
