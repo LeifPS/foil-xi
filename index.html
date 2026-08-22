@@ -16927,7 +16927,7 @@ function wm26NationXI(nation){
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
   Object.values(byGroup).forEach(arr=>arr.sort(rank));
-  const usedNames = new Set(), usedIds = new Set();
+  const usedNames = new Set(), usedIds = new Set(), nameCount = new Map();
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
     // 1) best-ranked unused real person in the right position group, 2) best-ranked unused real
@@ -16935,11 +16935,19 @@ function wm26NationXI(nation){
     // the next-best-ranked still-unused CARD (a different variant of an already-picked player, rather
     // than nobody left at all), and only as an absolute last resort (fewer than 11 cards exist for
     // this nation, period) repeat a card outright, always the best-ranked one available.
+    // Tier 3 picks whichever already-used PLAYER has been repeated the fewest times so far (ties
+    // broken by rank/OV) rather than always grabbing the next-best remaining CARD outright - a thin
+    // roster with one standout (e.g. Egypt: only 6 unique real players in this game, but 6 different
+    // Salah cards among them) used to dump every single leftover slot onto that one player's other
+    // variants, fielding a starting XI with Salah in 6 of 11 shirts. Spreading the unavoidable repeats
+    // across all of that nation's actual real players first is still 100% within "own players only",
+    // it's just fairer about who gets reused before anyone gets reused twice.
     const candidate = byGroup[group].find(c=>!usedNames.has(c.n))
       || pool.filter(c=>!usedNames.has(c.n)).sort(rank)[0]
-      || pool.filter(c=>!usedIds.has(c.id)).sort(rank)[0]
+      || pool.filter(c=>!usedIds.has(c.id)).sort((a,b)=> (nameCount.get(a.n)||0)-(nameCount.get(b.n)||0) || rank(a,b))[0]
       || pool.slice().sort(rank)[0];
     usedNames.add(candidate.n); usedIds.add(candidate.id);
+    nameCount.set(candidate.n, (nameCount.get(candidate.n)||0)+1);
     return candidate;
   });
   const {players, managerName} = boostBotXI(xi, slots);
