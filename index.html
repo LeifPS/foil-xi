@@ -13184,14 +13184,19 @@ function renderCrestSVG(crest, size=64){
   return fallbackSvg;
 }
 // best-effort crest for an opponent object that never went through the crest editor (CPU bots,
-// tournament/challenge opponents, ...) - if `owner` happens to be a real club name, show its real
-// logo (bots are built from real club rosters via pickRealisticOpponent), otherwise fall back to a
-// generic monogram shield like the pre-match cutscene already does
+// tournament/challenge opponents, WM 2026 nations, ...) - if `owner` happens to be a real club name,
+// show its real logo (bots are built from real club rosters via pickRealisticOpponent); WM 2026
+// opponents (see wm26NationXI) instead carry a `nation` field (their `owner` is the German display
+// label "Nationalmannschaft X", not a CLUB_LOGO key, which used to make this fall all the way through
+// to the generic shield with "N" as the letter - correct crest during the pre-match cutscene, which
+// resolves it separately via wm26OppSide, but wrong once the match itself re-derived it through here).
+// Otherwise fall back to a generic monogram shield like the pre-match cutscene already does.
 function opponentCrest(opp){
   if(!opp) return null;
   if(opp.crest) return opp.crest;
+  if(opp.nation && CLUB_LOGO[opp.nation]) return {club: opp.nation};
   if(opp.owner && CLUB_LOGO[opp.owner]) return {club: opp.owner};
-  const letter = (opp.owner || opp.name || '?')[0].toUpperCase();
+  const letter = (opp.nation ? natDE(opp.nation) : (opp.owner || opp.name || '?'))[0].toUpperCase();
   return {shape:'shield', primary:'#ffb84d', secondary:'#0a0d12', letter};
 }
 function teamBlobHTML(rating, crest, nameHtml){
