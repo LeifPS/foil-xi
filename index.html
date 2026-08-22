@@ -13122,6 +13122,19 @@ const CLUB_LOGO = {
   // Turkey
   'Fenerbahçe SK': 'https://assets.football-logos.cc/logos/turkey/1500x1500/fenerbahce.865697ea.png',
   'Galatasaray SK': 'https://assets.football-logos.cc/logos/turkey/1500x1500/galatasaray.a30b6ee6.png',
+  // National teams - keyed by the same English nation name used in WM26_ALL_NATIONS, so a single
+  // entry here does double duty: it's pickable as a personal club crest in the crest editor (searches
+  // Object.keys(CLUB_LOGO) directly), AND wm26OppSide below automatically prefers it over the generic
+  // monogram shield for that nation's WM 2026 matches. Only a handful done so far (more to come) -
+  // any nation without an entry here just keeps the generic fallback, nothing else needed to add one.
+  'Germany': 'https://assets.football-logos.cc/logos/germany/1500x1500/germany-national-team.0c1f52af.png',
+  'France': 'https://assets.football-logos.cc/logos/france/1500x1500/france-national-team.137a1a9c.png',
+  'Spain': 'https://assets.football-logos.cc/logos/spain/1500x1500/spain-national-team.87198e3f.png',
+  'England': 'https://assets.football-logos.cc/logos/england/1500x1500/england-national-team.c38eb318.png',
+  'Brazil': 'https://assets.football-logos.cc/logos/brazil/1500x1500/brazil-national-team.85d32216.png',
+  'Italy': 'https://assets.football-logos.cc/logos/italy/1500x1500/italy-national-team.d5e3eef1.png',
+  'Argentina': 'https://assets.football-logos.cc/logos/argentina/1500x1500/argentina-national-team.25139a90.png',
+  'Uruguay': 'https://assets.football-logos.cc/logos/uruguay/1500x1500/uruguay-national-team.cebe78ec.png',
 };
 const CREST_PALETTE = ['#3ddc84','#4da8ff','#ffb84d','#ff5fa8','#c78bf5','#ffd76a','#ff7a59','#5cc9ff','#e8c468','#ff4d4d'];
 // a deterministic, name-derived monogram - used wherever we only have a bare name and no saved
@@ -16916,9 +16929,10 @@ function wm26NationXI(nation){
 // reveal - the same cutscene already used for bot/online matches (see startBotMatch), so a WM 2026
 // opponent gets shown card-by-card exactly like any other opponent before the match starts.
 function wm26OppSide(opp, nation){
-  return {name: opp.owner, rating: opp.rating, managerName: opp.managerName,
-    crest: {shape:'shield', primary:'#4dbf6f', secondary:'#0a0d12', letter:(natDE(nation)||'?')[0].toUpperCase()},
-    formation: '433'};
+  // real national-team crest where one's been added to CLUB_LOGO (see the "National teams" block
+  // there); every other nation just keeps the generic monogram shield until its logo is added.
+  const crest = CLUB_LOGO[nation] ? {club: nation} : {shape:'shield', primary:'#4dbf6f', secondary:'#0a0d12', letter:(natDE(nation)||'?')[0].toUpperCase()};
+  return {name: opp.owner, rating: opp.rating, managerName: opp.managerName, crest, formation: '433'};
 }
 function wm26MatchResult(teamA, teamB, allowDraw){
   const aXI = wm26NationXI(teamA.nation);
