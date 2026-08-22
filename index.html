@@ -6966,6 +6966,12 @@ function wm26MatchesCaptainName(cardName, captainName){
   const lastName = norm(captainName).split(' ').filter(Boolean).pop();
   return !!lastName && norm(cardName).includes(lastName);
 }
+// Real action photos for specific WM-Kapitän cards, keyed by the underlying base card's id - same
+// override pattern as KRONJUWELEN_IMG_OVERRIDE above, for the same reason (a nicer real photo instead
+// of the default sofifa icon for that card). Being filled in gradually, nation by nation.
+const WM26_KAPITAEN_IMG_OVERRIDE = {
+  207865: 'https://cdn3.futbin.com/content/fifa26/img/players/p67316729.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=ea52512c03532040cdab556a41cb4d9a', // Marquinhos
+};
 function wm26KapitaenSpecials(){
   if(WM26_KAPITAEN_SPECIALS_CACHE) return WM26_KAPITAEN_SPECIALS_CACHE;
   WM26_KAPITAEN_SPECIALS_CACHE = WM26_ALL_NATIONS.map(nation=>{
@@ -6974,7 +6980,9 @@ function wm26KapitaenSpecials(){
     const captainName = WM26_REAL_CAPTAINS[nation];
     const captainMatches = captainName ? pool.filter(c=>wm26MatchesCaptainName(c.n, captainName)) : [];
     const base = (captainMatches.length ? captainMatches : pool).reduce((best,c)=> c.ov>best.ov ? c : best, (captainMatches.length ? captainMatches : pool)[0]);
-    return boostBaseToOv(base, base.ov+18, 60000000+base.id, 'wm26_kapitaen', 'WM-Kapitän', 'wm26k');
+    const card = boostBaseToOv(base, base.ov+18, 60000000+base.id, 'wm26_kapitaen', 'WM-Kapitän', 'wm26k');
+    if(WM26_KAPITAEN_IMG_OVERRIDE[base.id]) card.img = WM26_KAPITAEN_IMG_OVERRIDE[base.id];
+    return card;
   }).filter(Boolean);
   WM26_KAPITAEN_SPECIALS_CACHE.forEach(p=>BY_ID.set(p.id,p));
   return WM26_KAPITAEN_SPECIALS_CACHE;
