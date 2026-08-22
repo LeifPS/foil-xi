@@ -7867,13 +7867,13 @@ const PACKS = [
     desc:'6 Spieler, Rating 82-90 (inkl. Chance auf Sonderkarten). W\u00e4hle 3 davon zum Behalten.',
     draw(){ const pool=poolByRange(82,90,true); return Array.from({length:6},()=>pick(pool)); }},
   {id:'ratings27',name:'27 Ratings',cost:25000,tier:'ultimate',count:9,
-    desc:'9 Spieler aus einem starken Rating-85-94-Pool aus reinen Basis-Karten (keine Varianten), in den alle 27 frisch aufgewerteten FC27-Rating-Refresh-Karten der aktuell besten Profis eingemischt sind. Ca. 15% Chance pro Pack auf eine seltene „Ratings Reload“-Karte (+15 OVR obendrauf, Substats von den neuen Werten hochskaliert) — davon ca. 2% auf eine 105+ Reload-Karte, der Rest auf 103-104.',
+    desc:'9 Spieler aus einem starken Rating-85-94-Pool aus reinen Basis-Karten (keine Varianten), in den alle 27 frisch aufgewerteten FC27-Rating-Refresh-Karten der aktuell besten Profis eingemischt sind. Ca. 25% Chance pro Pack auf eine seltene „Ratings Reload“-Karte (+15 OVR obendrauf, Substats von den neuen Werten hochskaliert) — davon ca. 4% auf eine 105+ Reload-Karte, der Rest auf 103-104.',
     draw(){
       const pool = poolByRange(85,94,false).concat(RATINGS27_CARDS);
       const cards = Array.from({length:9},()=>pick(pool));
       const r = Math.random();
-      if(r<0.02) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_HIGH); // ~2% -> 105+
-      else if(r<0.15) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_LOW); // ~13% -> 103-104, 15% combined for any Reload
+      if(r<0.04) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_HIGH); // ~4% -> 105+
+      else if(r<0.25) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_LOW); // ~21% -> 103-104, 25% combined for any Reload
       return cards;
     }},
   {id:'mystery',name:'Mystery Elite Pack',cost:30000,tier:'ultimate',count:3,
