@@ -17199,24 +17199,40 @@ async function loadMyLeagueMembership(){
   }catch(e){ console.warn('load league membership failed', e); }
   return null;
 }
-// Joining is opt-in: a doc here marks the account as waiting for the next Montag-rollover to be
-// slotted into the bottom league by ligaFindNewcomers(). Re-checked on every renderLigenPanel() call
-// since the doc is only cleared once the rollover actually consumes it.
-async function loadMyLeagueJoinRequest(){
-  await fbReady;
-  if(!fb || !clubId) return null;
-  try{
-    const snap = await fb.getDoc(fb.doc(fb.db,'leagueJoinRequests', clubId));
-    return snap.exists() ? snap.data() : null;
-  }catch(e){ console.warn('load league join request failed', e); return null; }
-}
-async function requestLigaJoin(){
+// Joining is immediate, not queued for the next rollover: adds the account straight into the current
+// bottom-most league's membership (creating a new one if that league is already full at 8), and - if
+// the season is already mid-week - regenerates that league's CURRENT week fixtures so the new member
+// shows up in the table right away instead of waiting until Montag. That regeneration re-simulates
+// every match for the whole league that week (there's no notion of "add one team to an existing
+// schedule" in this engine), which is an accepted trade-off for a mid-week join.
+async function joinLigaNow(){
   await fbReady;
   if(!fb || !clubId) return {ok:false};
+  const {filled} = squadRating();
+  if(filled<11) return {ok:false, reason:'squad-incomplete'};
+  let membershipSnap;
+  try{ membershipSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
+  catch(e){ return {ok:false, detail:(e&&(e.code||e.message))||String(e)}; }
+  const lettersInUse = membershipSnap.docs.map(d=>d.id).sort();
+  let letter = lettersInUse[lettersInUse.length-1];
+  let members = letter ? (membershipSnap.docs.find(d=>d.id===letter).data().members||[]) : [];
+  if(!letter || members.length>=8){ letter = LIGA_LETTERS[lettersInUse.length]; members = []; }
+  if(!letter) return {ok:false, reason:'out-of-letters'};
+  members = members.concat([clubId]);
   try{
-    await fb.setDoc(fb.doc(fb.db,'leagueJoinRequests', clubId), {requestedAt:Date.now()});
-    return {ok:true};
-  }catch(e){ console.warn('league join request failed', e); return {ok:false, detail:(e&&(e.code||e.message))||String(e)}; }
+    await fb.setDoc(fb.doc(fb.db,'leagueMembership',letter), {letter, members});
+  }catch(e){ return {ok:false, detail:(e&&(e.code||e.message))||String(e)}; }
+  const weekStart = ligaCurrentWeekStart();
+  if(weekStart!=null){
+    const weekStartBefore = mostRecentMondayBerlin();
+    const isBerlinSunday = berlinNow().getDay()===0;
+    const targetWeekStart = isBerlinSunday ? weekStartBefore + 7*24*60*60*1000 : weekStart;
+    try{
+      const payload = await buildLeagueWeekPayload(letter, members, targetWeekStart);
+      await fb.setDoc(fb.doc(fb.db,'leagueWeeks', letter+'_'+targetWeekStart), payload);
+    }catch(e){ console.warn('league week regenerate on join failed', e); }
+  }
+  return {ok:true, letter};
 }
 // ===== Ligen Stufe 2: Spielplan, Simulation, Tabelle =====
 // Splits a double round-robin's total round count as evenly as possible across the 5 weekdays,
@@ -17401,33 +17417,10 @@ function ligaRelegationTie(teamA, teamB){
   }
   return {winner, aggA, aggB, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, leg2:{aGoals:leg2.oppGoals, bGoals:leg2.myGoals}, decider: decider ? {aGoals:decider.myGoals, bGoals:decider.oppGoals, wentToPK:decider.wentToPK} : null};
 }
-// Joining Ligen is opt-in (see requestLigaJoin/renderLigenPanel's "In die Liga einsteigen" button) -
-// an account not yet in any league never gets swept in automatically, it has to actively ask via a
-// leagueJoinRequests/{userId} doc. This also means the weekly rollover no longer needs a full
-// saves-collection scan just to find newcomers - it only has to read this small, purpose-built
-// collection. Requests from accounts that are excluded, banned, or still have an incomplete squad
-// at rollover time are simply left pending (not deleted) until they become eligible.
-async function ligaFindNewcomers(assignedIds){
-  const bannedIds = await getLeaderboardBannedUserIds();
-  let snap;
-  try{ snap = await fb.getDocs(fb.collection(fb.db,'leagueJoinRequests')); }
-  catch(e){ console.warn('read league join requests failed', e); return []; }
-  const newcomers = [];
-  for(const d of snap.docs){
-    const userId = d.id;
-    if(assignedIds.has(userId) || LEADERBOARD_EXCLUDED_USERS.has(userId) || bannedIds.has(userId)) continue;
-    const data = await resolveSaveDataForUser(userId);
-    if(!data || !data.profile) continue;
-    const {rating, filled} = squadRatingFromSaveData(data);
-    if(filled<11) continue; // request stays pending until the squad is actually complete
-    newcomers.push({userId, rating});
-  }
-  newcomers.sort((a,b)=>b.rating-a.rating);
-  return newcomers.map(n=>n.userId);
-}
 // The whole weekly "commissioner" pass: reads every league's final table, works out every promotion/
-// relegation/relegation-playoff, slots in any newcomer accounts at the bottom, pays out the winner/
-// runner-up rewards, and writes next week's membership. Guarded by leagueMeta/rollover_{weekStart} so
+// relegation/relegation-playoff, pays out the winner/runner-up rewards, and writes next week's
+// membership. (Newcomers no longer wait for this - joinLigaNow() slots them into the bottom league
+// immediately, see below.) Guarded by leagueMeta/rollover_{weekStart} so
 // it only ever actually runs once per week no matter which client's Ligen-tab visit triggers it -
 // there's no server/cron here, so "whoever opens the tab first on/after Sunday" has to do it. Runs
 // only on Sunday (not Saturday) so that Montag-Samstag always shows a single, still-current league
@@ -17487,20 +17480,9 @@ async function resolveWeeklyRolloverIfNeeded(){
       relegationResults.push({upperLetter, lowerLetter:letter, challenger:lowerChallenger.name, defender:upperDefender.name, ...tie, winnerId});
     }
   });
-  // newcomers: fill the current bottom-most league up to 8, then spill into new letters beyond it.
-  const assignedIds = new Set(Object.keys(nextLeagueOf));
-  const newcomers = await ligaFindNewcomers(assignedIds);
   const nextMembers = {};
   lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
   Object.entries(nextLeagueOf).forEach(([userId,letter])=>{ nextMembers[letter].push(userId); });
-  let bottomLetterIdx = LIGA_LETTERS.indexOf(lettersInUse[lettersInUse.length-1]);
-  newcomers.forEach(userId=>{
-    while(nextMembers[LIGA_LETTERS[bottomLetterIdx]] && nextMembers[LIGA_LETTERS[bottomLetterIdx]].length>=8) bottomLetterIdx++;
-    const letter = LIGA_LETTERS[bottomLetterIdx];
-    if(!letter) return; // out of letters (>208 accounts) - sits out, same as at initial seeding
-    if(!nextMembers[letter]) nextMembers[letter] = [];
-    nextMembers[letter].push(userId);
-  });
   // Payouts: direct per-account Firestore updates (these are OTHER accounts' saves docs, not the
   // viewer's own) - same increment/arrayUnion pattern used for hosted-tournament coin/card prizes.
   for(const r of rewards){
@@ -17613,18 +17595,18 @@ function renderLigenPanel(view){
     const weekStart = ligaCurrentWeekStart();
     const membership = await loadMyLeagueMembership();
     if(!membership){
-      const joinReq = await loadMyLeagueJoinRequest();
-      if(joinReq){
-        box.innerHTML = `<p class="hint">Beitrittsanfrage eingegangen — du wirst mit dem nächsten Ligaphasen-Start (Montag 00:00 Uhr) in die unterste Liga einsortiert.</p>`;
+      const {filled} = squadRating();
+      if(filled<11){
+        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Stelle zuerst einen vollständigen Kader (11 Spieler) auf, dann kannst du sofort einsteigen.</p>`;
       } else {
         box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt.</p>
           <button class="action-btn" id="liga-join-btn" style="width:auto;padding:9px 18px;">In die Liga einsteigen</button>`;
         document.getElementById('liga-join-btn').onclick = async ()=>{
           const btn = document.getElementById('liga-join-btn');
-          btn.disabled = true; btn.textContent = 'Sende…';
-          const res = await requestLigaJoin();
-          if(res.ok) renderLigenPanel(view);
-          else { toast('Fehler: '+(res.detail||'unbekannt')); btn.disabled=false; btn.textContent='In die Liga einsteigen'; }
+          btn.disabled = true; btn.textContent = 'Trete bei…';
+          const res = await joinLigaNow();
+          if(res.ok){ toast(`Liga ${res.letter}: sofort beigetreten!`); renderLigenPanel(view); }
+          else { toast('Fehler: '+(res.detail||res.reason||'unbekannt')); btn.disabled=false; btn.textContent='In die Liga einsteigen'; }
         };
       }
       return;
