@@ -17305,6 +17305,16 @@ async function buildLeagueWeekPayload(letter, members, weekStart){
       roundIdx++;
     }
   });
+  // Defensive check, not a fix: the circle-method scheduler already guarantees no team faces the same
+  // opponent twice on one calendar day (verified for every realistic league size, 3-26 members) - this
+  // just turns a silent violation into a loud console error instead of a quietly-wrong schedule, in
+  // case that guarantee is ever accidentally broken by a future change to the day-grouping logic.
+  const seenPerDay = new Map();
+  matches.forEach(m=>{
+    const key = m.day+':'+(m.aIdx<m.bIdx?m.aIdx+'-'+m.bIdx:m.bIdx+'-'+m.aIdx);
+    if(seenPerDay.has(key)) console.error('Liga scheduling bug: same pairing twice on one day', letter, weekStart, m);
+    seenPerDay.set(key, true);
+  });
   return {letter, weekStart, teams: teams.map(t=>({userId:t.userId, name:t.name, rating:t.rating, crest:t.crest})), matches};
 }
 // First caller "wins" and writes the week's data; anyone arriving after just reads what's already
@@ -17356,34 +17366,85 @@ function ligaComputeStandings(teams, matches, uptoDay){
   table.sort((x,y)=> y.pts-x.pts || y.gd-x.gd || y.gf-x.gf);
   return table;
 }
-function ligaStandingsTableHTML(table){
+// Zone context for standings coloring - which promotion/relegation zones actually apply to THIS
+// league depends on its neighbors (a top league has no promotion row, a bottom league has no
+// relegation row, and the relegation-PLAYOFF rows only exist when both sides of that boundary meet
+// resolveWeeklyRolloverIfNeeded's own size thresholds: table.length>=5 for the challenging side,
+// upperTable.length>=2 for the defending side) - mirrors that function's exact conditions so the
+// colors shown here never promise a movement that the actual rollover wouldn't perform.
+function ligaZonesFor(letter, sortedLetters, sizeOfFn){
+  const idx = sortedLetters.indexOf(letter);
+  if(idx<0) return {};
+  return {
+    isTop: idx===0,
+    isBottom: idx===sortedLetters.length-1,
+    upperSize: idx>0 ? sizeOfFn(sortedLetters[idx-1]) : 0,
+    lowerSize: idx<sortedLetters.length-1 ? sizeOfFn(sortedLetters[idx+1]) : 0,
+  };
+}
+function ligaStandingsTableHTML(table, zones){
+  const z = zones || {};
+  const n = table.length;
+  const zoneOf = i=>{
+    if(i===0 && !z.isTop) return 'promo';
+    if(i===1 && !z.isTop && n>=5 && z.upperSize>=2) return 'promo-playoff';
+    if(i===n-1 && !z.isBottom) return 'releg';
+    if(i===n-2 && !z.isBottom && z.lowerSize>=5) return 'releg-playoff';
+    return '';
+  };
+  const ZONE_STYLE = {
+    'promo': 'background:rgba(61,196,130,.15);border-left:3px solid #3dc482;',
+    'promo-playoff': 'background:rgba(230,195,67,.13);border-left:3px solid #e6c343;',
+    'releg': 'background:rgba(226,86,79,.15);border-left:3px solid #e2564f;',
+    'releg-playoff': 'background:rgba(226,86,79,.08);border-left:3px dashed #e2564f;',
+    '': 'border-left:3px solid transparent;',
+  };
+  const zonesPresent = new Set(table.map((t,i)=>zoneOf(i)).filter(Boolean));
+  const LEGEND_LABEL = {'promo':'Direkter Aufstieg','promo-playoff':'Aufstiegs-Relegation','releg':'Direkter Abstieg','releg-playoff':'Abstiegs-Relegation'};
+  const legend = zonesPresent.size ? `<div style="display:flex;flex-wrap:wrap;gap:12px;padding:8px 10px;font-size:10.5px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-top:none;">
+    ${[...zonesPresent].map(zn=>`<span style="display:inline-flex;align-items:center;gap:5px;"><i style="width:9px;height:9px;border-radius:2px;flex-shrink:0;${ZONE_STYLE[zn].split('border-left:')[0]}${zn.includes('playoff')?'border:1px solid '+(zn==='promo-playoff'?'#e6c343':'#e2564f')+';':''}"></i>${LEGEND_LABEL[zn]}</span>`).join('')}
+  </div>` : '';
   return `<div style="margin-bottom:16px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;overflow:hidden;">
     <div style="display:grid;grid-template-columns:28px 1fr 30px 30px 30px 50px 40px 40px;gap:0;font-size:11px;font-weight:600;background:var(--line);padding:8px;color:var(--muted);text-align:center;">
       <div></div><div style="text-align:left;">Verein</div><div>S</div><div>U</div><div>N</div><div>Tore</div><div>Diff</div><div>Pkt</div>
     </div>
-    ${table.map((t,i)=>`<div style="display:grid;grid-template-columns:28px 1fr 30px 30px 30px 50px 40px 40px;gap:0;padding:7px 8px;border-top:1px solid var(--line);align-items:center;font-size:11.5px;${t.userId===clubId?'background:rgba(95,225,201,0.08);':''}">
+    ${table.map((t,i)=>{
+      const zn = zoneOf(i);
+      const mine = t.userId===clubId;
+      return `<div style="display:grid;grid-template-columns:28px 1fr 30px 30px 30px 50px 40px 40px;gap:0;padding:7px 8px;border-top:1px solid var(--line);align-items:center;font-size:11.5px;${ZONE_STYLE[zn]}${mine?'box-shadow:inset 0 0 0 1px rgba(95,225,201,.5);':''}">
       <div style="text-align:center;color:var(--muted);">${i+1}</div>
-      <div style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${t.userId===clubId?'font-weight:700;color:var(--turf-bright);':''}">${t.name}</div>
+      <div style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${mine?'font-weight:700;color:var(--turf-bright);':''}">${t.name}${mine?' <span style="font-size:10px;">(du)</span>':''}</div>
       <div style="text-align:center;">${t.w}</div><div style="text-align:center;">${t.d}</div><div style="text-align:center;">${t.l}</div>
       <div style="text-align:center;" class="mono">${t.gf}:${t.ga}</div>
       <div style="text-align:center;">${t.gd>=0?'+':''}${t.gd}</div>
       <div style="text-align:center;font-weight:700;color:var(--gold);">${t.pts}</div>
-    </div>`).join('')}
-  </div>`;
+    </div>`;}).join('')}
+  </div>${legend}`;
 }
 function ligaMatchRowHTML(m, teams, viewerUserId){
   const a = teams[m.aIdx], b = teams[m.bIdx];
   const isMine = viewerUserId && (a.userId===viewerUserId || b.userId===viewerUserId);
   if(isMine && !m.liveRevealed){
-    return `<div class="leader-row" style="font-size:12px;padding:6px 0;justify-content:space-between;">
-      <span>${a.name} vs ${b.name}</span>
+    return `<div class="leader-row" style="font-size:12px;padding:9px 10px;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:4px;margin-bottom:5px;">
+      <span>${a.name} <span class="hint" style="margin:0;">vs</span> ${b.name}</span>
       <button class="bracket-live-btn" type="button" data-liga-live-mid="${m.mid}" style="padding:4px 10px;font-size:11px;">▶ Live spielen</button>
     </div>`;
   }
-  return `<div class="leader-row" style="font-size:12px;padding:6px 0;">
-    <span style="flex:1;${m.winnerSide==='me'?'font-weight:700;color:var(--turf-bright);':''}">${a.name}</span>
-    <span class="mono">${m.aGoals}:${m.bGoals}</span>
-    <span style="flex:1;text-align:right;${m.winnerSide==='opp'?'font-weight:700;color:var(--turf-bright);':''}">${b.name}</span>
+  // For the viewer's own match, an explicit S/U/N (Sieg/Unentschieden/Niederlage) badge - winnerSide
+  // is always relative to "a" (the match engine's fixed "me" side when the payload was built, not the
+  // current viewer), so it has to be re-derived from whichever of a/b the viewer actually is.
+  let badge = '';
+  if(isMine){
+    const meIsA = a.userId===viewerUserId;
+    const outcome = m.winnerSide==='draw' ? 'U' : (((m.winnerSide==='me')===meIsA) ? 'S' : 'N');
+    const badgeBg = outcome==='S' ? 'var(--turf-bright)' : outcome==='N' ? 'var(--danger)' : 'var(--muted)';
+    badge = `<span class="mono" style="font-weight:800;color:#0b1410;background:${badgeBg};border-radius:4px;padding:2px 6px;font-size:10px;margin-right:9px;flex-shrink:0;">${outcome}</span>`;
+  }
+  return `<div class="leader-row" style="font-size:12px;padding:8px 10px;border-radius:4px;margin-bottom:3px;${isMine?'background:rgba(95,225,201,0.07);':''}">
+    ${badge}
+    <span style="flex:1;${m.winnerSide==='me'?'font-weight:700;color:var(--turf-bright);':''}">${m.winnerSide==='me'?'🏆 ':''}${a.name}</span>
+    <span class="mono" style="font-weight:700;padding:0 10px;">${m.aGoals}:${m.bGoals}</span>
+    <span style="flex:1;text-align:right;${m.winnerSide==='opp'?'font-weight:700;color:var(--turf-bright);':''}">${b.name}${m.winnerSide==='opp'?' 🏆':''}</span>
   </div>`;
 }
 const LIGA_DAY_LABEL = {1:'Montag', 2:'Dienstag', 3:'Mittwoch', 4:'Donnerstag', 5:'Freitag'};
@@ -17579,10 +17640,13 @@ async function renderAllLigenOverview(box){
   const weekStart = ligaCurrentWeekStart();
   const preSeason = weekStart==null;
   const targetWeekStart = preSeason ? LIGA_SEASON_EPOCH : (isBerlinSunday ? weekStartBefore + 7*24*60*60*1000 : weekStart);
+  const sortedLetters = docs.map(d=>d.id);
+  const sizeOf = l => { const d=docs.find(x=>x.id===l); return d ? (d.data().members||[]).length : 0; };
   let html = '';
   for(const d of docs){
     const letter = d.id, members = d.data().members||[];
-    html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">${ligaBadgeHTML(letter,28)}<div style="font-family:'Anton';font-size:15px;">Liga ${letter}</div><div class="hint" style="margin:0;">${members.length} Vereine</div></div>`;
+    const mine = members.includes(clubId);
+    html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">${ligaBadgeHTML(letter,28)}<div style="font-family:'Anton';font-size:15px;">Liga ${letter}${mine?' <span style="color:var(--turf-bright);font-size:12px;">(deine)</span>':''}</div><div class="hint" style="margin:0;">${members.length} Vereine</div></div>`;
     LIGA_LAST_ERROR = null;
     // Same rule as the personal view: only the still-0:0 upcoming week (Sonntag, or pre-season) is
     // safe to self-heal a team-count mismatch on - an already-underway Montag-Samstag week is not.
@@ -17591,7 +17655,8 @@ async function renderAllLigenOverview(box){
       : await getOrCreateLeagueWeek(letter, members, targetWeekStart);
     if(week){
       const visibleDay = preSeason ? 0 : ligaVisibleDayCount(targetWeekStart);
-      html += ligaStandingsTableHTML(ligaComputeStandings(week.teams, week.matches, visibleDay));
+      const zones = ligaZonesFor(letter, sortedLetters, sizeOf);
+      html += ligaStandingsTableHTML(ligaComputeStandings(week.teams, week.matches, visibleDay), zones);
     } else {
       html += `<p class="hint">Tabelle konnte nicht geladen werden${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}.</p>`;
     }
@@ -17637,10 +17702,20 @@ function renderLigenPanel(view){
       }
       return;
     }
-    const header = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-        ${ligaBadgeHTML(membership.letter, 44)}
-        <div><div style="font-family:'Anton';font-size:20px;">Liga ${membership.letter}</div>
-        <div class="hint" style="margin:0;">${membership.members.length} Vereine · Sieger-Preis: ${formatCoins(ligaWinnerCoins(membership.letter))} Coins${membership.letter==='A'?' + Liga-Meister-Karte':''}</div></div>
+    // Fetched once here and reused for zone-coloring both the upcoming/current table below and (on
+    // Sonntag) the just-finished week's table, so the promotion/relegation rows shown always match
+    // resolveWeeklyRolloverIfNeeded's actual neighbor-based rules instead of a fixed guess.
+    let allLeaguesSnap = null;
+    try{ allLeaguesSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
+    catch(e){ console.warn('load all leagues for zone context failed', e); }
+    const sortedLetters = allLeaguesSnap ? allLeaguesSnap.docs.map(d=>d.id).sort() : [];
+    const sizeOf = l => { if(!allLeaguesSnap) return 0; const d=allLeaguesSnap.docs.find(x=>x.id===l); return d ? (d.data().members||[]).length : 0; };
+    const myZones = ligaZonesFor(membership.letter, sortedLetters, sizeOf);
+    const header = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:12px 14px;">
+        ${ligaBadgeHTML(membership.letter, 48)}
+        <div><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}</div>
+        <div class="hint" style="margin:0;">${membership.members.length} Vereine · 🏆 Sieger: ${formatCoins(ligaWinnerCoins(membership.letter))} Coins${membership.letter==='A'?' + Liga-Meister-Karte':''} · 🥈 2. Platz: ${formatCoins(ligaRunnerUpCoins(membership.letter))} Coins</div>
+        <div class="hint" style="margin:2px 0 0;">${myZones.isTop?'Höchste Liga - keine Aufstiegsmöglichkeit':(myZones.isBottom?'Unterste Liga - kein direkter Abstieg':'Auf-/Abstieg mit den Nachbarligen jede Woche')}</div></div>
       </div>`;
     if(weekStart==null){
       // Between seeding and the season's first Monday, there's no "old week" to recap - but the
@@ -17648,7 +17723,7 @@ function renderLigenPanel(view){
       // later Sonntag shows the just-created next week's table.
       let html = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Hier schon mal deine Liga:</p>`;
       const previewWeek = await ligaSyncedWeek(membership.letter, membership.members, LIGA_SEASON_EPOCH);
-      if(previewWeek) html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0));
+      if(previewWeek) html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0), myZones);
       else if(LIGA_LAST_ERROR) html += `<p class="hint" style="color:var(--danger);">Tabelle konnte nicht geladen werden (${LIGA_LAST_ERROR}).</p>`;
       box.innerHTML = html;
       return;
@@ -17675,16 +17750,27 @@ function renderLigenPanel(view){
         if(histSnap.exists()){
           const hist = histSnap.data();
           const myReward = (hist.rewards||[]).find(r=>r.userId===clubId);
-          if(myReward) historyBox += `<p class="hint" style="color:var(--gold);">🏆 Belohnung erhalten: ${formatCoins(myReward.coins)} Coins${myReward.championCard?' + Liga-Meister-Karte':''}!</p>`;
+          if(myReward) historyBox += `<div style="display:flex;align-items:center;gap:10px;background:rgba(230,195,67,.12);border:1px solid #e6c343;border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+            <span style="font-size:20px;">🏆</span><span>Belohnung erhalten: <b style="color:var(--gold);">${formatCoins(myReward.coins)} Coins</b>${myReward.championCard?' + Liga-Meister-Karte':''}!</span>
+          </div>`;
           const myPlayoff = (hist.relegationResults||[]).find(r=>r.upperLetter===membership.letter || r.lowerLetter===membership.letter);
-          if(myPlayoff) historyBox += `<p class="hint">Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: ${myPlayoff.challenger} ${myPlayoff.aggA}:${myPlayoff.aggB} ${myPlayoff.defender} (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — Aufstieg für ${myPlayoff.winnerId===clubId?'dich!':myPlayoff.winnerId}.</p>`;
+          if(myPlayoff){
+            const won = myPlayoff.winnerId===clubId;
+            historyBox += `<div style="display:flex;align-items:center;gap:10px;background:${won?'rgba(61,196,130,.12)':'rgba(226,86,79,.12)'};border:1px solid ${won?'#3dc482':'#e2564f'};border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+              <span style="font-size:20px;">${won?'⬆️':'⬇️'}</span>
+              <span>Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: <b>${myPlayoff.challenger}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.defender}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${won?'Aufstieg für dich!':'Aufstieg für '+myPlayoff.winnerId+'.'}</b></span>
+            </div>`;
+          }
           const oldLetter = Object.keys(hist.tables||{}).find(l=>(hist.tables[l]||[]).some(row=>row.userId===clubId));
           if(oldLetter){
             const oldWeekSnap = await fb.getDoc(fb.doc(fb.db,'leagueWeeks', oldLetter+'_'+weekStartBefore));
             if(oldWeekSnap.exists()){
               const oldWeek = oldWeekSnap.data();
+              const oldSortedLetters = Object.keys(hist.tables||{}).sort();
+              const oldSizeOf = l => (hist.tables[l]||[]).length;
+              const oldZones = ligaZonesFor(oldLetter, oldSortedLetters, oldSizeOf);
               oldSectionHtml += `<div style="display:flex;align-items:center;gap:10px;margin:16px 0 8px;">${ligaBadgeHTML(oldLetter,28)}<div style="font-family:'Anton';font-size:15px;">Abgeschlossene Woche · Liga ${oldLetter}</div></div>`;
-              oldSectionHtml += ligaStandingsTableHTML(hist.tables[oldLetter]);
+              oldSectionHtml += ligaStandingsTableHTML(hist.tables[oldLetter], oldZones);
               for(let d=1; d<=5; d++){
                 const dayMatches = oldWeek.matches.filter(m=>m.day===d);
                 if(!dayMatches.length) continue;
@@ -17710,9 +17796,11 @@ function renderLigenPanel(view){
     if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; return; }
     const visibleDay = ligaVisibleDayCount(targetWeekStart);
     const standings = ligaComputeStandings(week.teams, week.matches, visibleDay);
+    const myRank = standings.findIndex(t=>t.userId===clubId)+1;
     let html = header + historyBox + oldSectionHtml;
     if(isBerlinSunday) html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue Woche (ab Montag)</div>`;
-    html += ligaStandingsTableHTML(standings);
+    else if(myRank>0) html += `<div class="hint" style="margin:0 0 8px;">Aktuell: <b style="color:var(--turf-bright);">Platz ${myRank}</b> von ${standings.length} · Spieltag ${Math.min(visibleDay,5)}/5</div>`;
+    html += ligaStandingsTableHTML(standings, myZones);
     if(isBerlinSunday) html += `<p class="hint">Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
     for(let d=1; d<=visibleDay; d++){
       const dayMatches = week.matches.filter(m=>m.day===d);
