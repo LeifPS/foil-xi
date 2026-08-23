@@ -18184,6 +18184,11 @@ async function playWM26GroupMatch(matchIdx){
     await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner);
     const resultLabel = md.winnerSide==='draw' ? 'Unentschieden' : md.winnerSide==='me' ? 'Sieg' : 'Niederlage';
     toast(`${resultLabel} gegen ${natDE(oppTeam.nation)}: ${md.myGoals}:${md.oppGoals}`);
+    const myScorers = [];
+    md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+    const matchRatings = computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide);
+    await awardCardXP(matchRatings);
     const newMatches = t.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide, pending:false});
     profile.wm26 = {...t, matches:newMatches};
     await sSet('profile', profile);
@@ -18227,6 +18232,10 @@ async function playWM26KnockoutMatch(){
     await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner);
     won = md.winnerSide==='me';
     toast(`${won?'Sieg':'Niederlage'} gegen ${natDE(oppTeam.nation)}: ${md.myGoals}:${md.oppGoals}${md.wentToPK?' n.E.':md.wentToET?' n.V.':''}`);
+    const myScorers = [];
+    md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+    await awardCardXP(computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide));
   } finally {
     inMatch = false;
   }
