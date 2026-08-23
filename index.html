@@ -17744,8 +17744,8 @@ async function buildLeagueWeekPayload(letter, members, weekStart){
   let roundIdx = 0;
   perDay.forEach((count, dayIdx)=>{
     for(let c=0;c<count;c++){
-      (rounds[roundIdx]||[]).forEach(([aIdx,bIdx], matchIdxInRound)=>{
-        matches.push({day:dayIdx+1, roundInDay:c, roundsInDay:count, matchIdxInRound, aIdx, bIdx, mid:genId(),
+      (rounds[roundIdx]||[]).forEach(([aIdx,bIdx])=>{
+        matches.push({day:dayIdx+1, roundInDay:c, roundsInDay:count, aIdx, bIdx, mid:genId(),
           pending:true, aGoals:null, bGoals:null, winnerSide:null, liveMd:null, liveRevealed:false});
       });
       roundIdx++;
@@ -17849,18 +17849,15 @@ function ligaVisibleDayCount(weekStart){
   const elapsedDays = Math.floor((berlinNow().getTime()-weekStart)/(24*60*60*1000));
   return Math.max(0, Math.min(5, elapsedDays+1));
 }
-// Within a single day, matches don't all reveal at once - each ROUND starts on a fixed 5-hour step
-// (Montag-Donnerstag from 05:00, Freitag from 10:00), and within that round every individual match
-// then reveals its own hour later still (round 1: 05:00, 06:00, 07:00, ...; round 2: 10:00, 11:00,
-// 12:00, ...) rather than every simultaneous match of a round sharing one identical time - so a
-// Montag-Donnerstag 3-round day with 3 matches per round reveals 05:00/06:00/07:00, 10:00/11:00/12:00,
-// 15:00/16:00/17:00. Matches written before this per-round reveal existed have no roundInDay/
-// roundsInDay stored and simply fall back to "revealed as soon as the day starts" (offset 0), so old
-// already-created weeks keep working unchanged.
+// Within a single day, its rounds don't all reveal at once at midnight - they're spread out in fixed
+// 5-hour steps: Montag-Donnerstag start at 05:00 (a normal 3-round day reveals 05:00/10:00/15:00),
+// Freitag starts later at 10:00 (its usual 2 rounds reveal 10:00/15:00). Matches written before this
+// per-round reveal existed have no roundInDay/roundsInDay stored and simply fall back to "revealed
+// as soon as the day starts" (offset 0), so old already-created weeks keep working unchanged.
 function ligaMatchRevealOffsetMs(m){
   if(m.roundInDay==null || !m.roundsInDay) return 0;
   const baseHour = m.day===5 ? 10 : 5;
-  return (baseHour + m.roundInDay*5 + (m.matchIdxInRound||0)) * 60*60*1000;
+  return (baseHour + m.roundInDay*5) * 60*60*1000;
 }
 function ligaMatchIsRevealed(m, weekStart){
   const dayStart = weekStart + (m.day-1)*24*60*60*1000;
