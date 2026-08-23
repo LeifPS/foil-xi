@@ -17552,16 +17552,19 @@ async function leaveLigaNow(){
 // front-loaded (extra rounds land on earlier days) - for the standard 8-team league that's exactly
 // the "3/3/3/3/2" from the design brief, and it generalizes cleanly to the one undersized (last)
 // league, whatever size it ends up being.
-// Wraps getOrCreateLeagueWeek with a self-heal: if the stored week doc's team count doesn't match the
-// current membership list (e.g. joinLigaNow's own membership write landed but its week-regeneration
-// write raced with/lost to an earlier read, or simply failed), rebuild the week doc from the current
-// membership. Only ever called for a week that hasn't started yet as far as this app's join flow goes
-// (the pre-season preview, or a Sonntag's upcoming week), so there's no already-played match history
-// at risk of being silently overwritten.
+// Wraps getOrCreateLeagueWeek with a self-heal: rebuilds the stored week doc from the current
+// membership if either (a) its team count doesn't match the current membership list (e.g. joinLigaNow's
+// own membership write landed but its week-regeneration write raced with/lost to an earlier read, or
+// simply failed), or (b) its matches predate the per-round reveal-time feature (no roundInDay/
+// roundsInDay stored - see ligaMatchRevealOffsetMs's legacy fallback), which otherwise makes every
+// fixture show "ab 00:00 Uhr" instead of its real staggered time. Only ever called for a week that
+// hasn't started yet as far as this app's join flow goes (the pre-season preview, or a Sonntag's
+// upcoming week), so there's no already-played match history at risk of being silently overwritten.
 async function ligaSyncedWeek(letter, members, weekStart){
   LIGA_LAST_ERROR = null;
   let week = await getOrCreateLeagueWeek(letter, members, weekStart);
-  if(week && week.teams.length!==members.length){
+  const legacyMatches = week && week.matches.length>0 && week.matches[0].roundInDay==null;
+  if(week && (week.teams.length!==members.length || legacyMatches)){
     try{
       const fresh = await buildLeagueWeekPayload(letter, members, weekStart);
       await fb.setDoc(fb.doc(fb.db,'leagueWeeks', letter+'_'+weekStart), fresh);
