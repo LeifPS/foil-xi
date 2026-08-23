@@ -17520,18 +17520,19 @@ async function loadMyLeagueMembership(){
   }catch(e){ console.warn('load league membership failed', e); }
   return null;
 }
-// Joining is immediate, not queued for the next rollover, but only allowed on Sonntag (same day the
-// rest of the league structure resets) - adds the account straight into the current bottom-most
-// league's membership (creating a new one if that league is already full at 8), and regenerates that
-// league's CURRENT (i.e. upcoming) week fixtures so the new member shows up in the table right away
-// instead of waiting further. That regeneration re-simulates every match for the whole league that
-// week (there's no notion of "add one team to an existing schedule" in this engine), which is an
-// accepted trade-off, and is also why joining is restricted to Sonntag - any other day would mean
-// re-simulating a week that's already partway played for everyone else in that league.
+// Joining is immediate, not queued for the next rollover, but only allowed during the weekend recap
+// window (Samstag ab 12:00, once that week's rollover has actually run, through Sonntag - see
+// ligaWeekendRecapActive) - adds the account straight into the current bottom-most league's membership
+// (creating a new one if that league is already full at 8), and regenerates that league's CURRENT
+// (i.e. upcoming) week fixtures so the new member shows up in the table right away instead of waiting
+// further. That regeneration re-simulates every match for the whole league that week (there's no
+// notion of "add one team to an existing schedule" in this engine), which is an accepted trade-off,
+// and is also why joining is restricted to this window - any other time would mean re-simulating a
+// week that's already partway played for everyone else in that league.
 async function joinLigaNow(){
   await fbReady;
   if(!fb || !clubId) return {ok:false};
-  if(berlinNow().getDay()!==0) return {ok:false, reason:'sunday-only'};
+  if(!(await ligaWeekendRecapActive())) return {ok:false, reason:'window-closed'};
   const {filled} = squadRating();
   if(filled<11) return {ok:false, reason:'squad-incomplete'};
   let membershipSnap;
@@ -17546,9 +17547,10 @@ async function joinLigaNow(){
   try{
     await fb.setDoc(fb.doc(fb.db,'leagueMembership',letter), {letter, members});
   }catch(e){ return {ok:false, detail:(e&&(e.code||e.message))||String(e)}; }
-  // Since this only ever runs on Sonntag, the "current" week as far as the Ligen tab is concerned is
-  // always the upcoming one (mirrors renderLigenPanel's own Sonntag targetWeekStart calculation) -
-  // either the season's very first week (pre-epoch) or next Montag's, never a week already in progress.
+  // Since this only ever runs during the weekend recap window, the "current" week as far as the Ligen
+  // tab is concerned is always the upcoming one (mirrors renderLigenPanel's own weekend targetWeekStart
+  // calculation) - either the season's very first week (pre-epoch) or next Montag's, never a week
+  // already in progress.
   const weekStart = ligaCurrentWeekStart();
   const targetWeekStart = weekStart==null ? LIGA_SEASON_EPOCH : mostRecentMondayBerlin() + 7*24*60*60*1000;
   try{
@@ -17921,21 +17923,35 @@ async function ligaRolloverDoneFor(weekStart){
     return flag.exists() && !!flag.data().done;
   }catch(e){ console.warn('rollover flag check (render) failed', e); return false; }
 }
+// True during the "weekend recap" window: Samstag ab 12:00 Uhr (once resolveWeeklyRolloverIfNeeded has
+// actually run for this week) through the end of Sonntag. Shared by everything that needs to know
+// "has the commissioner pass for THIS weekend already happened" - the weekend split view (old week
+// recap + new week preview) and joinLigaNow's gate (joining only makes sense once the upcoming week's
+// post-rollover membership is what's actually live).
+async function ligaWeekendRecapActive(){
+  const day = berlinNow().getDay();
+  if(day!==6 && day!==0) return false;
+  const weekStart = mostRecentMondayBerlin();
+  if(weekStart<LIGA_SEASON_EPOCH) return true; // pre-season: no commissioner pass exists yet to wait for
+  return await ligaRolloverDoneFor(weekStart);
+}
 // The whole weekly "commissioner" pass: reads every league's final table, works out every promotion/
 // relegation/relegation-playoff, pays out the winner/runner-up rewards, and writes next week's
 // membership. (Newcomers no longer wait for this - joinLigaNow() slots them into the bottom league
 // immediately, see below.) Guarded by leagueMeta/rollover_{weekStart} so
 // it only ever actually runs once per week no matter which client's Ligen-tab visit triggers it -
-// there's no server/cron here, so "whoever opens the tab first on/after Sonntag 12:00" has to do it.
-// Fixed to a specific time (not just "any time Sunday") so relegation always reveals at the same
+// there's no server/cron here, so "whoever opens the tab first on/after Samstag 12:00" has to do it.
+// Fixed to a specific time (not just "any time Samstag") so relegation always reveals at the same
 // moment for everyone, instead of whenever the first visitor of the day happened to open the tab.
+// Runs Samstag (not Sonntag) per the tab's own description: "Montag-Freitag Ligaphase, Samstag
+// Relegation, Sonntag Ruhetag" - Sonntag only ever RECAPS what already happened Samstag.
 async function resolveWeeklyRolloverIfNeeded(){
   await fbReady;
   if(!fb) return null;
   const weekStart = mostRecentMondayBerlin();
   if(weekStart<LIGA_SEASON_EPOCH) return null; // season hasn't even started its first week yet
   const now = berlinNow();
-  if(now.getDay()!==0 || now.getHours()<12) return null; // only Sonntag ab 12:00 Uhr Berlin time
+  if(now.getDay()!==6 || now.getHours()<12) return null; // only Samstag ab 12:00 Uhr Berlin time
   const flagRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
   try{
     const flag = await fb.getDoc(flagRef);
@@ -18079,13 +18095,13 @@ async function renderAllLigenOverview(box){
   const docs = membershipSnap.docs.slice().sort((a,b)=>a.id.localeCompare(b.id));
   if(!docs.length){ box.innerHTML = `<p class="hint">Noch keine Ligen eingeteilt.</p>`; return; }
   const weekStartBefore = mostRecentMondayBerlin();
-  // Not just "is it Sunday" - the commissioner pass itself doesn't run until 12:00 Sonntag, so the
-  // split view (and building a "next week" preview off post-rollover membership) only makes sense
-  // once that pass has actually completed - see ligaRolloverDoneFor.
-  const isBerlinSunday = berlinNow().getDay()===0 && await ligaRolloverDoneFor(weekStartBefore);
+  // Not just "is it the weekend" - the commissioner pass itself doesn't run until Samstag 12:00, so
+  // the split view (and building a "next week" preview off post-rollover membership) only makes sense
+  // once that pass has actually completed - see ligaWeekendRecapActive/ligaRolloverDoneFor.
+  const isWeekendRecap = await ligaWeekendRecapActive();
   const weekStart = ligaCurrentWeekStart();
   const preSeason = weekStart==null;
-  const targetWeekStart = preSeason ? LIGA_SEASON_EPOCH : (isBerlinSunday ? weekStartBefore + 7*24*60*60*1000 : weekStart);
+  const targetWeekStart = preSeason ? LIGA_SEASON_EPOCH : (isWeekendRecap ? weekStartBefore + 7*24*60*60*1000 : weekStart);
   const sortedLetters = docs.map(d=>d.id);
   const sizeOf = l => { const d=docs.find(x=>x.id===l); return d ? (d.data().members||[]).length : 0; };
   let html = '';
@@ -18096,11 +18112,11 @@ async function renderAllLigenOverview(box){
     LIGA_LAST_ERROR = null;
     // Same rule as the personal view: only the still-0:0 upcoming week (Sonntag, or pre-season) is
     // safe to self-heal a team-count mismatch on - an already-underway Montag-Samstag week is not.
-    const week = (isBerlinSunday || preSeason)
+    const week = (isWeekendRecap || preSeason)
       ? await ligaSyncedWeek(letter, members, targetWeekStart)
       : await getOrCreateLeagueWeek(letter, members, targetWeekStart);
     if(week){
-      const isUpcoming = preSeason || isBerlinSunday;
+      const isUpcoming = preSeason || isWeekendRecap;
       const zones = ligaZonesFor(letter, sortedLetters, sizeOf);
       // An upcoming (not-yet-started) week has nothing to reveal at all (uptoDay 0); an ongoing
       // Montag-Samstag week counts every match whose own per-round reveal time has already passed.
@@ -18137,9 +18153,9 @@ function renderLigenPanel(view){
     if(!membership){
       const {filled} = squadRating();
       if(filled<11){
-        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Stelle zuerst einen vollständigen Kader (11 Spieler) auf, dann kannst du sonntags einsteigen.</p>`;
-      } else if(berlinNow().getDay()!==0){
-        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Der Beitritt ist nur sonntags möglich (dann bist du sofort in der Tabelle, ohne weiter zu warten).</p>`;
+        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Stelle zuerst einen vollständigen Kader (11 Spieler) auf, dann kannst du am Wochenende einsteigen.</p>`;
+      } else if(!(await ligaWeekendRecapActive())){
+        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Der Beitritt ist erst ab Samstag 12:00 Uhr (nach der Relegation) möglich (dann bist du sofort in der Tabelle, ohne weiter zu warten).</p>`;
       } else {
         box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt.</p>
           <button class="action-btn" id="liga-join-btn" style="width:auto;padding:9px 18px;">In die Liga einsteigen</button>`;
@@ -18197,23 +18213,24 @@ function renderLigenPanel(view){
       box.innerHTML = html;
       return;
     }
-    // Montag-Samstag, and Sonntag before 12:00 (the commissioner pass hasn't run yet): only ever one,
-    // single "current" league is shown. Only once the pass has actually completed (see
-    // ligaRolloverDoneFor) does the tab split into two sections: the just-finished week (with its
-    // relegation result) and the already-assigned coming week's league.
-    const isBerlinSunday = berlinNow().getDay()===0 && await ligaRolloverDoneFor(weekStartBefore);
+    // Montag-Freitag, and Samstag before 12:00 (the commissioner pass hasn't run yet): only ever one,
+    // single "current" league is shown. Only once the pass has actually completed - Samstag ab 12:00
+    // through the end of Sonntag, see ligaWeekendRecapActive - does the tab split into two sections:
+    // the just-finished week (with its relegation result) and the already-assigned coming week's league.
+    const isWeekendRecap = await ligaWeekendRecapActive();
     // The rollover (if it just ran) always operates on the week that JUST finished, i.e. the week
     // that started BEFORE today's possible Monday-rollover of ligaCurrentWeekStart() itself - so the
     // history doc to look up is keyed by weekStartBefore, not the (possibly already-next) weekStart.
     let historyBox = '';
-    // On Sonntag, membership already reflects the NEXT week's (post-rollover) league, but weekStart
-    // (mostRecentMondayBerlin) still points at the week that just finished - so the two no longer
-    // describe the same league-week. oldSectionHtml recovers the finished week's own table/results
-    // (looked up under whichever letter the viewer was ACTUALLY in that week, from leagueHistory's
+    // Once the weekend recap window is active, membership already reflects the NEXT week's (post-
+    // rollover) league, but weekStart (mostRecentMondayBerlin) still points at the week that just
+    // finished - so the two no longer describe the same league-week. oldSectionHtml recovers the
+    // finished week's own table/results (looked up under whichever letter the viewer was ACTUALLY in
+    // that week, from leagueHistory's
     // per-letter tables, since membership.letter may already have changed) so it can be shown
     // alongside a preview of the new week's just-created (all-0) table below.
     let oldSectionHtml = '';
-    if(isBerlinSunday){
+    if(isWeekendRecap){
       try{
         const histSnap = await fb.getDoc(fb.doc(fb.db,'leagueHistory', weekStartBefore+''));
         if(histSnap.exists()){
@@ -18255,26 +18272,26 @@ function renderLigenPanel(view){
     // During the weekend, weekStart (this week's Monday) already belongs to the just-finished week
     // (handled above as oldSectionHtml) - the table/fixtures rendered below are the NEW week's, which
     // starts the FOLLOWING Monday, hence +7 days.
-    const targetWeekStart = isBerlinSunday ? weekStartBefore + 7*24*60*60*1000 : weekStart;
+    const targetWeekStart = isWeekendRecap ? weekStartBefore + 7*24*60*60*1000 : weekStart;
     LIGA_LAST_ERROR = null;
     // Only the Sonntag (upcoming, still-0:0) week is safe to self-heal a team-count mismatch on - the
     // Montag-Samstag week may already have played matches, which a resync would silently wipe.
-    const week = isBerlinSunday
+    const week = isWeekendRecap
       ? await ligaSyncedWeek(membership.letter, membership.members, targetWeekStart)
       : await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
     if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; return; }
     const visibleDay = ligaVisibleDayCount(targetWeekStart);
     // Matches within a day reveal individually across the day (see ligaMatchIsRevealed), not all at
     // once at midnight - the standings only count a match once its own reveal moment has passed.
-    const standings = isBerlinSunday
+    const standings = isWeekendRecap
       ? ligaComputeStandings(week.teams, week.matches, 0, targetWeekStart)
       : ligaComputeStandings(week.teams, week.matches, 5, targetWeekStart, targetWeekStart);
     const myRow = standings.find(t=>t.userId===clubId);
     let html = header + historyBox + oldSectionHtml;
-    if(isBerlinSunday) html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue Woche (ab Montag)</div>`;
+    if(isWeekendRecap) html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue Woche (ab Montag)</div>`;
     else if(myRow) html += `<div class="hint" style="margin:0 0 8px;">Aktuell: <b style="color:var(--turf-bright);">Platz ${myRow.displayRank}</b> von ${standings.length} · Spieltag ${Math.min(visibleDay,5)}/5</div>`;
     html += ligaStandingsTableHTML(standings, myZones);
-    if(isBerlinSunday) html += `<p class="hint">Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
+    if(isWeekendRecap) html += `<p class="hint">Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
     // The whole week's fixtures (who plays whom, which day) are shown up front, all 5 days at once -
     // Sonntag through Freitag, so you always know what's coming. Only the RESULT of a given match is
     // held back until its own reveal moment (see ligaMatchIsRevealed): a not-yet-revealed match still
