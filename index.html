@@ -11622,7 +11622,7 @@ function applyGraphicsPreset(){
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full'};
+    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -11660,6 +11660,7 @@ async function init(){
     // count for accounts that already existed before this field did, so nobody's legacy starts at 0.
     if(profile.careerWins===undefined) profile.careerWins = profile.wins||0;
     if(profile.graphicsPreset===undefined) profile.graphicsPreset = 'full';
+    if(profile.showDecimalEffOv===undefined) profile.showDecimalEffOv = false;
   }
   applyGraphicsPreset();
   if(ensureWeekPassQuestsFresh()) await sSet('profile', profile);
@@ -14629,6 +14630,16 @@ function renderClub(view){
           <option value="lite">Reduziert (f\u00fcr schw\u00e4chere Ger\u00e4te)</option>
         </select>
       </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Effektiv-Rating mit Kommazahlen</div>
+          <div class="hint" style="margin-top:2px;">Die Rating-Vorschau in Klammern (z.B. "(81)") zeigt eine genaue Kommazahl statt der gerundeten Zahl.</div>
+        </div>
+        <select id="decimal-effov-select">
+          <option value="off">Aus (Standard)</option>
+          <option value="on">An</option>
+        </select>
+      </div>
     </details>
     <div class="toolbar">
       <input id="club-search" placeholder="Spielername suchen..." value="${clubFilter.q}">
@@ -14699,6 +14710,14 @@ function renderClub(view){
     await sSet('profile', profile);
     applyGraphicsPreset();
     toast(profile.graphicsPreset==='lite' ? 'Grafik reduziert — Karten-Animationen sind jetzt aus.' : 'Grafik auf Voll gestellt.');
+  });
+  const decimalEffOvSelect = document.getElementById('decimal-effov-select');
+  decimalEffOvSelect.value = profile.showDecimalEffOv ? 'on' : 'off';
+  decimalEffOvSelect.addEventListener('change', async e=>{
+    profile.showDecimalEffOv = e.target.value==='on';
+    await sSet('profile', profile);
+    toast(profile.showDecimalEffOv ? 'Effektiv-Rating zeigt jetzt Kommazahlen.' : 'Effektiv-Rating zeigt wieder gerundete Zahlen.');
+    renderClub(document.getElementById('view'));
   });
   document.getElementById('club-pos').value = clubFilter.pos;
   document.getElementById('club-nat').value = clubFilter.nat;
@@ -14790,7 +14809,7 @@ function drawClubGrid(){
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap';
     wrap.style.cursor = 'pointer';
-    wrap.appendChild(cardEl(card, '', previewEffectiveOvsForCard(card, uid), null, {onToggleFavorite: toggleCardFavorite, showUntradableBadge: true}));
+    wrap.appendChild(cardEl(card, '', previewEffectiveOvsForCard(card, uid, profile.showDecimalEffOv), null, {onToggleFavorite: toggleCardFavorite, showUntradableBadge: true}));
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
@@ -14894,7 +14913,13 @@ function getSquadChemistryDetail(){
 // the club grid and the slot picker. ownUid (if given) is the candidate's own uid: if it's already
 // sitting in a different slot of the current squad, that other placement is excluded from the
 // hypothetical roster so it isn't double-counted for chemistry once it "moves" into the new slot.
-function previewEffectiveOvAtSlot(card, slot, ownUid){
+// precise=true (see profile.showDecimalEffOv) keeps the manager-boost and chemistry math in floating
+// point all the way through instead of rounding the boosted OV to an integer before chemistry ever
+// sees it - that pre-rounding is exactly why the eff-rating preview could otherwise never show a
+// decimal at all (there simply wasn't any fractional information left by the time chemistry ran).
+// Only affects this DISPLAY preview, never the real chemOv used elsewhere (getMySquadPlayers,
+// squadRating, ...), which keeps rounding immediately as before.
+function previewEffectiveOvAtSlot(card, slot, ownUid, precise=false){
   const info = positionEligibility(card, slot.label);
   if(!info) return null;
   const mgr = getAssignedManager();
@@ -14919,14 +14944,15 @@ function previewEffectiveOvAtSlot(card, slot, ownUid){
   const boosted = hypoRoster.map(p=>{
     let ov = p.ov;
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
-    return {...p, ov:Math.round(ov)};
+    return {...p, ov: precise ? ov : Math.round(ov)};
   });
-  const chemPlayers = computeChemistry(boosted, mgr?mgr.nat:null);
-  return chemPlayers[previewIdx].chemOv + info.bonus;
+  const chemPlayers = computeChemistry(boosted, mgr?mgr.nat:null, precise);
+  const raw = chemPlayers[previewIdx].chemOv + info.bonus;
+  return precise ? Math.round(raw*10)/10 : raw;
 }
 // best-fitting slot in the current formation that actually has this exact position label
 // (a formation can have more than one, e.g. two CB slots - takes the best of those)
-function previewEffectiveOvForPosition(card, posLabel, ownUid){
+function previewEffectiveOvForPosition(card, posLabel, ownUid, precise=false){
   const form = FORMATIONS[squad.formation];
   let hostSlots = form.slots.filter(s=>s.label===posLabel);
   if(!hostSlots.length){
@@ -14939,15 +14965,15 @@ function previewEffectiveOvForPosition(card, posLabel, ownUid){
   }
   let best = null;
   hostSlots.forEach(slot=>{
-    const v = previewEffectiveOvAtSlot(card, slot, ownUid);
+    const v = previewEffectiveOvAtSlot(card, slot, ownUid, precise);
     if(v!==null && (best===null || v>best)) best = v;
   });
   return best;
 }
 // one entry per position in the card's own list, same order - lets the UI cycle the rating display
 // in lockstep with the position label, showing how each position would actually change the rating
-function previewEffectiveOvsForCard(card, ownUid){
-  return cardPositions(card.pos).map(pos=>previewEffectiveOvForPosition(card, pos, ownUid));
+function previewEffectiveOvsForCard(card, ownUid, precise=false){
+  return cardPositions(card.pos).map(pos=>previewEffectiveOvForPosition(card, pos, ownUid, precise));
 }
 // tap-to-inspect from "Mein Verein": full card visual plus, for every position it can play, the
 // bonus tier and the rating it would actually have in the CURRENT squad right now (chemistry,
@@ -14960,7 +14986,7 @@ function showCardInfoModal(card, uid){
   const rows = posList.map((pos, idx)=>{
     const bonusLabel = POS_BONUS_LABEL[positionBonusTier(card.ov, idx)] || 'normal';
     const hasSlot = form.slots.some(s=>s.label===pos);
-    const effOv = previewEffectiveOvForPosition(card, pos, uid);
+    const effOv = previewEffectiveOvForPosition(card, pos, uid, profile.showDecimalEffOv);
     const isEquippedHere = !!(equippedSlot && equippedSlot.label===pos);
     return {pos, bonusLabel, hasSlot, effOv, isEquippedHere};
   }).sort((a,b)=>(b.effOv??-1)-(a.effOv??-1));
@@ -15226,7 +15252,7 @@ async function openPicker(slot){
   const marketLocked = await getMarketLockedUidsOnly();
   const usedNames = allSquadNames('slots:'+slot.id);
   let items = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
-  items = items.map(x=>({...x, effOv: previewEffectiveOvAtSlot(x.card, slot, x.uid)})).filter(x=>x.effOv!==null);
+  items = items.map(x=>({...x, effOv: previewEffectiveOvAtSlot(x.card, slot, x.uid, profile.showDecimalEffOv)})).filter(x=>x.effOv!==null);
   items.sort((a,b)=>b.effOv-a.effOv);
   const currentUid = squad.slots[slot.id];
   const primeUidsInSquad = new Set();
@@ -21118,7 +21144,10 @@ function poissonGoals(lambda){
 function simGoals(lambda){
   return clamp(poissonGoals(lambda), 0, 8);
 }
-function computeChemistry(players, managerNat){
+// precise=true (see profile.showDecimalEffOv / previewEffectiveOvAtSlot) keeps chemOv as an unrounded
+// float (1 decimal, rounded by the caller) instead of an integer - default false preserves the exact
+// existing behavior every real gameplay caller (getMySquadPlayers, squadRating, ...) relies on.
+function computeChemistry(players, managerNat, precise=false){
   return players.map(p=>{
     let score = 0, clubLinks=0, leagueLinks=0, natLinks=0, mgrLink=false;
     players.forEach(other=>{
@@ -21137,7 +21166,8 @@ function computeChemistry(players, managerNat){
     const alwaysMaxChem = p.variant==='ogicon' || LEGENDS_ALWAYS_MAX.has(p.variant);
     const stars = alwaysMaxChem ? 3 : (score>=14 ? 3 : score>=7 ? 2 : score>=3 ? 1 : 0);
     const ovAdjust = stars===3 ? 3 : stars===2 ? 2 : stars===1 ? 1 : 0;
-    return {...p, chem:stars, chemOv: Math.max(1, Math.round(p.ov+ovAdjust)), chemBreakdown:{clubLinks, leagueLinks, natLinks, mgrLink, isOgIcon:alwaysMaxChem}};
+    const chemOvRaw = Math.max(1, p.ov+ovAdjust);
+    return {...p, chem:stars, chemOv: precise ? chemOvRaw : Math.round(chemOvRaw), chemBreakdown:{clubLinks, leagueLinks, natLinks, mgrLink, isOgIcon:alwaysMaxChem}};
   });
 }
 function getMySquadPlayers(){
