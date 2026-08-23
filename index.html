@@ -14603,6 +14603,8 @@ function renderClub(view){
         <p>${collection.length} Spieler im Besitz. RAP (Recent Average Price) zeigt den gesch\u00e4tzten Marktwert jeder Karte \u2014 verkaufen kannst du nur noch \u00fcber den Transfermarkt.</p>
         <p class="hint" style="margin:6px 0 0;">Anzeigename beim Online-Spielen: <b style="color:var(--chalk);">${profile.displayName||profile.userId}</b>
           <button class="action-btn secondary" id="rename-club" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button></p>
+        <p class="hint" style="margin:4px 0 0;">K\u00fcrzel in Liga-Fixtures: <b style="color:var(--chalk);">${ligaTeamAbbr(profile.displayName||profile.userId, profile.clubAbbr)}</b>
+          <button class="action-btn secondary" id="rename-club-abbr" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button></p>
       </div>
     </div>
     <details class="settings-box" id="club-settings">
@@ -14672,6 +14674,16 @@ function renderClub(view){
       toast('Anzeigename ge\u00e4ndert. Dein Login-Vereinsname bleibt unver\u00e4ndert.');
       renderClub(document.getElementById('view'));
     }, 24);
+  });
+  document.getElementById('rename-club-abbr').addEventListener('click', ()=>{
+    askTextModal('K\u00fcrzel in Liga-Fixtures (max. 3 Zeichen)', ligaTeamAbbr(profile.displayName||profile.userId, profile.clubAbbr), async (val)=>{
+      const clean = (val||'').replace(/[^a-zA-Z0-9\u00c0-\u00ff]/g,'').slice(0,3).toUpperCase();
+      if(!clean) return;
+      profile.clubAbbr = clean;
+      await sSet('profile', profile);
+      toast(`K\u00fcrzel ge\u00e4ndert zu "${clean}". Gilt ab dem n\u00e4chsten neu erstellten Liga-Wochenplan.`);
+      renderClub(document.getElementById('view'));
+    }, 3);
   });
   const packOpenModeSelect = document.getElementById('pack-open-mode-select');
   packOpenModeSelect.value = profile.packOpenMode==='click' ? 'click' : 'slice';
@@ -17615,9 +17627,9 @@ async function buildLeagueWeekPayload(letter, members, weekStart){
   const teams = [];
   for(const userId of members){
     const data = await resolveSaveDataForUser(userId);
-    if(!data || !data.profile){ teams.push({userId, name:userId, rating:40, crest:null, players:[]}); continue; }
+    if(!data || !data.profile){ teams.push({userId, name:userId, rating:40, crest:null, abbr:null, players:[]}); continue; }
     const {rating, players} = squadRatingFromSaveData(data);
-    teams.push({userId, name:data.profile.displayName||userId, rating, crest:data.profile.crest||null, players});
+    teams.push({userId, name:data.profile.displayName||userId, rating, crest:data.profile.crest||null, abbr:data.profile.clubAbbr||null, players});
   }
   const rounds = generateDoubleRoundRobinRounds(teams.length);
   const perDay = distributeRoundsAcrossDays(rounds.length);
@@ -17789,10 +17801,12 @@ function ligaStandingsTableHTML(table, zones){
     </div>`;}).join('')}
   </div>${legend}`;
 }
-// Short crest-card label (e.g. "MCI"), matching the real-fixture-card look this is styled after - a
-// club name is arbitrary user text here, not a real 3-letter code, so this just takes its first 3
-// letters/digits (ignoring spaces/punctuation) rather than trying to abbreviate "properly".
-function ligaTeamAbbr(name){
+// Short crest-card label (e.g. "MCI"), matching the real-fixture-card look this is styled after.
+// Prefers the player's own chosen profile.clubAbbr (set in Mein Verein's Einstellungen, next to
+// Anzeigename) - falls back to auto-deriving one from the display name (first 3 letters/digits,
+// ignoring spaces/punctuation) for anyone who never set one.
+function ligaTeamAbbr(name, customAbbr){
+  if(customAbbr) return customAbbr.slice(0,3).toUpperCase();
   const clean = (name||'?').replace(/[^a-zA-Z0-9À-ÿ]/g,'');
   return (clean.slice(0,3) || '?').toUpperCase();
 }
@@ -17807,7 +17821,7 @@ function ligaMatchRowHTML(m, teams, viewerUserId, opts={}){
     return `<div class="liga-fixture-card${isMine?' liga-fixture-mine':''}">
       <div class="liga-fixture-side">
         ${renderCrestSVG(a.crest || fallbackCrestFor(a.name), 40)}
-        <div class="liga-fixture-abbr">${ligaTeamAbbr(a.name)}</div>
+        <div class="liga-fixture-abbr">${ligaTeamAbbr(a.name, a.abbr)}</div>
       </div>
       <div class="liga-fixture-center">
         ${opts.revealTime ? `<div class="liga-fixture-time">${opts.revealTime}</div>` : ''}
@@ -17815,7 +17829,7 @@ function ligaMatchRowHTML(m, teams, viewerUserId, opts={}){
       </div>
       <div class="liga-fixture-side">
         ${renderCrestSVG(b.crest || fallbackCrestFor(b.name), 40)}
-        <div class="liga-fixture-abbr">${ligaTeamAbbr(b.name)}</div>
+        <div class="liga-fixture-abbr">${ligaTeamAbbr(b.name, b.abbr)}</div>
       </div>
     </div>`;
   }
