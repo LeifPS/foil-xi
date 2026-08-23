@@ -18008,7 +18008,7 @@ function ligaRelegationTie(teamA, teamB){
 async function ligaRolloverDoneFor(weekStart){
   try{
     const flag = await fb.getDoc(fb.doc(fb.db,'leagueMeta','rollover_'+weekStart));
-    return flag.exists() && !!flag.data().done;
+    return flag.exists() && flag.data().status==='done';
   }catch(e){ console.warn('rollover flag check (render) failed', e); return false; }
 }
 // True during the "weekend recap" window: Samstag ab 12:00 Uhr (once resolveWeeklyRolloverIfNeeded has
@@ -18041,10 +18041,25 @@ async function resolveWeeklyRolloverIfNeeded(){
   const now = berlinNow();
   if(now.getDay()!==6 || now.getHours()<12) return null; // only Samstag ab 12:00 Uhr Berlin time
   const flagRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
+  // Atomic claim: a plain read-then-later-write flag left a window where two clients hitting Samstag
+  // 12:00 at the same moment could BOTH pass the "not done yet" check and both run the whole payout
+  // loop, double-crediting every reward. This transaction makes "check and claim" one atomic step -
+  // only the client whose tx.set actually commits proceeds; everyone else backs off immediately. A
+  // claim goes stale after ROLLOVER_CLAIM_TIMEOUT_MS (crashed tab, lost connection mid-payout) so the
+  // pass still eventually runs instead of being permanently stuck on a claim nobody ever finishes.
+  const ROLLOVER_CLAIM_TIMEOUT_MS = 3*60*1000;
+  let claimed = false;
   try{
-    const flag = await fb.getDoc(flagRef);
-    if(flag.exists() && flag.data().done) return null;
-  }catch(e){ console.warn('rollover flag check failed', e); return null; }
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const snap = await tx.get(flagRef);
+      const data = snap.exists() ? snap.data() : null;
+      if(data && data.status==='done') return;
+      if(data && data.status==='in-progress' && (Date.now()-data.claimedAt)<ROLLOVER_CLAIM_TIMEOUT_MS) return;
+      tx.set(flagRef, {status:'in-progress', claimedAt:Date.now()});
+      claimed = true;
+    });
+  }catch(e){ console.warn('rollover claim failed', e); return null; }
+  if(!claimed) return null;
   // Read every current league's membership + this week's (already-finished) data.
   let membershipSnap;
   try{ membershipSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
@@ -18153,7 +18168,7 @@ async function resolveWeeklyRolloverIfNeeded(){
     await Promise.all(Object.entries(nextMembers).filter(([,m])=>m.length).map(([letter,members])=>
       getOrCreateLeagueWeek(letter, members, nextWeekStart)
     ));
-    await fb.setDoc(flagRef, {done:true, at:Date.now()});
+    await fb.setDoc(flagRef, {status:'done', at:Date.now()});
   }catch(e){ console.warn('rollover write failed', e); return null; }
   return {tables, relegationResults, rewards};
 }
