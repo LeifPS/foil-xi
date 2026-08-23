@@ -17645,6 +17645,21 @@ async function resolveSaveDataForUser(userId){
     return snap.exists() ? snap.data() : null;
   }catch(e){ console.warn('resolve league member save failed', userId, e); return null; }
 }
+// Cosmetic identity (Anzeigename, Wappen, Kürzel) is never part of the actual competition - unlike the
+// squad/rating (only allowed to affect matches not yet reached, see resolveLigaMatchIfNeeded), a
+// rename/re-crest/new Kürzel should show up EVERYWHERE immediately, including retroactively on already-
+// finished weeks' fixture cards and tables. So this never touches the persisted week doc at all - it's
+// a pure read-time overlay recomputed on every render. The viewer's own team is read straight from the
+// live in-memory `profile` (not re-fetched) so it updates the instant you save the setting, even before
+// that write has round-tripped back from Firestore.
+async function ligaRefreshTeamDisplay(teams){
+  return Promise.all(teams.map(async t=>{
+    if(t.userId===clubId) return {...t, name: profile.displayName||t.userId, crest: profile.crest||null, abbr: profile.clubAbbr||null};
+    const data = await resolveSaveDataForUser(t.userId);
+    if(!data || !data.profile) return t;
+    return {...t, name: data.profile.displayName||t.userId, crest: data.profile.crest||null, abbr: data.profile.clubAbbr||null};
+  }));
+}
 // Builds one league's entire week's SCHEDULE (who plays whom, which day/round) up front, but no longer
 // pre-simulates any result: each match stays pending:true until its own reveal moment arrives, at
 // which point resolveLigaMatchIfNeeded fetches BOTH sides' then-CURRENT squad and simulates it -
@@ -18203,6 +18218,7 @@ async function renderAllLigenOverview(box){
       ? await ligaSyncedWeek(letter, members, targetWeekStart)
       : await getOrCreateLeagueWeek(letter, members, targetWeekStart);
     if(week){
+      week.teams = await ligaRefreshTeamDisplay(week.teams);
       const isUpcoming = preSeason || isWeekendRecap;
       const zones = ligaZonesFor(letter, sortedLetters, sizeOf);
       // An upcoming (not-yet-started) week has nothing to reveal at all (uptoDay 0); an ongoing
@@ -18279,6 +18295,7 @@ function renderLigenPanel(view){
       // later Sonntag shows the just-created next week's table.
       let html = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Hier schon mal deine Liga:</p>`;
       const previewWeek = await ligaSyncedWeek(membership.letter, membership.members, LIGA_SEASON_EPOCH);
+      if(previewWeek) previewWeek.teams = await ligaRefreshTeamDisplay(previewWeek.teams);
       if(previewWeek){
         html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0, LIGA_SEASON_EPOCH), myZones);
         // Same "whole week's fixtures visible up front, results held back" treatment as the main
@@ -18338,12 +18355,15 @@ function renderLigenPanel(view){
           if(oldLetter){
             const oldWeekSnap = await fb.getDoc(fb.doc(fb.db,'leagueWeeks', oldLetter+'_'+weekStartBefore));
             if(oldWeekSnap.exists()){
-              const oldWeek = oldWeekSnap.data();
+              let oldWeek = oldWeekSnap.data();
+              oldWeek.teams = await ligaRefreshTeamDisplay(oldWeek.teams);
+              const nameByUserId = new Map(oldWeek.teams.map(t=>[t.userId, t.name]));
+              const freshOldTable = (hist.tables[oldLetter]||[]).map(row=>({...row, name: nameByUserId.get(row.userId) ?? row.name}));
               const oldSortedLetters = Object.keys(hist.tables||{}).sort();
               const oldSizeOf = l => (hist.tables[l]||[]).length;
               const oldZones = ligaZonesFor(oldLetter, oldSortedLetters, oldSizeOf);
               oldSectionHtml += `<div style="display:flex;align-items:center;gap:10px;margin:16px 0 8px;">${ligaBadgeHTML(oldLetter,28)}<div style="font-family:'Anton';font-size:15px;">Abgeschlossene Woche · Liga ${oldLetter}</div></div>`;
-              oldSectionHtml += ligaStandingsTableHTML(hist.tables[oldLetter], oldZones);
+              oldSectionHtml += ligaStandingsTableHTML(freshOldTable, oldZones);
               for(let d=1; d<=5; d++){
                 const dayMatches = oldWeek.matches.filter(m=>m.day===d);
                 if(!dayMatches.length) continue;
@@ -18370,6 +18390,7 @@ function renderLigenPanel(view){
     // Whoever's tab hits a match first after its own reveal moment simulates it, using both sides'
     // CURRENT squad right then - not during the weekend preview week, where nothing is due yet anyway.
     if(!isWeekendRecap) week = await resolveLigaMatchIfNeeded(membership.letter, targetWeekStart, week);
+    week.teams = await ligaRefreshTeamDisplay(week.teams);
     const visibleDay = ligaVisibleDayCount(targetWeekStart);
     // Matches within a day reveal individually across the day (see ligaMatchIsRevealed), not all at
     // once at midnight - the standings only count a match once its own reveal moment has passed.
