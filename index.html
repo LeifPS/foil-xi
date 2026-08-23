@@ -226,6 +226,28 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ffd76a;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 42px 2px #fff6d6;}
 }
+/* WM-Kapitän bespoke FX (see cardEl's isWm26KapitaenTier): a pulsing gold trophy-halo behind the photo
+   plus rising golden victory sparks - own dedicated element, same "not just the shared pattern-layer"
+   approach as Black Hole's swirl/Ratings Reload's shards/Legikone's confetti, but deliberately RISING
+   sparks (a fresh triumph) rather than Legikone's FALLING flag-colored confetti (an all-time legend). */
+.pcard .wm26k-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .wm26k-halo{position:absolute;top:29%;left:50%;width:145%;height:145%;margin:-72.5% 0 0 -72.5%;
+  background:radial-gradient(circle, rgba(255,246,214,.4) 0%, rgba(255,215,106,.16) 42%, transparent 70%);
+  animation:wm26kHaloPulse 2.4s ease-in-out infinite;}
+@keyframes wm26kHaloPulse{0%,100%{opacity:.55;transform:scale(1);}50%{opacity:1;transform:scale(1.1);}}
+.pcard .wm26k-spark{position:absolute;bottom:-8%;width:4px;height:4px;border-radius:50%;background:#fff6d6;
+  opacity:0;box-shadow:0 0 6px 1px rgba(255,215,106,.8);animation:wm26kSparkRise linear infinite;}
+@keyframes wm26kSparkRise{0%{bottom:-8%;opacity:0;transform:translateX(0);}12%{opacity:1;}90%{opacity:.75;}100%{bottom:108%;opacity:0;transform:translateX(6px);}}
+.pcard .wm26k-spark.k1{left:8%;animation-duration:3.4s;animation-delay:0s;}
+.pcard .wm26k-spark.k2{left:18%;animation-duration:2.8s;animation-delay:.6s;width:3px;height:3px;}
+.pcard .wm26k-spark.k3{left:28%;animation-duration:3.9s;animation-delay:1.3s;}
+.pcard .wm26k-spark.k4{left:38%;animation-duration:3.1s;animation-delay:.2s;width:3px;height:3px;}
+.pcard .wm26k-spark.k5{left:50%;animation-duration:3.6s;animation-delay:1.8s;}
+.pcard .wm26k-spark.k6{left:62%;animation-duration:2.9s;animation-delay:.9s;width:3px;height:3px;}
+.pcard .wm26k-spark.k7{left:72%;animation-duration:3.7s;animation-delay:1.5s;}
+.pcard .wm26k-spark.k8{left:82%;animation-duration:3s;animation-delay:.4s;width:3px;height:3px;}
+.pcard .wm26k-spark.k9{left:92%;animation-duration:3.5s;animation-delay:2.1s;}
+.pcard .wm26k-spark.k10{left:46%;animation-duration:4s;animation-delay:1.1s;width:3px;height:3px;}
 .pcard.theme-wc{--acc:#ffd700;box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 30px -4px #ffd700;}
 .pcard.theme-blk{--acc:#c9a8ff;background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.04) 0 2px, transparent 2px 9px),
@@ -637,6 +659,15 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     background-size:100% 100%, 100% 320%;
     animation:ratings27reloadSweep 2.4s linear infinite;}
 @keyframes ratings27reloadSweep{0%{background-position:0 0, 0 100%;}100%{background-position:0 0, 0 -220%;}}
+/* WM-Kapitän: the Kapitäne Pack's grey armband stripe, but gold, PLUS a trophy-glow at the top of the
+   photo (like .pattern-trophy) - "still a captain" and "just won the World Cup" combined into one
+   silhouette instead of looking like a generic gold-foil reskin of either alone. */
+.pcard.pattern-wm26kpattern .pattern-layer{background:
+    repeating-linear-gradient(115deg, rgba(255,215,106,.16) 0 2px, transparent 2px 16px),
+    linear-gradient(180deg, transparent 0% 24%, rgba(255,215,106,.45) 24% 28%, rgba(255,246,214,.6) 28% 29%, rgba(255,215,106,.45) 29% 33%, transparent 33% 100%),
+    radial-gradient(circle at 50% 8%, rgba(255,215,106,.35), transparent 55%);
+    animation:wm26kSparkle 2.4s ease-in-out infinite;}
+@keyframes wm26kSparkle{0%,100%{opacity:.7;}50%{opacity:1;}}
 /* Ratings Reload extra FX (see cardEl's isRatings27ReloadTier): a big slowly-rotating circular
    refresh-arrow icon behind the photo, plus 8 small shard fragments that independently fade in and
    out at staggered timings - deliberately many-small-and-twinkling rather than the Kronjuwelen
@@ -11690,6 +11721,7 @@ const PATTERN_FAMILY = {
   promocard:'promocardpattern',
   kapitaen:'kapitaenpattern',
   ratings27reload:'ratings27reloadpattern',
+  wm26k:'wm26kpattern',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
@@ -11745,6 +11777,14 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const legikoneFxHTML = isLegikoneTier ? `<div class="legikone-fx">
       <div class="legikone-halo"></div>
       ${Array.from({length:30},(_,i)=>`<i class="confetti c${i+1}"></i>`).join('')}
+    </div>` : '';
+  // WM-Kapitän (World Cup Pack, rare pull): pulsing gold trophy-halo + rising victory sparks, own
+  // element like the three FX above - see the CSS comment next to .wm26k-fx for why it's rising
+  // sparks rather than reusing Legikone's falling confetti.
+  const isWm26KapitaenTier = card.theme==='wm26k';
+  const wm26kFxHTML = isWm26KapitaenTier ? `<div class="wm26k-fx">
+      <div class="wm26k-halo"></div>
+      ${Array.from({length:10},(_,i)=>`<i class="wm26k-spark k${i+1}"></i>`).join('')}
     </div>` : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
@@ -11827,6 +11867,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${gemFacetsHTML}
     ${refreshFxHTML}
     ${legikoneFxHTML}
+    ${wm26kFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
