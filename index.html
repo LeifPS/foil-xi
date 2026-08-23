@@ -862,6 +862,30 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .pcard.xs .level-badge{width:12px;height:12px;bottom:-5px;border-width:1px;}
 .pcard.xs .level-badge svg{width:6.5px;height:6.5px;}
 
+/* Liga-Abzeichen (Platz 1-3 in Liga A, gültig 1 Woche - see profile.ligaBadge): a small pill shown
+   next to the Ligen-tab header (.liga-my-badge) and next to a name in the Kader-Rangliste
+   (.liga-badge-pill), plus an animated gradient text treatment for the name itself
+   (.liga-name-gold/silver/bronze) - same "bg-clip:text + shifting gradient" language every other
+   name-variant treatment in the game already uses (Prime/Wochen-MVP/Mystery/SBC-exклusive/PROMO).
+   Only ever shown while profile.ligaBadge.expiresAt is still in the future - a leaderboard entry (a
+   published squads/{userId} doc) carries its own copy of this field, only refreshed when that account
+   next publishes their squad.*/
+.liga-my-badge, .liga-badge-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+  padding:3px 9px;border-radius:100px;white-space:nowrap;}
+.liga-badge-gold{background:linear-gradient(160deg,#ffd76a,#c9971f);color:#3a2a00;}
+.liga-badge-silver{background:linear-gradient(160deg,#d7dade,#9297a0);color:#1a1d20;}
+.liga-badge-bronze{background:linear-gradient(160deg,#c9814f,#7a4a24);color:#fff2e6;}
+.liga-name-gold{background:linear-gradient(90deg,#ffd76a,#fff3c4,#ffb347,#ffd76a);background-size:260% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:ligaNameGoldShift 4s linear infinite;font-weight:700;}
+.liga-name-silver{background:linear-gradient(90deg,#d7dade,#ffffff,#9297a0,#d7dade);background-size:260% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:ligaNameSilverShift 4s linear infinite;font-weight:700;}
+.liga-name-bronze{background:linear-gradient(90deg,#c9814f,#e0a468,#7a4a24,#c9814f);background-size:260% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:ligaNameBronzeShift 4s linear infinite;font-weight:700;}
+@keyframes ligaNameGoldShift{0%{background-position:0% 0%;}100%{background-position:260% 0%;}}
+@keyframes ligaNameSilverShift{0%{background-position:0% 0%;}100%{background-position:260% 0%;}}
+@keyframes ligaNameBronzeShift{0%{background-position:0% 0%;}100%{background-position:260% 0%;}}
+body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite .liga-name-bronze{ animation:none !important; }
+
 /* untradable cards (e.g. PRIME) - flag badge sitting on the bottom-right corner of the card border,
    same half-outside treatment as the level-badge. */
 .pcard .untradable-badge{position:absolute;bottom:-11px;right:-11px;width:32px;height:32px;z-index:5;pointer-events:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));}
@@ -8076,6 +8100,9 @@ const PACKS = [
       const third = (UCLW_MANAGER && Math.random()<0.05) ? UCLW_MANAGER : weighted[Math.floor(Math.random()*weighted.length)];
       return [first, second, third];
     }},
+  {id:'ligapack',name:'Liga Pack',cost:0,tier:'ultimate',count:1,hidden:true,
+    desc:'1 garantierte Karte mit mindestens 97 OVR, aus dem gesamten Kartenpool des Spiels - nie eine Karte, die sonst nicht handelbar wäre. Nicht käuflich, nur als Liga-Belohnung (Platz 1/2 in Liga A) erhältlich.',
+    draw(){ return [pick(ligaPackPool())]; }},
   {id:'worldcuppack',name:'World Cup Pack',cost:0,tier:'ultimate',count:5,hidden:true,
     desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit einer 10%-Chance pro Pack auf einen WM-Kapitän (+18 OVR, ein Spieler pro Nation) - bevorzugt der Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
     draw(opts={}){
@@ -13906,6 +13933,16 @@ function adminFullCardPool(){
   wm26VarianteSpecials(); wm26KapitaenSpecials();
   return Array.from(BY_ID.values()).filter(c=>!c.isManager);
 }
+// Liga Pack (see PACKS' 'ligapack'): every real, otherwise-tradable card in the game rated 97+ - built
+// once, lazily, off the same "every card that exists" source as adminFullCardPool. Excludes anything
+// with .untradable set (quest/SBC-exclusive rewards), per the explicit design call: a Liga Pack should
+// never hand out a card that couldn't otherwise be traded/sold.
+let LIGA_PACK_POOL_CACHE = null;
+function ligaPackPool(){
+  if(LIGA_PACK_POOL_CACHE) return LIGA_PACK_POOL_CACHE;
+  LIGA_PACK_POOL_CACHE = adminFullCardPool().filter(c=>c.ov>=97 && !c.untradable);
+  return LIGA_PACK_POOL_CACHE;
+}
 function openAdminPackPicker(){
   openModal(`
     <h2 style="margin-bottom:12px;">Pack ausw\u00e4hlen (kostenlos, f\u00fcr mich)</h2>
@@ -15286,7 +15323,10 @@ function publishSquad(){
     // preciseRating (unrounded) rides alongside the rounded rating so the leaderboard can break
     // same-OVR ties and show a decimal - orderBy() in loadLeaderboard still uses the rounded
     // `rating` field so squads published before this field existed don't vanish from the query.
-    const payload = {owner:profile.displayName, userId:profile.userId, crest: profile.crest, rating, preciseRating, formation:squad.formation, players, managerId: mgr?mgr.id:null, updatedAt:Date.now()};
+    // ligaBadge rides along so the Kader-Rangliste can show it without a live per-account lookup -
+    // only carried over while still actually valid; an expired one is simply dropped, not published.
+    const ligaBadge = profile.ligaBadge && profile.ligaBadge.expiresAt>Date.now() ? profile.ligaBadge : null;
+    const payload = {owner:profile.displayName, userId:profile.userId, crest: profile.crest, rating, preciseRating, formation:squad.formation, players, managerId: mgr?mgr.id:null, ligaBadge, updatedAt:Date.now()};
     await fbReady;
     if(fb){
       try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); invalidateReadCache('squad-leaderboard'); toast('Kader online ver\u00f6ffentlicht!'); return; }
@@ -17251,13 +17291,42 @@ function ligaBadgeHTML(letter, size=28){
   const color = ligaColor(letter);
   return `<div class="liga-badge" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;">${letter}</div>`;
 }
-// Prize money per league: A/B/C/D fixed, everything from D downward shares D's payout (it's not worth
-// hand-tuning a unique amount for leagues 5-26, which will rarely if ever be fully reached).
-const LIGA_WINNER_COINS = { A:75000, B:35000, C:15000, D:10000 };
-function ligaWinnerCoins(letter){ return LIGA_WINNER_COINS[letter] ?? LIGA_WINNER_COINS.D; }
-// runner-up always gets the winner's payout divided by 3, rounded to the nearest 5000 (per the
-// design brief) - e.g. 75000 -> 25000, 35000 -> 10000, 15000 -> 5000, 10000 -> 5000.
-function ligaRunnerUpCoins(letter){ return Math.round(ligaWinnerCoins(letter)/3/5000)*5000; }
+// Prize table per league bracket - every place gets a reward now, not just the top two: 1st/2nd/3rd
+// each have their own tuned coins (plus, for A/B, real card packs on top), and everyone from 4th place
+// down shares the bracket's flat "rest" amount. A/B/C are each hand-tuned; every league from D downward
+// shares D's numbers (not worth hand-tuning leagues 5-26, which will rarely if ever be fully reached).
+// Liga A's top 3 additionally earn a badge (see LIGA_BADGE_LABEL) valid for the coming Ligaphase week.
+const LIGA_REWARD_TABLE = {
+  A: {1:{coins:75000, badge:'gold',   packs:[{id:'ligapack', count:2}]},
+      2:{coins:25000, badge:'silver', packs:[{id:'ligapack', count:1}]},
+      3:{coins:10000, badge:'bronze', packs:[{id:'ratings27', count:1}]},
+      rest:{coins:10000}},
+  B: {1:{coins:45000, packs:[{id:'ratings27', count:2}]},
+      2:{coins:15000, packs:[{id:'ratings27', count:1}]},
+      3:{coins:5000},
+      rest:{coins:5000}},
+  C: {1:{coins:15000}, 2:{coins:5000}, 3:{coins:2000}, rest:{coins:2000}},
+  D: {1:{coins:10000}, 2:{coins:4000}, 3:{coins:1000}, rest:{coins:1000}},
+};
+function ligaRewardBracket(letter){ return LIGA_REWARD_TABLE[letter] || LIGA_REWARD_TABLE.D; }
+function ligaRewardForPlace(letter, place){
+  const bracket = ligaRewardBracket(letter);
+  return bracket[place] || bracket.rest;
+}
+const LIGA_BADGE_LABEL = { gold:'Gold', silver:'Silber', bronze:'Bronze' };
+// One-line summary of a league bracket's full reward table (used in the Ligen tab header) - built
+// generically off LIGA_REWARD_TABLE so it never drifts out of sync with the actual payout logic in
+// resolveWeeklyRolloverIfNeeded.
+function ligaRewardLineHTML(letter){
+  const b = ligaRewardBracket(letter);
+  const describe = r=>{
+    let extra = '';
+    if(r.badge) extra += ` + ${LIGA_BADGE_LABEL[r.badge]}-Abzeichen`;
+    (r.packs||[]).forEach(p=>{ const pack = PACKS.find(x=>x.id===p.id); if(pack) extra += ` + ${pack.name}${p.count>1?' x'+p.count:''}`; });
+    return `${formatCoins(r.coins)} Coins${extra}`;
+  };
+  return `🥇 1.: ${describe(b[1])} · 🥈 2.: ${describe(b[2])} · 🥉 3.: ${describe(b[3])} · 4.+: ${describe(b.rest)}`;
+}
 // ===== Liga-Meister-Karte: the automatic weekly reward for winning Liga A specifically - a rotating
 // cast of players (a new one most weeks, supplied as the season goes on), always boosted to 104 OVR
 // and untradable. Two entry shapes: `custom` for a brand-new player that doesn't exist anywhere else
@@ -17759,14 +17828,18 @@ async function resolveWeeklyRolloverIfNeeded(){
   // userId -> {letter, coins, isChampion} destination league after all movements, before newcomers.
   const nextLeagueOf = {};
   lettersInUse.forEach(letter=>{ tables[letter].forEach(row=>{ nextLeagueOf[row.userId] = letter; }); });
-  const rewards = []; // {userId, coins, championCard:bool}
+  const rewards = []; // {userId, letter, coins, championCard:bool, badge:string|null, packs:[{id,count}]}
   const relegationResults = [];
   lettersInUse.forEach((letter,i)=>{
     const table = tables[letter];
     if(!table.length) return;
-    const champion = table[0];
-    rewards.push({userId:champion.userId, coins:ligaWinnerCoins(letter), championCard: letter==='A'});
-    if(table.length>1) rewards.push({userId:table[1].userId, coins:ligaRunnerUpCoins(letter)});
+    // Every placement earns something now, not just the top two - places 1/2/3 each have their own
+    // tuned reward (see LIGA_REWARD_TABLE), everyone from 4th down shares the bracket's flat amount.
+    table.forEach((row, idx)=>{
+      const place = idx+1;
+      const r = ligaRewardForPlace(letter, place);
+      rewards.push({userId:row.userId, letter, coins:r.coins, championCard: letter==='A' && place===1, badge:r.badge||null, packs:r.packs||[]});
+    });
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
     if(!lettersInUse.includes(upperLetter)) return; // no league above this one (letter is 'A')
     const upperTable = tables[upperLetter];
@@ -17795,10 +17868,25 @@ async function resolveWeeklyRolloverIfNeeded(){
   for(const r of rewards){
     try{
       const updates = {'profile.coins': fb.increment(r.coins)};
+      const collectionAdds = [];
       if(r.championCard){
         const card = currentLigaChampionCard();
-        updates.collection = fb.arrayUnion({uid:genId(), cardId:card.id});
+        collectionAdds.push({uid:genId(), cardId:card.id});
       }
+      // Place-based pack rewards (Liga A top 3, Liga B top 2) - drawn now and added directly, same as
+      // the champion card above, since these are OTHER accounts' saves docs with no interactive
+      // pack-opening screen to show them through.
+      r.packs.forEach(p=>{
+        const pack = PACKS.find(x=>x.id===p.id);
+        if(!pack) return;
+        for(let n=0;n<p.count;n++){
+          pack.draw().forEach(c=>{ if(!c.isManager) collectionAdds.push({uid:genId(), cardId:c.id}); });
+        }
+      });
+      if(collectionAdds.length) updates.collection = fb.arrayUnion(...collectionAdds);
+      // Badge (Liga A top 3 only): valid through the coming Ligaphase week - weekStart here is the
+      // week that just finished, so +14 days covers "starts next Monday, lasts through that whole week".
+      if(r.badge) updates['profile.ligaBadge'] = {tier:r.badge, letter:r.letter, awardedAt:Date.now(), expiresAt: weekStart + 14*24*60*60*1000};
       await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), updates);
     }catch(e){ console.warn('liga reward payout failed for', r.userId, e); }
   }
@@ -17942,11 +18030,13 @@ function renderLigenPanel(view){
     const sortedLetters = allLeaguesSnap ? allLeaguesSnap.docs.map(d=>d.id).sort() : [];
     const sizeOf = l => { if(!allLeaguesSnap) return 0; const d=allLeaguesSnap.docs.find(x=>x.id===l); return d ? (d.data().members||[]).length : 0; };
     const myZones = ligaZonesFor(membership.letter, sortedLetters, sizeOf);
+    const myBadge = profile.ligaBadge && profile.ligaBadge.expiresAt>Date.now() ? profile.ligaBadge : null;
     const header = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:12px 14px;">
         ${ligaBadgeHTML(membership.letter, 48)}
-        <div><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}</div>
-        <div class="hint" style="margin:0;">${membership.members.length} Vereine · 🏆 Sieger: ${formatCoins(ligaWinnerCoins(membership.letter))} Coins${membership.letter==='A'?' + Liga-Meister-Karte':''} · 🥈 2. Platz: ${formatCoins(ligaRunnerUpCoins(membership.letter))} Coins</div>
-        <div class="hint" style="margin:2px 0 0;">${myZones.isTop?'Höchste Liga - keine Aufstiegsmöglichkeit':(myZones.isBottom?'Unterste Liga - kein direkter Abstieg':'Auf-/Abstieg mit den Nachbarligen jede Woche')}</div></div>
+        <div><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}${membership.letter==='A'?' <span class="hint" style="font-size:11px;">(1. Platz zusätzlich Liga-Meister-Karte)</span>':''}</div>
+        <div class="hint" style="margin:0;font-size:10.5px;">${ligaRewardLineHTML(membership.letter)}</div>
+        <div class="hint" style="margin:2px 0 0;">${myZones.isTop?'Höchste Liga - keine Aufstiegsmöglichkeit':(myZones.isBottom?'Unterste Liga - kein direkter Abstieg':'Auf-/Abstieg mit den Nachbarligen jede Woche')}</div>
+        ${myBadge ? `<div class="liga-my-badge liga-badge-${myBadge.tier}" style="margin-top:6px;">🏅 Dein Abzeichen: ${LIGA_BADGE_LABEL[myBadge.tier]}</div>` : ''}</div>
       </div>`;
     if(weekStart==null){
       // Between seeding and the season's first Monday, there's no "old week" to recap - but the
@@ -20760,7 +20850,12 @@ async function loadLeaderboard(){
     const info = document.createElement('span');
     info.style.cssText = 'flex:1;cursor:pointer;display:flex;gap:8px;align-items:center;';
     const decimal = s.preciseRating!=null ? `<span class="rating-decimal">${ratingDecimalSuffix(s.preciseRating)}</span>` : '';
-    info.innerHTML = `<span class="rk${medal?' medal'+medal:''}">${rank}</span><span class="leader-crest">${renderCrestSVG(s.crest || fallbackCrestFor(s.owner), 20)}</span><span style="flex:1;">${s.owner||'Unbenannter Verein'}</span><span class="mono">${s.rating}${decimal} OVR</span>`;
+    // Liga-Abzeichen (Platz 1-3 in Liga A, gültig 1 Woche - see profile.ligaBadge/publishSquad): the
+    // published squad doc carries its own copy, so this only needs to check expiry, not re-fetch.
+    const badge = s.ligaBadge && s.ligaBadge.expiresAt>Date.now() ? s.ligaBadge : null;
+    const nameClass = badge ? ` liga-name-${badge.tier}` : '';
+    const badgePill = badge ? `<span class="liga-badge-pill liga-badge-${badge.tier}" title="Liga-Abzeichen (Platz ${badge.tier==='gold'?1:badge.tier==='silver'?2:3} Liga A, 1 Woche gültig)">🏅 ${LIGA_BADGE_LABEL[badge.tier]}</span>` : '';
+    info.innerHTML = `<span class="rk${medal?' medal'+medal:''}">${rank}</span><span class="leader-crest">${renderCrestSVG(s.crest || fallbackCrestFor(s.owner), 20)}</span><span style="flex:1;" class="${nameClass}">${s.owner||'Unbenannter Verein'}</span>${badgePill}<span class="mono">${s.rating}${decimal} OVR</span>`;
     info.addEventListener('click', ()=>showSquadModal(s));
     const challengeBtn = document.createElement('button');
     challengeBtn.className = 'action-btn secondary';
