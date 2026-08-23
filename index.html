@@ -999,7 +999,11 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
    pack-opening .cutscene-overlay above, but its own overlay/z-index since a level-up can in principle
    fire right as that other cutscene is closing. Multiple level-ups in one match are shown one at a
    time, each POPPING IN at full size in the exact same spot the previous one just left - the "becomes
-   the next one" effect is the fresh pop-in replacing the old badge in place, not a slide/carousel. */
+   the next one" effect is the fresh pop-in replacing the old badge in place, not a slide/carousel.
+   Deliberately EXEMPT from the Grafik-Qualität "Reduziert" mode (unlike every .pcard theme animation) -
+   perf-lite exists because dozens of simultaneously-looping card-grid animations are what actually
+   causes lag, not this one-off, single-instance moment, and a level-up is meant to always feel like a
+   big deal regardless of device. */
 .lvlup-overlay{position:fixed;inset:0;z-index:320;display:flex;align-items:center;justify-content:center;flex-direction:column;
   background:radial-gradient(circle at 50% 42%, var(--cs-acc,#ffd76a) 0%, rgba(6,7,10,.97) 55%);
   animation:csFlash .5s ease;cursor:pointer;}
@@ -1019,7 +1023,6 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .lvlup-label{margin-top:4px;font-size:14px;color:rgba(255,255,255,.75);letter-spacing:.03em;
   opacity:0;animation:csBannerIn .4s .2s forwards;}
 .lvlup-hint{margin-top:26px;font-size:12px;color:rgba(255,255,255,.6);letter-spacing:.03em;opacity:0;animation:csBannerIn .5s .5s forwards;}
-body.perf-lite .lvlup-overlay, body.perf-lite .lvlup-overlay *{ animation:none !important; opacity:1 !important; transform:none !important; }
 .fut-visual-frame{width:132px;height:96px;margin-bottom:20px;border-radius:14px;position:relative;
   background:#0d0f14;border:2px solid var(--cs-acc,#e8c468);overflow:hidden;
   display:flex;align-items:center;justify-content:center;color:var(--cs-acc,#e8c468);
