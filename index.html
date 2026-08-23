@@ -17583,7 +17583,13 @@ function renderLigenPanel(view){
         <div class="hint" style="margin:0;">${membership.members.length} Vereine · Sieger-Preis: ${formatCoins(ligaWinnerCoins(membership.letter))} Coins${membership.letter==='A'?' + Liga-Meister-Karte':''}</div></div>
       </div>`;
     if(weekStart==null){
-      box.innerHTML = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Bis dahin siehst du hier nur deine Zuteilung.</p>`;
+      // Between seeding and the season's first Monday, there's no "old week" to recap - but the
+      // league's own table can already be shown ahead of time (all 0, no matches yet), same as any
+      // later Sonntag shows the just-created next week's table.
+      let html = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Hier schon mal deine Liga:</p>`;
+      const previewWeek = await getOrCreateLeagueWeek(membership.letter, membership.members, LIGA_SEASON_EPOCH);
+      if(previewWeek) html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0));
+      box.innerHTML = html;
       return;
     }
     const isBerlinWeekend = berlinNow().getDay()===6 || berlinNow().getDay()===0;
