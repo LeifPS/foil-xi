@@ -875,6 +875,15 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .liga-badge-gold{background:linear-gradient(160deg,#ffd76a,#c9971f);color:#3a2a00;}
 .liga-badge-silver{background:linear-gradient(160deg,#d7dade,#9297a0);color:#1a1d20;}
 .liga-badge-bronze{background:linear-gradient(160deg,#c9814f,#7a4a24);color:#fff2e6;}
+/* Liga-Buchstaben-Icon (A/B/C/... circle, ligaBadgeHTML): a pulsing glow in the league's own color -
+   deliberately NOT a spin/rotation (explicitly rejected earlier, the letter has to stay readable and
+   still), just a breathing highlight so the badge doesn't sit completely static/dead in the UI. */
+.liga-badge{animation:ligaBadgePulse 2.4s ease-in-out infinite;}
+@keyframes ligaBadgePulse{
+  0%,100%{box-shadow:0 1px 4px rgba(0,0,0,.4);}
+  50%{box-shadow:0 1px 4px rgba(0,0,0,.4), 0 0 14px 3px var(--liga-glow, currentColor);}
+}
+body.perf-lite .liga-badge{ animation:none !important; }
 .liga-name-gold{background:linear-gradient(90deg,#ffd76a,#fff3c4,#ffb347,#ffd76a);background-size:260% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;animation:ligaNameGoldShift 4s linear infinite;font-weight:700;}
 .liga-name-silver{background:linear-gradient(90deg,#d7dade,#ffffff,#9297a0,#d7dade);background-size:260% 100%;
@@ -17286,10 +17295,17 @@ const LIGA_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 // its own identity the way the top few meaningfully do.
 const LIGA_COLORS = { A:'conic-gradient(from 180deg,#b46bff,#7a3ff2,#d68bff,#b46bff)', B:'#3d7bff', C:'#2fbd6a', D:'#e6c343', E:'#e2564f' };
 const LIGA_DEFAULT_COLOR = '#8892a4';
+// Solid stand-in per letter for the glow pulse below - A's real background is a conic-gradient, which
+// box-shadow can't reference directly, so this just picks that gradient's own violet as its glow color.
+const LIGA_GLOW_COLOR = { A:'#b46bff', B:'#3d7bff', C:'#2fbd6a', D:'#e6c343', E:'#e2564f' };
 function ligaColor(letter){ return LIGA_COLORS[letter] || LIGA_DEFAULT_COLOR; }
+function ligaGlowColor(letter){ return LIGA_GLOW_COLOR[letter] || LIGA_DEFAULT_COLOR; }
+// A pulsing glow, not a spin (explicitly rejected earlier - the letter itself must stay still) - see
+// .liga-badge/@keyframes ligaBadgePulse.
 function ligaBadgeHTML(letter, size=28){
   const color = ligaColor(letter);
-  return `<div class="liga-badge" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;">${letter}</div>`;
+  const glow = ligaGlowColor(letter);
+  return `<div class="liga-badge" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;--liga-glow:${glow};">${letter}</div>`;
 }
 // Prize table per league bracket - every place gets a reward now, not just the top two: 1st/2nd/3rd
 // each have their own tuned coins (plus, for A/B, real card packs on top), and everyone from 4th place
