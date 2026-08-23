@@ -17771,9 +17771,19 @@ function ligaStandingsTableHTML(table, zones){
     </div>`;}).join('')}
   </div>${legend}`;
 }
-function ligaMatchRowHTML(m, teams, viewerUserId){
+// opts.fixtureOnly (revealTime: "HH:MM" string) renders just the pairing with no score and no "Live
+// spielen" button, for a match whose own reveal moment hasn't arrived yet - so the whole week's
+// schedule (who plays whom, on which day) is visible in advance, while results/simulation still only
+// appear once that match is actually revealed.
+function ligaMatchRowHTML(m, teams, viewerUserId, opts={}){
   const a = teams[m.aIdx], b = teams[m.bIdx];
   const isMine = viewerUserId && (a.userId===viewerUserId || b.userId===viewerUserId);
+  if(opts.fixtureOnly){
+    return `<div class="leader-row" style="font-size:12px;padding:7px 10px;opacity:.65;${isMine?'font-weight:600;opacity:.85;':''}">
+      <span style="flex:1;">${a.name} <span class="hint" style="margin:0;">vs</span> ${b.name}</span>
+      ${opts.revealTime ? `<span class="hint" style="margin:0;font-size:10.5px;">ab ${opts.revealTime} Uhr</span>` : ''}
+    </div>`;
+  }
   if(isMine && !m.liveRevealed){
     return `<div class="leader-row" style="font-size:12px;padding:9px 10px;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:4px;margin-bottom:5px;">
       <span>${a.name} <span class="hint" style="margin:0;">vs</span> ${b.name}</span>
@@ -18182,20 +18192,21 @@ function renderLigenPanel(view){
     else if(myRow) html += `<div class="hint" style="margin:0 0 8px;">Aktuell: <b style="color:var(--turf-bright);">Platz ${myRow.displayRank}</b> von ${standings.length} · Spieltag ${Math.min(visibleDay,5)}/5</div>`;
     html += ligaStandingsTableHTML(standings, myZones);
     if(isBerlinSunday) html += `<p class="hint">Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
-    for(let d=1; d<=visibleDay; d++){
+    // The whole week's fixtures (who plays whom, which day) are shown up front, all 5 days at once -
+    // Sonntag through Freitag, so you always know what's coming. Only the RESULT of a given match is
+    // held back until its own reveal moment (see ligaMatchIsRevealed): a not-yet-revealed match still
+    // shows up as a plain "A vs B, ab HH:MM Uhr" fixture row instead of vanishing from the list.
+    for(let d=1; d<=5; d++){
       const dayMatches = week.matches.filter(m=>m.day===d);
       if(!dayMatches.length) continue;
-      const revealed = dayMatches.filter(m=>ligaMatchIsRevealed(m, targetWeekStart));
-      if(!revealed.length) continue;
       html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
-      html += revealed.map(m=>ligaMatchRowHTML(m, week.teams, clubId)).join('');
-      const nextHidden = dayMatches.filter(m=>!ligaMatchIsRevealed(m, targetWeekStart));
-      if(nextHidden.length){
-        const dayStart = targetWeekStart + (d-1)*24*60*60*1000;
-        const nextRevealMs = dayStart + Math.min(...nextHidden.map(ligaMatchRevealOffsetMs));
-        const nextRevealDate = new Date(nextRevealMs);
-        html += `<p class="hint" style="margin:4px 0 0;">Weitere ${nextHidden.length} Partie${nextHidden.length===1?'':'n'} an diesem Tag ab ${String(nextRevealDate.getHours()).padStart(2,'0')}:${String(nextRevealDate.getMinutes()).padStart(2,'0')} Uhr.</p>`;
-      }
+      const dayStart = targetWeekStart + (d-1)*24*60*60*1000;
+      html += dayMatches.map(m=>{
+        if(ligaMatchIsRevealed(m, targetWeekStart)) return ligaMatchRowHTML(m, week.teams, clubId);
+        const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
+        const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+        return ligaMatchRowHTML(m, week.teams, clubId, {fixtureOnly:true, revealTime});
+      }).join('');
     }
     box.innerHTML = html;
     box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
