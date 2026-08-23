@@ -11113,26 +11113,31 @@ async function sGet(key, shared=false){
 // match animation has played, so the coin pill ticking up/down doesn't give the result away early.
 // The caller is responsible for calling updateCoinDisplay() itself once the reveal actually happens.
 async function atomicCoinChange(delta, extraSets={}, opts={}){
-  await fbReady;
   // "Verdiene X Coins" Wochen Pass quest - any positive delta counts as earned, regardless of source
   // (match reward, sale, quest/reward payout, admin grant, ...)
   const questsChanged = delta>0 ? bumpWeekPassQuest('earnCoins', delta) : false;
+  // Applied to the in-memory profile SYNCHRONOUSLY, before the first await below - every call site
+  // guards a spend with a plain "if(profile.coins<cost) return;" check just before calling this, and
+  // JS won't hand control back to a second, near-simultaneous click's handler until this function
+  // hits its first await. Updating profile.coins only AFTER the network round-trip (the old order)
+  // left a window where two rapid clicks (double-tap, a slow connection making a button feel
+  // unresponsive) could each pass their own balance check against the same stale value, then both
+  // fb.increment() writes would land and push the real balance negative - which is exactly how an
+  // account ends up with e.g. -3.000 Coins despite every purchase flow checking funds first.
+  profile.coins += delta;
+  Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
+  if(!opts.silentDisplay) updateCoinDisplay();
+  await fbReady;
   if(fb && clubId && fb.updateDoc && fb.increment){
     try{
       const payload = { 'profile.coins': fb.increment(delta) };
       Object.entries(extraSets).forEach(([k,v])=>{ payload[`profile.${k}`] = v; });
       if(questsChanged) payload['profile.weekPassQuests'] = profile.weekPassQuests;
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
-      profile.coins += delta;
-      Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
-      if(!opts.silentDisplay) updateCoinDisplay();
       return;
     }catch(e){ console.warn('atomic coin update failed, falling back to full profile write', e); }
   }
-  profile.coins += delta;
-  Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
   await sSet('profile', profile);
-  if(!opts.silentDisplay) updateCoinDisplay();
 }
 async function sSet(key, value, shared=false){
   if(!shared){
