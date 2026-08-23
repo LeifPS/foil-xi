@@ -13695,7 +13695,7 @@ async function renderAdminPanel(view){
       resultEl.textContent = 'Wurde bereits eingeteilt — das passiert nur einmal.';
       resultEl.style.color = 'var(--muted)';
     } else {
-      resultEl.textContent = 'Fehlgeschlagen ('+(out.reason||'unbekannt')+'). Siehe Konsole für Details.';
+      resultEl.innerHTML = `Fehlgeschlagen (${out.reason||'unbekannt'}).${out.detail?` <span class="mono" style="user-select:all;">${out.detail}</span> (zum Kopieren markieren)`:' Siehe Konsole für Details.'}`;
       resultEl.style.color = 'var(--danger)';
     }
     e.target.disabled = false; e.target.textContent = 'Ligen jetzt einmalig einteilen';
@@ -17137,12 +17137,12 @@ async function seedLeaguesOnce(){
   try{
     const existing = await fb.getDoc(metaRef);
     if(existing.exists() && existing.data().seeded) return {ok:false, reason:'already-seeded'};
-  }catch(e){ console.warn('league seed check failed', e); return {ok:false, reason:'error'}; }
+  }catch(e){ console.warn('league seed check failed', e); return {ok:false, reason:'error', detail: (e && (e.code||e.message)) || String(e)}; }
   let allDocs;
   try{
     const snap = await fb.getDocs(fb.collection(fb.db,'saves'));
     allDocs = snap.docs;
-  }catch(e){ console.warn('league seed: full saves scan failed', e); return {ok:false, reason:'scan-failed', error:e}; }
+  }catch(e){ console.warn('league seed: full saves scan failed', e); return {ok:false, reason:'scan-failed', detail: (e && (e.code||e.message)) || String(e)}; }
   const bannedIds = await getLeaderboardBannedUserIds();
   const ranked = [];
   allDocs.forEach(d=>{
@@ -17171,7 +17171,7 @@ async function seedLeaguesOnce(){
     await Promise.all(Object.entries(leagues).map(([letter,members])=>
       fb.setDoc(fb.doc(fb.db,'leagueMembership',letter), {letter, members})
     ));
-  }catch(e){ console.warn('league seed write failed', e); return {ok:false, reason:'write-failed', error:e}; }
+  }catch(e){ console.warn('league seed write failed', e); return {ok:false, reason:'write-failed', detail: (e && (e.code||e.message)) || String(e)}; }
   return {ok:true, leagues, totalEligible:ranked.length};
 }
 async function loadMyLeagueMembership(){
