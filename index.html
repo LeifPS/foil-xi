@@ -18138,11 +18138,21 @@ async function resolveWeeklyRolloverIfNeeded(){
     }catch(e){ console.warn('liga reward payout failed for', r.userId, e); }
   }
   // Persist next week's membership + a history snapshot (for the weekend "Endstand" + relegation view).
+  const nextWeekStart = weekStart + 7*24*60*60*1000;
   try{
     await Promise.all(Object.entries(nextMembers).filter(([,m])=>m.length).map(([letter,members])=>
       fb.setDoc(fb.doc(fb.db,'leagueMembership',letter), {letter, members})
     ));
     await fb.setDoc(fb.doc(fb.db,'leagueHistory', weekStart+''), {weekStart, tables, relegationResults, rewards});
+    // Build next week's fixtures (schedule only, no results yet - matches start pending, see
+    // buildLeagueWeekPayload) right now, at this one guaranteed fixed moment, instead of waiting for
+    // whoever's tab happens to open the Ligen view first - the pairings need to already exist for
+    // EVERY league from Samstag 12:00 on, not just for leagues someone happened to visit. Goes through
+    // getOrCreateLeagueWeek (not a raw buildLeagueWeekPayload+setDoc) so it stays safe even if two
+    // rollover calls somehow overlap: first writer wins, nobody's schedule gets silently re-rolled.
+    await Promise.all(Object.entries(nextMembers).filter(([,m])=>m.length).map(([letter,members])=>
+      getOrCreateLeagueWeek(letter, members, nextWeekStart)
+    ));
     await fb.setDoc(flagRef, {done:true, at:Date.now()});
   }catch(e){ console.warn('rollover write failed', e); return null; }
   return {tables, relegationResults, rewards};
@@ -18214,12 +18224,16 @@ async function renderAllLigenOverview(box){
     LIGA_LAST_ERROR = null;
     // Same rule as the personal view: only the still-0:0 upcoming week (Sonntag, or pre-season) is
     // safe to self-heal a team-count mismatch on - an already-underway Montag-Samstag week is not.
-    const week = (isWeekendRecap || preSeason)
+    let week = (isWeekendRecap || preSeason)
       ? await ligaSyncedWeek(letter, members, targetWeekStart)
       : await getOrCreateLeagueWeek(letter, members, targetWeekStart);
+    const isUpcoming = preSeason || isWeekendRecap;
+    // This overview is visited by anyone, not just that league's own members - without this, a league
+    // nobody personally checks in on this week would sit at 0 pts (all pending) here all week, only
+    // ever catching up once someone opens their OWN "Meine Liga" tab (or Samstag's force-resolve hits).
+    if(week && !isUpcoming) week = await resolveLigaMatchIfNeeded(letter, targetWeekStart, week);
     if(week){
       week.teams = await ligaRefreshTeamDisplay(week.teams);
-      const isUpcoming = preSeason || isWeekendRecap;
       const zones = ligaZonesFor(letter, sortedLetters, sizeOf);
       // An upcoming (not-yet-started) week has nothing to reveal at all (uptoDay 0); an ongoing
       // Montag-Samstag week counts every match whose own per-round reveal time has already passed.
