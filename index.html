@@ -17186,6 +17186,171 @@ async function loadMyLeagueMembership(){
   }catch(e){ console.warn('load league membership failed', e); }
   return null;
 }
+// ===== Ligen Stufe 2: Spielplan, Simulation, Tabelle =====
+// Splits a double round-robin's total round count as evenly as possible across the 5 weekdays,
+// front-loaded (extra rounds land on earlier days) - for the standard 8-team league that's exactly
+// the "3/3/3/3/2" from the design brief, and it generalizes cleanly to the one undersized (last)
+// league, whatever size it ends up being.
+function distributeRoundsAcrossDays(totalRounds){
+  const base = Math.floor(totalRounds/5), rem = totalRounds%5;
+  return Array.from({length:5}, (_,i)=> base + (i<rem?1:0));
+}
+// Full double round-robin (Hin- und Rückspiel gegen jeden) via the same circle-method scheduler the
+// hosted-tournament round-robin format already uses - running it twice gives every pair exactly two
+// meetings, which is literally what "einmal Hin- und einmal Rückspiel" means.
+function generateDoubleRoundRobinRounds(n){
+  const single = circleMethodSchedule(n).filter(r=>r.length); // drop any all-bye phantom round
+  return single.concat(single);
+}
+async function resolveSaveDataForUser(userId){
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'saves',userId));
+    return snap.exists() ? snap.data() : null;
+  }catch(e){ console.warn('resolve league member save failed', userId, e); return null; }
+}
+// Builds one league's entire week - every team's frozen Monday-state rating/roster, and every single
+// match of the double round-robin, fully pre-simulated (see the "ändert das Ergebnis NIE" design
+// answer - watching live never re-rolls anything, it only replays an already-decided result). Every
+// match gets a full liveMd, since every match in a league is human-vs-human and either side might
+// want to watch theirs live - unlike a bot-filled hosted tournament, there's no "only humans need
+// liveMd" shortcut available here.
+async function buildLeagueWeekPayload(letter, members, weekStart){
+  const teams = [];
+  for(const userId of members){
+    const data = await resolveSaveDataForUser(userId);
+    if(!data || !data.profile){ teams.push({userId, name:userId, rating:40, crest:null, players:[]}); continue; }
+    const {rating, players} = squadRatingFromSaveData(data);
+    teams.push({userId, name:data.profile.displayName||userId, rating, crest:data.profile.crest||null, players});
+  }
+  const rounds = generateDoubleRoundRobinRounds(teams.length);
+  const perDay = distributeRoundsAcrossDays(rounds.length);
+  const matches = [];
+  let roundIdx = 0;
+  perDay.forEach((count, dayIdx)=>{
+    for(let c=0;c<count;c++){
+      (rounds[roundIdx]||[]).forEach(([aIdx,bIdx])=>{
+        const a = teams[aIdx], b = teams[bIdx];
+        const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players, null, null, {allowDraw:true});
+        matches.push({day:dayIdx+1, aIdx, bIdx, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide,
+          mid:genId(), liveMd: JSON.parse(JSON.stringify(md)), liveRevealed:false});
+      });
+      roundIdx++;
+    }
+  });
+  return {letter, weekStart, teams: teams.map(t=>({userId:t.userId, name:t.name, rating:t.rating, crest:t.crest})), matches};
+}
+// First caller "wins" and writes the week's data; anyone arriving after just reads what's already
+// there. The payload is built BEFORE the transaction (it depends on Math.random(), which must only
+// ever run once) - the transaction itself only does an atomic check-and-set, mirroring exactly how
+// startHostedTournament avoids double-simulating a bracket on concurrent clicks.
+async function getOrCreateLeagueWeek(letter, members, weekStart){
+  await fbReady;
+  if(!fb) return null;
+  const id = letter+'_'+weekStart;
+  const ref = fb.doc(fb.db,'leagueWeeks', id);
+  try{
+    const existing = await fb.getDoc(ref);
+    if(existing.exists()) return existing.data();
+  }catch(e){ console.warn('league week read failed', e); return null; }
+  const payload = await buildLeagueWeekPayload(letter, members, weekStart);
+  try{
+    if(fb.runTransaction){
+      let result = payload;
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const snap = await tx.get(ref);
+        if(snap.exists()){ result = snap.data(); return; }
+        tx.set(ref, payload);
+      });
+      return result;
+    }
+    await fb.setDoc(ref, payload);
+    return payload;
+  }catch(e){ console.warn('league week write failed', e); return payload; }
+}
+// How many of the 5 weekdays are "done" (their results exist and should be shown) purely as a
+// function of wall-clock time, Berlin-anchored - Monday 00:00 reveals day 1, Tuesday 00:00 reveals
+// day 2, and so on, capped at 5 (Friday's matches are the last ones, Saturday is relegation).
+function ligaVisibleDayCount(weekStart){
+  if(weekStart==null) return 0;
+  const elapsedDays = Math.floor((berlinNow().getTime()-weekStart)/(24*60*60*1000));
+  return Math.max(0, Math.min(5, elapsedDays+1));
+}
+function ligaComputeStandings(teams, matches, uptoDay){
+  const table = teams.map((t,i)=>({idx:i, userId:t.userId, name:t.name, pts:0, w:0, d:0, l:0, gf:0, ga:0}));
+  matches.filter(m=>m.day<=uptoDay).forEach(m=>{
+    const a = table[m.aIdx], b = table[m.bIdx];
+    a.gf+=m.aGoals; a.ga+=m.bGoals; b.gf+=m.bGoals; b.ga+=m.aGoals;
+    if(m.winnerSide==='draw'){ a.pts+=1; b.pts+=1; a.d++; b.d++; }
+    else if(m.winnerSide==='me'){ a.pts+=3; a.w++; b.l++; }
+    else { b.pts+=3; b.w++; a.l++; }
+  });
+  table.forEach(t=>{ t.gd = t.gf-t.ga; });
+  table.sort((x,y)=> y.pts-x.pts || y.gd-x.gd || y.gf-x.gf);
+  return table;
+}
+function ligaStandingsTableHTML(table){
+  return `<div style="margin-bottom:16px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;overflow:hidden;">
+    <div style="display:grid;grid-template-columns:28px 1fr 30px 30px 30px 50px 40px 40px;gap:0;font-size:11px;font-weight:600;background:var(--line);padding:8px;color:var(--muted);text-align:center;">
+      <div></div><div style="text-align:left;">Verein</div><div>S</div><div>U</div><div>N</div><div>Tore</div><div>Diff</div><div>Pkt</div>
+    </div>
+    ${table.map((t,i)=>`<div style="display:grid;grid-template-columns:28px 1fr 30px 30px 30px 50px 40px 40px;gap:0;padding:7px 8px;border-top:1px solid var(--line);align-items:center;font-size:11.5px;${t.userId===clubId?'background:rgba(95,225,201,0.08);':''}">
+      <div style="text-align:center;color:var(--muted);">${i+1}</div>
+      <div style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${t.userId===clubId?'font-weight:700;color:var(--turf-bright);':''}">${t.name}</div>
+      <div style="text-align:center;">${t.w}</div><div style="text-align:center;">${t.d}</div><div style="text-align:center;">${t.l}</div>
+      <div style="text-align:center;" class="mono">${t.gf}:${t.ga}</div>
+      <div style="text-align:center;">${t.gd>=0?'+':''}${t.gd}</div>
+      <div style="text-align:center;font-weight:700;color:var(--gold);">${t.pts}</div>
+    </div>`).join('')}
+  </div>`;
+}
+function ligaMatchRowHTML(m, teams, viewerUserId){
+  const a = teams[m.aIdx], b = teams[m.bIdx];
+  const isMine = viewerUserId && (a.userId===viewerUserId || b.userId===viewerUserId);
+  if(isMine && !m.liveRevealed){
+    return `<div class="leader-row" style="font-size:12px;padding:6px 0;justify-content:space-between;">
+      <span>${a.name} vs ${b.name}</span>
+      <button class="bracket-live-btn" type="button" data-liga-live-mid="${m.mid}" style="padding:4px 10px;font-size:11px;">▶ Live spielen</button>
+    </div>`;
+  }
+  return `<div class="leader-row" style="font-size:12px;padding:6px 0;">
+    <span style="flex:1;${m.winnerSide==='me'?'font-weight:700;color:var(--turf-bright);':''}">${a.name}</span>
+    <span class="mono">${m.aGoals}:${m.bGoals}</span>
+    <span style="flex:1;text-align:right;${m.winnerSide==='opp'?'font-weight:700;color:var(--turf-bright);':''}">${b.name}</span>
+  </div>`;
+}
+const LIGA_DAY_LABEL = {1:'Montag', 2:'Dienstag', 3:'Mittwoch', 4:'Donnerstag', 5:'Freitag'};
+async function playLigaLiveMatch(letter, weekStart, mid){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  await fbReady;
+  if(!fb) return;
+  const id = letter+'_'+weekStart;
+  const ref = fb.doc(fb.db,'leagueWeeks', id);
+  let snap;
+  try{ snap = await fb.getDoc(ref); }catch(e){ toast('Konnte nicht geladen werden.'); return; }
+  if(!snap.exists()) return;
+  const week = snap.data();
+  const matchIdx = week.matches.findIndex(m=>m.mid===mid);
+  if(matchIdx<0) return;
+  const m = week.matches[matchIdx];
+  const a = week.teams[m.aIdx], b = week.teams[m.bIdx];
+  const viewerIsA = a.userId===clubId, viewerIsB = b.userId===clubId;
+  if(!viewerIsA && !viewerIsB) return;
+  const md = viewerIsA ? {...m.liveMd} : flipMatchDataSides(m.liveMd);
+  md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+  const myName = viewerIsA ? a.name : b.name, oppName = viewerIsA ? b.name : a.name;
+  inMatch = true;
+  openModal(`<h2 style="margin-bottom:4px;">Liga ${letter} · ${LIGA_DAY_LABEL[m.day]}</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${myName} vs ${oppName}</p>`);
+  const box = document.querySelector('#modal-root .modal-box');
+  ensureMatchAreaHost(box);
+  try{ await playFullMatch(md, myName, oppName); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
+  finally{ inMatch = false; }
+  try{
+    const matches2 = week.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, liveRevealed:true});
+    await fb.setDoc(ref, {matches: matches2}, {merge:true});
+  }catch(e){ console.warn('mark liga match revealed failed', e); }
+  closeModal();
+  renderView('ligen');
+}
 function renderLigenPanel(view){
   view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Ruhetag. Auf- und Abstieg jede Woche.</p></div>
     <div id="liga-content"><p class="hint">Lädt…</p></div>`;
@@ -17197,14 +17362,35 @@ function renderLigenPanel(view){
       box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Die Einteilung erfolgt einmalig — danach nie wieder.</p>`;
       return;
     }
-    const preseason = weekStart==null;
-    box.innerHTML = `
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+    const header = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
         ${ligaBadgeHTML(membership.letter, 44)}
         <div><div style="font-family:'Anton';font-size:20px;">Liga ${membership.letter}</div>
         <div class="hint" style="margin:0;">${membership.members.length} Vereine · Sieger-Preis: ${formatCoins(ligaWinnerCoins(membership.letter))} Coins${membership.letter==='A'?' + Liga-Meister-Karte':''}</div></div>
-      </div>
-      ${preseason ? `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr. Bis dahin siehst du hier nur deine Zuteilung.</p>` : `<p class="hint">Spielplan &amp; Tabelle folgen in Kürze (Stufe 2).</p>`}`;
+      </div>`;
+    if(weekStart==null){
+      box.innerHTML = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Bis dahin siehst du hier nur deine Zuteilung.</p>`;
+      return;
+    }
+    box.innerHTML = header + `<p class="hint">Spielplan wird geladen…</p>`;
+    const week = await getOrCreateLeagueWeek(membership.letter, membership.members, weekStart);
+    if(!week){ box.innerHTML = header + `<p class="hint">Spielplan konnte nicht geladen werden.</p>`; return; }
+    const visibleDay = ligaVisibleDayCount(weekStart);
+    const standings = ligaComputeStandings(week.teams, week.matches, visibleDay);
+    const isWeekend = visibleDay>=5;
+    let html = header + ligaStandingsTableHTML(standings);
+    if(isWeekend){
+      html += `<p class="hint">Endstand der Woche. ${membership.letter!=='A'||true?'Auf-/Abstieg und Relegation folgen samstags (Stufe 3).':''}</p>`;
+    }
+    for(let d=1; d<=visibleDay; d++){
+      const dayMatches = week.matches.filter(m=>m.day===d);
+      if(!dayMatches.length) continue;
+      html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
+      html += dayMatches.map(m=>ligaMatchRowHTML(m, week.teams, clubId)).join('');
+    }
+    box.innerHTML = html;
+    box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
+      btn.addEventListener('click', ()=> playLigaLiveMatch(membership.letter, weekStart, btn.dataset.ligaLiveMid));
+    });
   })();
 }
 // ===== WM 2026: the real 48-team format end to end - 12 groups of 4, top 2 plus the best 8 thirds
@@ -20432,7 +20618,7 @@ function flipMatchDataSides(md){
     incidents: (md.incidents||[]).map(flipSide),
     myProfile: md.oppProfile, oppProfile: md.myProfile,
     myRedMinute: md.oppRedMinute, oppRedMinute: md.myRedMinute,
-    winnerSide: md.winnerSide==='me' ? 'opp' : 'me',
+    winnerSide: md.winnerSide==='draw' ? 'draw' : (md.winnerSide==='me' ? 'opp' : 'me'),
     shootout: md.shootout ? {
       myKicks: md.shootout.oppKicks, oppKicks: md.shootout.myKicks,
       myScore: md.shootout.oppScore, oppScore: md.shootout.myScore,
