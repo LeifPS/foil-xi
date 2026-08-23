@@ -17353,15 +17353,15 @@ function ligaVisibleDayCount(weekStart){
   const elapsedDays = Math.floor((berlinNow().getTime()-weekStart)/(24*60*60*1000));
   return Math.max(0, Math.min(5, elapsedDays+1));
 }
-// Within a single day, its rounds don't all reveal at once at midnight - they're spread across
-// 05:00-20:00 Berlin, evenly by however many rounds that day actually has (a typical 3-round day
-// reveals at 05:00, 10:00, 15:00; a 2-round day at 05:00 and 12:30; etc.). Matches written before this
+// Within a single day, its rounds don't all reveal at once at midnight - they're spread out in fixed
+// 5-hour steps: Montag-Donnerstag start at 05:00 (a normal 3-round day reveals 05:00/10:00/15:00),
+// Freitag starts later at 10:00 (its usual 2 rounds reveal 10:00/15:00). Matches written before this
 // per-round reveal existed have no roundInDay/roundsInDay stored and simply fall back to "revealed
 // as soon as the day starts" (offset 0), so old already-created weeks keep working unchanged.
 function ligaMatchRevealOffsetMs(m){
   if(m.roundInDay==null || !m.roundsInDay) return 0;
-  const hour = 5 + m.roundInDay * (15/m.roundsInDay);
-  return Math.round(hour*60*60*1000);
+  const baseHour = m.day===5 ? 10 : 5;
+  return (baseHour + m.roundInDay*5) * 60*60*1000;
 }
 function ligaMatchIsRevealed(m, weekStart){
   const dayStart = weekStart + (m.day-1)*24*60*60*1000;
