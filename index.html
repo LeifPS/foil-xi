@@ -62,6 +62,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 #topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:linear-gradient(180deg,#0d1017,#0a0d13);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;}
 .brand{display:flex;align-items:center;gap:10px;}
 .brand-mark{width:34px;height:34px;border-radius:8px;background:linear-gradient(145deg,var(--turf-bright),var(--turf));display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:16px;color:#eafff2;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;}
+@keyframes ligaBadgeSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 /* real logo image, swapped in for .brand-mark once APP_LOGO_DATA_URI is set - see applyAppLogo() */
 .brand-logo{width:34px;height:34px;border-radius:8px;object-fit:cover;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;}
 .brand h1{font-size:19px;letter-spacing:.03em;}
@@ -11896,7 +11897,7 @@ document.addEventListener('visibilitychange', ()=>{
 });
 
 // ===== nav & routing =====
-const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['week','Wochen Pass']];
+const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass']];
 const ADMIN_USERS = new Set(['leifps','test']);
 function isAdmin(){ return clubId && ADMIN_USERS.has(clubId); }
 function renderNav(){
@@ -11916,6 +11917,7 @@ function renderView(tab){
   if(tab==='sbc') return renderSBCList(view);
   if(tab==='trade') return renderTrade(view);
   if(tab==='play') return renderPlay(view);
+  if(tab==='ligen') return renderLigenPanel(view);
   if(tab==='week') return renderWeekPass(view);
   if(tab==='admin') return isAdmin() ? renderAdminPanel(view) : renderPlay(view);
 }
@@ -13667,6 +13669,12 @@ async function renderAdminPanel(view){
       <p class="hint" style="margin-top:0;margin-bottom:10px;">Setzt ALLE Spieler zurück (Coins, Karten, Kader, Statistiken) — jeder bekommt vorher einen dauerhaften Prestige-Rang, der über Resets hinweg erhalten bleibt.</p>
       <button class="action-btn secondary" id="admin-great-reset" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Great Reset auslösen</button>
     </div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Ligen einteilen</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Einmalige, unumkehrbare Einteilung ALLER Accounts (außer Test-Accounts und Leaderboard-gesperrten) in Ligen à 8, nach Kaderstärke sortiert. Läuft nur, wenn noch nie eingeteilt wurde.</p>
+      <button class="action-btn secondary" id="admin-seed-leagues" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Ligen jetzt einmalig einteilen</button>
+      <p class="hint" id="admin-seed-leagues-result" style="margin:10px 0 0;"></p>
+    </div>
     <div class="vs-panel" style="border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Nutzer verwalten</h3>
       <div style="display:flex;gap:8px;margin-bottom:14px;">
@@ -13676,6 +13684,22 @@ async function renderAdminPanel(view){
       <div id="admin-user-content"></div>
     </div>`;
   document.getElementById('admin-great-reset').addEventListener('click', triggerGreatReset);
+  document.getElementById('admin-seed-leagues').addEventListener('click', async (e)=>{
+    e.target.disabled = true; e.target.textContent = 'Läuft…';
+    const resultEl = document.getElementById('admin-seed-leagues-result');
+    const out = await seedLeaguesOnce();
+    if(out.ok){
+      resultEl.textContent = `Fertig: ${out.totalEligible} Accounts in ${Object.keys(out.leagues).length} Ligen eingeteilt.`;
+      resultEl.style.color = 'var(--turf-bright)';
+    } else if(out.reason==='already-seeded'){
+      resultEl.textContent = 'Wurde bereits eingeteilt — das passiert nur einmal.';
+      resultEl.style.color = 'var(--muted)';
+    } else {
+      resultEl.textContent = 'Fehlgeschlagen ('+(out.reason||'unbekannt')+'). Siehe Konsole für Details.';
+      resultEl.style.color = 'var(--danger)';
+    }
+    e.target.disabled = false; e.target.textContent = 'Ligen jetzt einmalig einteilen';
+  });
   document.getElementById('admin-add-coins').addEventListener('click', async ()=>{
     await atomicCoinChange(100000);
     toast('100.000 Coins hinzugef\u00fcgt.');
@@ -16980,6 +17004,208 @@ async function playTournamentRound(){
       renderTournamentPanel();
     }
   });
+}
+// ===== Ligen: weekly league system (Stufe 1 - Datenmodell, Farben, Meister-Karten, einmalige
+// Einteilung, Grundgerüst des Reiters). Montag-Freitag Ligaphase (3/3/3/3/2 Spiele), Samstag
+// Relegation, Sonntag Ruhetag/Endstand. Ligen A-Z (bis zu 208 Vereine), jede volle Liga hat exakt 8
+// Teilnehmer, nur die unterste/letzte Liga darf kleiner sein.
+//
+// Anchored to Europe/Berlin wall-clock time, NOT the viewer's own local timezone - unlike
+// mostRecentMonday/WEEK_PASS_START above (a personal XP track that doesn't need cross-player
+// agreement), a league is a shared competition between several real accounts, so every viewer's
+// client must compute the exact same week boundary regardless of where they physically are.
+function berlinNow(){
+  const parts = new Intl.DateTimeFormat('en-US', {timeZone:'Europe/Berlin', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false}).formatToParts(new Date());
+  const get = t => Number(parts.find(p=>p.type===t).value);
+  const hour = get('hour');
+  return new Date(get('year'), get('month')-1, get('day'), hour===24?0:hour, get('minute'), get('second'));
+}
+function mostRecentMondayBerlin(){
+  const d = berlinNow();
+  const diffToMonday = (d.getDay()+6)%7; // Mon->0 ... Sun->6
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()-diffToMonday, 0,0,0,0).getTime();
+}
+// Week 1 of the league system - the Monday right after the one-time seeding (Sun 2026-08-23). Fixed
+// forever: every later week is counted as "N weeks after this one", never recomputed relative to now.
+const LIGA_SEASON_EPOCH = new Date(2026,7,24,0,0,0,0).getTime();
+// This week's Monday 00:00 (Berlin) - or null if the season hasn't started yet (still before the
+// epoch above), which is only possible for the brief window between the one-time seeding and the
+// following Monday.
+function ligaCurrentWeekStart(){
+  const monday = mostRecentMondayBerlin();
+  return monday>=LIGA_SEASON_EPOCH ? monday : null;
+}
+function ligaWeekIndex(weekStart){ return Math.round((weekStart-LIGA_SEASON_EPOCH)/(7*24*60*60*1000)); }
+// 26 possible leagues (A-Z), enough for 208 clubs (26*8) per the design brief - in practice only as
+// many as currently have members will ever be shown/used.
+const LIGA_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+// A: violet gradient (the flagship league gets the flashiest treatment, matching the conic-gradient
+// look already used for the game's other "ultimate" rarities elsewhere); B-E: solid colors; F onward:
+// the same neutral grey repeated - by then it's just "one of many mid/lower leagues" and doesn't need
+// its own identity the way the top few meaningfully do.
+const LIGA_COLORS = { A:'conic-gradient(from 180deg,#b46bff,#7a3ff2,#d68bff,#b46bff)', B:'#3d7bff', C:'#2fbd6a', D:'#e6c343', E:'#e2564f' };
+const LIGA_DEFAULT_COLOR = '#8892a4';
+function ligaColor(letter){ return LIGA_COLORS[letter] || LIGA_DEFAULT_COLOR; }
+function ligaBadgeHTML(letter, size=28){
+  const color = ligaColor(letter);
+  const isGradient = color.indexOf('gradient')>=0;
+  return `<div class="liga-badge" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;${isGradient?'animation:ligaBadgeSpin 6s linear infinite;':''}">${letter}</div>`;
+}
+// Prize money per league: A/B/C/D fixed, everything from D downward shares D's payout (it's not worth
+// hand-tuning a unique amount for leagues 5-26, which will rarely if ever be fully reached).
+const LIGA_WINNER_COINS = { A:75000, B:35000, C:15000, D:10000 };
+function ligaWinnerCoins(letter){ return LIGA_WINNER_COINS[letter] ?? LIGA_WINNER_COINS.D; }
+// runner-up always gets the winner's payout divided by 3, rounded to the nearest 5000 (per the
+// design brief) - e.g. 75000 -> 25000, 35000 -> 10000, 15000 -> 5000, 10000 -> 5000.
+function ligaRunnerUpCoins(letter){ return Math.round(ligaWinnerCoins(letter)/3/5000)*5000; }
+// ===== Liga-Meister-Karte: the automatic weekly reward for winning Liga A specifically - a rotating
+// cast of players (a new one most weeks, supplied as the season goes on), always boosted to 104 OVR
+// and untradable. Two entry shapes: `custom` for a brand-new player that doesn't exist anywhere else
+// in the game (built from scratch, own base stats), or `baseId` to reuse a real existing player's card
+// as the boost source (their real stats/position/nation, just a different photo and a big OVR jump) -
+// same convention as every other *_IMG_OVERRIDE pool in the file. Index 0 is week 1; once the list
+// runs out, the LAST entry just keeps repeating week after week - unlike the Wochen-Pass roster, this
+// deliberately does NOT wrap back around to week 1, since new entries get appended going forward
+// rather than cycling through a fixed set.
+const LIGA_CHAMPION_ID_BASE = 9798000;
+const LIGA_CHAMPION_ROSTER = [
+  { custom: {n:'Carlos Espí', pos:'ST', nat:'Spain', lg:'LaLiga', club:'Levante UD', foot:'Right',
+      img:'https://cdn3.futbin.com/content/fifa26/img/players/p67179831.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=62e945451736aeb3897a5d1d81fa823c',
+      ov:70, pac:71, sho:64, pas:56, dri:64, defn:37, phy:74} }, // Woche 1
+  { baseId:241461, img:'https://cdn3.futbin.com/content/fifa26/img/players/p67350325.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=a61b4a6ea1af22158172961e98e6eb5e' }, // Woche 2: Ferran Torres
+];
+function ligaChampionCardForIndex(idx){
+  const i = Math.max(0, Math.min(idx, LIGA_CHAMPION_ROSTER.length-1));
+  const id = LIGA_CHAMPION_ID_BASE+i;
+  if(BY_ID.has(id)) return BY_ID.get(id);
+  const entry = LIGA_CHAMPION_ROSTER[i];
+  const base = entry.custom
+    ? {id: LIGA_CHAMPION_ID_BASE-1000-i, ...entry.custom, pot:entry.custom.ov, gk:false}
+    : (entry.img ? {...BY_ID.get(entry.baseId), img:entry.img} : BY_ID.get(entry.baseId));
+  const card = boostBaseToOv(base, 104, id, 'liga_champion', 'Liga-Meister', 'ligachamp');
+  card.untradable = true;
+  BY_ID.set(card.id, card);
+  return card;
+}
+function currentLigaChampionCard(){
+  const weekStart = ligaCurrentWeekStart();
+  const idx = weekStart==null ? 0 : ligaWeekIndex(weekStart);
+  return ligaChampionCardForIndex(idx);
+}
+// Accounts that never take part in Ligen: the same three test/admin logins already excluded from the
+// public leaderboards (see LEADERBOARD_EXCLUDED_USERS), plus anyone currently leaderboard-banned -
+// both exclusions the user explicitly asked for.
+async function ligaEligible(userId, bannedIds){
+  return !LEADERBOARD_EXCLUDED_USERS.has(userId) && !bannedIds.has(userId);
+}
+// Computes a squad rating + resolved player list from a RAW saves/{id} document's data, without
+// touching any of the current session's own global state (profile/collection/squad/managerCollection)
+// - needed because the one-time league seeding has to rank every OTHER account's squad, not just the
+// viewer's own. Mirrors squadRating()/getMySquadPlayers()'s logic exactly, just parameterized.
+function squadRatingFromSaveData(data){
+  const coll = data.collection||[];
+  const sq = data.squad||{formation:'433',slots:{}};
+  const mgrColl = data.managerCollection||[];
+  const form = FORMATIONS[sq.formation]||FORMATIONS['433'];
+  const mgrEntry = sq.managerUid ? mgrColl.find(m=>m.uid===sq.managerUid) : null;
+  const mgr = mgrEntry ? BY_ID.get(mgrEntry.mgrId) || MGR_BY_ID.get(mgrEntry.mgrId) : null;
+  const list = [];
+  form.slots.forEach(slot=>{
+    const uid = sq.slots[slot.id];
+    const entry = uid ? coll.find(c=>c.uid===uid) : null;
+    const card = entry ? leveledOwnedCard(entry) : null;
+    if(!card) return;
+    let ov = card.ov;
+    if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
+    const info = positionEligibility(card, slot.label);
+    if(info) ov += info.bonus;
+    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn});
+  });
+  const chemmed = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
+  const filled = chemmed.length;
+  const rating = filled ? Math.round(chemmed.reduce((s,p)=>s+p.ov,0)/filled) : 0;
+  return {rating, filled, players: chemmed};
+}
+// ===== One-time seeding (admin-triggered, see renderAdminPanel) - reads every account's raw save,
+// ranks by squad rating, and chunks into leagues of exactly 8 (last/lowest league gets the remainder).
+// Guarded by leagueMeta/config's `seeded` flag so it can only ever actually run once, no matter how
+// many times the button gets clicked or by how many admins.
+async function seedLeaguesOnce(){
+  await fbReady;
+  if(!fb) { toast('Benötigt das Online-Backend.'); return {ok:false}; }
+  const metaRef = fb.doc(fb.db,'leagueMeta','config');
+  try{
+    const existing = await fb.getDoc(metaRef);
+    if(existing.exists() && existing.data().seeded) return {ok:false, reason:'already-seeded'};
+  }catch(e){ console.warn('league seed check failed', e); return {ok:false, reason:'error'}; }
+  let allDocs;
+  try{
+    const snap = await fb.getDocs(fb.collection(fb.db,'saves'));
+    allDocs = snap.docs;
+  }catch(e){ console.warn('league seed: full saves scan failed', e); return {ok:false, reason:'scan-failed', error:e}; }
+  const bannedIds = await getLeaderboardBannedUserIds();
+  const ranked = [];
+  allDocs.forEach(d=>{
+    const userId = d.id;
+    if(LEADERBOARD_EXCLUDED_USERS.has(userId) || bannedIds.has(userId)) return;
+    const data = d.data();
+    if(!data || !data.profile) return;
+    const {rating, filled} = squadRatingFromSaveData(data);
+    if(filled<11) return; // an incomplete squad can't be fairly rated/simulated - sits out until it is
+    ranked.push({userId, rating, displayName: data.profile.displayName||userId});
+  });
+  ranked.sort((a,b)=>b.rating-a.rating);
+  const leagues = {};
+  let idx = 0;
+  for(let li=0; idx<ranked.length; li++){
+    const letter = LIGA_LETTERS[li];
+    if(!letter) break; // out of letters entirely (>208 eligible accounts) - anyone beyond this sits out
+    const remaining = ranked.length-idx;
+    // every league except a final undersized remainder is exactly 8
+    const size = remaining<=8 ? remaining : 8;
+    leagues[letter] = ranked.slice(idx, idx+size).map(r=>r.userId);
+    idx += size;
+  }
+  try{
+    await fb.setDoc(metaRef, {seeded:true, seededAt:Date.now(), totalEligible:ranked.length, letters:Object.keys(leagues)});
+    await Promise.all(Object.entries(leagues).map(([letter,members])=>
+      fb.setDoc(fb.doc(fb.db,'leagueMembership',letter), {letter, members})
+    ));
+  }catch(e){ console.warn('league seed write failed', e); return {ok:false, reason:'write-failed', error:e}; }
+  return {ok:true, leagues, totalEligible:ranked.length};
+}
+async function loadMyLeagueMembership(){
+  await fbReady;
+  if(!fb || !clubId) return null;
+  try{
+    const snap = await fb.getDocs(fb.collection(fb.db,'leagueMembership'));
+    for(const d of snap.docs){
+      const data = d.data();
+      if((data.members||[]).includes(clubId)) return {letter:data.letter, members:data.members};
+    }
+  }catch(e){ console.warn('load league membership failed', e); }
+  return null;
+}
+function renderLigenPanel(view){
+  view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Ruhetag. Auf- und Abstieg jede Woche.</p></div>
+    <div id="liga-content"><p class="hint">Lädt…</p></div>`;
+  const box = document.getElementById('liga-content');
+  (async ()=>{
+    const weekStart = ligaCurrentWeekStart();
+    const membership = await loadMyLeagueMembership();
+    if(!membership){
+      box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Die Einteilung erfolgt einmalig — danach nie wieder.</p>`;
+      return;
+    }
+    const preseason = weekStart==null;
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        ${ligaBadgeHTML(membership.letter, 44)}
+        <div><div style="font-family:'Anton';font-size:20px;">Liga ${membership.letter}</div>
+        <div class="hint" style="margin:0;">${membership.members.length} Vereine · Sieger-Preis: ${formatCoins(ligaWinnerCoins(membership.letter))} Coins${membership.letter==='A'?' + Liga-Meister-Karte':''}</div></div>
+      </div>
+      ${preseason ? `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr. Bis dahin siehst du hier nur deine Zuteilung.</p>` : `<p class="hint">Spielplan &amp; Tabelle folgen in Kürze (Stufe 2).</p>`}`;
+  })();
 }
 // ===== WM 2026: the real 48-team format end to end - 12 groups of 4, top 2 plus the best 8 thirds
 // advance to a 32-team knockout (round of 32 -> round of 16 -> Viertelfinale -> Halbfinale -> Finale).
