@@ -905,11 +905,16 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .liga-fixture-card.liga-fixture-mine{border-color:var(--turf-bright);}
 .liga-fixture-side{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:0;}
 .liga-fixture-side svg, .liga-fixture-side img{display:block;}
+.liga-fixture-side-decided{flex-direction:row;justify-content:center;gap:10px;}
+.liga-fixture-team-unit{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
 .liga-fixture-abbr{font-family:'Anton';font-size:12.5px;letter-spacing:.03em;color:var(--chalk);
   text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .liga-fixture-abbr.liga-fixture-winner{color:var(--turf-bright);}
+.liga-fixture-goals{font-family:'Anton';font-size:28px;color:var(--chalk);line-height:1;font-variant-numeric:tabular-nums;}
+.liga-fixture-goals.liga-fixture-winner{color:var(--turf-bright);}
 .liga-fixture-center{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;padding:0 8px;}
 .liga-fixture-time{font-family:'Anton';font-size:19px;color:#fff;}
+.liga-fixture-dash{font-family:'Anton';font-size:20px;color:var(--muted);}
 .liga-fixture-league{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
 .liga-fixture-play{width:34px;height:34px;border-radius:50%;background:var(--turf-bright);color:#04140f;
   border:none;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;
@@ -17918,18 +17923,31 @@ function ligaTeamAbbr(name, customAbbr){
   const clean = (name||'?').replace(/[^a-zA-Z0-9À-ÿ]/g,'');
   return (clean.slice(0,3) || '?').toUpperCase();
 }
-// One crest-card layout for every state of a match, only the CENTER slot changes - keeps a single
-// visual language throughout the whole week's list instead of switching between a fixture card, a
-// plain "vs + button" row, and a plain text result row:
+// One crest-card layout for every state of a match, only the CENTER slot (and, once decided, the goal
+// counts next to each crest) changes - keeps a single visual language throughout the whole week's list
+// instead of switching between a fixture card, a plain "vs + button" row, and a plain text result row:
 //   - opts.fixtureOnly (revealTime, letter): own reveal moment hasn't arrived yet -> time + league.
 //   - own match, revealed but not yet watched live: a Play button in place of the time.
-//   - decided (either a finished match, or the viewer's own after watching): the score, winning side's
-//     crest/Kürzel highlighted turf-green with a trophy - no separate S/U/N badge needed, the viewer
+//   - decided (either a finished match, or the viewer's own after watching): a lone dash in the center,
+//     each side's own goal count shown big right next to its crest - winning side's Kürzel AND goal
+//     count highlighted turf-green with a trophy, no separate S/U/N badge needed since the viewer
 //     already knows which side is theirs from the green card border.
 function ligaMatchRowHTML(m, teams, viewerUserId, opts={}){
   const a = teams[m.aIdx], b = teams[m.bIdx];
   const isMine = viewerUserId && (a.userId===viewerUserId || b.userId===viewerUserId);
   const pendingForViewer = !opts.fixtureOnly && isMine && !m.liveRevealed;
+  const decided = !opts.fixtureOnly && !pendingForViewer;
+  const aWon = decided && m.winnerSide==='me';
+  const bWon = decided && m.winnerSide==='opp';
+  const teamBlock = (t, goals, won, goalsFirst)=>{
+    const teamUnit = `<div class="liga-fixture-team-unit">
+      ${renderCrestSVG(t.crest || fallbackCrestFor(t.name), 40)}
+      <div class="liga-fixture-abbr${won?' liga-fixture-winner':''}">${won?'🏆 ':''}${ligaTeamAbbr(t.name, t.abbr)}</div>
+    </div>`;
+    if(!decided) return `<div class="liga-fixture-side">${teamUnit}</div>`;
+    const num = `<div class="liga-fixture-goals${won?' liga-fixture-winner':''}">${goals}</div>`;
+    return `<div class="liga-fixture-side liga-fixture-side-decided">${goalsFirst ? num+teamUnit : teamUnit+num}</div>`;
+  };
   let center;
   if(opts.fixtureOnly){
     center = `${opts.revealTime ? `<div class="liga-fixture-time">${opts.revealTime}</div>` : ''}
@@ -17937,21 +17955,12 @@ function ligaMatchRowHTML(m, teams, viewerUserId, opts={}){
   } else if(pendingForViewer){
     center = `<button class="liga-fixture-play" type="button" data-liga-live-mid="${m.mid}" title="Live spielen">▶</button>`;
   } else {
-    center = `<div class="liga-fixture-time">${m.aGoals}:${m.bGoals}</div>
-      <div class="liga-fixture-league">Endstand</div>`;
+    center = `<div class="liga-fixture-dash">–</div>`;
   }
-  const aWon = !opts.fixtureOnly && !pendingForViewer && m.winnerSide==='me';
-  const bWon = !opts.fixtureOnly && !pendingForViewer && m.winnerSide==='opp';
   return `<div class="liga-fixture-card${isMine?' liga-fixture-mine':''}">
-    <div class="liga-fixture-side">
-      ${renderCrestSVG(a.crest || fallbackCrestFor(a.name), 40)}
-      <div class="liga-fixture-abbr${aWon?' liga-fixture-winner':''}">${aWon?'🏆 ':''}${ligaTeamAbbr(a.name, a.abbr)}</div>
-    </div>
+    ${teamBlock(a, m.aGoals, aWon, false)}
     <div class="liga-fixture-center">${center}</div>
-    <div class="liga-fixture-side">
-      ${renderCrestSVG(b.crest || fallbackCrestFor(b.name), 40)}
-      <div class="liga-fixture-abbr${bWon?' liga-fixture-winner':''}">${ligaTeamAbbr(b.name, b.abbr)}${bWon?' 🏆':''}</div>
-    </div>
+    ${teamBlock(b, m.bGoals, bWon, true)}
   </div>`;
 }
 const LIGA_DAY_LABEL = {1:'Montag', 2:'Dienstag', 3:'Mittwoch', 4:'Donnerstag', 5:'Freitag'};
