@@ -17021,6 +17021,9 @@ async function playTournamentRound(){
 // mostRecentMonday/WEEK_PASS_START above (a personal XP track that doesn't need cross-player
 // agreement), a league is a shared competition between several real accounts, so every viewer's
 // client must compute the exact same week boundary regardless of where they physically are.
+// Surfaces the last Firestore error hit anywhere in the Ligen flow so renderLigenPanel can show a
+// copy-pasteable diagnosis (e.g. "permission-denied") even though the player has no browser console.
+let LIGA_LAST_ERROR = null;
 function berlinNow(){
   const parts = new Intl.DateTimeFormat('en-US', {timeZone:'Europe/Berlin', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false}).formatToParts(new Date());
   const get = t => Number(parts.find(p=>p.type===t).value);
@@ -17276,7 +17279,7 @@ async function getOrCreateLeagueWeek(letter, members, weekStart){
   try{
     const existing = await fb.getDoc(ref);
     if(existing.exists()) return existing.data();
-  }catch(e){ console.warn('league week read failed', e); return null; }
+  }catch(e){ console.warn('league week read failed', e); LIGA_LAST_ERROR = (e&&(e.code||e.message))||String(e); return null; }
   const payload = await buildLeagueWeekPayload(letter, members, weekStart);
   try{
     if(fb.runTransaction){
@@ -17590,8 +17593,10 @@ function renderLigenPanel(view){
       // league's own table can already be shown ahead of time (all 0, no matches yet), same as any
       // later Sonntag shows the just-created next week's table.
       let html = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Hier schon mal deine Liga:</p>`;
+      LIGA_LAST_ERROR = null;
       const previewWeek = await getOrCreateLeagueWeek(membership.letter, membership.members, LIGA_SEASON_EPOCH);
       if(previewWeek) html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0));
+      else if(LIGA_LAST_ERROR) html += `<p class="hint" style="color:var(--danger);">Tabelle konnte nicht geladen werden (${LIGA_LAST_ERROR}).</p>`;
       box.innerHTML = html;
       return;
     }
@@ -17639,8 +17644,9 @@ function renderLigenPanel(view){
     // (handled above as oldSectionHtml) - the table/fixtures rendered below are the NEW week's, which
     // starts the FOLLOWING Monday, hence +7 days.
     const targetWeekStart = isBerlinWeekend ? weekStartBefore + 7*24*60*60*1000 : weekStart;
+    LIGA_LAST_ERROR = null;
     const week = await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
-    if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.</p>`; return; }
+    if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; return; }
     const visibleDay = ligaVisibleDayCount(targetWeekStart);
     const standings = ligaComputeStandings(week.teams, week.matches, visibleDay);
     let html = header + historyBox + oldSectionHtml;
