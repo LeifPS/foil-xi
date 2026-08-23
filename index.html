@@ -17241,6 +17241,24 @@ async function joinLigaNow(){
 // front-loaded (extra rounds land on earlier days) - for the standard 8-team league that's exactly
 // the "3/3/3/3/2" from the design brief, and it generalizes cleanly to the one undersized (last)
 // league, whatever size it ends up being.
+// Wraps getOrCreateLeagueWeek with a self-heal: if the stored week doc's team count doesn't match the
+// current membership list (e.g. joinLigaNow's own membership write landed but its week-regeneration
+// write raced with/lost to an earlier read, or simply failed), rebuild the week doc from the current
+// membership. Only ever called for a week that hasn't started yet as far as this app's join flow goes
+// (the pre-season preview, or a Sonntag's upcoming week), so there's no already-played match history
+// at risk of being silently overwritten.
+async function ligaSyncedWeek(letter, members, weekStart){
+  LIGA_LAST_ERROR = null;
+  let week = await getOrCreateLeagueWeek(letter, members, weekStart);
+  if(week && week.teams.length!==members.length){
+    try{
+      const fresh = await buildLeagueWeekPayload(letter, members, weekStart);
+      await fb.setDoc(fb.doc(fb.db,'leagueWeeks', letter+'_'+weekStart), fresh);
+      week = fresh;
+    }catch(e){ console.warn('league week resync failed', e); LIGA_LAST_ERROR = (e&&(e.code||e.message))||String(e); }
+  }
+  return week;
+}
 function distributeRoundsAcrossDays(totalRounds){
   const base = Math.floor(totalRounds/5), rem = totalRounds%5;
   return Array.from({length:5}, (_,i)=> base + (i<rem?1:0));
@@ -17566,7 +17584,11 @@ async function renderAllLigenOverview(box){
     const letter = d.id, members = d.data().members||[];
     html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">${ligaBadgeHTML(letter,28)}<div style="font-family:'Anton';font-size:15px;">Liga ${letter}</div><div class="hint" style="margin:0;">${members.length} Vereine</div></div>`;
     LIGA_LAST_ERROR = null;
-    const week = await getOrCreateLeagueWeek(letter, members, targetWeekStart);
+    // Same rule as the personal view: only the still-0:0 upcoming week (Sonntag, or pre-season) is
+    // safe to self-heal a team-count mismatch on - an already-underway Montag-Samstag week is not.
+    const week = (isBerlinSunday || preSeason)
+      ? await ligaSyncedWeek(letter, members, targetWeekStart)
+      : await getOrCreateLeagueWeek(letter, members, targetWeekStart);
     if(week){
       const visibleDay = preSeason ? 0 : ligaVisibleDayCount(targetWeekStart);
       html += ligaStandingsTableHTML(ligaComputeStandings(week.teams, week.matches, visibleDay));
@@ -17625,8 +17647,7 @@ function renderLigenPanel(view){
       // league's own table can already be shown ahead of time (all 0, no matches yet), same as any
       // later Sonntag shows the just-created next week's table.
       let html = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Hier schon mal deine Liga:</p>`;
-      LIGA_LAST_ERROR = null;
-      const previewWeek = await getOrCreateLeagueWeek(membership.letter, membership.members, LIGA_SEASON_EPOCH);
+      const previewWeek = await ligaSyncedWeek(membership.letter, membership.members, LIGA_SEASON_EPOCH);
       if(previewWeek) html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0));
       else if(LIGA_LAST_ERROR) html += `<p class="hint" style="color:var(--danger);">Tabelle konnte nicht geladen werden (${LIGA_LAST_ERROR}).</p>`;
       box.innerHTML = html;
@@ -17681,7 +17702,11 @@ function renderLigenPanel(view){
     // starts the FOLLOWING Monday, hence +7 days.
     const targetWeekStart = isBerlinSunday ? weekStartBefore + 7*24*60*60*1000 : weekStart;
     LIGA_LAST_ERROR = null;
-    const week = await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
+    // Only the Sonntag (upcoming, still-0:0) week is safe to self-heal a team-count mismatch on - the
+    // Montag-Samstag week may already have played matches, which a resync would silently wipe.
+    const week = isBerlinSunday
+      ? await ligaSyncedWeek(membership.letter, membership.members, targetWeekStart)
+      : await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
     if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; return; }
     const visibleDay = ligaVisibleDayCount(targetWeekStart);
     const standings = ligaComputeStandings(week.teams, week.matches, visibleDay);
