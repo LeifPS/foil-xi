@@ -17353,7 +17353,19 @@ function ligaVisibleDayCount(weekStart){
   const elapsedDays = Math.floor((berlinNow().getTime()-weekStart)/(24*60*60*1000));
   return Math.max(0, Math.min(5, elapsedDays+1));
 }
-function ligaComputeStandings(teams, matches, uptoDay){
+// Deterministic (not truly random) tiebreak: same two teams with identical pts/gd/gf always resolve
+// to the same order every time this is computed, seeded by both userIds plus the league-week so it
+// isn't the same fixed winner every single week. This exists purely to give resolveWeeklyRolloverIfNeeded
+// (and the "who's actually champion/promoted/relegated" question in general) a single real answer even
+// on a full tie - the TABLE ITSELF still displays tied teams under the same shared rank (see
+// ligaStandingsTableHTML), it just needs one of them to be genuinely "first" under the hood.
+function ligaTieBreakHash(userId, seed){
+  let h = 0;
+  const s = userId+':'+seed;
+  for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i))|0; }
+  return h;
+}
+function ligaComputeStandings(teams, matches, uptoDay, seed){
   const table = teams.map((t,i)=>({idx:i, userId:t.userId, name:t.name, pts:0, w:0, d:0, l:0, gf:0, ga:0}));
   matches.filter(m=>m.day<=uptoDay).forEach(m=>{
     const a = table[m.aIdx], b = table[m.bIdx];
@@ -17362,8 +17374,17 @@ function ligaComputeStandings(teams, matches, uptoDay){
     else if(m.winnerSide==='me'){ a.pts+=3; a.w++; b.l++; }
     else { b.pts+=3; b.w++; a.l++; }
   });
-  table.forEach(t=>{ t.gd = t.gf-t.ga; });
-  table.sort((x,y)=> y.pts-x.pts || y.gd-x.gd || y.gf-x.gf);
+  table.forEach(t=>{ t.gd = t.gf-t.ga; t.tieHash = ligaTieBreakHash(t.userId, seed||0); });
+  table.sort((x,y)=> y.pts-x.pts || y.gd-x.gd || y.gf-x.gf || y.tieHash-x.tieHash);
+  // Competition ranking ("1224"): identical pts/gd/gf share the same displayed place, and the next
+  // DIFFERENT row's place skips ahead to its real index rather than counting up by one - e.g. two tied
+  // 1st places both show "1.", and whoever comes right after is "3.", not "2.". This is purely a
+  // DISPLAY number - table order (and who's picked for champion/promotion/relegation) still comes
+  // from the tiebreak-resolved sort above, never from this shared label.
+  table.forEach((t,i)=>{
+    const prev = table[i-1];
+    t.displayRank = (prev && prev.pts===t.pts && prev.gd===t.gd && prev.gf===t.gf) ? prev.displayRank : i+1;
+  });
   return table;
 }
 // Zone context for standings coloring - which promotion/relegation zones actually apply to THIS
@@ -17412,7 +17433,7 @@ function ligaStandingsTableHTML(table, zones){
       const zn = zoneOf(i);
       const mine = t.userId===clubId;
       return `<div style="display:grid;grid-template-columns:28px 1fr 30px 30px 30px 50px 40px 40px;gap:0;padding:7px 8px;border-top:1px solid var(--line);align-items:center;font-size:11.5px;${ZONE_STYLE[zn]}${mine?'box-shadow:inset 0 0 0 1px rgba(95,225,201,.5);':''}">
-      <div style="text-align:center;color:var(--muted);">${i+1}</div>
+      <div style="text-align:center;color:var(--muted);">${t.displayRank!=null?t.displayRank:i+1}</div>
       <div style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${mine?'font-weight:700;color:var(--turf-bright);':''}">${t.name}${mine?' <span style="font-size:10px;">(du)</span>':''}</div>
       <div style="text-align:center;">${t.w}</div><div style="text-align:center;">${t.d}</div><div style="text-align:center;">${t.l}</div>
       <div style="text-align:center;" class="mono">${t.gf}:${t.ga}</div>
@@ -17529,7 +17550,7 @@ async function resolveWeeklyRolloverIfNeeded(){
     weeks[letter] = await getOrCreateLeagueWeek(letter, members, weekStart);
   }
   const tables = {};
-  lettersInUse.forEach(letter=>{ tables[letter] = ligaComputeStandings(weeks[letter].teams, weeks[letter].matches, 5); });
+  lettersInUse.forEach(letter=>{ tables[letter] = ligaComputeStandings(weeks[letter].teams, weeks[letter].matches, 5, weekStart); });
   // userId -> {letter, coins, isChampion} destination league after all movements, before newcomers.
   const nextLeagueOf = {};
   lettersInUse.forEach(letter=>{ tables[letter].forEach(row=>{ nextLeagueOf[row.userId] = letter; }); });
@@ -17656,7 +17677,7 @@ async function renderAllLigenOverview(box){
     if(week){
       const visibleDay = preSeason ? 0 : ligaVisibleDayCount(targetWeekStart);
       const zones = ligaZonesFor(letter, sortedLetters, sizeOf);
-      html += ligaStandingsTableHTML(ligaComputeStandings(week.teams, week.matches, visibleDay), zones);
+      html += ligaStandingsTableHTML(ligaComputeStandings(week.teams, week.matches, visibleDay, targetWeekStart), zones);
     } else {
       html += `<p class="hint">Tabelle konnte nicht geladen werden${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}.</p>`;
     }
@@ -17723,7 +17744,7 @@ function renderLigenPanel(view){
       // later Sonntag shows the just-created next week's table.
       let html = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Hier schon mal deine Liga:</p>`;
       const previewWeek = await ligaSyncedWeek(membership.letter, membership.members, LIGA_SEASON_EPOCH);
-      if(previewWeek) html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0), myZones);
+      if(previewWeek) html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0, LIGA_SEASON_EPOCH), myZones);
       else if(LIGA_LAST_ERROR) html += `<p class="hint" style="color:var(--danger);">Tabelle konnte nicht geladen werden (${LIGA_LAST_ERROR}).</p>`;
       box.innerHTML = html;
       return;
@@ -17795,11 +17816,11 @@ function renderLigenPanel(view){
       : await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
     if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; return; }
     const visibleDay = ligaVisibleDayCount(targetWeekStart);
-    const standings = ligaComputeStandings(week.teams, week.matches, visibleDay);
-    const myRank = standings.findIndex(t=>t.userId===clubId)+1;
+    const standings = ligaComputeStandings(week.teams, week.matches, visibleDay, targetWeekStart);
+    const myRow = standings.find(t=>t.userId===clubId);
     let html = header + historyBox + oldSectionHtml;
     if(isBerlinSunday) html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue Woche (ab Montag)</div>`;
-    else if(myRank>0) html += `<div class="hint" style="margin:0 0 8px;">Aktuell: <b style="color:var(--turf-bright);">Platz ${myRank}</b> von ${standings.length} · Spieltag ${Math.min(visibleDay,5)}/5</div>`;
+    else if(myRow) html += `<div class="hint" style="margin:0 0 8px;">Aktuell: <b style="color:var(--turf-bright);">Platz ${myRow.displayRank}</b> von ${standings.length} · Spieltag ${Math.min(visibleDay,5)}/5</div>`;
     html += ligaStandingsTableHTML(standings, myZones);
     if(isBerlinSunday) html += `<p class="hint">Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
     for(let d=1; d<=visibleDay; d++){
