@@ -17199,15 +17199,18 @@ async function loadMyLeagueMembership(){
   }catch(e){ console.warn('load league membership failed', e); }
   return null;
 }
-// Joining is immediate, not queued for the next rollover: adds the account straight into the current
-// bottom-most league's membership (creating a new one if that league is already full at 8), and - if
-// the season is already mid-week - regenerates that league's CURRENT week fixtures so the new member
-// shows up in the table right away instead of waiting until Montag. That regeneration re-simulates
-// every match for the whole league that week (there's no notion of "add one team to an existing
-// schedule" in this engine), which is an accepted trade-off for a mid-week join.
+// Joining is immediate, not queued for the next rollover, but only allowed on Sonntag (same day the
+// rest of the league structure resets) - adds the account straight into the current bottom-most
+// league's membership (creating a new one if that league is already full at 8), and regenerates that
+// league's CURRENT (i.e. upcoming) week fixtures so the new member shows up in the table right away
+// instead of waiting further. That regeneration re-simulates every match for the whole league that
+// week (there's no notion of "add one team to an existing schedule" in this engine), which is an
+// accepted trade-off, and is also why joining is restricted to Sonntag - any other day would mean
+// re-simulating a week that's already partway played for everyone else in that league.
 async function joinLigaNow(){
   await fbReady;
   if(!fb || !clubId) return {ok:false};
+  if(berlinNow().getDay()!==0) return {ok:false, reason:'sunday-only'};
   const {filled} = squadRating();
   if(filled<11) return {ok:false, reason:'squad-incomplete'};
   let membershipSnap;
@@ -17222,16 +17225,15 @@ async function joinLigaNow(){
   try{
     await fb.setDoc(fb.doc(fb.db,'leagueMembership',letter), {letter, members});
   }catch(e){ return {ok:false, detail:(e&&(e.code||e.message))||String(e)}; }
+  // Since this only ever runs on Sonntag, the "current" week as far as the Ligen tab is concerned is
+  // always the upcoming one (mirrors renderLigenPanel's own Sonntag targetWeekStart calculation) -
+  // either the season's very first week (pre-epoch) or next Montag's, never a week already in progress.
   const weekStart = ligaCurrentWeekStart();
-  if(weekStart!=null){
-    const weekStartBefore = mostRecentMondayBerlin();
-    const isBerlinSunday = berlinNow().getDay()===0;
-    const targetWeekStart = isBerlinSunday ? weekStartBefore + 7*24*60*60*1000 : weekStart;
-    try{
-      const payload = await buildLeagueWeekPayload(letter, members, targetWeekStart);
-      await fb.setDoc(fb.doc(fb.db,'leagueWeeks', letter+'_'+targetWeekStart), payload);
-    }catch(e){ console.warn('league week regenerate on join failed', e); }
-  }
+  const targetWeekStart = weekStart==null ? LIGA_SEASON_EPOCH : mostRecentMondayBerlin() + 7*24*60*60*1000;
+  try{
+    const payload = await buildLeagueWeekPayload(letter, members, targetWeekStart);
+    await fb.setDoc(fb.doc(fb.db,'leagueWeeks', letter+'_'+targetWeekStart), payload);
+  }catch(e){ console.warn('league week regenerate on join failed', e); }
   return {ok:true, letter};
 }
 // ===== Ligen Stufe 2: Spielplan, Simulation, Tabelle =====
@@ -17597,7 +17599,9 @@ function renderLigenPanel(view){
     if(!membership){
       const {filled} = squadRating();
       if(filled<11){
-        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Stelle zuerst einen vollständigen Kader (11 Spieler) auf, dann kannst du sofort einsteigen.</p>`;
+        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Stelle zuerst einen vollständigen Kader (11 Spieler) auf, dann kannst du sonntags einsteigen.</p>`;
+      } else if(berlinNow().getDay()!==0){
+        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Der Beitritt ist nur sonntags möglich (dann bist du sofort in der Tabelle, ohne weiter zu warten).</p>`;
       } else {
         box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt.</p>
           <button class="action-btn" id="liga-join-btn" style="width:auto;padding:9px 18px;">In die Liga einsteigen</button>`;
