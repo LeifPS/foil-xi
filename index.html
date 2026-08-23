@@ -18675,6 +18675,10 @@ async function playWM26GroupMatch(matchIdx){
     if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
     const matchRatings = computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide);
     await awardCardXP(matchRatings);
+    // WM26-Matches liefen bisher an commitMatchResult vorbei, daher hier dieselben Wochen-Pass-Quest-Bumps
+    bumpWeekPassQuest('playMatches', 1);
+    if(md.myGoals>0) bumpWeekPassQuest('scoreGoals', md.myGoals);
+    if(md.winnerSide==='me') bumpWeekPassQuest('winMatches', 1);
     const newMatches = t.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide, pending:false});
     profile.wm26 = {...t, matches:newMatches};
     await sSet('profile', profile);
@@ -18722,6 +18726,10 @@ async function playWM26KnockoutMatch(){
     md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
     if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
     await awardCardXP(computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide));
+    // WM26-Matches liefen bisher an commitMatchResult vorbei, daher hier dieselben Wochen-Pass-Quest-Bumps
+    bumpWeekPassQuest('playMatches', 1);
+    if(md.myGoals>0) bumpWeekPassQuest('scoreGoals', md.myGoals);
+    if(won) bumpWeekPassQuest('winMatches', 1);
   } finally {
     inMatch = false;
   }
