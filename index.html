@@ -11145,40 +11145,75 @@ function allSquadNames(excludeSlotKey){ // name -> uid, across the starting XI, 
 
 
 // ===== single-device session lock =====
-// Prevents the same club account being played on two tabs or two devices at once, which causes save
+// Prevents the same club account being played on two actual DEVICES at once, which causes save
 // conflicts (last write wins, so simultaneous play silently drops progress on one side). Whoever
-// signs in writes {id, ts} to the 'session' key and refreshes ts on a heartbeat; a second tab or a
-// different device signing in sees a fresh, different id and is blocked - deliberately, that's the
-// whole point of this lock. If a session goes stale (tab closed/crashed, no heartbeat for a while)
-// it's considered abandoned and the next sign-in is allowed to take over.
-// The id is persisted in sessionStorage, which is scoped to exactly one tab but SURVIVES a reload of
-// that same tab - so a plain page reload reads back the very same id it had before and reclaims
-// instantly (existing.id===mySessionId, never even hits the block check), while an actual second tab
-// or device gets its own fresh id and is correctly blocked, exactly as intended.
+// signs in writes {id, ts} to the 'session' key and refreshes ts on a heartbeat; a genuinely different
+// device signing in sees a fresh, different id and is blocked - deliberately, that's the whole point
+// of this lock. If a session goes stale (tab closed/crashed, no heartbeat for a while) it's considered
+// abandoned and the next sign-in is allowed to take over.
+// The id is persisted in localStorage (not sessionStorage) - scoped to the whole BROWSER/device, not
+// to one tab, so every tab of the same browser shares the exact same id: a reload always reclaims
+// instantly (existing.id===mySessionId, never even hits the block check), and a second tab opened on
+// the SAME device never blocks the first one either, since both carry the identical id. Only an
+// actually different device (different browser profile/machine) ever gets a different id and is
+// correctly blocked, exactly as intended - this lock was only ever meant to stop two DEVICES clobbering
+// the same save, not to stop someone from having two tabs of their own game open.
 function genSessionId(){ return crypto.randomUUID ? crypto.randomUUID() : 'sess-'+Date.now()+'-'+Math.random().toString(36).slice(2); }
 const mySessionId = (function(){
   try{
-    let id = sessionStorage.getItem('foil11-session-id');
-    if(!id){ id = genSessionId(); sessionStorage.setItem('foil11-session-id', id); }
+    let id = localStorage.getItem('foil11-session-id');
+    if(!id){ id = genSessionId(); localStorage.setItem('foil11-session-id', id); }
     return id;
   }catch(e){ return genSessionId(); }
 })();
 const SESSION_STALE_MS = 180000;
 const SESSION_HEARTBEAT_MS = 75000;
 let sessionHeartbeatTimer = null;
+// Now that mySessionId is shared by every tab of this device (see above), releasing the lock the
+// instant ANY one tab closes would be wrong - closing tab 2 of 2 must NOT free up the device-wide lock
+// while tab 1 is still actively playing, or a different device could slip in during that gap. This
+// tracks how many tabs of THIS device currently have the game open, purely via localStorage (cheap,
+// synchronous, no Firestore round-trip) - releaseSession() only actually clears the shared lock once
+// the count drops to zero.
+const myTabId = (function(){
+  try{
+    let id = sessionStorage.getItem('foil11-tab-id');
+    if(!id){ id = genSessionId(); sessionStorage.setItem('foil11-tab-id', id); }
+    return id;
+  }catch(e){ return genSessionId(); }
+})();
+const TAB_STALE_MS = 20000; // local-only heartbeat, can be much shorter than the cross-device one
+function readOpenTabs(){
+  try{ return JSON.parse(localStorage.getItem('foil11-open-tabs')||'[]'); }catch(e){ return []; }
+}
+function markTabAlive(){
+  const now = Date.now();
+  const tabs = readOpenTabs().filter(x=>x.id!==myTabId && (now-x.ts)<TAB_STALE_MS);
+  tabs.push({id:myTabId, ts:now});
+  try{ localStorage.setItem('foil11-open-tabs', JSON.stringify(tabs)); }catch(e){}
+}
+// Removes this tab from the local roster and reports whether it was the LAST one open on this device.
+function markTabClosedAndCheckLast(){
+  const now = Date.now();
+  const remaining = readOpenTabs().filter(x=>x.id!==myTabId && (now-x.ts)<TAB_STALE_MS);
+  try{ localStorage.setItem('foil11-open-tabs', JSON.stringify(remaining)); }catch(e){}
+  return remaining.length===0;
+}
 async function claimSession(){
   const existing = await sGet('session');
   const now = Date.now();
   if(existing && existing.id && existing.id!==mySessionId && (now-existing.ts) < SESSION_STALE_MS) return false;
   await sSet('session', {id:mySessionId, ts:now});
+  markTabAlive();
   return true;
 }
 function startSessionHeartbeat(){
   if(sessionHeartbeatTimer) clearInterval(sessionHeartbeatTimer);
-  sessionHeartbeatTimer = setInterval(()=>{ sSet('session', {id:mySessionId, ts:Date.now()}); }, SESSION_HEARTBEAT_MS);
+  sessionHeartbeatTimer = setInterval(()=>{ sSet('session', {id:mySessionId, ts:Date.now()}); markTabAlive(); }, SESSION_HEARTBEAT_MS);
 }
 async function releaseSession(){
   if(sessionHeartbeatTimer){ clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
+  if(!markTabClosedAndCheckLast()) return; // a sibling tab of this same device is still open - leave the shared lock alone
   if(clubId) await sSet('session', {id:null, ts:0});
 }
 function showSessionBlockedModal(id){
@@ -13923,6 +13958,36 @@ function showCutscene(card, onDone){
 
 // ===== CLUB =====
 let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL'};
+// Quick-pick MRU list for the admin "Nutzer verwalten" search - purely a local convenience for
+// whoever's using this browser as an admin, so it lives in localStorage (not Firestore/the save):
+// most-recently-looked-up account first, deduped, capped at a handful of entries.
+const ADMIN_RECENT_USERS_MAX = 8;
+function getAdminRecentUsers(){
+  try{ return JSON.parse(localStorage.getItem('foil11-admin-recent-users')||'[]'); }catch(e){ return []; }
+}
+function pushAdminRecentUser(id){
+  try{
+    const list = [id, ...getAdminRecentUsers().filter(x=>x!==id)].slice(0, ADMIN_RECENT_USERS_MAX);
+    localStorage.setItem('foil11-admin-recent-users', JSON.stringify(list));
+  }catch(e){}
+}
+// Re-renders the "zuletzt verwendet" chip row in place (called on initial admin panel render, and
+// again every time a lookup succeeds so the just-used account jumps to the front immediately).
+function refreshAdminRecentUserChips(){
+  const row = document.getElementById('admin-recent-users-row');
+  if(!row) return;
+  const recent = getAdminRecentUsers();
+  row.innerHTML = recent.length ? `<div class="hint" style="margin:0 0 4px;">Zuletzt verwendet:</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      ${recent.map(id=>`<button class="action-btn secondary admin-recent-user-btn" data-id="${id}" style="width:auto;padding:5px 10px;font-size:11.5px;">${id}</button>`).join('')}
+    </div>` : '';
+  row.querySelectorAll('.admin-recent-user-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.getElementById('admin-user-search').value = btn.dataset.id;
+      loadAdminUserPanel(btn.dataset.id);
+    });
+  });
+}
 async function renderAdminPanel(view){
   view.innerHTML = `
     <div class="view-head"><h2>\u2699 Admin-Panel</h2><p>Eingeloggt als Administrator (${clubId}). Mit gro\u00dfer Macht kommt gro\u00dfe Verantwortung.</p></div>
@@ -13963,10 +14028,11 @@ async function renderAdminPanel(view){
     </div>
     <div class="vs-panel" style="border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Nutzer verwalten</h3>
-      <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
         <input id="admin-user-search" placeholder="Vereinsname (Login-ID)...">
         <button class="action-btn" id="admin-user-load" style="width:auto;padding:9px 16px;">Laden</button>
       </div>
+      <div id="admin-recent-users-row" style="margin-bottom:14px;"></div>
       <div id="admin-user-content"></div>
     </div>`;
   document.getElementById('admin-great-reset').addEventListener('click', triggerGreatReset);
@@ -14021,6 +14087,7 @@ async function renderAdminPanel(view){
   const doLoad = ()=>loadAdminUserPanel(document.getElementById('admin-user-search').value.trim());
   document.getElementById('admin-user-load').addEventListener('click', doLoad);
   document.getElementById('admin-user-search').addEventListener('keydown', e=>{ if(e.key==='Enter') doLoad(); });
+  refreshAdminRecentUserChips();
 }
 function adminFullCardPool(){
   // every player card that exists gets registered into BY_ID at boot (see the many BY_ID.set(...) calls
@@ -14319,6 +14386,8 @@ async function loadAdminUserPanel(targetId){
   }
   catch(e){ box.innerHTML = '<p class="hint">Fehler beim Laden.</p>'; return; }
   if(!snap.exists()){ box.innerHTML = `<p class="hint">Kein Verein mit dem Namen "${targetId}" gefunden.</p>`; return; }
+  pushAdminRecentUser(targetId);
+  refreshAdminRecentUserChips();
   const data = snap.data();
   const p = data.profile || {};
   const ban = banSnap.exists() ? banSnap.data() : null;
