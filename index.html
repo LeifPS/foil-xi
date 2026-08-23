@@ -62,7 +62,6 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 #topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:linear-gradient(180deg,#0d1017,#0a0d13);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;}
 .brand{display:flex;align-items:center;gap:10px;}
 .brand-mark{width:34px;height:34px;border-radius:8px;background:linear-gradient(145deg,var(--turf-bright),var(--turf));display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:16px;color:#eafff2;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;}
-@keyframes ligaBadgeSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 /* real logo image, swapped in for .brand-mark once APP_LOGO_DATA_URI is set - see applyAppLogo() */
 .brand-logo{width:34px;height:34px;border-radius:8px;object-fit:cover;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;}
 .brand h1{font-size:19px;letter-spacing:.03em;}
@@ -17053,8 +17052,7 @@ const LIGA_DEFAULT_COLOR = '#8892a4';
 function ligaColor(letter){ return LIGA_COLORS[letter] || LIGA_DEFAULT_COLOR; }
 function ligaBadgeHTML(letter, size=28){
   const color = ligaColor(letter);
-  const isGradient = color.indexOf('gradient')>=0;
-  return `<div class="liga-badge" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;${isGradient?'animation:ligaBadgeSpin 6s linear infinite;':''}">${letter}</div>`;
+  return `<div class="liga-badge" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;">${letter}</div>`;
 }
 // Prize money per league: A/B/C/D fixed, everything from D downward shares D's payout (it's not worth
 // hand-tuning a unique amount for leagues 5-26, which will rarely if ever be fully reached).
@@ -17190,6 +17188,25 @@ async function loadMyLeagueMembership(){
     }
   }catch(e){ console.warn('load league membership failed', e); }
   return null;
+}
+// Joining is opt-in: a doc here marks the account as waiting for the next Montag-rollover to be
+// slotted into the bottom league by ligaFindNewcomers(). Re-checked on every renderLigenPanel() call
+// since the doc is only cleared once the rollover actually consumes it.
+async function loadMyLeagueJoinRequest(){
+  await fbReady;
+  if(!fb || !clubId) return null;
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'leagueJoinRequests', clubId));
+    return snap.exists() ? snap.data() : null;
+  }catch(e){ console.warn('load league join request failed', e); return null; }
+}
+async function requestLigaJoin(){
+  await fbReady;
+  if(!fb || !clubId) return {ok:false};
+  try{
+    await fb.setDoc(fb.doc(fb.db,'leagueJoinRequests', clubId), {requestedAt:Date.now()});
+    return {ok:true};
+  }catch(e){ console.warn('league join request failed', e); return {ok:false, detail:(e&&(e.code||e.message))||String(e)}; }
 }
 // ===== Ligen Stufe 2: Spielplan, Simulation, Tabelle =====
 // Splits a double round-robin's total round count as evenly as possible across the 5 weekdays,
@@ -17374,22 +17391,27 @@ function ligaRelegationTie(teamA, teamB){
   }
   return {winner, aggA, aggB, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, leg2:{aGoals:leg2.oppGoals, bGoals:leg2.myGoals}, decider: decider ? {aGoals:decider.myGoals, bGoals:decider.oppGoals, wentToPK:decider.wentToPK} : null};
 }
-// Every account currently NOT in any leagueMembership doc, excluding the usual test/banned exclusions
-// and anyone whose squad still isn't fully filled - the same eligibility bar as the original seeding.
-// Requires the same full saves-collection scan seedLeaguesOnce() already relies on.
+// Joining Ligen is opt-in (see requestLigaJoin/renderLigenPanel's "In die Liga einsteigen" button) -
+// an account not yet in any league never gets swept in automatically, it has to actively ask via a
+// leagueJoinRequests/{userId} doc. This also means the weekly rollover no longer needs a full
+// saves-collection scan just to find newcomers - it only has to read this small, purpose-built
+// collection. Requests from accounts that are excluded, banned, or still have an incomplete squad
+// at rollover time are simply left pending (not deleted) until they become eligible.
 async function ligaFindNewcomers(assignedIds){
   const bannedIds = await getLeaderboardBannedUserIds();
-  const snap = await fb.getDocs(fb.collection(fb.db,'saves'));
+  let snap;
+  try{ snap = await fb.getDocs(fb.collection(fb.db,'leagueJoinRequests')); }
+  catch(e){ console.warn('read league join requests failed', e); return []; }
   const newcomers = [];
-  snap.docs.forEach(d=>{
+  for(const d of snap.docs){
     const userId = d.id;
-    if(assignedIds.has(userId) || LEADERBOARD_EXCLUDED_USERS.has(userId) || bannedIds.has(userId)) return;
-    const data = d.data();
-    if(!data || !data.profile) return;
+    if(assignedIds.has(userId) || LEADERBOARD_EXCLUDED_USERS.has(userId) || bannedIds.has(userId)) continue;
+    const data = await resolveSaveDataForUser(userId);
+    if(!data || !data.profile) continue;
     const {rating, filled} = squadRatingFromSaveData(data);
-    if(filled<11) return;
+    if(filled<11) continue; // request stays pending until the squad is actually complete
     newcomers.push({userId, rating});
-  });
+  }
   newcomers.sort((a,b)=>b.rating-a.rating);
   return newcomers.map(n=>n.userId);
 }
@@ -17539,7 +17561,20 @@ function renderLigenPanel(view){
     const weekStart = ligaCurrentWeekStart();
     const membership = await loadMyLeagueMembership();
     if(!membership){
-      box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Die Einteilung erfolgt einmalig — danach nie wieder.</p>`;
+      const joinReq = await loadMyLeagueJoinRequest();
+      if(joinReq){
+        box.innerHTML = `<p class="hint">Beitrittsanfrage eingegangen — du wirst mit dem nächsten Ligaphasen-Start (Montag 00:00 Uhr) in die unterste Liga einsortiert.</p>`;
+      } else {
+        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt.</p>
+          <button class="btn" id="liga-join-btn">In die Liga einsteigen</button>`;
+        document.getElementById('liga-join-btn').onclick = async ()=>{
+          const btn = document.getElementById('liga-join-btn');
+          btn.disabled = true; btn.textContent = 'Sende…';
+          const res = await requestLigaJoin();
+          if(res.ok) renderLigenPanel(view);
+          else { toast('Fehler: '+(res.detail||'unbekannt')); btn.disabled=false; btn.textContent='In die Liga einsteigen'; }
+        };
+      }
       return;
     }
     const header = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
