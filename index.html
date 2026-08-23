@@ -13886,6 +13886,12 @@ async function renderAdminPanel(view){
       <button class="action-btn secondary" id="admin-seed-leagues" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Ligen jetzt einmalig einteilen</button>
       <p class="hint" id="admin-seed-leagues-result" style="margin:10px 0 0;"></p>
     </div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Meine Liga verlassen</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Entfernt DIESEN Account sofort aus seiner aktuellen Liga - z.B. um einen versehentlichen Test-Beitritt rückgängig zu machen. Tages-unabhängig, rührt aber weder den laufenden Spielplan noch bereits gespielte Ergebnisse an.</p>
+      <button class="action-btn secondary" id="admin-leave-liga" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Meine Liga jetzt verlassen</button>
+      <p class="hint" id="admin-leave-liga-result" style="margin:10px 0 0;"></p>
+    </div>
     <div class="vs-panel" style="border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Nutzer verwalten</h3>
       <div style="display:flex;gap:8px;margin-bottom:14px;">
@@ -13910,6 +13916,22 @@ async function renderAdminPanel(view){
       resultEl.style.color = 'var(--danger)';
     }
     e.target.disabled = false; e.target.textContent = 'Ligen jetzt einmalig einteilen';
+  });
+  document.getElementById('admin-leave-liga').addEventListener('click', async (e)=>{
+    e.target.disabled = true; e.target.textContent = 'Läuft…';
+    const resultEl = document.getElementById('admin-leave-liga-result');
+    const out = await leaveLigaNow();
+    if(out.ok){
+      resultEl.textContent = `Liga ${out.letter} verlassen.`;
+      resultEl.style.color = 'var(--turf-bright)';
+    } else if(out.reason==='not-in-a-league'){
+      resultEl.textContent = 'Dieser Account ist aktuell in keiner Liga.';
+      resultEl.style.color = 'var(--muted)';
+    } else {
+      resultEl.textContent = `Fehlgeschlagen${out.detail?': '+out.detail:''}.`;
+      resultEl.style.color = 'var(--danger)';
+    }
+    e.target.disabled = false; e.target.textContent = 'Meine Liga jetzt verlassen';
   });
   document.getElementById('admin-add-coins').addEventListener('click', async ()=>{
     await atomicCoinChange(100000);
@@ -17507,6 +17529,23 @@ async function joinLigaNow(){
     await fb.setDoc(fb.doc(fb.db,'leagueWeeks', letter+'_'+targetWeekStart), payload);
   }catch(e){ console.warn('league week regenerate on join failed', e); }
   return {ok:true, letter};
+}
+// Admin escape hatch for an account that joined a league by mistake (e.g. while testing joinLigaNow
+// itself) - unlike joining, this is NOT Sunday-gated and does NOT touch the current week's fixtures/
+// history, it just removes the account from its leagueMembership doc. That account's already-
+// simulated matches for the current week simply stay in the record (same principle as a banned
+// account's past history never getting retroactively erased) - fine for undoing an accidental
+// test-account join, not meant as a polished "leave my league" feature for real players mid-season.
+async function leaveLigaNow(){
+  await fbReady;
+  if(!fb || !clubId) return {ok:false};
+  const membership = await loadMyLeagueMembership();
+  if(!membership) return {ok:false, reason:'not-in-a-league'};
+  try{
+    const newMembers = membership.members.filter(u=>u!==clubId);
+    await fb.setDoc(fb.doc(fb.db,'leagueMembership', membership.letter), {letter:membership.letter, members:newMembers});
+    return {ok:true, letter:membership.letter};
+  }catch(e){ return {ok:false, detail:(e&&(e.code||e.message))||String(e)}; }
 }
 // ===== Ligen Stufe 2: Spielplan, Simulation, Tabelle =====
 // Splits a double round-robin's total round count as evenly as possible across the 5 weekdays,
