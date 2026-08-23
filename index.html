@@ -994,6 +994,32 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .cs-card-wrap{transform:rotateY(90deg) scale(.7);opacity:0;animation:csFlip .6s .35s cubic-bezier(.2,.7,.3,1) forwards;}
 @keyframes csFlip{to{transform:rotateY(0) scale(1.35);opacity:1;}}
 .cs-hint{margin-top:26px;font-size:12px;color:rgba(255,255,255,.65);letter-spacing:.03em;opacity:0;animation:csBannerIn .5s 1s forwards;}
+/* Level-up cutscene (see showLevelUpCutscene): a card leveling up used to be just a toast, easy to
+   miss during a busy match screen. Same "radial glow using --cs-acc, tap to continue" language as the
+   pack-opening .cutscene-overlay above, but its own overlay/z-index since a level-up can in principle
+   fire right as that other cutscene is closing. Multiple level-ups in one match are shown one at a
+   time, each POPPING IN at full size in the exact same spot the previous one just left - the "becomes
+   the next one" effect is the fresh pop-in replacing the old badge in place, not a slide/carousel. */
+.lvlup-overlay{position:fixed;inset:0;z-index:320;display:flex;align-items:center;justify-content:center;flex-direction:column;
+  background:radial-gradient(circle at 50% 42%, var(--cs-acc,#ffd76a) 0%, rgba(6,7,10,.97) 55%);
+  animation:csFlash .5s ease;cursor:pointer;}
+.lvlup-badge{width:132px;height:132px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 60px 8px rgba(255,255,255,.2), 0 20px 40px rgba(0,0,0,.6);margin-bottom:18px;
+  animation:lvlupBadgePop .5s cubic-bezier(.2,1.4,.4,1);}
+.lvlup-badge svg{width:60px;height:60px;}
+.lvlup-badge.lvl1{background:linear-gradient(160deg,#c9814f,#7a4a24);}
+.lvlup-badge.lvl1 svg{color:#ffe0bd;}
+.lvlup-badge.lvl2{background:linear-gradient(160deg,#d7dade,#9297a0);}
+.lvlup-badge.lvl2 svg{color:#fff;}
+.lvlup-badge.lvl3{background:linear-gradient(160deg,#ffd76a,#c9971f);}
+.lvlup-badge.lvl3 svg{color:#3a2a00;}
+@keyframes lvlupBadgePop{0%{transform:scale(.25);opacity:0;}65%{transform:scale(1.15);opacity:1;}100%{transform:scale(1);opacity:1;}}
+.lvlup-name{font-family:'Anton';font-size:24px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.6);
+  opacity:0;animation:csBannerIn .4s .12s forwards;}
+.lvlup-label{margin-top:4px;font-size:14px;color:rgba(255,255,255,.75);letter-spacing:.03em;
+  opacity:0;animation:csBannerIn .4s .2s forwards;}
+.lvlup-hint{margin-top:26px;font-size:12px;color:rgba(255,255,255,.6);letter-spacing:.03em;opacity:0;animation:csBannerIn .5s .5s forwards;}
+body.perf-lite .lvlup-overlay, body.perf-lite .lvlup-overlay *{ animation:none !important; opacity:1 !important; transform:none !important; }
 .fut-visual-frame{width:132px;height:96px;margin-bottom:20px;border-radius:14px;position:relative;
   background:#0d0f14;border:2px solid var(--cs-acc,#e8c468);overflow:hidden;
   display:flex;align-items:center;justify-content:center;color:var(--cs-acc,#e8c468);
@@ -11206,6 +11232,9 @@ let currentTab = 'store';
 // automatically - no separate carry-over step needed, the trade code already moves the whole entry. =====
 const CARD_XP_THRESHOLDS = [200, 2000, 10000]; // cumulative XP needed for Bronze/Silber/Gold
 const CARD_LEVEL_LABEL = {0:'Kein Level', 1:'Bronze', 2:'Silber', 3:'Gold'};
+// Shared between the small in-card .level-badge (cardEl) and the big center-screen level-up cutscene
+// (showLevelUpCutscene) so both always show the exact same star, just at very different sizes.
+const LEVEL_BADGE_ICON_SVG = `<svg viewBox="0 0 24 24"><path d="M12 4l2 4.8 5 .4-3.8 3.4 1.2 5-4.4-2.6-4.4 2.6 1.2-5-3.8-3.4 5-.4z" fill="currentColor"/></svg>`;
 const LEVEL_RAP_MULT = {0:1, 1:1.25, 2:1.75, 3:3}; // RAP multiplier over the base card's value: Bronze +25%, Silber +75%, Gold +200%
 function cardLevelForXp(xp){
   if(xp>=CARD_XP_THRESHOLDS[2]) return 3;
@@ -11290,7 +11319,38 @@ async function awardCardXP(matchRatings){
     }
   });
   if(changed) await sSet('collection', collection);
-  levelUps.forEach(lu=>{ toast(`⭐ ${lu.n} erreicht Level ${lu.level} (${CARD_LEVEL_LABEL[lu.level]})!`); });
+  if(levelUps.length) await showLevelUpCutscene(levelUps);
+}
+// A card leveling up used to be just a toast, easy to miss during a busy match screen - now it's the
+// biggest thing on screen, one level-up at a time. Tapping anywhere (or a timer, so it never blocks
+// someone who's looked away) pops in the NEXT one in the exact same spot, which is the "becomes the
+// next one" animation: a fresh badge popping in over the last, not a slide/carousel transition.
+function showLevelUpCutscene(levelUps){
+  return new Promise(resolve=>{
+    if(!levelUps || !levelUps.length){ resolve(); return; }
+    const root = document.createElement('div');
+    root.className = 'lvlup-overlay';
+    document.body.appendChild(root);
+    let i = 0, timer = null;
+    function renderStep(){
+      const lu = levelUps[i];
+      root.innerHTML = `
+        <div class="lvlup-badge lvl${lu.level}">${LEVEL_BADGE_ICON_SVG}</div>
+        <div class="lvlup-name">${lu.n}</div>
+        <div class="lvlup-label">Level ${lu.level} — ${CARD_LEVEL_LABEL[lu.level]}!</div>
+        <div class="lvlup-hint">${i<levelUps.length-1 ? 'Tippen für nächstes Level-up' : 'Tippen zum Schließen'}</div>`;
+    }
+    function advance(){
+      clearTimeout(timer);
+      i++;
+      if(i>=levelUps.length){ root.remove(); resolve(); return; }
+      renderStep();
+      timer = setTimeout(advance, 2200);
+    }
+    root.addEventListener('click', advance);
+    renderStep();
+    timer = setTimeout(advance, 2200);
+  });
 }
 
 
@@ -11864,9 +11924,8 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // without a uid, and should still show their badge. Sits half outside the card edge (see .pcard's
   // overflow:visible); clickable to open the XP progress modal only when uid is present (see the
   // listener attached after div.innerHTML is set below) - an opponent's card has no XP data to show.
-  const levelBadgeIcon = `<svg viewBox="0 0 24 24"><path d="M12 4l2 4.8 5 .4-3.8 3.4 1.2 5-4.4-2.6-4.4 2.6 1.2-5-3.8-3.4 5-.4z" fill="currentColor"/></svg>`;
   const levelBadge = (!card.isManager && card.level>0)
-    ? `<div class="level-badge lvl${card.level}" title="${CARD_LEVEL_LABEL[card.level]}${card.uid ? ' — Level-Fortschritt ansehen' : ''}">${levelBadgeIcon}</div>`
+    ? `<div class="level-badge lvl${card.level}" title="${CARD_LEVEL_LABEL[card.level]}${card.uid ? ' — Level-Fortschritt ansehen' : ''}">${LEVEL_BADGE_ICON_SVG}</div>`
     : '';
   const photoInner = card.isManager
     ? `<div class="avatar">${initialsOf(card.n)}</div>`
