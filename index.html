@@ -6812,6 +6812,7 @@ function weekPassXpForNextLevel(level){ return level>=WEEK_PASS_MAX_LEVEL ? 0 : 
 function weekPassReward(level){
   if(level===15){ const c = currentWeekPassCardSet().lvl15; return {type:'card', cardId: c ? c.id : null}; }
   if(level===WEEK_PASS_MAX_LEVEL){ const c = currentWeekPassCardSet().lvl30; return {type:'card', cardId: c ? c.id : null}; }
+  if(level===20) return {type:'pack', packId:'ratings27'}; // untradable, same as every other Wochen-Pass pack (see claimWeekPassReward)
   if(level%3===0) return {type:'pack', packId: level<9?'gold':(level<13?'sevenof88':(level<24?'zeitgeist':'kronjuwelen'))};
   return {type:'coins', amount: 900 + level*80};
 }
