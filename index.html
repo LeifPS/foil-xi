@@ -17645,19 +17645,18 @@ async function resolveSaveDataForUser(userId){
     return snap.exists() ? snap.data() : null;
   }catch(e){ console.warn('resolve league member save failed', userId, e); return null; }
 }
-// Builds one league's entire week - every team's frozen Monday-state rating/roster, and every single
-// match of the double round-robin, fully pre-simulated (see the "ändert das Ergebnis NIE" design
-// answer - watching live never re-rolls anything, it only replays an already-decided result). Every
-// match gets a full liveMd, since every match in a league is human-vs-human and either side might
-// want to watch theirs live - unlike a bot-filled hosted tournament, there's no "only humans need
-// liveMd" shortcut available here.
+// Builds one league's entire week's SCHEDULE (who plays whom, which day/round) up front, but no longer
+// pre-simulates any result: each match stays pending:true until its own reveal moment arrives, at
+// which point resolveLigaMatchIfNeeded fetches BOTH sides' then-CURRENT squad and simulates it -
+// "aktuelles Kader zum Start des Spiels", not a Monday-frozen snapshot. A roster change mid-week can
+// no longer change an already-reached match (still never re-rolled once resolved, see
+// resolveLigaMatchIfNeeded), but it DOES affect any of that same week's matches not yet reached.
 async function buildLeagueWeekPayload(letter, members, weekStart){
   const teams = [];
   for(const userId of members){
     const data = await resolveSaveDataForUser(userId);
-    if(!data || !data.profile){ teams.push({userId, name:userId, rating:40, crest:null, abbr:null, players:[]}); continue; }
-    const {rating, players} = squadRatingFromSaveData(data);
-    teams.push({userId, name:data.profile.displayName||userId, rating, crest:data.profile.crest||null, abbr:data.profile.clubAbbr||null, players});
+    if(!data || !data.profile){ teams.push({userId, name:userId, crest:null, abbr:null}); continue; }
+    teams.push({userId, name:data.profile.displayName||userId, crest:data.profile.crest||null, abbr:data.profile.clubAbbr||null});
   }
   const rounds = generateDoubleRoundRobinRounds(teams.length);
   const perDay = distributeRoundsAcrossDays(rounds.length);
@@ -17666,10 +17665,8 @@ async function buildLeagueWeekPayload(letter, members, weekStart){
   perDay.forEach((count, dayIdx)=>{
     for(let c=0;c<count;c++){
       (rounds[roundIdx]||[]).forEach(([aIdx,bIdx])=>{
-        const a = teams[aIdx], b = teams[bIdx];
-        const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players, null, null, {allowDraw:true});
-        matches.push({day:dayIdx+1, roundInDay:c, roundsInDay:count, aIdx, bIdx, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide,
-          mid:genId(), liveMd: JSON.parse(JSON.stringify(md)), liveRevealed:false});
+        matches.push({day:dayIdx+1, roundInDay:c, roundsInDay:count, aIdx, bIdx, mid:genId(),
+          pending:true, aGoals:null, bGoals:null, winnerSide:null, liveMd:null, liveRevealed:false});
       });
       roundIdx++;
     }
@@ -17684,7 +17681,57 @@ async function buildLeagueWeekPayload(letter, members, weekStart){
     if(seenPerDay.has(key)) console.error('Liga scheduling bug: same pairing twice on one day', letter, weekStart, m);
     seenPerDay.set(key, true);
   });
-  return {letter, weekStart, teams: teams.map(t=>({userId:t.userId, name:t.name, rating:t.rating, crest:t.crest})), matches};
+  return {letter, weekStart, teams, matches};
+}
+// A match only gets simulated once its own reveal moment has actually arrived (or opts.force, used by
+// the Samstag rollover to sweep up anything nobody happened to view in time) - whoever's viewport hits
+// this first fetches BOTH sides' CURRENT save fresh right then, so a squad change earlier in the week
+// still lands correctly on any fixture not yet reached. Simulation runs OUTSIDE the transaction (same
+// reasoning as getOrCreateLeagueWeek: Math.random() must only ever be rolled once per match) - the
+// transaction itself only does a re-check-and-apply, so a second viewer racing the first never
+// double-simulates or overwrites an already-committed result.
+async function resolveLigaMatchIfNeeded(letter, weekStart, week, opts={}){
+  if(!fb || !week) return week;
+  const due = week.matches.filter(m=> m.pending && (opts.force || ligaMatchIsRevealed(m, weekStart)));
+  if(!due.length) return week;
+  const freshByUser = new Map();
+  for(const m of due){
+    for(const idx of [m.aIdx, m.bIdx]){
+      const userId = week.teams[idx].userId;
+      if(!freshByUser.has(userId)) freshByUser.set(userId, await resolveSaveDataForUser(userId));
+    }
+  }
+  const resultsByMid = new Map();
+  due.forEach(m=>{
+    const a = week.teams[m.aIdx], b = week.teams[m.bIdx];
+    const aData = freshByUser.get(a.userId), bData = freshByUser.get(b.userId);
+    const aStats = (aData && aData.profile) ? squadRatingFromSaveData(aData) : {rating:40, players:[]};
+    const bStats = (bData && bData.profile) ? squadRatingFromSaveData(bData) : {rating:40, players:[]};
+    const md = buildDecisiveMatch(aStats.rating, bStats.rating, aStats.players, bStats.players, null, null, {allowDraw:true});
+    resultsByMid.set(m.mid, {aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide, liveMd: JSON.parse(JSON.stringify(md))});
+  });
+  const ref = fb.doc(fb.db,'leagueWeeks', letter+'_'+weekStart);
+  let result = week;
+  try{
+    if(fb.runTransaction){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const snap = await tx.get(ref);
+        if(!snap.exists()) return;
+        const cur = snap.data();
+        let changed = false;
+        const newMatches = cur.matches.map(m=>{
+          const r = m.pending ? resultsByMid.get(m.mid) : null;
+          if(!r) return m;
+          changed = true;
+          return {...m, ...r, liveRevealed:false, pending:false};
+        });
+        if(!changed) return;
+        tx.update(ref, {matches:newMatches});
+        result = {...cur, matches:newMatches};
+      });
+    }
+  }catch(e){ console.warn('liga match resolve failed', letter, weekStart, e); }
+  return result;
 }
 // First caller "wins" and writes the week's data; anyone arriving after just reads what's already
 // there. The payload is built BEFORE the transaction (it depends on Math.random(), which must only
@@ -17754,7 +17801,7 @@ function ligaTieBreakHash(userId, seed){
 // to fall back to the simpler day<=uptoDay cutoff, since a finished week has nothing left to hide.
 function ligaComputeStandings(teams, matches, uptoDay, seed, revealWeekStart){
   const table = teams.map((t,i)=>({idx:i, userId:t.userId, name:t.name, pts:0, w:0, d:0, l:0, gf:0, ga:0}));
-  matches.filter(m=> m.day<=uptoDay && (revealWeekStart==null || ligaMatchIsRevealed(m, revealWeekStart))).forEach(m=>{
+  matches.filter(m=> m.day<=uptoDay && !m.pending && (revealWeekStart==null || ligaMatchIsRevealed(m, revealWeekStart))).forEach(m=>{
     const a = table[m.aIdx], b = table[m.bIdx];
     a.gf+=m.aGoals; a.ga+=m.bGoals; b.gf+=m.bGoals; b.ga+=m.aGoals;
     if(m.winnerSide==='draw'){ a.pts+=1; b.pts+=1; a.d++; b.d++; }
@@ -17994,6 +18041,10 @@ async function resolveWeeklyRolloverIfNeeded(){
     const members = membershipSnap.docs.find(d=>d.id===letter).data().members;
     weeks[letter] = await getOrCreateLeagueWeek(letter, members, weekStart);
   }
+  // Force-resolve anything nobody happened to view after its own reveal moment this week - the week is
+  // over now, so every match needs a real result (using each side's CURRENT squad, right as this final
+  // sweep runs) before the table below can be treated as final.
+  for(const letter of lettersInUse){ weeks[letter] = await resolveLigaMatchIfNeeded(letter, weekStart, weeks[letter], {force:true}); }
   const tables = {};
   lettersInUse.forEach(letter=>{ tables[letter] = ligaComputeStandings(weeks[letter].teams, weeks[letter].matches, 5, weekStart); });
   // userId -> {letter, coins, isChampion} destination league after all movements, before newcomers.
@@ -18001,9 +18052,10 @@ async function resolveWeeklyRolloverIfNeeded(){
   lettersInUse.forEach(letter=>{ tables[letter].forEach(row=>{ nextLeagueOf[row.userId] = letter; }); });
   const rewards = []; // {userId, letter, coins, championCard:bool, badge:string|null, packs:[{id,count}]}
   const relegationResults = [];
-  lettersInUse.forEach((letter,i)=>{
+  const relegationTiesPending = []; // resolved below, after fresh squad data is fetched for each pair
+  for(const letter of lettersInUse){
     const table = tables[letter];
-    if(!table.length) return;
+    if(!table.length) continue;
     // Every placement earns something now, not just the top two - places 1/2/3 each have their own
     // tuned reward (see LIGA_REWARD_TABLE), everyone from 4th down shares the bracket's flat amount.
     table.forEach((row, idx)=>{
@@ -18012,7 +18064,7 @@ async function resolveWeeklyRolloverIfNeeded(){
       rewards.push({userId:row.userId, letter, coins:r.coins, championCard: letter==='A' && place===1, badge:r.badge||null, packs:r.packs||[]});
     });
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
-    if(!lettersInUse.includes(upperLetter)) return; // no league above this one (letter is 'A')
+    if(!lettersInUse.includes(upperLetter)) continue; // no league above this one (letter is 'A')
     const upperTable = tables[upperLetter];
     // automatic moves (this league's own last place gets handled one loop iteration later, when IT
     // plays the role of "upperTable" for the boundary below it - every non-bottom league eventually
@@ -18021,16 +18073,25 @@ async function resolveWeeklyRolloverIfNeeded(){
     if(upperTable.length>1) nextLeagueOf[upperTable[upperTable.length-1].userId] = letter; // upper's last -> down here
     nextLeagueOf[table[0].userId] = upperLetter; // lower's first -> up (overwrites the champion-stays-put default, correct: promotion always beats "stay")
     if(table.length>=5 && upperTable.length>=2){
-      const lowerChallenger = weeks[letter].teams[table[1].idx];
-      const upperDefender = weeks[upperLetter].teams[upperTable[upperTable.length-2].idx];
-      const tie = ligaRelegationTie(lowerChallenger, upperDefender);
-      const winnerId = tie.winner==='A' ? lowerChallenger.userId : upperDefender.userId;
-      const loserId = tie.winner==='A' ? upperDefender.userId : lowerChallenger.userId;
-      nextLeagueOf[winnerId] = upperLetter;
-      nextLeagueOf[loserId] = letter;
-      relegationResults.push({upperLetter, lowerLetter:letter, challenger:lowerChallenger.name, defender:upperDefender.name, ...tie, winnerId});
+      relegationTiesPending.push({letter, upperLetter, challengerRow:table[1], defenderRow:upperTable[upperTable.length-2]});
     }
-  });
+  }
+  // Relegation-playoff ties are played live, right now, at rollover time - so fetching each side's
+  // squad fresh HERE is already exactly "aktuelles Kader zum Start des Spiels", no snapshot involved.
+  for(const t of relegationTiesPending){
+    const chData = await resolveSaveDataForUser(t.challengerRow.userId);
+    const defData = await resolveSaveDataForUser(t.defenderRow.userId);
+    const chStats = (chData && chData.profile) ? squadRatingFromSaveData(chData) : {rating:40, players:[]};
+    const defStats = (defData && defData.profile) ? squadRatingFromSaveData(defData) : {rating:40, players:[]};
+    const lowerChallenger = {userId:t.challengerRow.userId, name:t.challengerRow.name, ...chStats};
+    const upperDefender = {userId:t.defenderRow.userId, name:t.defenderRow.name, ...defStats};
+    const tie = ligaRelegationTie(lowerChallenger, upperDefender);
+    const winnerId = tie.winner==='A' ? lowerChallenger.userId : upperDefender.userId;
+    const loserId = tie.winner==='A' ? upperDefender.userId : lowerChallenger.userId;
+    nextLeagueOf[winnerId] = t.upperLetter;
+    nextLeagueOf[loserId] = t.letter;
+    relegationResults.push({upperLetter:t.upperLetter, lowerLetter:t.letter, challenger:lowerChallenger.name, defender:upperDefender.name, ...tie, winnerId});
+  }
   const nextMembers = {};
   lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
   Object.entries(nextLeagueOf).forEach(([userId,letter])=>{ nextMembers[letter].push(userId); });
@@ -18302,10 +18363,13 @@ function renderLigenPanel(view){
     LIGA_LAST_ERROR = null;
     // Only the Sonntag (upcoming, still-0:0) week is safe to self-heal a team-count mismatch on - the
     // Montag-Samstag week may already have played matches, which a resync would silently wipe.
-    const week = isWeekendRecap
+    let week = isWeekendRecap
       ? await ligaSyncedWeek(membership.letter, membership.members, targetWeekStart)
       : await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
     if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; return; }
+    // Whoever's tab hits a match first after its own reveal moment simulates it, using both sides'
+    // CURRENT squad right then - not during the weekend preview week, where nothing is due yet anyway.
+    if(!isWeekendRecap) week = await resolveLigaMatchIfNeeded(membership.letter, targetWeekStart, week);
     const visibleDay = ligaVisibleDayCount(targetWeekStart);
     // Matches within a day reveal individually across the day (see ligaMatchIsRevealed), not all at
     // once at midnight - the standings only count a match once its own reveal moment has passed.
@@ -18328,7 +18392,7 @@ function renderLigenPanel(view){
       html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
       const dayStart = targetWeekStart + (d-1)*24*60*60*1000;
       html += dayMatches.map(m=>{
-        if(ligaMatchIsRevealed(m, targetWeekStart)) return ligaMatchRowHTML(m, week.teams, clubId);
+        if(!m.pending && ligaMatchIsRevealed(m, targetWeekStart)) return ligaMatchRowHTML(m, week.teams, clubId);
         const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
         const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
         return ligaMatchRowHTML(m, week.teams, clubId, {fixtureOnly:true, revealTime, letter:membership.letter});
