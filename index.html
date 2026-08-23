@@ -14687,9 +14687,21 @@ function renderClub(view){
     }, 24);
   });
   document.getElementById('rename-club-abbr').addEventListener('click', ()=>{
-    askTextModal('K\u00fcrzel in Liga-Fixtures (max. 3 Zeichen)', ligaTeamAbbr(profile.displayName||profile.userId, profile.clubAbbr), async (val)=>{
-      const clean = (val||'').replace(/[^a-zA-Z0-9\u00c0-\u00ff]/g,'').slice(0,3).toUpperCase();
-      if(!clean) return;
+    askTextModal('K\u00fcrzel in Liga-Fixtures (exakt 3 Zeichen: A-Z, \u00c4\u00d6\u00dc, 0-9)', ligaTeamAbbr(profile.displayName||profile.userId, profile.clubAbbr), async (val)=>{
+      if(!val) return;
+      // Bewusst strenger als der alte Regex (der noch das ganze Latin-1-Akzentspektrum erlaubte) - alte,
+      // nach dieser Regel nicht mehr konforme K\u00fcrzel bleiben unangetastet g\u00fcltig, nur NEUE \u00c4nderungen
+      // m\u00fcssen ab jetzt exakt 3 Zeichen aus A-Z/\u00c4\u00d6\u00dc/0-9 sein.
+      const clean = val.toUpperCase().replace(/[^A-Z\u00c4\u00d6\u00dc0-9]/g,'');
+      if(clean.length!==3){ toast('K\u00fcrzel muss genau 3 Zeichen lang sein (A-Z, \u00c4\u00d6\u00dc, 0-9).'); return; }
+      if(clean===profile.clubAbbr){ toast(`K\u00fcrzel ist bereits "${clean}".`); return; }
+      try{
+        await fbReady;
+        if(fb){
+          const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'saves'), fb.where('profile.clubAbbr','==',clean)));
+          if(snap.docs.some(d=>d.id!==clubId)){ toast(`K\u00fcrzel "${clean}" ist bereits vergeben.`); return; }
+        }
+      }catch(e){ console.warn('clubAbbr uniqueness check failed', e); toast('Konnte nicht gepr\u00fcft werden, versuch es nochmal.'); return; }
       profile.clubAbbr = clean;
       await sSet('profile', profile);
       toast(`K\u00fcrzel ge\u00e4ndert zu "${clean}". Gilt ab dem n\u00e4chsten neu erstellten Liga-Wochenplan.`);
