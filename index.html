@@ -17299,7 +17299,7 @@ async function buildLeagueWeekPayload(letter, members, weekStart){
       (rounds[roundIdx]||[]).forEach(([aIdx,bIdx])=>{
         const a = teams[aIdx], b = teams[bIdx];
         const md = buildDecisiveMatch(a.rating, b.rating, a.players, b.players, null, null, {allowDraw:true});
-        matches.push({day:dayIdx+1, aIdx, bIdx, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide,
+        matches.push({day:dayIdx+1, roundInDay:c, roundsInDay:count, aIdx, bIdx, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide,
           mid:genId(), liveMd: JSON.parse(JSON.stringify(md)), liveRevealed:false});
       });
       roundIdx++;
@@ -17353,6 +17353,20 @@ function ligaVisibleDayCount(weekStart){
   const elapsedDays = Math.floor((berlinNow().getTime()-weekStart)/(24*60*60*1000));
   return Math.max(0, Math.min(5, elapsedDays+1));
 }
+// Within a single day, its rounds don't all reveal at once at midnight - they're spread across
+// 05:00-20:00 Berlin, evenly by however many rounds that day actually has (a typical 3-round day
+// reveals at 05:00, 10:00, 15:00; a 2-round day at 05:00 and 12:30; etc.). Matches written before this
+// per-round reveal existed have no roundInDay/roundsInDay stored and simply fall back to "revealed
+// as soon as the day starts" (offset 0), so old already-created weeks keep working unchanged.
+function ligaMatchRevealOffsetMs(m){
+  if(m.roundInDay==null || !m.roundsInDay) return 0;
+  const hour = 5 + m.roundInDay * (15/m.roundsInDay);
+  return Math.round(hour*60*60*1000);
+}
+function ligaMatchIsRevealed(m, weekStart){
+  const dayStart = weekStart + (m.day-1)*24*60*60*1000;
+  return berlinNow().getTime() >= dayStart + ligaMatchRevealOffsetMs(m);
+}
 // Deterministic (not truly random) tiebreak: same two teams with identical pts/gd/gf always resolve
 // to the same order every time this is computed, seeded by both userIds plus the league-week so it
 // isn't the same fixed winner every single week. This exists purely to give resolveWeeklyRolloverIfNeeded
@@ -17365,9 +17379,13 @@ function ligaTieBreakHash(userId, seed){
   for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i))|0; }
   return h;
 }
-function ligaComputeStandings(teams, matches, uptoDay, seed){
+// revealWeekStart (optional): when given, a match only counts once its own per-round reveal time has
+// passed (see ligaMatchIsRevealed), not just "its whole day has started" - used for a live, in-progress
+// week. Omit it (as resolveWeeklyRolloverIfNeeded and any already-finished week's history table do)
+// to fall back to the simpler day<=uptoDay cutoff, since a finished week has nothing left to hide.
+function ligaComputeStandings(teams, matches, uptoDay, seed, revealWeekStart){
   const table = teams.map((t,i)=>({idx:i, userId:t.userId, name:t.name, pts:0, w:0, d:0, l:0, gf:0, ga:0}));
-  matches.filter(m=>m.day<=uptoDay).forEach(m=>{
+  matches.filter(m=> m.day<=uptoDay && (revealWeekStart==null || ligaMatchIsRevealed(m, revealWeekStart))).forEach(m=>{
     const a = table[m.aIdx], b = table[m.bIdx];
     a.gf+=m.aGoals; a.ga+=m.bGoals; b.gf+=m.bGoals; b.ga+=m.aGoals;
     if(m.winnerSide==='draw'){ a.pts+=1; b.pts+=1; a.d++; b.d++; }
@@ -17675,9 +17693,14 @@ async function renderAllLigenOverview(box){
       ? await ligaSyncedWeek(letter, members, targetWeekStart)
       : await getOrCreateLeagueWeek(letter, members, targetWeekStart);
     if(week){
-      const visibleDay = preSeason ? 0 : ligaVisibleDayCount(targetWeekStart);
+      const isUpcoming = preSeason || isBerlinSunday;
       const zones = ligaZonesFor(letter, sortedLetters, sizeOf);
-      html += ligaStandingsTableHTML(ligaComputeStandings(week.teams, week.matches, visibleDay, targetWeekStart), zones);
+      // An upcoming (not-yet-started) week has nothing to reveal at all (uptoDay 0); an ongoing
+      // Montag-Samstag week counts every match whose own per-round reveal time has already passed.
+      const tbl = isUpcoming
+        ? ligaComputeStandings(week.teams, week.matches, 0, targetWeekStart)
+        : ligaComputeStandings(week.teams, week.matches, 5, targetWeekStart, targetWeekStart);
+      html += ligaStandingsTableHTML(tbl, zones);
     } else {
       html += `<p class="hint">Tabelle konnte nicht geladen werden${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}.</p>`;
     }
@@ -17816,7 +17839,11 @@ function renderLigenPanel(view){
       : await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
     if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; return; }
     const visibleDay = ligaVisibleDayCount(targetWeekStart);
-    const standings = ligaComputeStandings(week.teams, week.matches, visibleDay, targetWeekStart);
+    // Matches within a day reveal individually across the day (see ligaMatchIsRevealed), not all at
+    // once at midnight - the standings only count a match once its own reveal moment has passed.
+    const standings = isBerlinSunday
+      ? ligaComputeStandings(week.teams, week.matches, 0, targetWeekStart)
+      : ligaComputeStandings(week.teams, week.matches, 5, targetWeekStart, targetWeekStart);
     const myRow = standings.find(t=>t.userId===clubId);
     let html = header + historyBox + oldSectionHtml;
     if(isBerlinSunday) html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue Woche (ab Montag)</div>`;
@@ -17826,8 +17853,17 @@ function renderLigenPanel(view){
     for(let d=1; d<=visibleDay; d++){
       const dayMatches = week.matches.filter(m=>m.day===d);
       if(!dayMatches.length) continue;
+      const revealed = dayMatches.filter(m=>ligaMatchIsRevealed(m, targetWeekStart));
+      if(!revealed.length) continue;
       html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
-      html += dayMatches.map(m=>ligaMatchRowHTML(m, week.teams, clubId)).join('');
+      html += revealed.map(m=>ligaMatchRowHTML(m, week.teams, clubId)).join('');
+      const nextHidden = dayMatches.filter(m=>!ligaMatchIsRevealed(m, targetWeekStart));
+      if(nextHidden.length){
+        const dayStart = targetWeekStart + (d-1)*24*60*60*1000;
+        const nextRevealMs = dayStart + Math.min(...nextHidden.map(ligaMatchRevealOffsetMs));
+        const nextRevealDate = new Date(nextRevealMs);
+        html += `<p class="hint" style="margin:4px 0 0;">Weitere ${nextHidden.length} Partie${nextHidden.length===1?'':'n'} an diesem Tag ab ${String(nextRevealDate.getHours()).padStart(2,'0')}:${String(nextRevealDate.getMinutes()).padStart(2,'0')} Uhr.</p>`;
+      }
     }
     box.innerHTML = html;
     box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
