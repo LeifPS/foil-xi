@@ -17907,20 +17907,35 @@ function ligaRelegationTie(teamA, teamB){
   }
   return {winner, aggA, aggB, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, leg2:{aGoals:leg2.oppGoals, bGoals:leg2.myGoals}, decider: decider ? {aGoals:decider.myGoals, bGoals:decider.oppGoals, wentToPK:decider.wentToPK} : null};
 }
+// Whether the commissioner pass has actually completed for a given (just-finished) week - used to
+// decide whether to show the Sonntag split view (old week recap + new week preview) instead of just
+// checking "is it Sunday", since the pass itself doesn't run until 12:00 Sonntag (see
+// resolveWeeklyRolloverIfNeeded). Without this, opening the tab between 00:00 and 12:00 on a Sonntag
+// would build/cache a "next week" preview off the OLD, not-yet-rolled-over membership - which would
+// then be the WRONG roster once the real rollover runs later that day and actually changes who's
+// promoted/relegated (same team COUNT, different actual members, so ligaSyncedWeek's self-heal
+// wouldn't even catch it).
+async function ligaRolloverDoneFor(weekStart){
+  try{
+    const flag = await fb.getDoc(fb.doc(fb.db,'leagueMeta','rollover_'+weekStart));
+    return flag.exists() && !!flag.data().done;
+  }catch(e){ console.warn('rollover flag check (render) failed', e); return false; }
+}
 // The whole weekly "commissioner" pass: reads every league's final table, works out every promotion/
 // relegation/relegation-playoff, pays out the winner/runner-up rewards, and writes next week's
 // membership. (Newcomers no longer wait for this - joinLigaNow() slots them into the bottom league
 // immediately, see below.) Guarded by leagueMeta/rollover_{weekStart} so
 // it only ever actually runs once per week no matter which client's Ligen-tab visit triggers it -
-// there's no server/cron here, so "whoever opens the tab first on/after Sunday" has to do it. Runs
-// only on Sunday (not Saturday) so that Montag-Samstag always shows a single, still-current league
-// (Samstag included - relegation is only REVEALED, along with the new league, on Sonntag).
+// there's no server/cron here, so "whoever opens the tab first on/after Sonntag 12:00" has to do it.
+// Fixed to a specific time (not just "any time Sunday") so relegation always reveals at the same
+// moment for everyone, instead of whenever the first visitor of the day happened to open the tab.
 async function resolveWeeklyRolloverIfNeeded(){
   await fbReady;
   if(!fb) return null;
   const weekStart = mostRecentMondayBerlin();
   if(weekStart<LIGA_SEASON_EPOCH) return null; // season hasn't even started its first week yet
-  if(berlinNow().getDay()!==0) return null; // only Sunday Berlin time
+  const now = berlinNow();
+  if(now.getDay()!==0 || now.getHours()<12) return null; // only Sonntag ab 12:00 Uhr Berlin time
   const flagRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
   try{
     const flag = await fb.getDoc(flagRef);
@@ -18064,7 +18079,10 @@ async function renderAllLigenOverview(box){
   const docs = membershipSnap.docs.slice().sort((a,b)=>a.id.localeCompare(b.id));
   if(!docs.length){ box.innerHTML = `<p class="hint">Noch keine Ligen eingeteilt.</p>`; return; }
   const weekStartBefore = mostRecentMondayBerlin();
-  const isBerlinSunday = berlinNow().getDay()===0;
+  // Not just "is it Sunday" - the commissioner pass itself doesn't run until 12:00 Sonntag, so the
+  // split view (and building a "next week" preview off post-rollover membership) only makes sense
+  // once that pass has actually completed - see ligaRolloverDoneFor.
+  const isBerlinSunday = berlinNow().getDay()===0 && await ligaRolloverDoneFor(weekStartBefore);
   const weekStart = ligaCurrentWeekStart();
   const preSeason = weekStart==null;
   const targetWeekStart = preSeason ? LIGA_SEASON_EPOCH : (isBerlinSunday ? weekStartBefore + 7*24*60*60*1000 : weekStart);
@@ -18179,11 +18197,11 @@ function renderLigenPanel(view){
       box.innerHTML = html;
       return;
     }
-    // Montag-Samstag: only ever one, single "current" league is shown (Samstag included - the
-    // rollover/relegation is computed but not revealed until Sonntag). Only on Sonntag does the tab
-    // split into two sections: the just-finished week (with its relegation result) and the already-
-    // assigned coming week's league.
-    const isBerlinSunday = berlinNow().getDay()===0;
+    // Montag-Samstag, and Sonntag before 12:00 (the commissioner pass hasn't run yet): only ever one,
+    // single "current" league is shown. Only once the pass has actually completed (see
+    // ligaRolloverDoneFor) does the tab split into two sections: the just-finished week (with its
+    // relegation result) and the already-assigned coming week's league.
+    const isBerlinSunday = berlinNow().getDay()===0 && await ligaRolloverDoneFor(weekStartBefore);
     // The rollover (if it just ran) always operates on the week that JUST finished, i.e. the week
     // that started BEFORE today's possible Monday-rollover of ligaCurrentWeekStart() itself - so the
     // history doc to look up is keyed by weekStartBefore, not the (possibly already-next) weekStart.
