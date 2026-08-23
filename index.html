@@ -18109,7 +18109,23 @@ function renderLigenPanel(view){
       // later Sonntag shows the just-created next week's table.
       let html = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Hier schon mal deine Liga:</p>`;
       const previewWeek = await ligaSyncedWeek(membership.letter, membership.members, LIGA_SEASON_EPOCH);
-      if(previewWeek) html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0, LIGA_SEASON_EPOCH), myZones);
+      if(previewWeek){
+        html += ligaStandingsTableHTML(ligaComputeStandings(previewWeek.teams, previewWeek.matches, 0, LIGA_SEASON_EPOCH), myZones);
+        // Same "whole week's fixtures visible up front, results held back" treatment as the main
+        // Montag-Samstag view below - here EVERY match is still hidden (the season hasn't even
+        // started), so this always renders as a plain pairing list with reveal times, never results.
+        for(let d=1; d<=5; d++){
+          const dayMatches = previewWeek.matches.filter(m=>m.day===d);
+          if(!dayMatches.length) continue;
+          html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
+          const dayStart = LIGA_SEASON_EPOCH + (d-1)*24*60*60*1000;
+          html += dayMatches.map(m=>{
+            const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
+            const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+            return ligaMatchRowHTML(m, previewWeek.teams, clubId, {fixtureOnly:true, revealTime});
+          }).join('');
+        }
+      }
       else if(LIGA_LAST_ERROR) html += `<p class="hint" style="color:var(--danger);">Tabelle konnte nicht geladen werden (${LIGA_LAST_ERROR}).</p>`;
       box.innerHTML = html;
       return;
