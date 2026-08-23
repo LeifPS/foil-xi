@@ -203,6 +203,21 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   100%{box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 28px -4px #ff8bd0;}
 }
 @keyframes ultimateBreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.018);}}
+/* Performance-Modus (Einstellungen -> Grafik-Qualität): a card grid can have dozens of .pcard elements
+   on screen at once, each normally running several separate looping animations (glow, foil-border
+   shift, breathe, autoShine, plus the pattern-layer/gem-facet/particle FX some themes add on top) -
+   that's the actual source of stutter/lag on weaker devices, not any single effect by itself. This one
+   class kills every bit of that in one place instead of needing an override per theme/keyframe. The
+   static gradients/colors (what makes a Diamant look different from a base card at a glance) stay -
+   only the CONSTANT MOTION is removed, so cards remain visually distinguishable, just still. */
+body.perf-lite .pcard, body.perf-lite .pcard *{ animation:none !important; }
+body.perf-lite .pcard::before{ display:none !important; }
+body.perf-lite .pcard .gem-facets,
+body.perf-lite .pcard .refresh-fx,
+body.perf-lite .pcard .legikone-fx,
+body.perf-lite .pcard .wm26k-fx{ display:none !important; }
+body.perf-lite .wm26-trophy-cutscene *{ animation:none !important; }
+body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
 .pcard.theme-gb{--acc:#ffb84d;} .pcard.theme-wall{--acc:#8fb4d1;} .pcard.theme-tots{--acc:#f5d76e;}
 .pcard.theme-flash{--acc:#ff7a59;} .pcard.theme-sd{--acc:#ff5fa8;} .pcard.theme-icon{--acc:#c78bf5;}
@@ -248,6 +263,41 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pcard .wm26k-spark.k8{left:82%;animation-duration:3s;animation-delay:.4s;width:3px;height:3px;}
 .pcard .wm26k-spark.k9{left:92%;animation-duration:3.5s;animation-delay:2.1s;}
 .pcard .wm26k-spark.k10{left:46%;animation-duration:4s;animation-delay:1.1s;width:3px;height:3px;}
+/* WM 2026 Pokal-Cutscene (shown once on actually winning the Finale, before the reward pack opens):
+   a big trophy emoji with a pulsing gold halo behind it, plus falling gold/white confetti - reuses the
+   same "own modal, not a generic toast" idea as everything else here that deserves to actually FEEL
+   like winning, not just be reported as a line of text. */
+.wm26-trophy-cutscene{position:relative;text-align:center;padding:12px 4px 4px;overflow:hidden;}
+.wm26-trophy-halo{position:absolute;top:8%;left:50%;width:220px;height:220px;margin:0 0 0 -110px;
+  background:radial-gradient(circle, rgba(255,246,214,.55) 0%, rgba(255,215,106,.22) 45%, transparent 72%);
+  animation:wm26TrophyHaloPulse 1.8s ease-in-out infinite;pointer-events:none;}
+@keyframes wm26TrophyHaloPulse{0%,100%{opacity:.6;transform:scale(1);}50%{opacity:1;transform:scale(1.12);}}
+.wm26-trophy-icon{position:relative;font-size:76px;line-height:1;margin-bottom:6px;
+  filter:drop-shadow(0 0 22px rgba(255,215,106,.75));animation:wm26TrophyBounce 1.1s ease-in-out infinite;}
+@keyframes wm26TrophyBounce{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-8px) scale(1.05);}}
+.wm26-trophy-title{position:relative;font-family:'Anton';font-size:26px;letter-spacing:.02em;margin:2px 0 0;
+  color:#fff2c9;text-shadow:0 0 14px rgba(255,215,106,.7);}
+.wm26-trophy-confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+.wm26-trophy-confetti i{position:absolute;top:-10%;width:6px;height:12px;border-radius:1px;opacity:0;
+  animation:wm26TrophyConfettiFall linear infinite;}
+@keyframes wm26TrophyConfettiFall{
+  0%{top:-10%;opacity:0;transform:rotate(0deg);}
+  8%{opacity:1;}
+  88%{opacity:1;}
+  100%{top:112%;opacity:0;transform:rotate(360deg);}
+}
+.wm26-trophy-confetti i.c1{left:4%;background:#ffd76a;animation-duration:3s;animation-delay:0s;}
+.wm26-trophy-confetti i.c2{left:12%;background:#fff6d6;animation-duration:3.6s;animation-delay:.4s;width:5px;height:9px;}
+.wm26-trophy-confetti i.c3{left:20%;background:#ffd76a;animation-duration:2.7s;animation-delay:1.1s;}
+.wm26-trophy-confetti i.c4{left:28%;background:#fff2c9;animation-duration:3.3s;animation-delay:.2s;width:5px;height:9px;}
+.wm26-trophy-confetti i.c5{left:36%;background:#ffd76a;animation-duration:3.9s;animation-delay:1.6s;}
+.wm26-trophy-confetti i.c6{left:44%;background:#fff6d6;animation-duration:2.9s;animation-delay:.7s;width:5px;height:9px;}
+.wm26-trophy-confetti i.c7{left:56%;background:#ffd76a;animation-duration:3.4s;animation-delay:1.9s;}
+.wm26-trophy-confetti i.c8{left:64%;background:#fff2c9;animation-duration:3.1s;animation-delay:.5s;width:5px;height:9px;}
+.wm26-trophy-confetti i.c9{left:72%;background:#ffd76a;animation-duration:3.7s;animation-delay:1.3s;}
+.wm26-trophy-confetti i.c10{left:80%;background:#fff6d6;animation-duration:2.8s;animation-delay:.9s;width:5px;height:9px;}
+.wm26-trophy-confetti i.c11{left:88%;background:#ffd76a;animation-duration:3.5s;animation-delay:2.1s;}
+.wm26-trophy-confetti i.c12{left:96%;background:#fff2c9;animation-duration:3.2s;animation-delay:.1s;width:5px;height:9px;}
 .pcard.theme-wc{--acc:#ffd700;box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 30px -4px #ffd700;}
 .pcard.theme-blk{--acc:#c9a8ff;background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.04) 0 2px, transparent 2px 9px),
@@ -11441,10 +11491,19 @@ async function boot(){
   showEntryGate();
 }
 
+// Performance preset ("full" vs "lite"): toggles a single body-level class that every card theme's
+// CSS (glow/shine/sparkle/sweep/gem-facet/particle animations - see .perf-lite rules near .pcard) is
+// written to respect, rather than duplicating an on/off check into dozens of individual keyframe
+// rules. Card grids can render a lot of .pcard elements at once (Kartenladen, Mein Verein, ...), each
+// normally running 3-6 separate animations, which is the actual source of lag on weaker devices/
+// browsers - this is a blunt but effective single switch for that, not a fine-grained quality ladder.
+function applyGraphicsPreset(){
+  document.body.classList.toggle('perf-lite', profile && profile.graphicsPreset==='lite');
+}
 async function init(){
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0};
+    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full'};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -11481,7 +11540,9 @@ async function init(){
     // legacy stat - never wiped by a Great Reset, unlike profile.wins. Seeded from the current win
     // count for accounts that already existed before this field did, so nobody's legacy starts at 0.
     if(profile.careerWins===undefined) profile.careerWins = profile.wins||0;
+    if(profile.graphicsPreset===undefined) profile.graphicsPreset = 'full';
   }
+  applyGraphicsPreset();
   if(ensureWeekPassQuestsFresh()) await sSet('profile', profile);
   if(profile.banned && !isAdmin()){
     document.getElementById('modal-root').innerHTML = `
@@ -14406,6 +14467,16 @@ function renderClub(view){
           <option value="click">Klick</option>
         </select>
       </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Grafik-Qualit\u00e4t</div>
+          <div class="hint" style="margin-top:2px;">Bei Rucklern auf \u00e4lteren Ger\u00e4ten: schaltet alle Karten-Animationen (Glanz, Funken, Textur) ab.</div>
+        </div>
+        <select id="graphics-preset-select">
+          <option value="full">Voll (Standard)</option>
+          <option value="lite">Reduziert (f\u00fcr schw\u00e4chere Ger\u00e4te)</option>
+        </select>
+      </div>
     </details>
     <div class="toolbar">
       <input id="club-search" placeholder="Spielername suchen..." value="${clubFilter.q}">
@@ -14458,6 +14529,14 @@ function renderClub(view){
     profile.packOpenMode = e.target.value;
     await sSet('profile', profile);
     toast(profile.packOpenMode==='click' ? 'Packs öffnen jetzt per Klick.' : 'Packs öffnen jetzt per Wischen.');
+  });
+  const graphicsPresetSelect = document.getElementById('graphics-preset-select');
+  graphicsPresetSelect.value = profile.graphicsPreset==='lite' ? 'lite' : 'full';
+  graphicsPresetSelect.addEventListener('change', async e=>{
+    profile.graphicsPreset = e.target.value;
+    await sSet('profile', profile);
+    applyGraphicsPreset();
+    toast(profile.graphicsPreset==='lite' ? 'Grafik reduziert — Karten-Animationen sind jetzt aus.' : 'Grafik auf Voll gestellt.');
   });
   document.getElementById('club-pos').value = clubFilter.pos;
   document.getElementById('club-nat').value = clubFilter.nat;
@@ -18152,6 +18231,22 @@ async function startWM26(){
   toast(`${formatCoins(WM26_ENTRY_FEE)} Coins Startgeld bezahlt. Du übernimmst den Platz von ${natDE(dropped)} in Gruppe ${groupId}.`);
   renderWM26Panel();
 }
+// Trophy-lift cutscene shown once, right when the Finale is actually won - resolves when the player
+// clicks through, so the caller can await it before moving on to the reward pack (same "own moment,
+// not just a toast line" treatment PROMO rewards and Legikone already get, but WM26 never had one).
+function showWM26TrophyCutscene(){
+  return new Promise(resolve=>{
+    openModal(`<div class="wm26-trophy-cutscene">
+        <div class="wm26-trophy-halo"></div>
+        <div class="wm26-trophy-confetti">${Array.from({length:12},(_,i)=>`<i class="c${i+1}"></i>`).join('')}</div>
+        <div class="wm26-trophy-icon">🏆</div>
+        <div class="wm26-trophy-title">WELTMEISTER 2026!</div>
+        <p class="hint" style="position:relative;margin:4px 0 18px;">+${formatCoins(WM26_WIN_REWARD)} Coins</p>
+        <button class="action-btn" id="wm26-trophy-continue" style="position:relative;width:100%;">Weiter</button>
+      </div>`);
+    document.getElementById('wm26-trophy-continue').addEventListener('click', ()=>{ closeModal(); resolve(); });
+  });
+}
 async function wm26FinishRun(exitStage, won){
   const t = wm26CurrentRun();
   if(!t) return;
@@ -18160,7 +18255,8 @@ async function wm26FinishRun(exitStage, won){
     await sSet('profile', profile);
     await atomicCoinChange(WM26_WIN_REWARD, {}, {silentDisplay:true});
     updateCoinDisplay();
-    toast(`🏆 Weltmeister! +${formatCoins(WM26_WIN_REWARD)} Coins. Öffne dein Pack…`);
+    await showWM26TrophyCutscene();
+    toast('Öffne dein Pack…');
     const useWinnersPack = Math.random()<0.2;
     const pack = PACKS.find(p=>p.id===(useWinnersPack ? 'wmwinners' : 'worldcuppack'));
     // the just-decided Finale is always the last round - the other side is whichever finalist isn't
