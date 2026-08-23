@@ -895,9 +895,10 @@ body.perf-lite .liga-badge{ animation:none !important; }
 @keyframes ligaNameBronzeShift{0%{background-position:0% 0%;}100%{background-position:260% 0%;}}
 body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite .liga-name-bronze{ animation:none !important; }
 
-/* Fixture-preview card (see ligaMatchRowHTML's opts.fixtureOnly) - crest + short code on each side,
-   kickoff time and league name centered, styled after a real sports app's match-preview card instead
-   of a plain text row. */
+/* One crest-card layout for EVERY match state (see ligaMatchRowHTML) - crest + short code on each
+   side, styled after a real sports app's match-preview card instead of a plain text row. Only the
+   center slot changes: kickoff time + league (not yet revealed), a Play button (revealed, own match
+   not yet watched live), or the final score (decided). */
 .liga-fixture-card{display:flex;align-items:center;justify-content:space-between;gap:8px;
   padding:14px 10px;margin-bottom:6px;border-radius:10px;
   background:linear-gradient(180deg,#1c1f24,#101216);border:1px solid var(--line);}
@@ -906,9 +907,14 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .liga-fixture-side svg, .liga-fixture-side img{display:block;}
 .liga-fixture-abbr{font-family:'Anton';font-size:12.5px;letter-spacing:.03em;color:var(--chalk);
   text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.liga-fixture-abbr.liga-fixture-winner{color:var(--turf-bright);}
 .liga-fixture-center{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;padding:0 8px;}
 .liga-fixture-time{font-family:'Anton';font-size:19px;color:#fff;}
 .liga-fixture-league{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
+.liga-fixture-play{width:34px;height:34px;border-radius:50%;background:var(--turf-bright);color:#04140f;
+  border:none;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;
+  box-shadow:0 0 0 4px rgba(47,157,103,.15);padding:0 0 0 2px;}
+.liga-fixture-play:hover{filter:brightness(1.08);}
 
 /* untradable cards (e.g. PRIME) - flag badge sitting on the bottom-right corner of the card border,
    same half-outside treatment as the level-badge. */
@@ -17912,50 +17918,40 @@ function ligaTeamAbbr(name, customAbbr){
   const clean = (name||'?').replace(/[^a-zA-Z0-9À-ÿ]/g,'');
   return (clean.slice(0,3) || '?').toUpperCase();
 }
-// opts.fixtureOnly (revealTime: "HH:MM" string, letter: league letter) renders a crest-card fixture
-// preview - no score, no "Live spielen" button - for a match whose own reveal moment hasn't arrived
-// yet, so the whole week's schedule (who plays whom, on which day) is visible in advance while
-// results/simulation still only appear once that match is actually revealed.
+// One crest-card layout for every state of a match, only the CENTER slot changes - keeps a single
+// visual language throughout the whole week's list instead of switching between a fixture card, a
+// plain "vs + button" row, and a plain text result row:
+//   - opts.fixtureOnly (revealTime, letter): own reveal moment hasn't arrived yet -> time + league.
+//   - own match, revealed but not yet watched live: a Play button in place of the time.
+//   - decided (either a finished match, or the viewer's own after watching): the score, winning side's
+//     crest/Kürzel highlighted turf-green with a trophy - no separate S/U/N badge needed, the viewer
+//     already knows which side is theirs from the green card border.
 function ligaMatchRowHTML(m, teams, viewerUserId, opts={}){
   const a = teams[m.aIdx], b = teams[m.bIdx];
   const isMine = viewerUserId && (a.userId===viewerUserId || b.userId===viewerUserId);
+  const pendingForViewer = !opts.fixtureOnly && isMine && !m.liveRevealed;
+  let center;
   if(opts.fixtureOnly){
-    return `<div class="liga-fixture-card${isMine?' liga-fixture-mine':''}">
-      <div class="liga-fixture-side">
-        ${renderCrestSVG(a.crest || fallbackCrestFor(a.name), 40)}
-        <div class="liga-fixture-abbr">${ligaTeamAbbr(a.name, a.abbr)}</div>
-      </div>
-      <div class="liga-fixture-center">
-        ${opts.revealTime ? `<div class="liga-fixture-time">${opts.revealTime}</div>` : ''}
-        ${opts.letter ? `<div class="liga-fixture-league">Liga ${opts.letter}</div>` : ''}
-      </div>
-      <div class="liga-fixture-side">
-        ${renderCrestSVG(b.crest || fallbackCrestFor(b.name), 40)}
-        <div class="liga-fixture-abbr">${ligaTeamAbbr(b.name, b.abbr)}</div>
-      </div>
-    </div>`;
+    center = `${opts.revealTime ? `<div class="liga-fixture-time">${opts.revealTime}</div>` : ''}
+      ${opts.letter ? `<div class="liga-fixture-league">Liga ${opts.letter}</div>` : ''}`;
+  } else if(pendingForViewer){
+    center = `<button class="liga-fixture-play" type="button" data-liga-live-mid="${m.mid}" title="Live spielen">▶</button>`;
+  } else {
+    center = `<div class="liga-fixture-time">${m.aGoals}:${m.bGoals}</div>
+      <div class="liga-fixture-league">Endstand</div>`;
   }
-  if(isMine && !m.liveRevealed){
-    return `<div class="leader-row" style="font-size:12px;padding:9px 10px;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:4px;margin-bottom:5px;">
-      <span>${a.name} <span class="hint" style="margin:0;">vs</span> ${b.name}</span>
-      <button class="bracket-live-btn" type="button" data-liga-live-mid="${m.mid}" style="padding:4px 10px;font-size:11px;">▶ Live spielen</button>
-    </div>`;
-  }
-  // For the viewer's own match, an explicit S/U/N (Sieg/Unentschieden/Niederlage) badge - winnerSide
-  // is always relative to "a" (the match engine's fixed "me" side when the payload was built, not the
-  // current viewer), so it has to be re-derived from whichever of a/b the viewer actually is.
-  let badge = '';
-  if(isMine){
-    const meIsA = a.userId===viewerUserId;
-    const outcome = m.winnerSide==='draw' ? 'U' : (((m.winnerSide==='me')===meIsA) ? 'S' : 'N');
-    const badgeBg = outcome==='S' ? 'var(--turf-bright)' : outcome==='N' ? 'var(--danger)' : 'var(--muted)';
-    badge = `<span class="mono" style="font-weight:800;color:#0b1410;background:${badgeBg};border-radius:4px;padding:2px 6px;font-size:10px;margin-right:9px;flex-shrink:0;">${outcome}</span>`;
-  }
-  return `<div class="leader-row" style="font-size:12px;padding:8px 10px;border-radius:4px;margin-bottom:3px;${isMine?'background:rgba(95,225,201,0.07);':''}">
-    ${badge}
-    <span style="flex:1;${m.winnerSide==='me'?'font-weight:700;color:var(--turf-bright);':''}">${m.winnerSide==='me'?'🏆 ':''}${a.name}</span>
-    <span class="mono" style="font-weight:700;padding:0 10px;">${m.aGoals}:${m.bGoals}</span>
-    <span style="flex:1;text-align:right;${m.winnerSide==='opp'?'font-weight:700;color:var(--turf-bright);':''}">${b.name}${m.winnerSide==='opp'?' 🏆':''}</span>
+  const aWon = !opts.fixtureOnly && !pendingForViewer && m.winnerSide==='me';
+  const bWon = !opts.fixtureOnly && !pendingForViewer && m.winnerSide==='opp';
+  return `<div class="liga-fixture-card${isMine?' liga-fixture-mine':''}">
+    <div class="liga-fixture-side">
+      ${renderCrestSVG(a.crest || fallbackCrestFor(a.name), 40)}
+      <div class="liga-fixture-abbr${aWon?' liga-fixture-winner':''}">${aWon?'🏆 ':''}${ligaTeamAbbr(a.name, a.abbr)}</div>
+    </div>
+    <div class="liga-fixture-center">${center}</div>
+    <div class="liga-fixture-side">
+      ${renderCrestSVG(b.crest || fallbackCrestFor(b.name), 40)}
+      <div class="liga-fixture-abbr${bWon?' liga-fixture-winner':''}">${ligaTeamAbbr(b.name, b.abbr)}${bWon?' 🏆':''}</div>
+    </div>
   </div>`;
 }
 const LIGA_DAY_LABEL = {1:'Montag', 2:'Dienstag', 3:'Mittwoch', 4:'Donnerstag', 5:'Freitag'};
