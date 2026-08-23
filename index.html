@@ -14090,6 +14090,11 @@ async function loadAdminUserPanel(targetId){
         }catch(e){ console.warn('set leaderboard ban failed', e); toast('Sperre konnte nicht gesetzt werden.'); return; }
         invalidateReadCache('leaderboard-bans');
         toast(`${targetId} f\u00fcr ${days} Tag${days===1?'':'e'} vom Leaderboard gesperrt.`);
+        // Design-Vorgabe: ein Account, der W\u00c4HREND er gerade in einer Liga steckt gesperrt wird, wird
+        // sofort mit jemandem aus der untersten Liga ausgetauscht, statt die Liga eine Woche lang mit
+        // nur 7 Vereinen weiterlaufen zu lassen.
+        const swap = await ligaSwapBannedAccount(targetId);
+        if(swap.ok && swap.replacedWith) toast(`Liga ${swap.letter}: ${targetId} sofort gegen ${swap.replacedWith} aus der untersten Liga getauscht.`);
         loadAdminUserPanel(targetId);
       }, 4);
     }
@@ -17351,11 +17356,186 @@ async function playLigaLiveMatch(letter, weekStart, mid){
   closeModal();
   renderView('ligen');
 }
+// ===== Ligen Stufe 3: Auf-/Abstieg, Relegation, Belohnungen, Neuzugänge, Sperr-Austausch =====
+// Two-legged relegation tie: aggregate goals across both legs decide it; a tied aggregate goes to one
+// more decisive match (extra time + penalties if needed) rather than replaying either leg, since the
+// engine has no notion of "continue this specific leg into extra time" - functionally identical outcome
+// (someone has to win), just modeled as its own tiebreak match instead of extending leg 2 literally.
+function ligaRelegationTie(teamA, teamB){
+  const leg1 = buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:true});
+  const leg2 = buildDecisiveMatch(teamB.rating, teamA.rating, teamB.players, teamA.players, null, null, {allowDraw:true});
+  const aggA = leg1.myGoals + leg2.oppGoals, aggB = leg1.oppGoals + leg2.myGoals;
+  let winner, decider = null;
+  if(aggA>aggB) winner = 'A';
+  else if(aggB>aggA) winner = 'B';
+  else {
+    decider = buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:false});
+    winner = decider.winnerSide==='me' ? 'A' : 'B';
+  }
+  return {winner, aggA, aggB, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, leg2:{aGoals:leg2.oppGoals, bGoals:leg2.myGoals}, decider: decider ? {aGoals:decider.myGoals, bGoals:decider.oppGoals, wentToPK:decider.wentToPK} : null};
+}
+// Every account currently NOT in any leagueMembership doc, excluding the usual test/banned exclusions
+// and anyone whose squad still isn't fully filled - the same eligibility bar as the original seeding.
+// Requires the same full saves-collection scan seedLeaguesOnce() already relies on.
+async function ligaFindNewcomers(assignedIds){
+  const bannedIds = await getLeaderboardBannedUserIds();
+  const snap = await fb.getDocs(fb.collection(fb.db,'saves'));
+  const newcomers = [];
+  snap.docs.forEach(d=>{
+    const userId = d.id;
+    if(assignedIds.has(userId) || LEADERBOARD_EXCLUDED_USERS.has(userId) || bannedIds.has(userId)) return;
+    const data = d.data();
+    if(!data || !data.profile) return;
+    const {rating, filled} = squadRatingFromSaveData(data);
+    if(filled<11) return;
+    newcomers.push({userId, rating});
+  });
+  newcomers.sort((a,b)=>b.rating-a.rating);
+  return newcomers.map(n=>n.userId);
+}
+// The whole weekly "commissioner" pass: reads every league's final table, works out every promotion/
+// relegation/relegation-playoff, slots in any newcomer accounts at the bottom, pays out the winner/
+// runner-up rewards, and writes next week's membership. Guarded by leagueMeta/rollover_{weekStart} so
+// it only ever actually runs once per week no matter which client's Ligen-tab visit triggers it -
+// there's no server/cron here, so "whoever opens the tab first on/after Saturday" has to do it.
+async function resolveWeeklyRolloverIfNeeded(){
+  await fbReady;
+  if(!fb) return null;
+  const weekStart = mostRecentMondayBerlin();
+  if(weekStart<LIGA_SEASON_EPOCH) return null; // season hasn't even started its first week yet
+  if(berlinNow().getDay()!==6 && berlinNow().getDay()!==0) return null; // only Sat(6)/Sun(0) Berlin time
+  const flagRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
+  try{
+    const flag = await fb.getDoc(flagRef);
+    if(flag.exists() && flag.data().done) return null;
+  }catch(e){ console.warn('rollover flag check failed', e); return null; }
+  // Read every current league's membership + this week's (already-finished) data.
+  let membershipSnap;
+  try{ membershipSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
+  catch(e){ console.warn('rollover: membership read failed', e); return null; }
+  const lettersInUse = membershipSnap.docs.map(d=>d.id).sort();
+  if(!lettersInUse.length) return null;
+  const weeks = {};
+  for(const letter of lettersInUse){
+    const members = membershipSnap.docs.find(d=>d.id===letter).data().members;
+    weeks[letter] = await getOrCreateLeagueWeek(letter, members, weekStart);
+  }
+  const tables = {};
+  lettersInUse.forEach(letter=>{ tables[letter] = ligaComputeStandings(weeks[letter].teams, weeks[letter].matches, 5); });
+  // userId -> {letter, coins, isChampion} destination league after all movements, before newcomers.
+  const nextLeagueOf = {};
+  lettersInUse.forEach(letter=>{ tables[letter].forEach(row=>{ nextLeagueOf[row.userId] = letter; }); });
+  const rewards = []; // {userId, coins, championCard:bool}
+  const relegationResults = [];
+  lettersInUse.forEach((letter,i)=>{
+    const table = tables[letter];
+    if(!table.length) return;
+    const champion = table[0];
+    rewards.push({userId:champion.userId, coins:ligaWinnerCoins(letter), championCard: letter==='A'});
+    if(table.length>1) rewards.push({userId:table[1].userId, coins:ligaRunnerUpCoins(letter)});
+    const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
+    if(!lettersInUse.includes(upperLetter)) return; // no league above this one (letter is 'A')
+    const upperTable = tables[upperLetter];
+    // automatic moves (this league's own last place gets handled one loop iteration later, when IT
+    // plays the role of "upperTable" for the boundary below it - every non-bottom league eventually
+    // gets processed as the upper side of exactly one boundary). Guarded to length>1 so a league that
+    // somehow only has a single member never relegates its only team and empties itself out.
+    if(upperTable.length>1) nextLeagueOf[upperTable[upperTable.length-1].userId] = letter; // upper's last -> down here
+    nextLeagueOf[table[0].userId] = upperLetter; // lower's first -> up (overwrites the champion-stays-put default, correct: promotion always beats "stay")
+    if(table.length>=5 && upperTable.length>=2){
+      const lowerChallenger = weeks[letter].teams[table[1].idx];
+      const upperDefender = weeks[upperLetter].teams[upperTable[upperTable.length-2].idx];
+      const tie = ligaRelegationTie(lowerChallenger, upperDefender);
+      const winnerId = tie.winner==='A' ? lowerChallenger.userId : upperDefender.userId;
+      const loserId = tie.winner==='A' ? upperDefender.userId : lowerChallenger.userId;
+      nextLeagueOf[winnerId] = upperLetter;
+      nextLeagueOf[loserId] = letter;
+      relegationResults.push({upperLetter, lowerLetter:letter, challenger:lowerChallenger.name, defender:upperDefender.name, ...tie, winnerId});
+    }
+  });
+  // newcomers: fill the current bottom-most league up to 8, then spill into new letters beyond it.
+  const assignedIds = new Set(Object.keys(nextLeagueOf));
+  const newcomers = await ligaFindNewcomers(assignedIds);
+  const nextMembers = {};
+  lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
+  Object.entries(nextLeagueOf).forEach(([userId,letter])=>{ nextMembers[letter].push(userId); });
+  let bottomLetterIdx = LIGA_LETTERS.indexOf(lettersInUse[lettersInUse.length-1]);
+  newcomers.forEach(userId=>{
+    while(nextMembers[LIGA_LETTERS[bottomLetterIdx]] && nextMembers[LIGA_LETTERS[bottomLetterIdx]].length>=8) bottomLetterIdx++;
+    const letter = LIGA_LETTERS[bottomLetterIdx];
+    if(!letter) return; // out of letters (>208 accounts) - sits out, same as at initial seeding
+    if(!nextMembers[letter]) nextMembers[letter] = [];
+    nextMembers[letter].push(userId);
+  });
+  // Payouts: direct per-account Firestore updates (these are OTHER accounts' saves docs, not the
+  // viewer's own) - same increment/arrayUnion pattern used for hosted-tournament coin/card prizes.
+  for(const r of rewards){
+    try{
+      const updates = {'profile.coins': fb.increment(r.coins)};
+      if(r.championCard){
+        const card = currentLigaChampionCard();
+        updates.collection = fb.arrayUnion({uid:genId(), cardId:card.id});
+      }
+      await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), updates);
+    }catch(e){ console.warn('liga reward payout failed for', r.userId, e); }
+  }
+  // Persist next week's membership + a history snapshot (for the weekend "Endstand" + relegation view).
+  try{
+    await Promise.all(Object.entries(nextMembers).filter(([,m])=>m.length).map(([letter,members])=>
+      fb.setDoc(fb.doc(fb.db,'leagueMembership',letter), {letter, members})
+    ));
+    await fb.setDoc(fb.doc(fb.db,'leagueHistory', weekStart+''), {weekStart, tables, relegationResults, rewards});
+    await fb.setDoc(flagRef, {done:true, at:Date.now()});
+  }catch(e){ console.warn('rollover write failed', e); return null; }
+  return {tables, relegationResults, rewards};
+}
+// Admin-only immediate safety valve (see the design brief: an account that gets leaderboard-banned
+// WHILE currently in a league gets swapped out right away for someone from the current bottom league,
+// so every league except the bottom one always still has exactly 8). Best-effort: picks the
+// highest-rated not-yet-assigned account sitting in the bottom league as the replacement.
+async function ligaSwapBannedAccount(bannedUserId){
+  await fbReady;
+  if(!fb) return {ok:false};
+  let membershipSnap;
+  try{ membershipSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
+  catch(e){ return {ok:false, reason:'read-failed'}; }
+  const docs = membershipSnap.docs;
+  const hostDoc = docs.find(d=>(d.data().members||[]).includes(bannedUserId));
+  if(!hostDoc) return {ok:false, reason:'not-in-a-league'};
+  const letters = docs.map(d=>d.id).sort();
+  const bottomLetter = letters[letters.length-1];
+  if(hostDoc.id===bottomLetter) return {ok:true, note:'already in the bottom league, nothing to swap in from below'};
+  const bottomDoc = docs.find(d=>d.id===bottomLetter);
+  const bottomMembers = (bottomDoc.data().members||[]).filter(u=>u!==bannedUserId);
+  if(!bottomMembers.length) return {ok:false, reason:'bottom-league-empty'};
+  // rank the bottom league's members by current rating to pick the strongest as the replacement
+  const ranked = [];
+  for(const userId of bottomMembers){
+    const data = await resolveSaveDataForUser(userId);
+    if(!data) continue;
+    ranked.push({userId, rating: squadRatingFromSaveData(data).rating});
+  }
+  ranked.sort((a,b)=>b.rating-a.rating);
+  const replacement = ranked[0];
+  if(!replacement) return {ok:false, reason:'no-eligible-replacement'};
+  try{
+    const hostMembers = hostDoc.data().members.map(u=>u===bannedUserId?replacement.userId:u);
+    await fb.setDoc(fb.doc(fb.db,'leagueMembership',hostDoc.id), {letter:hostDoc.id, members:hostMembers});
+    await fb.setDoc(fb.doc(fb.db,'leagueMembership',bottomLetter), {letter:bottomLetter, members: bottomMembers.filter(u=>u!==replacement.userId).concat([bannedUserId])});
+  }catch(e){ return {ok:false, reason:'write-failed'}; }
+  return {ok:true, replacedWith:replacement.userId, movedOut:bannedUserId, letter:hostDoc.id};
+}
 function renderLigenPanel(view){
   view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Ruhetag. Auf- und Abstieg jede Woche.</p></div>
     <div id="liga-content"><p class="hint">Lädt…</p></div>`;
   const box = document.getElementById('liga-content');
   (async ()=>{
+    const weekStartBefore = mostRecentMondayBerlin();
+    // Sat/Sun: whoever opens this tab first runs the weekly commissioner pass (promotions, relegation
+    // playoffs, payouts, newcomer slotting) - a no-op for everyone after the first, guarded by
+    // leagueMeta/rollover_{weekStart}. Doing this BEFORE reading membership means even the very first
+    // visitor immediately sees their own possibly-just-changed league.
+    await resolveWeeklyRolloverIfNeeded();
     const weekStart = ligaCurrentWeekStart();
     const membership = await loadMyLeagueMembership();
     if(!membership){
@@ -17371,16 +17551,30 @@ function renderLigenPanel(view){
       box.innerHTML = header + `<p class="hint">Die Liga-Phase startet am kommenden Montag um 00:00 Uhr (Europa/Berlin). Bis dahin siehst du hier nur deine Zuteilung.</p>`;
       return;
     }
-    box.innerHTML = header + `<p class="hint">Spielplan wird geladen…</p>`;
+    const isBerlinWeekend = berlinNow().getDay()===6 || berlinNow().getDay()===0;
+    // The rollover (if it just ran) always operates on the week that JUST finished, i.e. the week
+    // that started BEFORE today's possible Monday-rollover of ligaCurrentWeekStart() itself - so the
+    // history doc to look up is keyed by weekStartBefore, not the (possibly already-next) weekStart.
+    let historyBox = '';
+    if(isBerlinWeekend){
+      try{
+        const histSnap = await fb.getDoc(fb.doc(fb.db,'leagueHistory', weekStartBefore+''));
+        if(histSnap.exists()){
+          const hist = histSnap.data();
+          const myReward = (hist.rewards||[]).find(r=>r.userId===clubId);
+          if(myReward) historyBox += `<p class="hint" style="color:var(--gold);">🏆 Belohnung erhalten: ${formatCoins(myReward.coins)} Coins${myReward.championCard?' + Liga-Meister-Karte':''}!</p>`;
+          const myPlayoff = (hist.relegationResults||[]).find(r=>r.upperLetter===membership.letter || r.lowerLetter===membership.letter);
+          if(myPlayoff) historyBox += `<p class="hint">Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: ${myPlayoff.challenger} ${myPlayoff.aggA}:${myPlayoff.aggB} ${myPlayoff.defender} (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — Aufstieg für ${myPlayoff.winnerId===clubId?'dich!':myPlayoff.winnerId}.</p>`;
+        }
+      }catch(e){ console.warn('load liga history failed', e); }
+    }
+    box.innerHTML = header + historyBox + `<p class="hint">Spielplan wird geladen…</p>`;
     const week = await getOrCreateLeagueWeek(membership.letter, membership.members, weekStart);
-    if(!week){ box.innerHTML = header + `<p class="hint">Spielplan konnte nicht geladen werden.</p>`; return; }
+    if(!week){ box.innerHTML = header + historyBox + `<p class="hint">Spielplan konnte nicht geladen werden.</p>`; return; }
     const visibleDay = ligaVisibleDayCount(weekStart);
     const standings = ligaComputeStandings(week.teams, week.matches, visibleDay);
-    const isWeekend = visibleDay>=5;
-    let html = header + ligaStandingsTableHTML(standings);
-    if(isWeekend){
-      html += `<p class="hint">Endstand der Woche. ${membership.letter!=='A'||true?'Auf-/Abstieg und Relegation folgen samstags (Stufe 3).':''}</p>`;
-    }
+    let html = header + historyBox + ligaStandingsTableHTML(standings);
+    if(isBerlinWeekend) html += `<p class="hint">Endstand der Woche. Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
     for(let d=1; d<=visibleDay; d++){
       const dayMatches = week.matches.filter(m=>m.day===d);
       if(!dayMatches.length) continue;
