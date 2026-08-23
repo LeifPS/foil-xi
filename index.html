@@ -10852,12 +10852,28 @@ async function finalizeTradeAccept(t, payment){
   // payment = {coins, cardUids:[], managerUid:null} -- what I (recipient) send back to the sender
   await fbReady;
   if(!fb){ toast('Backend nicht erreichbar.'); return; }
+  // Atomic claim FIRST, before touching any collection: a plain read-then-much-later-delete left a
+  // window where the SAME accept could run twice (a slow first attempt still in flight while the user,
+  // seeing no response yet, re-opens the trades tab and taps Accept again on a freshly-rendered, not-
+  // yet-disabled button; or two tabs open on the same account) - both calls would pass the old "still
+  // pending" check, and BOTH would push the offered card into `collection` a second time, duplicating
+  // it. Claiming (read-and-delete) inside one transaction means only the call that actually commits
+  // gets to proceed; every other concurrent call sees the trade already gone and backs off immediately,
+  // before it ever mutates a collection.
+  let claimedTrade = null;
   try{
-    // re-check the trade itself is still pending (sender may have withdrawn it since we opened this dialog)
-    const tradeSnap = await fb.getDoc(fb.doc(fb.db,'trades', t.id));
-    if(!tradeSnap.exists() || tradeSnap.data().status!=='pending'){
-      toast('Dieses Angebot ist nicht mehr g\u00fcltig.'); closeModal(); loadTrades(); return;
-    }
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const snap = await tx.get(fb.doc(fb.db,'trades', t.id));
+      if(!snap.exists() || snap.data().status!=='pending') return;
+      claimedTrade = snap.data();
+      tx.delete(fb.doc(fb.db,'trades', t.id));
+    });
+  }catch(e){ console.warn('trade claim failed', e); toast('Handel konnte nicht abgeschlossen werden \u2014 bitte erneut versuchen.'); return; }
+  if(!claimedTrade){
+    toast('Dieses Angebot ist nicht mehr g\u00fcltig.'); closeModal(); loadTrades(); return;
+  }
+  t = {...t, ...claimedTrade, id:t.id};
+  try{
     const senderSnap = await fb.getDoc(fb.doc(fb.db,'saves', t.fromUserId));
     if(!senderSnap.exists()){ toast('Absender-Daten nicht gefunden \u2014 Angebot eventuell veraltet.'); closeModal(); return; }
     const senderData = senderSnap.data();
@@ -10880,8 +10896,8 @@ async function finalizeTradeAccept(t, payment){
     const missingMgrs = [...offerMgrUids].filter(uid=>!senderManagerCollection.some(m=>m.uid===uid));
     const missingPacks = [...offerPackUids].filter(uid=>!senderPackCollection.some(p=>p.uid===uid));
     if(missingCards.length || missingMgrs.length || missingPacks.length){
+      // trade was already claimed (deleted) above - nothing left to clean up here, the offer is just void
       toast('Der Absender besitzt nicht mehr alle angebotenen Karten \u2014 Angebot wurde ung\u00fcltig.');
-      try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(_){}
       closeModal(); loadTrades(); return;
     }
     // verify my own payment cards are still actually mine (defensive; should normally always hold)
@@ -10915,7 +10931,7 @@ async function finalizeTradeAccept(t, payment){
       await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile}, {merge:true});
     }
     await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {collection:senderCollection, managerCollection:senderManagerCollection, packCollection:senderPackCollection}, {merge:true});
-    try{ await fb.deleteDoc(fb.doc(fb.db,'trades', t.id)); }catch(_){}
+    // trade doc is already gone - claimed (read-and-deleted) atomically at the very top of this function
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
     if(payment.managerUid) managerCollection = managerCollection.filter(m=>m.uid!==payment.managerUid);
