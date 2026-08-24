@@ -903,14 +903,30 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
   text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
 .liga-reward-compare-row.mine{background:rgba(95,225,201,.08);}
 .liga-reward-compare-letter{display:flex;align-items:center;justify-content:center;}
-/* Liga-Buchstaben-Icon (A/B/C/... circle, ligaBadgeHTML): a pulsing glow in the league's own color -
-   deliberately NOT a spin/rotation (explicitly rejected earlier, the letter has to stay readable and
-   still), just a breathing highlight so the badge doesn't sit completely static/dead in the UI. */
+/* Liga-Buchstaben-Badge (A/B/C/D/..., ligaBadgeHTML): each tier gets its own SHAPE, not just a color -
+   Liga A a diamond (plus an animated shimmer sweep across its gradient, the one visibly "premium"
+   effect), B a hexagon, C a shield, D and everything below stays the plain circle. A pulsing glow still
+   runs on all of them - deliberately NOT a spin/rotation (explicitly rejected earlier, the letter has to
+   stay readable and still). Shaped badges (clip-path, not border-radius) use filter:drop-shadow for the
+   glow instead of box-shadow, since box-shadow draws around the full square BOX a clip-path leaves
+   behind, not the visible clipped shape - drop-shadow correctly follows the actual silhouette. */
 .liga-badge{animation:ligaBadgePulse 2.4s ease-in-out infinite;}
 @keyframes ligaBadgePulse{
   0%,100%{box-shadow:0 1px 4px rgba(0,0,0,.4);}
   50%{box-shadow:0 1px 4px rgba(0,0,0,.4), 0 0 14px 3px var(--liga-glow, currentColor);}
 }
+.liga-badge.shape-diamond{border-radius:4px;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);
+  background-size:260% 260%;animation:ligaBadgeShapePulse 2.4s ease-in-out infinite, ligaBadgeShimmer 3.2s ease-in-out infinite;}
+.liga-badge.shape-hex{border-radius:4px;clip-path:polygon(25% 4%,75% 4%,100% 50%,75% 96%,25% 96%,0% 50%);
+  animation:ligaBadgeShapePulse 2.4s ease-in-out infinite;}
+.liga-badge.shape-shield{border-radius:4px;clip-path:polygon(50% 0%,96% 16%,96% 60%,50% 100%,4% 60%,4% 16%);
+  animation:ligaBadgeShapePulse 2.4s ease-in-out infinite;}
+.liga-badge.shape-shield .liga-badge-letter{transform:translateY(-6%);}
+@keyframes ligaBadgeShapePulse{
+  0%,100%{filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));}
+  50%{filter:drop-shadow(0 1px 3px rgba(0,0,0,.4)) drop-shadow(0 0 7px var(--liga-glow, currentColor));}
+}
+@keyframes ligaBadgeShimmer{0%,100%{background-position:0% 0%;}50%{background-position:100% 100%;}}
 body.perf-lite .liga-badge{ animation:none !important; }
 .liga-name-gold{background:linear-gradient(90deg,#ffd76a,#fff3c4,#ffb347,#ffd76a);background-size:260% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;animation:ligaNameGoldShift 4s linear infinite;font-weight:700;}
@@ -17570,32 +17586,34 @@ function ligaWeekIndex(weekStart){ return Math.round((weekStart-LIGA_SEASON_EPOC
 // 26 possible leagues (A-Z), enough for 208 clubs (26*8) per the design brief - in practice only as
 // many as currently have members will ever be shown/used.
 const LIGA_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-// A: violet gradient (the flagship league gets the flashiest treatment, matching the conic-gradient
-// look already used for the game's other "ultimate" rarities elsewhere); B-E: solid colors; F onward:
-// the same neutral grey repeated - by then it's just "one of many mid/lower leagues" and doesn't need
-// its own identity the way the top few meaningfully do.
-const LIGA_COLORS = { A:'conic-gradient(from 180deg,#b46bff,#7a3ff2,#d68bff,#b46bff)', B:'#3d7bff', C:'#2fbd6a', D:'#e6c343', E:'#e2564f' };
+// A: violet-to-magenta gradient with an animated shimmer sweep (the flagship league gets the flashiest
+// treatment); B-D: their own linear gradient (not a flat color) for a bit of depth/shape without the
+// shimmer; E onward: the same neutral grey repeated - by then it's just "one of many mid/lower leagues"
+// and doesn't need its own identity the way the top few meaningfully do.
+const LIGA_COLORS = {
+  A:'linear-gradient(135deg,#d68bff,#7a3ff2,#b46bff,#d68bff)',
+  B:'linear-gradient(160deg,#6fa8ff,#1d4fbf)',
+  C:'linear-gradient(160deg,#5be08a,#1f8a4a)',
+  D:'linear-gradient(160deg,#ffe27a,#c9971f)',
+  E:'linear-gradient(160deg,#ff8f79,#c23a32)',
+};
 const LIGA_DEFAULT_COLOR = '#8892a4';
-// Solid stand-in per letter for the glow pulse below - A's real background is a conic-gradient, which
-// box-shadow can't reference directly, so this just picks that gradient's own violet as its glow color.
 const LIGA_GLOW_COLOR = { A:'#b46bff', B:'#3d7bff', C:'#2fbd6a', D:'#e6c343', E:'#e2564f' };
+// Each top tier gets its own silhouette instead of every league just being a plain circle - see the
+// .liga-badge.shape-* CSS. Anything past D (E, F, ...) stays a circle: those share D's reward numbers
+// too (LIGA_REWARD_TABLE), so a distinct shape there would promise a distinction that doesn't exist.
+const LIGA_SHAPE_CLASS = { A:'shape-diamond', B:'shape-hex', C:'shape-shield' };
 function ligaColor(letter){ return LIGA_COLORS[letter] || LIGA_DEFAULT_COLOR; }
 function ligaGlowColor(letter){ return LIGA_GLOW_COLOR[letter] || LIGA_DEFAULT_COLOR; }
-// Small rank icon overlaid on the letter badge's corner - crown for the top league, working down
-// through trophy/shield/star for B/C/D, so the letter stays the main readable element (the icon is
-// just a quick visual "how high up is this" cue) rather than replacing it outright. Anything below D
-// (E, F, ...) has no icon at all - those never got their own tuned reward tier either, see
-// LIGA_REWARD_TABLE falling back to D's numbers for every league past it.
-const LIGA_RANK_ICON = { A:'👑', B:'🏆', C:'🛡️', D:'⭐' };
-// A pulsing glow, not a spin (explicitly rejected earlier - the letter itself must stay still) - see
-// .liga-badge/@keyframes ligaBadgePulse.
 function ligaBadgeHTML(letter, size=28){
   const color = ligaColor(letter);
   const glow = ligaGlowColor(letter);
-  const icon = LIGA_RANK_ICON[letter];
-  const iconSize = Math.max(10, Math.round(size*0.4));
-  const iconHTML = icon ? `<span class="liga-badge-icon" style="position:absolute;top:${-iconSize*0.28}px;right:${-iconSize*0.28}px;font-size:${iconSize}px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));">${icon}</span>` : '';
-  return `<div class="liga-badge" style="position:relative;width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;--liga-glow:${glow};">${letter}${iconHTML}</div>`;
+  const shapeClass = LIGA_SHAPE_CLASS[letter] || '';
+  // A shaped badge's clip-path leaves the actual box a plain square underneath it, so the flex-centered
+  // letter needs no extra handling EXCEPT the shield (its content is front-loaded near the top, tapering
+  // to a point at the bottom) - .shape-shield .liga-badge-letter nudges it up slightly to sit centered
+  // in the visible silhouette rather than the invisible full square.
+  return `<div class="liga-badge ${shapeClass}" style="position:relative;width:${size}px;height:${size}px;border-radius:${shapeClass?'0':'50%'};display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;--liga-glow:${glow};"><span class="liga-badge-letter">${letter}</span></div>`;
 }
 // Prize table per league bracket - every place gets a reward now, not just the top two: 1st/2nd/3rd
 // each have their own tuned coins (plus, for A/B, real card packs on top), and everyone from 4th place
