@@ -18163,12 +18163,122 @@ function ligaStandingsTableHTML(table, zones){
     </div>`;}).join('')}
   </div>${legend}`;
 }
+// Real official/broadcast abbreviations for well-known real clubs (keyed exactly like CLUB_LOGO/card
+// .club fields), so a bot opponent playing as e.g. Paris Saint-Germain shows "PSG" in the VS card
+// instead of the generic "first 3 letters" fallback landing on "PAR". Covers the clubs a player is
+// actually likely to face often (the biggest names across the top leagues represented in the game) -
+// anything not listed here (smaller/less standardized clubs, lower non-European leagues) still falls
+// back to ligaTeamAbbr's auto-derivation exactly as before, so nothing ever renders blank.
+const CLUB_CODE = {
+  // Premier League / Championship
+  'Chelsea':'CHE','Nottingham Forest':'NFO','Tottenham Hotspur':'TOT','Sunderland':'SUN','Arsenal':'ARS',
+  'Leeds United':'LEE','Brighton & Hove Albion':'BHA','Aston Villa':'AVL','Newcastle United':'NEW',
+  'Crystal Palace':'CRY','Fulham FC':'FUL','AFC Bournemouth':'BOU','Everton':'EVE','Manchester United':'MUN',
+  'Brentford':'BRE','Manchester City':'MCI','Liverpool':'LIV','Wolverhampton Wanderers':'WOL',
+  'West Ham United':'WHU','Southampton':'SOU','Ipswich Town':'IPS','Leicester City':'LEI',
+  'Sheffield Wednesday':'SHW','Sheffield United':'SHU','Hull City':'HUL','Coventry City':'COV',
+  'Oxford United':'OXU','Watford':'WAT','West Bromwich Albion':'WBA','Stoke City':'STK','Swansea City':'SWA',
+  'Birmingham City':'BIR','Blackburn Rovers':'BLB','Bolton Wanderers':'BOL','Bristol City':'BRC',
+  'Burnley':'BUR','Cardiff City':'CAR','Charlton Athletic':'CHA','Derby County':'DER','Lincoln City':'LIN',
+  'Middlesbrough':'MID','Millwall FC':'MIL','Norwich City':'NOR','Portsmouth':'POR','Preston North End':'PNE',
+  'Queens Park Rangers':'QPR','Luton Town':'LUT','Reading FC':'REA','Huddersfield Town':'HUD',
+  'Blackpool FC':'BLA','Wrexham':'WRE',
+  // Scotland
+  'Celtic':'CEL','Rangers FC':'RAN','Aberdeen':'ABE','Hibernian':'HIB','Hearts':'HEA',
+  // La Liga / Segunda
+  'Real Madrid':'RMA','FC Barcelona':'FCB','Atlético Madrid':'ATM','Athletic Club':'ATH',
+  'Real Betis Balompié':'BET','RC Celta':'CEL','Sevilla FC':'SEV','Girona FC':'GIR','Real Sociedad':'RSO',
+  'Valencia CF':'VAL','Villarreal CF':'VIL','Rayo Vallecano':'RAY','CA Osasuna':'OSA','RCD Espanyol':'ESP',
+  'Deportivo Alavés':'ALA','Elche CF':'ELC','Levante UD':'LEV','Getafe CF':'GET','Real Oviedo':'OVI',
+  'RCD Mallorca':'MLL','UD Almería':'ALM','UD Las Palmas':'LPA','Real Zaragoza':'ZAR',
+  'RC Deportivo de La Coruña':'DEP','CD Leganés':'LEG','Real Valladolid CF':'VLL','Burgos CF':'BUR',
+  'Real Sporting de Gijón':'SPG','SD Eibar':'EIB','Albacete Balompié':'ALB','Granada CF':'GRA',
+  'Córdoba CF':'COR','Racing Santander':'RAC','Cádiz CF':'CAD','SD Huesca':'HUE','Cultural Leonesa':'CUL',
+  'Málaga CF':'MAL','CD Castellón':'CAS','FC Andorra':'AND','CD Mirandés':'MIR',
+  // Bundesliga / 2. Liga
+  'FC Bayern München':'FCB','Borussia Dortmund':'BVB','Bayer 04 Leverkusen':'B04','RB Leipzig':'RBL',
+  'VfB Stuttgart':'VFB','Eintracht Frankfurt':'SGE','VfL Wolfsburg':'WOB','TSG 1899 Hoffenheim':'TSG',
+  '1. FC Union Berlin':'FCU','FC Augsburg':'FCA','1. FSV Mainz 05':'M05','SV Werder Bremen':'SVW',
+  'Borussia Mönchengladbach':'BMG','1. FC Heidenheim 1846':'FCH','FC St. Pauli':'STP','1. FC Köln':'KOE',
+  'SC Freiburg':'SCF','Hamburger SV':'HSV','1. FC Kaiserslautern':'FCK','1. FC Magdeburg':'FCM',
+  '1. FC Nürnberg':'FCN','DSC Arminia Bielefeld':'DSC','Dynamo Dresden':'SGD',
+  'Eintracht Braunschweig':'EBS','FC Schalke 04':'S04','Fortuna Düsseldorf':'F95','Hannover 96':'H96',
+  'Hertha BSC':'BSC','Holstein Kiel':'KSV','Karlsruher SC':'KSC','SC Paderborn 07':'SCP',
+  'SC Preußen Münster':'PRM','SV Darmstadt 98':'SVD','SV Elversberg':'SVE','SpVgg Greuther Fürth':'SGF',
+  'VfL Bochum 1848':'BOC','SV Wehen Wiesbaden':'WWI','TSV 1860 München':'M60',
+  // Serie A / B
+  'Juventus':'JUV','Inter':'INT','AC Milan':'MIL','Napoli':'NAP','Roma':'ROM','Lazio':'LAZ',
+  'Atalanta':'ATA','Fiorentina':'FIO','Bologna':'BOL','Palermo FC':'PAL','Monza':'MON','Sampdoria':'SAM',
+  'Spezia':'SPE','Venezia':'VEN','Modena':'MOD','SSC Bari':'BAR','Cesena FC':'CES','Catanzaro':'CTZ',
+  'Empoli':'EMP','Pescara':'PES','Carrarese':'CRR','Padova':'PAD','Südtirol':'SUD','Avellino':'AVE',
+  'Mantova':'MAN','Virtus Entella':'ENT','Reggiana':'REG','Cremonese':'CRE','Como':'COM','Torino':'TOR',
+  'Sassuolo':'SAS','Parma':'PAR','Udinese':'UDI','Hellas Verona FC':'HVR','Genoa':'GEN','Cagliari':'CAG',
+  'Lecce':'LEC','Pisa':'PIS',
+  // Ligue 1 / 2
+  'Paris Saint-Germain':'PSG','Olympique de Marseille':'OM','OGC Nice':'OGC','AS Monaco':'ASM',
+  'Lille OSC':'LOSC','RC Strasbourg Alsace':'RCS','RC Lens':'RCL','Olympique Lyonnais':'OL',
+  'Paris FC':'PFC','FC Lorient':'FCL','Le Havre AC':'HAC','Stade Brestois 29':'SB29','Angers SCO':'SCO',
+  'Toulouse FC':'TFC','AJ Auxerre':'AJA','Stade Rennais FC':'SRFC','FC Nantes':'FCN','FC Metz':'FCM',
+  'AS Saint-Étienne':'ASSE','Stade de Reims':'REI','Montpellier HSC':'MHSC','En Avant Guingamp':'EAG',
+  'USL Dunkerque':'USLD','Red Star FC':'RSFC','Stade Lavallois Mayenne FC':'LAV','Amiens SC':'ASC',
+  'Grenoble Foot 38':'GF38','AS Nancy Lorraine':'ASNL','Sporting Club Bastia':'SCB','FC Annecy':'FCA',
+  'ESTAC Troyes':'ESTAC',
+  // Portugal
+  'Sporting CP':'SCP','SL Benfica':'SLB','FC Porto':'FCP','Sporting Clube de Braga':'SCB',
+  'Famalicão':'FAM','GD Estoril Praia':'EST','Casa Pia':'CP','Santa Clara':'SCL','Vitória SC':'VSC',
+  'Rio Ave FC':'RAV','Gil Vicente FC':'GIL','Moreirense FC':'MOR','FC Arouca':'ARO','AVS Futebol SAD':'AVS',
+  'Estrela da Amadora':'EDA','CD Nacional':'NAC','CD Tondela':'TON','Alverca':'ALV',
+  // Netherlands
+  'Ajax':'AJA','PSV':'PSV','Feyenoord':'FEY','AZ Alkmaar':'AZ','FC Twente':'TWE','FC Utrecht':'UTR',
+  'NEC Nijmegen':'NEC','Go Ahead Eagles':'GAE','Sparta Rotterdam':'SPA','Fortuna Sittard':'FOR',
+  'SC Heerenveen':'HEE','PEC Zwolle':'PEC','NAC Breda':'NAC','FC Groningen':'GRO','FC Volendam':'VOL',
+  'Heracles Almelo':'HER',
+  // Belgium
+  'Club Brugge KV':'CLU','KRC Genk':'GEN','Union Saint-Gilloise':'USG','KAA Gent':'GNT',
+  'RSC Anderlecht':'AND','Oud-Heverlee Leuven':'OHL','Standard de Liège':'STA','Royal Antwerp FC':'ANT',
+  'Cercle Brugge KSV':'CER','KV Mechelen':'MEC','Royal Charleroi Sporting Club':'CHA','KVC Westerlo':'WES',
+  'Sint-Truidense VV':'STVV','FCV Dender EH':'DEN','RAAL La Louvière':'RAAL','SV Zulte Waregem':'ZUL',
+  // Turkey
+  'Fenerbahçe SK':'FB','Galatasaray SK':'GS','Beşiktaş JK':'BJK','Medipol Başakşehir FK':'IBFK',
+  'Samsunspor':'SAM','Trabzonspor':'TS','Çaykur Rizespor':'RIZ','Alanyaspor':'ALY','Gaziantep FK':'GFK',
+  'Eyüpspor':'EYU','Fatih Karagümrük':'FKG','Kayserispor':'KAY','Antalyaspor':'ANT','Kocaelispor':'KOC',
+  'Gençlerbirliği SK':'GEB','Konyaspor':'KON','Kasımpaşa SK':'KAS','Göztepe SK':'GOZ',
+  // Switzerland
+  'BSC Young Boys':'YB','FC Basel 1893':'BAS','FC Lugano':'LUG','Servette FC':'SER',
+  'FC St.Gallen 1879':'STG','FC Luzern':'LUZ','FC Sion':'SIO','FC Lausanne-Sport':'LAU','FC Zürich':'FCZ',
+  'Grasshopper Club Zürich':'GC',
+  // Brazil
+  'Flamengo':'FLA','Palmeiras':'PAL','Atlético Mineiro':'CAM','Internacional':'INT','Botafogo':'BOT',
+  'São Paulo':'SAO','Corinthians':'COR','Fortaleza':'FOR','Grêmio':'GRE','Cruzeiro':'CRU','Bahia':'BAH',
+  'Fluminense':'FLU','Vasco da Gama':'VAS','Vitória':'VIT',
+  // Argentina
+  'Boca Juniors':'BOC','River Plate':'RIV','Racing Club':'RAC','Vélez Sarsfield':'VEL',
+  'Estudiantes de La Plata':'EST','Lanús':'LAN','Belgrano de Córdoba':'BEL','Talleres':'TAL',
+  'Rosario Central':'RSC','Independiente':'IND','Huracán':'HUR','Argentinos Juniors':'ARG',
+  "Newell's Old Boys":'NOB','Godoy Cruz':'GOD','Atlético Tucumán':'ATU','Club Atlético Unión':'UNI',
+  'Defensa y Justicia':'DYJ','San Lorenzo de Almagro':'SLO','Gimnasia y Esgrima La Plata':'GEL',
+  'Platense':'PLA','CA Banfield':'BAN','Barracas Central':'BC','CA Aldosivi':'ALD','Tigre':'TIG',
+  'Instituto Atlético Central Córdoba':'INS','Independiente Rivadavia':'IR','Club Atlético Sarmiento':'SAR',
+  'Central Cordoba SdE':'CCO','Club Atlético San Martín':'CASM','Deportivo Riestra':'RIE',
+  // Greece
+  'AEK Athens':'AEK','Panathinaikos FC':'PAO','Olympiacos FC':'OLY','PAOK':'PAOK',
+  // MLS
+  'FC Cincinnati':'CIN','Seattle Sounders FC':'SEA','Los Angeles FC':'LAFC','Vancouver Whitecaps FC':'VAN',
+  'Atlanta United':'ATL','Portland Timbers':'POR','Minnesota United FC':'MIN','Columbus Crew':'CLB',
+  'New England Revolution':'NE','New York City FC':'NYC','San Diego FC':'SD','Houston Dynamo':'HOU',
+  'LA Galaxy':'LAG','Orlando City SC':'ORL','Inter Miami':'MIA','Real Salt Lake':'RSL',
+  'Chicago Fire':'CHI','Sporting Kansas City':'SKC','New York Red Bulls':'NYRB','Charlotte FC':'CLT',
+  'Colorado Rapids':'COL','Philadelphia Union':'PHI','Austin FC':'ATX','San Jose Earthquakes':'SJ',
+  'Nashville SC':'NSH','St. Louis CITY SC':'STL','Toronto FC':'TOR','DC United':'DC','FC Dallas':'DAL',
+};
 // Short crest-card label (e.g. "MCI"), matching the real-fixture-card look this is styled after.
 // Prefers the player's own chosen profile.clubAbbr (set in Mein Verein's Einstellungen, next to
-// Anzeigename) - falls back to auto-deriving one from the display name (first 3 letters/digits,
-// ignoring spaces/punctuation) for anyone who never set one.
+// Anzeigename), then a real club's official code (CLUB_CODE) if the name matches one - falls back to
+// auto-deriving one from the name (first 3 letters/digits, ignoring spaces/punctuation) for anyone/
+// anything neither of those cover.
 function ligaTeamAbbr(name, customAbbr){
   if(customAbbr) return customAbbr.slice(0,3).toUpperCase();
+  if(CLUB_CODE[name]) return CLUB_CODE[name];
   const clean = (name||'?').replace(/[^a-zA-Z0-9À-ÿ]/g,'');
   return (clean.slice(0,3) || '?').toUpperCase();
 }
