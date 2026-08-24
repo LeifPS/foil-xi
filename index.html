@@ -385,8 +385,11 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
    than "another top-rated card". Its own bespoke treatment now: an aged sepia/parchment face with a
    heavy vignette like an old photograph, a static patina-bronze frame (no animated rainbow sweep -
    same reasoning as GOAT above, an aged-photo look has to stay still, not shimmer), and its own FX
-   layer (ogicon-fx) of flickering vertical film-scratches plus slowly drifting dust motes - the "worn
-   old film reel" texture, distinct from every other bespoke theme's FX mechanism. */
+   layer (ogicon-fx): a slowly rotating engraved bronze Hall-of-Fame medallion with a pulsing star at
+   its center, flanked by a laurel-leaf wreath - a single unmistakable "this is a legend, enshrined"
+   image instead of scattered ambient particles, the same "one bold central shape" idea as the
+   Kronjuwelen's rotating cut-gem facets or Ratings Reload's rotating arrow, just its own shape/meaning
+   rather than a copy of either. */
 .pcard.theme-ogicon{border:3px solid #8a6328;
   background:
     radial-gradient(circle at 50% 42%, #3c2a12 0%, #241a0c 55%, #100b05 100%),
@@ -401,21 +404,33 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
   50%{box-shadow:0 18px 36px rgba(0,0,0,.8), 0 0 0 1px rgba(232,199,138,.5) inset, 0 0 30px -2px #e8c78a;}
 }
 .pcard .ogicon-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
-.pcard .ogicon-scratch{position:absolute;top:-10%;width:1px;height:120%;background:rgba(255,245,220,.5);
-  opacity:0;animation:ogiconScratchFlicker linear infinite;}
-.pcard .ogicon-scratch.o1{left:18%;animation-duration:4.2s;animation-delay:.3s;}
-.pcard .ogicon-scratch.o2{left:44%;animation-duration:5.1s;animation-delay:1.6s;}
-.pcard .ogicon-scratch.o3{left:68%;animation-duration:3.8s;animation-delay:2.4s;}
-.pcard .ogicon-scratch.o4{left:83%;animation-duration:4.7s;animation-delay:.9s;}
-@keyframes ogiconScratchFlicker{0%,92%,100%{opacity:0;}93%{opacity:.6;}94%{opacity:.1;}96%{opacity:.5;}97%{opacity:0;}}
-.pcard .ogicon-mote{position:absolute;bottom:-4%;width:2px;height:2px;border-radius:50%;background:#e8c78a;
-  opacity:0;box-shadow:0 0 4px 1px rgba(232,199,138,.7);animation:ogiconMoteRise linear infinite;}
-.pcard .ogicon-mote.m1{left:14%;animation-duration:6.5s;animation-delay:0s;}
-.pcard .ogicon-mote.m2{left:32%;animation-duration:7.8s;animation-delay:2.1s;}
-.pcard .ogicon-mote.m3{left:58%;animation-duration:6.9s;animation-delay:1.2s;}
-.pcard .ogicon-mote.m4{left:76%;animation-duration:8.4s;animation-delay:3.4s;}
-.pcard .ogicon-mote.m5{left:90%;animation-duration:7.2s;animation-delay:.6s;}
-@keyframes ogiconMoteRise{0%{bottom:-4%;opacity:0;}10%{opacity:.8;}90%{opacity:.4;}100%{bottom:104%;opacity:0;}}
+.pcard .ogicon-medallion{position:absolute;top:16%;left:50%;width:130%;height:130%;margin:-65% 0 0 -65%;
+  border-radius:50%;background:repeating-conic-gradient(from 0deg, #5c3d18 0deg 4deg, #c98a3e 4deg 6deg, #6b4a1e 6deg 10deg);
+  animation:ogiconMedallionSpin 26s linear infinite;opacity:.6;}
+.pcard .ogicon-medallion::after{content:"";position:absolute;inset:10%;border-radius:50%;
+  background:radial-gradient(circle at 40% 34%, #f0d9a8 0%, #c98a3e 45%, #7a5420 80%, #4a3312 100%);
+  box-shadow:inset 0 0 16px rgba(0,0,0,.55), 0 0 16px -2px rgba(201,138,62,.5);}
+@keyframes ogiconMedallionSpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+.pcard .ogicon-star{position:absolute;top:16%;left:50%;width:26%;height:26%;margin:0 0 0 -13%;
+  clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+  background:linear-gradient(160deg,#f0d9a8,#c98a3e 55%,#7a5420);
+  filter:drop-shadow(0 0 6px rgba(240,217,168,.6));animation:ogiconStarPulse 2.8s ease-in-out infinite;}
+@keyframes ogiconStarPulse{0%,100%{opacity:.8;transform:scale(1);}50%{opacity:1;transform:scale(1.1);}}
+.pcard .ogicon-wreath{position:absolute;left:50%;bottom:22%;width:0;height:0;}
+.pcard .ogicon-leaf{position:absolute;left:0;top:0;width:15px;height:8px;
+  background:linear-gradient(160deg,#e8c78a,#8a6328 70%);border-radius:0 100% 0 100%;
+  opacity:.65;filter:drop-shadow(0 0 2px rgba(232,199,138,.4));animation:ogiconLeafGlint 3.6s ease-in-out infinite;}
+.pcard .ogicon-leaf.l1{transform:rotate(-10deg) translate(-8px,-2px);}
+.pcard .ogicon-leaf.l2{transform:rotate(-28deg) translate(-16px,-9px);animation-delay:.3s;}
+.pcard .ogicon-leaf.l3{transform:rotate(-46deg) translate(-22px,-18px);animation-delay:.6s;}
+.pcard .ogicon-leaf.l4{transform:rotate(-64deg) translate(-25px,-28px);animation-delay:.9s;}
+.pcard .ogicon-leaf.l5{transform:rotate(-82deg) translate(-25px,-38px);animation-delay:1.2s;}
+.pcard .ogicon-leaf.r1{transform:rotate(10deg) translate(8px,-2px) scaleX(-1);}
+.pcard .ogicon-leaf.r2{transform:rotate(28deg) translate(16px,-9px) scaleX(-1);animation-delay:.3s;}
+.pcard .ogicon-leaf.r3{transform:rotate(46deg) translate(22px,-18px) scaleX(-1);animation-delay:.6s;}
+.pcard .ogicon-leaf.r4{transform:rotate(64deg) translate(25px,-28px) scaleX(-1);animation-delay:.9s;}
+.pcard .ogicon-leaf.r5{transform:rotate(82deg) translate(25px,-38px) scaleX(-1);animation-delay:1.2s;}
+@keyframes ogiconLeafGlint{0%,100%{opacity:.5;}50%{opacity:.9;}}
 /* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
 .pcard.theme-dia{border:2.5px solid transparent;
   background:
@@ -12232,12 +12247,18 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="goat-halo"></div>
       ${Array.from({length:4},(_,i)=>`<i class="goat-crack g${i+1}"></i>`).join('')}
     </div>` : '';
-  // OG Icons: flickering vertical film-scratches plus slowly drifting dust motes - "worn old film reel"
-  // texture, its own mechanism like GOAT's above rather than a recolor of any other tier's FX.
+  // OG Icons: a slowly rotating engraved bronze Hall-of-Fame medallion (milled rim + static coin face)
+  // with a pulsing star at its center, flanked by a laurel wreath - one unmistakable "legend enshrined"
+  // image, the same "single bold rotating shape" idea as the Kronjuwelen gem-facets / Ratings Reload's
+  // arrow, but its own shape and meaning.
   const isOgIconTier = card.theme==='ogicon';
   const ogiconFxHTML = isOgIconTier ? `<div class="ogicon-fx">
-      ${Array.from({length:4},(_,i)=>`<i class="ogicon-scratch o${i+1}"></i>`).join('')}
-      ${Array.from({length:5},(_,i)=>`<i class="ogicon-mote m${i+1}"></i>`).join('')}
+      <div class="ogicon-medallion"></div>
+      <div class="ogicon-star"></div>
+      <div class="ogicon-wreath">
+        ${Array.from({length:5},(_,i)=>`<i class="ogicon-leaf l${i+1}"></i>`).join('')}
+        ${Array.from({length:5},(_,i)=>`<i class="ogicon-leaf r${i+1}"></i>`).join('')}
+      </div>
     </div>` : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
