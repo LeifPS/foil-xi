@@ -379,6 +379,43 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .pcard .goat-crack.g3{top:70%;left:14%;width:50%;transform:rotate(8deg);animation-duration:3.8s;animation-delay:.6s;}
 .pcard .goat-crack.g4{top:60%;left:52%;width:34%;transform:rotate(-20deg);animation-duration:2.9s;animation-delay:1.8s;}
 @keyframes goatCrackFlicker{0%,100%{opacity:0;}45%{opacity:0;}52%{opacity:.9;}58%{opacity:.2;}70%{opacity:.7;}80%{opacity:0;}}
+/* OG Icons (variant 'ogicon', legendary players from decades past): previously just inherited the
+   generic r-ultimate look too, distinguished only by THEME_ACC's bronze accent border color - no
+   dedicated background of its own, nothing that actually reads "archival footage of a legend" rather
+   than "another top-rated card". Its own bespoke treatment now: an aged sepia/parchment face with a
+   heavy vignette like an old photograph, a static patina-bronze frame (no animated rainbow sweep -
+   same reasoning as GOAT above, an aged-photo look has to stay still, not shimmer), and its own FX
+   layer (ogicon-fx) of flickering vertical film-scratches plus slowly drifting dust motes - the "worn
+   old film reel" texture, distinct from every other bespoke theme's FX mechanism. */
+.pcard.theme-ogicon{border:3px solid #8a6328;
+  background:
+    radial-gradient(circle at 50% 42%, #3c2a12 0%, #241a0c 55%, #100b05 100%),
+    radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,.55) 100%);
+  animation: ultimateBreathe 2.6s ease-in-out infinite, ogiconGlow 3.2s ease-in-out infinite;
+  filter:sepia(.15);}
+.pcard.theme-ogicon::before{animation:autoShine 2.4s ease-in-out infinite;}
+.pcard.theme-ogicon .name{color:#e8c78a;text-shadow:0 0 8px rgba(201,138,62,.55);}
+.pcard.theme-ogicon .name.name-variant{color:#e8c78a;text-shadow:0 0 8px rgba(201,138,62,.55);}
+@keyframes ogiconGlow{
+  0%,100%{box-shadow:0 18px 36px rgba(0,0,0,.8), 0 0 0 1px rgba(201,138,62,.4) inset, 0 0 18px -4px #c98a3e;}
+  50%{box-shadow:0 18px 36px rgba(0,0,0,.8), 0 0 0 1px rgba(232,199,138,.5) inset, 0 0 30px -2px #e8c78a;}
+}
+.pcard .ogicon-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .ogicon-scratch{position:absolute;top:-10%;width:1px;height:120%;background:rgba(255,245,220,.5);
+  opacity:0;animation:ogiconScratchFlicker linear infinite;}
+.pcard .ogicon-scratch.o1{left:18%;animation-duration:4.2s;animation-delay:.3s;}
+.pcard .ogicon-scratch.o2{left:44%;animation-duration:5.1s;animation-delay:1.6s;}
+.pcard .ogicon-scratch.o3{left:68%;animation-duration:3.8s;animation-delay:2.4s;}
+.pcard .ogicon-scratch.o4{left:83%;animation-duration:4.7s;animation-delay:.9s;}
+@keyframes ogiconScratchFlicker{0%,92%,100%{opacity:0;}93%{opacity:.6;}94%{opacity:.1;}96%{opacity:.5;}97%{opacity:0;}}
+.pcard .ogicon-mote{position:absolute;bottom:-4%;width:2px;height:2px;border-radius:50%;background:#e8c78a;
+  opacity:0;box-shadow:0 0 4px 1px rgba(232,199,138,.7);animation:ogiconMoteRise linear infinite;}
+.pcard .ogicon-mote.m1{left:14%;animation-duration:6.5s;animation-delay:0s;}
+.pcard .ogicon-mote.m2{left:32%;animation-duration:7.8s;animation-delay:2.1s;}
+.pcard .ogicon-mote.m3{left:58%;animation-duration:6.9s;animation-delay:1.2s;}
+.pcard .ogicon-mote.m4{left:76%;animation-duration:8.4s;animation-delay:3.4s;}
+.pcard .ogicon-mote.m5{left:90%;animation-duration:7.2s;animation-delay:.6s;}
+@keyframes ogiconMoteRise{0%{bottom:-4%;opacity:0;}10%{opacity:.8;}90%{opacity:.4;}100%{bottom:104%;opacity:0;}}
 /* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
 .pcard.theme-dia{border:2.5px solid transparent;
   background:
@@ -12195,6 +12232,13 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="goat-halo"></div>
       ${Array.from({length:4},(_,i)=>`<i class="goat-crack g${i+1}"></i>`).join('')}
     </div>` : '';
+  // OG Icons: flickering vertical film-scratches plus slowly drifting dust motes - "worn old film reel"
+  // texture, its own mechanism like GOAT's above rather than a recolor of any other tier's FX.
+  const isOgIconTier = card.theme==='ogicon';
+  const ogiconFxHTML = isOgIconTier ? `<div class="ogicon-fx">
+      ${Array.from({length:4},(_,i)=>`<i class="ogicon-scratch o${i+1}"></i>`).join('')}
+      ${Array.from({length:5},(_,i)=>`<i class="ogicon-mote m${i+1}"></i>`).join('')}
+    </div>` : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
@@ -12277,6 +12321,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${legikoneFxHTML}
     ${wm26kFxHTML}
     ${goatFxHTML}
+    ${ogiconFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
