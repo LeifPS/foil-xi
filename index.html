@@ -77,7 +77,34 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .nav-btn:hover{color:var(--chalk);}
 .nav-btn.active{color:var(--chalk);border-bottom-color:var(--turf-bright);}
 
+/* ---- mobile bottom nav ----
+   Desktop keeps the top #nav exactly as it was (text tabs in a row). Below the 820px breakpoint (same
+   one used elsewhere for the squad/play layouts) it's replaced by #nav-mobile: a fixed bottom bar of
+   icon-only buttons, each exactly 20% of the bar's width so precisely 5 are visible at a time - the
+   rest reachable by a normal horizontal swipe (native overflow-x scrolling with snap, no custom touch
+   JS needed). Icons are plain inline SVGs (TAB_ICON, currentColor strokes) rather than colored emoji,
+   since emoji glyphs ignore `color` entirely and couldn't show an active/inactive state through it. */
+#nav-mobile{display:none;}
+@media(max-width:820px){
+  #nav{display:none;}
+  #nav-mobile{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:41;
+    background:linear-gradient(180deg,#0d1017,#0a0d13);border-top:1px solid var(--line);
+    overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+    padding-bottom:env(safe-area-inset-bottom,0);
+  }
+  #nav-mobile::-webkit-scrollbar{display:none;}
+  .nav-btn-m{flex:0 0 20%;scroll-snap-align:start;display:flex;align-items:center;justify-content:center;
+    padding:11px 2px;background:none;border:none;color:var(--muted);}
+  .nav-btn-m svg{width:22px;height:22px;}
+  .nav-btn-m.active{color:var(--turf-bright);background:rgba(61,196,130,.12);}
+}
+
 #view{flex:1;padding:22px 20px 60px;}
+/* extra bottom room on mobile so content doesn't sit behind the fixed #nav-mobile bar - declared after
+   the base #view rule (not inside the #nav-mobile media block above) so it actually wins the cascade
+   instead of being overridden by that later, unconditional rule. */
+@media(max-width:820px){ #view{padding-bottom:76px;} }
 .view-head{margin-bottom:18px;}
 .view-head h2{font-size:26px;}
 .view-head p{color:var(--muted);font-size:13.5px;margin-top:4px;max-width:640px;line-height:1.5;}
@@ -1511,9 +1538,9 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
   box-shadow:inset 0 1px 3px rgba(0,0,0,.35);}
 .wp3-seg{height:100%;transition:width .4s ease;}
 .wp3-win{background:linear-gradient(90deg,#268a58,#3dc482);}
-.wp3-draw{background:linear-gradient(90deg,#9aa04a,#d4c95c);}
+.wp3-draw{background:linear-gradient(90deg,#6b7280,#9aa1ab);}
 .wp3-loss{background:var(--danger);}
-.winprob-pct-row .wp3-draw-label{color:#d4c95c;}
+.winprob-pct-row .wp3-draw-label{color:#9aa1ab;}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';font-weight:700;text-align:center;}
@@ -1734,6 +1761,7 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
     </div>
   </div>
   <div id="nav"></div>
+  <div id="nav-mobile"></div>
   <div id="view"></div>
 </div>
 <div id="modal-root"></div>
@@ -12438,6 +12466,21 @@ document.addEventListener('visibilitychange', ()=>{
 
 // ===== nav & routing =====
 const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass']];
+// Icon-only equivalents for #nav-mobile (see its CSS comment) - plain inline SVGs, not emoji, so the
+// active/inactive color actually applies (emoji glyphs are fixed-color and ignore `color`). One path
+// per tab, same stroke style throughout for a consistent set.
+const TAB_ICON = {
+  store: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  club: '<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5Z"/>',
+  squad: '<circle cx="12" cy="5" r="2"/><circle cx="6" cy="16" r="2"/><circle cx="18" cy="16" r="2"/><path d="M12 7v4M12 11 6 14M12 11l6 3"/>',
+  sbc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+  trade: '<path d="M17 2 21 6l-4 4"/><path d="M3 12v-2a4 4 0 0 1 4-4h14"/><path d="M7 22 3 18l4-4"/><path d="M21 12v2a4 4 0 0 1-4 4H3"/>',
+  play: '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/>',
+  ligen: '<path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"/><path d="M8 5H5a3 3 0 0 0 3 5"/><path d="M16 5h3a3 3 0 0 1-3 5"/><path d="M12 12v4"/><path d="M9 20h6"/><path d="M10 16h4l1 4H9l1-4Z"/>',
+  week: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  trade_locked: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  admin: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V19a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 17.35a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.65 13 1.7 1.7 0 0 0 3.09 12H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.65 7a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 2.65 1.7 1.7 0 0 0 10.09 1H10a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 2.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 7a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51.96Z"/>',
+};
 const ADMIN_USERS = new Set(['leifps','test']);
 function isAdmin(){ return clubId && ADMIN_USERS.has(clubId); }
 function renderNav(){
@@ -12445,6 +12488,14 @@ function renderNav(){
   nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${id==='trade' && !tradeUnlocked() ? '\ud83d\udd12 ' : ''}${label}</button>`).join('')
     + (isAdmin() ? `<button class="nav-btn ${currentTab==='admin'?'active':''}" data-tab="admin" style="color:#ff5f5f;">\u2699 Admin</button>` : '');
   nav.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click', ()=>{ currentTab=b.dataset.tab; renderNav(); renderView(currentTab); }));
+  const navMobile = document.getElementById('nav-mobile');
+  const iconSvg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  navMobile.innerHTML = TABS.map(([id,label])=>{
+    const icon = (id==='trade' && !tradeUnlocked()) ? TAB_ICON.trade_locked : TAB_ICON[id];
+    return `<button class="nav-btn-m ${id===currentTab?'active':''}" data-tab="${id}" title="${label}" aria-label="${label}">${iconSvg(icon)}</button>`;
+  }).join('')
+    + (isAdmin() ? `<button class="nav-btn-m ${currentTab==='admin'?'active':''}" data-tab="admin" title="Admin" aria-label="Admin" style="${currentTab==='admin'?'color:#ff5f5f;':''}">${iconSvg(TAB_ICON.admin)}</button>` : '');
+  navMobile.querySelectorAll('.nav-btn-m').forEach(b=>b.addEventListener('click', ()=>{ currentTab=b.dataset.tab; renderNav(); renderView(currentTab); }));
   const adminBtn = document.getElementById('admin-fab');
   if(adminBtn) adminBtn.remove();
 }
@@ -15900,7 +15951,7 @@ function playRefGoal(side){
 }
 function initGlobalSfxListeners(){
   document.addEventListener('click', (e)=>{
-    const navBtn = e.target.closest('.nav-btn');
+    const navBtn = e.target.closest('.nav-btn, .nav-btn-m');
     if(navBtn){ playSfx('navSwitch'); return; }
     const btn = e.target.closest('button');
     if(btn && !btn.disabled) playSfx('click');
