@@ -1412,16 +1412,6 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .chem-stars.chem-1{color:#e8834a;}
 .chem-stars.chem-2{color:#e8c468;}
 .chem-stars.chem-3{color:var(--turf-bright);}
-/* Mirrors .chem-stars but bottom-right instead of bottom-left: shows how this player's individual
-   stats (not just Overall) actually affect them in a match - see showPlayerImpactModal. Kept as its
-   own always-visible badge (not hidden behind a menu) so the effect is transparent by default, the
-   same reasoning the chemistry stars already follow. */
-.impact-badge{position:absolute;bottom:6px;right:6px;z-index:6;font-size:10px;
-  font-family:'JetBrains Mono';font-weight:700;background:rgba(6,8,12,.72);border-radius:20px;padding:3px 7px;
-  box-shadow:0 0 0 1px rgba(0,0,0,.4);cursor:pointer;}
-.impact-badge.impact-up{color:var(--turf-bright);}
-.impact-badge.impact-down{color:var(--danger);}
-.impact-badge.impact-neutral{color:var(--muted);}
 .formation-select{display:flex;gap:6px;flex-wrap:wrap;}
 .chip{padding:7px 11px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);font-size:12px;color:var(--muted);}
 .crest-shape-chip{cursor:pointer;}
@@ -15537,51 +15527,6 @@ function showChemistryInfoModal(){
   `);
   document.getElementById('chem-info-close').addEventListener('click', closeModal);
 }
-const IMPACT_STAT_LABEL = {sho:'Schuss', dri:'Dribbling', pac:'Tempo', defn:'Verteidigung', phy:'Physis'};
-function impactContribRow(stat, statValue, ov, delta){
-  const sign = delta>=0 ? '+' : '\u2212';
-  const color = delta>0.05 ? 'var(--turf-bright)' : delta<-0.05 ? 'var(--danger)' : 'var(--muted)';
-  return `<div class="leader-row" style="margin-bottom:6px;font-size:12.5px;"><span style="flex:1;">${IMPACT_STAT_LABEL[stat]} (${statValue} vs. Overall ${ov})</span><span class="mono" style="color:${color};">${sign}${Math.abs(delta).toFixed(1)}</span></div>`;
-}
-// Tap target for the impact badge on an individual pitch-slot card - shows exactly which of this
-// card's stats are pulling its in-match attack/defense rating away from its plain Overall, and by how
-// much. Uses the SAME playerImpactRating() the match engine itself calls, so this is never an
-// approximation of what the engine does - it's the literal number.
-function showPlayerImpactModal(card){
-  const atk = playerImpactRating(card, 'attack');
-  const def = playerImpactRating(card, 'defense');
-  const noDeltaHint = `<p class="hint" style="margin:0 0 8px;">Die relevanten Werte liegen nah an der Overall-Note \u2014 kein sp\u00fcrbarer Unterschied.</p>`;
-  const atkRows = atk.contributions.length ? atk.contributions.map(c=>impactContribRow(c.stat, c.statValue, atk.ov, c.delta)).join('') : noDeltaHint;
-  const defRows = def.contributions.length ? def.contributions.map(c=>impactContribRow(c.stat, c.statValue, def.ov, c.delta)).join('') : noDeltaHint;
-  openModal(`
-    <h2 style="margin-bottom:2px;">${card.n}</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">So wirken sich die Einzelwerte dieser Karte im Spiel aus \u2014 das Overall bleibt die Basis, hier siehst du nur die Abweichung davon.</p>
-    <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angriffswert im Spiel: ${atk.value} (Overall ${atk.ov})</div>
-    <div style="display:flex;flex-direction:column;margin-bottom:14px;">${atkRows}</div>
-    <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Abwehrwert im Spiel: ${def.value} (Overall ${def.ov})</div>
-    <div style="display:flex;flex-direction:column;margin-bottom:6px;">${defRows}</div>
-    <p class="hint" style="margin:10px 0 0;">Zus\u00e4tzlich: dein Schusswert entscheidet mit, wie oft du selbst der Torsch\u00fctze bist, und der Passen-Schnitt deines Teams verst\u00e4rkt oder d\u00e4mpft den Bonus eures besten Angreifers.</p>
-    <button class="modal-close" id="impact-player-close" style="margin-top:14px;">Schlie\u00dfen</button>
-  `);
-  document.getElementById('impact-player-close').addEventListener('click', closeModal);
-}
-// General explainer, reachable from the info button next to the Team-Rating - same role as
-// showChemistryInfoModal above, just for the stat-impact mechanic instead of chemistry.
-function showImpactInfoModal(){
-  openModal(`
-    <h2 style="margin-bottom:4px;">Wie wirken sich die Einzelwerte aus?</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">Das Overall-Rating bleibt die Basis f\u00fcr Angriff und Abwehr im Spiel. Liegen die Einzelwerte einer Karte nah an ihrer Overall-Note, \u00e4ndert sich praktisch nichts \u2014 weicht ein Wert deutlich ab, wirkt sich das sp\u00fcrbar, aber begrenzt aus.</p>
-    <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angriff</div>
-    <p class="hint" style="margin:0 0 12px;">Schuss, Dribbling und Tempo heben oder senken den Angriffswert \u2014 wie stark, h\u00e4ngt von der Position ab (Schuss z\u00e4hlt bei St\u00fcrmern am meisten). Der Schusswert entscheidet au\u00dferdem mit, wie oft ein Spieler selbst zum Torsch\u00fctzen wird.</p>
-    <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Abwehr</div>
-    <p class="hint" style="margin:0 0 12px;">Verteidigung, Physis und Tempo heben oder senken den Abwehrwert, am st\u00e4rksten bei Verteidigern und Torh\u00fctern. Physis beeinflusst zus\u00e4tzlich, wie oft dein Team Fouls und Karten kassiert.</p>
-    <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Team-weit</div>
-    <p class="hint" style="margin:0 0 10px;">Der Passen-Schnitt deines Teams verst\u00e4rkt oder d\u00e4mpft, wie sehr sich dein bester Angreifer vom Rest abhebt.</p>
-    <p class="hint" style="margin:0;">Tipp: Tippe im Kader-Editor auf das Symbol unten rechts an einer Karte, um die genaue Aufschl\u00fcsselung f\u00fcr diesen Spieler zu sehen.</p>
-    <button class="modal-close" id="impact-info-close" style="margin-top:16px;">Verstanden</button>
-  `);
-  document.getElementById('impact-info-close').addEventListener('click', closeModal);
-}
 function posGroup2(label){
   if(label==='GK') return 'GK';
   if(['CB','LB','RB','LWB','RWB'].includes(label)) return 'DEF';
@@ -15598,7 +15543,6 @@ function renderSquad(view){
       <div class="pitch" id="pitch"></div>
       <div class="side-panel">
         <div class="rating-hero"><div class="num" style="display:flex;align-items:baseline;">${rating||'--'}<span class="mono" style="font-size:15px;font-weight:400;color:var(--muted);margin-left:1px;">${filled?ratingDecimalSuffix(preciseRating):''}</span></div><div><div class="lbl">Team-Rating</div><div class="lbl">${filled}/11 besetzt</div></div></div>
-        <p class="hint" style="margin:6px 0 0;display:flex;align-items:center;gap:6px;">Deine Einzelwerte (Schuss, Tempo, ...) wirken sich zusätzlich im Spiel aus <span class="chem-info-btn" id="impact-info-btn">?</span></p>
         <div class="chem-meter" id="chem-meter"></div>
         <div><div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Formation</div>
         <div class="formation-select" id="form-select">
@@ -15665,8 +15609,6 @@ function renderSquad(view){
       ${distHtml}`;
     document.getElementById('chem-info-btn').addEventListener('click', showChemistryInfoModal);
   }
-  const impactInfoBtn = document.getElementById('impact-info-btn');
-  if(impactInfoBtn) impactInfoBtn.addEventListener('click', showImpactInfoModal);
   form.slots.forEach(slot=>{
     const uid = squad.slots[slot.id];
     const card = uid ? ownedCard(uid) : null;
@@ -15687,21 +15629,6 @@ function renderSquad(view){
         stars.addEventListener('click', (e)=>{ e.stopPropagation(); showPlayerChemistryModal(card, chem, chemDetail.breakdownBySlot[slot.id]); });
         cardNode.appendChild(stars);
       }
-      // always-visible badge showing how this player's individual stats actually shift their
-      // effective attack/defense in a match, not just their Overall - see showPlayerImpactModal.
-      // Whichever rating (attack/defense) actually matters for this position is the one shown.
-      cardNode.style.position = 'relative';
-      const g = posGroup2(slot.label);
-      const primaryKind = (g==='DEF'||g==='GK') ? 'defense' : 'attack';
-      const impact = playerImpactRating(card, primaryKind);
-      const roundedDelta = Math.round(impact.delta);
-      const impactCls = roundedDelta>0 ? 'impact-up' : roundedDelta<0 ? 'impact-down' : 'impact-neutral';
-      const impactBadge = document.createElement('div');
-      impactBadge.className = 'impact-badge '+impactCls;
-      impactBadge.textContent = roundedDelta===0 ? '±0' : (roundedDelta>0?'▲':'▼')+Math.abs(roundedDelta);
-      impactBadge.title = 'Einzelwert-Einfluss auf diesen Spieler - antippen für Details';
-      impactBadge.addEventListener('click', (e)=>{ e.stopPropagation(); showPlayerImpactModal(card); });
-      cardNode.appendChild(impactBadge);
       el.appendChild(cardNode);
     } else {
       el.innerHTML = `<div class="empty-slot-inner">${posDE(slot.label)}</div>`;
@@ -22093,14 +22020,8 @@ function pickScorer(players){
     const g = posGroup2(p.pos);
     const posW = g==='FWD' ? 4.4 : g==='MID' ? 2.4 : g==='DEF' ? 0.55 : 0.04;
     const ov = p.ov || 75;
-    // rating matters within a position too: an elite forward should noticeably outscore a mediocre one -
-    // blended with Shooting rather than pure Overall, so a clinical finisher scores more often than a
-    // teammate with the same Overall but a weaker shot, and vice versa. Doesn't change how MANY goals a
-    // match has (that's decided before this function is ever called) - only WHO scores them, so it never
-    // touches win probability.
-    const sho = p.sho!=null ? p.sho : ov;
-    const scoreSkill = ov*0.55 + sho*0.45;
-    const ratingFactor = Math.pow(1.05, scoreSkill-72);
+    // rating matters within a position too: an elite forward should noticeably outscore a mediocre one
+    const ratingFactor = Math.pow(1.05, ov-72);
     const w = posW * ratingFactor;
     const reps = Math.max(1, Math.round(w*3));
     for(let i=0;i<reps;i++) weighted.push(p);
@@ -22246,20 +22167,12 @@ function pickCardRecipient(players){
   players.forEach(p=>{
     const g = posGroup2(mainPos(p.pos));
     const w = g==='DEF' ? 3 : g==='MID' ? 2.6 : g==='FWD' ? 1.4 : 0.2; // defenders/midfielders foul more than forwards/keepers
-    // a physically weaker player mistimes more challenges - small nudge around the 75 baseline
-    // (an average Physicality stat), not a rewrite of the position weighting above
-    const phy = p.phy!=null ? p.phy : (p.ov||75);
-    const phyW = clamp(1 + (75-phy)/100, 0.6, 1.5);
-    const reps = Math.max(1, Math.round(w*phyW*2));
+    const reps = Math.max(1, Math.round(w*2));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
   return weighted[Math.floor(Math.random()*weighted.length)] || players[0];
 }
 function planCardsAndPenalties(cardMult=1, players=[]){
-  // a physically weaker team as a whole fouls a bit more often - same 75-baseline nudge as
-  // pickCardRecipient above, just applied to the team's overall card rate instead of who takes them
-  const avgPhy = players.length ? players.reduce((s,p)=>s+(p.phy!=null?p.phy:(p.ov||75)),0)/players.length : 75;
-  cardMult = cardMult * clamp(1 + (75-avgPhy)/150, 0.8, 1.3);
   const cards = [];
   const numYellows = Math.min(3, poissonGoals(0.5*cardMult)); // ~0.5 yellow cards per team per match on average - a card should feel notable, not routine
   // minutes are drawn up front and sorted so cards get assigned to recipients in chronological order -
@@ -22310,57 +22223,22 @@ function scorerPoolExcluding(players, redMinute, sentOffPlayer, atMinute){
   return filtered.length ? filtered : players;
 }
 
-// PLAYER_IMPACT_WEIGHTS: how much each stat nudges a player's effective attack/defense rating away
-// from their plain Overall - same numbers used by the match engine (computeTeamProfile below) AND by
-// the Kader-Editor's "Einfluss"-badge (showPlayerImpactModal), so what the player sees is exactly what
-// the engine uses - not a separate, possibly-drifting approximation. Deliberately a DELTA around OV,
-// not a replacement for it: a player whose individual stats sit right on their Overall (the normal
-// case) gets delta≈0 and plays exactly as before this feature existed - only a lopsided stat profile
-// (a blistering-pace winger, a shot-shy target man, ...) now actually plays differently. Weights are
-// position-dependent (a striker's shooting matters more than a center-back's) and the total delta is
-// capped at ±4 so no single card can swing a match on stats alone.
-const PLAYER_IMPACT_WEIGHTS = {
-  attack: { FWD:{sho:.5, dri:.3, pac:.25}, MID:{sho:.35,dri:.35,pac:.2}, DEF:{sho:.15,dri:.15,pac:.15}, GK:{sho:.05,dri:.05,pac:.05} },
-  defense:{ FWD:{defn:.1, phy:.1, pac:.05}, MID:{defn:.25,phy:.2, pac:.1}, DEF:{defn:.5, phy:.3, pac:.2}, GK:{defn:.5, phy:.2, pac:.05} },
-};
-function playerImpactRating(p, kind){
-  const ov = p.ov || 75;
-  const g = posGroup2(p.pos);
-  const weights = PLAYER_IMPACT_WEIGHTS[kind][g] || {};
-  let delta = 0;
-  const contributions = [];
-  Object.entries(weights).forEach(([stat,w])=>{
-    const val = p[stat]!=null ? p[stat] : ov;
-    const d = (val-ov)*w;
-    delta += d;
-    if(Math.abs(d)>=0.15) contributions.push({stat, statValue:val, weight:w, delta:d});
-  });
-  delta = clamp(delta, -4, 4);
-  return {value: Math.round(ov+delta), ov, delta, contributions};
-}
 function computeTeamProfile(players, fallbackOv){
   if(!players || !players.length) return {attack: fallbackOv||75, defense: fallbackOv||75};
   const wA = {FWD:3, MID:1.6, DEF:0.5, GK:0.1};
   const wD = {GK:2.5, DEF:2, MID:1, FWD:0.3};
-  let attackSum=0, attackWeight=0, defenseSum=0, defenseWeight=0, topAttacker=0, pasSum=0;
+  let attackSum=0, attackWeight=0, defenseSum=0, defenseWeight=0, topAttacker=0;
   players.forEach(p=>{
     const g = posGroup2(p.pos);
-    const attackRating = playerImpactRating(p, 'attack').value;
-    const defenseRating = playerImpactRating(p, 'defense').value;
-    attackSum += attackRating*wA[g]; attackWeight += wA[g];
-    defenseSum += defenseRating*wD[g]; defenseWeight += wD[g];
-    if((g==='FWD'||g==='MID') && attackRating>topAttacker) topAttacker = attackRating;
-    pasSum += p.pas!=null ? p.pas : (p.ov||fallbackOv||75);
+    const ov = p.ov || fallbackOv || 75;
+    attackSum += ov*wA[g]; attackWeight += wA[g];
+    defenseSum += ov*wD[g]; defenseWeight += wD[g];
+    if((g==='FWD'||g==='MID') && ov>topAttacker) topAttacker = ov;
   });
   const attackAvg = attackWeight ? attackSum/attackWeight : (fallbackOv||75);
   const defenseAvg = defenseWeight ? defenseSum/defenseWeight : (fallbackOv||75);
-  // a genuine standout attacker pulls the team's attacking threat up beyond the pure average (star
-  // power) - how MUCH that star shines through is scaled by the team's average passing: a brilliant
-  // striker starved of service by poor passers stands out less than the same striker fed by a team
-  // that passes at 75 (the neutral baseline, where this scaler is exactly 1 and nothing changes).
-  const pasAvg = players.length ? pasSum/players.length : 75;
-  const pasScaler = clamp(0.85 + (pasAvg-75)/150, 0.85, 1.15);
-  const attack = topAttacker ? attackAvg + (topAttacker-attackAvg)*0.28*pasScaler : attackAvg;
+  // a genuine standout attacker pulls the team's attacking threat up beyond the pure average (star power)
+  const attack = topAttacker ? attackAvg*0.72 + topAttacker*0.28 : attackAvg;
   return {attack: Math.round(attack), defense: Math.round(defenseAvg)};
 }
 function computeLambda(attack, oppDefense){
