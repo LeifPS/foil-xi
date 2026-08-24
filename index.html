@@ -905,22 +905,23 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .liga-reward-compare-letter{display:flex;align-items:center;justify-content:center;}
 /* Liga-Buchstaben-Badge (A/B/C/D/..., ligaBadgeHTML): each tier gets its own SHAPE, not just a color -
    Liga A a diamond (plus an animated shimmer sweep across its gradient, the one visibly "premium"
-   effect), B a hexagon, C a shield, D and everything below stays the plain circle. A pulsing glow still
-   runs on all of them - deliberately NOT a spin/rotation (explicitly rejected earlier, the letter has to
-   stay readable and still). Shaped badges (clip-path, not border-radius) use filter:drop-shadow for the
-   glow instead of box-shadow, since box-shadow draws around the full square BOX a clip-path leaves
-   behind, not the visible clipped shape - drop-shadow correctly follows the actual silhouette. */
+   effect), B a hexagon, C a shield, D and everything below stays the plain circle. Every shaped badge's
+   actual outline is ROUNDED at every corner (see roundedPolygonPathPx/JS, applied as an inline
+   clip-path:path() since path() needs real pixel coordinates matching each instance's own size, not the
+   percentages a plain CSS clip-path:polygon() could use) - no sharp points anywhere, not even the
+   diamond's tips. A pulsing glow still runs on all of them - deliberately NOT a spin/rotation
+   (explicitly rejected earlier, the letter has to stay readable and still). Shaped badges use
+   filter:drop-shadow for the glow instead of box-shadow, since box-shadow draws around the full square
+   BOX a clip-path leaves behind, not the visible clipped shape - drop-shadow correctly follows the
+   actual (rounded) silhouette. */
 .liga-badge{animation:ligaBadgePulse 2.4s ease-in-out infinite;}
 @keyframes ligaBadgePulse{
   0%,100%{box-shadow:0 1px 4px rgba(0,0,0,.4);}
   50%{box-shadow:0 1px 4px rgba(0,0,0,.4), 0 0 14px 3px var(--liga-glow, currentColor);}
 }
-.liga-badge.shape-diamond{border-radius:4px;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);
-  background-size:260% 260%;animation:ligaBadgeShapePulse 2.4s ease-in-out infinite, ligaBadgeShimmer 3.2s ease-in-out infinite;}
-.liga-badge.shape-hex{border-radius:4px;clip-path:polygon(25% 4%,75% 4%,100% 50%,75% 96%,25% 96%,0% 50%);
-  animation:ligaBadgeShapePulse 2.4s ease-in-out infinite;}
-.liga-badge.shape-shield{border-radius:4px;clip-path:polygon(50% 0%,96% 16%,96% 60%,50% 100%,4% 60%,4% 16%);
-  animation:ligaBadgeShapePulse 2.4s ease-in-out infinite;}
+.liga-badge.shape-diamond{background-size:260% 260%;
+  animation:ligaBadgeShapePulse 2.4s ease-in-out infinite, ligaBadgeShimmer 3.2s ease-in-out infinite;}
+.liga-badge.shape-hex, .liga-badge.shape-shield{animation:ligaBadgeShapePulse 2.4s ease-in-out infinite;}
 .liga-badge.shape-shield .liga-badge-letter{transform:translateY(-6%);}
 @keyframes ligaBadgeShapePulse{
   0%,100%{filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));}
@@ -17605,15 +17606,47 @@ const LIGA_GLOW_COLOR = { A:'#b46bff', B:'#3d7bff', C:'#2fbd6a', D:'#e6c343', E:
 const LIGA_SHAPE_CLASS = { A:'shape-diamond', B:'shape-hex', C:'shape-shield' };
 function ligaColor(letter){ return LIGA_COLORS[letter] || LIGA_DEFAULT_COLOR; }
 function ligaGlowColor(letter){ return LIGA_GLOW_COLOR[letter] || LIGA_DEFAULT_COLOR; }
+// Point sets for each shaped badge, as fractions (0-1) of its own size - fed through
+// roundedPolygonPathPx below to get an actually-rounded outline (a plain CSS clip-path:polygon() only
+// ever draws sharp corners, no exceptions - this walks each edge in a bit before every vertex and
+// connects across it with a quadratic curve instead of a hard point).
+const LIGA_SHAPE_POINTS = {
+  'shape-diamond': [[0.5,0],[1,0.5],[0.5,1],[0,0.5]],
+  'shape-hex': [[0.25,0.04],[0.75,0.04],[1,0.5],[0.75,0.96],[0.25,0.96],[0,0.5]],
+  'shape-shield': [[0.5,0],[0.96,0.16],[0.96,0.6],[0.5,1],[0.04,0.6],[0.04,0.16]],
+};
+// Rounds every corner of a polygon by this fraction of the shorter adjoining edge - used for every
+// shaped badge so there are no sharp points anywhere, not even at the diamond's tips or the shield's
+// base. pts are [x,y] fractions (0-1); size is the badge's actual pixel size.
+function roundedPolygonPathPx(pts, size, roundFrac=0.32){
+  const n = pts.length;
+  const P = pts.map(([x,y])=>({x:x*size, y:y*size}));
+  let d = '';
+  for(let i=0;i<n;i++){
+    const prev = P[(i-1+n)%n], cur = P[i], next = P[(i+1)%n];
+    const dPrev = Math.hypot(cur.x-prev.x, cur.y-prev.y);
+    const dNext = Math.hypot(next.x-cur.x, next.y-cur.y);
+    const r = Math.min(dPrev, dNext) * roundFrac;
+    const p1 = { x: cur.x + (prev.x-cur.x)/dPrev*r, y: cur.y + (prev.y-cur.y)/dPrev*r };
+    const p2 = { x: cur.x + (next.x-cur.x)/dNext*r, y: cur.y + (next.y-cur.y)/dNext*r };
+    d += (i===0 ? `M ${p1.x} ${p1.y} ` : `L ${p1.x} ${p1.y} `) + `Q ${cur.x} ${cur.y} ${p2.x} ${p2.y} `;
+  }
+  return d + 'Z';
+}
 function ligaBadgeHTML(letter, size=28){
   const color = ligaColor(letter);
   const glow = ligaGlowColor(letter);
   const shapeClass = LIGA_SHAPE_CLASS[letter] || '';
+  const shapePoints = LIGA_SHAPE_POINTS[shapeClass];
+  // clip-path:path() needs real pixel coordinates matching this exact instance's size (percentages
+  // aren't supported there), so the rounded outline is computed fresh per call instead of living in a
+  // static CSS class - only the shimmer/pulse animations stay in the shared .shape-* CSS classes.
+  const clipStyle = shapePoints ? `clip-path:path('${roundedPolygonPathPx(shapePoints, size)}');` : '';
   // A shaped badge's clip-path leaves the actual box a plain square underneath it, so the flex-centered
   // letter needs no extra handling EXCEPT the shield (its content is front-loaded near the top, tapering
   // to a point at the bottom) - .shape-shield .liga-badge-letter nudges it up slightly to sit centered
   // in the visible silhouette rather than the invisible full square.
-  return `<div class="liga-badge ${shapeClass}" style="position:relative;width:${size}px;height:${size}px;border-radius:${shapeClass?'0':'50%'};display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;--liga-glow:${glow};"><span class="liga-badge-letter">${letter}</span></div>`;
+  return `<div class="liga-badge ${shapeClass}" style="position:relative;width:${size}px;height:${size}px;border-radius:${shapeClass?'0':'50%'};${clipStyle}display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;--liga-glow:${glow};"><span class="liga-badge-letter">${letter}</span></div>`;
 }
 // Prize table per league bracket - every place gets a reward now, not just the top two: 1st/2nd/3rd
 // each have their own tuned coins (plus, for A/B, real card packs on top), and everyone from 4th place
