@@ -22053,8 +22053,14 @@ function pickScorer(players){
     const g = posGroup2(p.pos);
     const posW = g==='FWD' ? 4.4 : g==='MID' ? 2.4 : g==='DEF' ? 0.55 : 0.04;
     const ov = p.ov || 75;
-    // rating matters within a position too: an elite forward should noticeably outscore a mediocre one
-    const ratingFactor = Math.pow(1.05, ov-72);
+    // rating matters within a position too: an elite forward should noticeably outscore a mediocre one -
+    // blended with Shooting rather than pure Overall, so a clinical finisher scores more often than a
+    // teammate with the same Overall but a weaker shot, and vice versa. Doesn't change how MANY goals a
+    // match has (decided before this function is ever called) - only WHO scores them, so it never
+    // touches win probability, exactly the "SHO, zweite Rolle" row.
+    const sho = p.sho!=null ? p.sho : ov;
+    const scoreSkill = ov*0.55 + sho*0.45;
+    const ratingFactor = Math.pow(1.05, scoreSkill-72);
     const w = posW * ratingFactor;
     const reps = Math.max(1, Math.round(w*3));
     for(let i=0;i<reps;i++) weighted.push(p);
@@ -22200,12 +22206,24 @@ function pickCardRecipient(players){
   players.forEach(p=>{
     const g = posGroup2(mainPos(p.pos));
     const w = g==='DEF' ? 3 : g==='MID' ? 2.6 : g==='FWD' ? 1.4 : 0.2; // defenders/midfielders foul more than forwards/keepers
-    const reps = Math.max(1, Math.round(w*2));
+    // a physically weaker player mistimes more challenges - small nudge around the 75 baseline
+    // (an average Physicality stat), not a rewrite of the position weighting above
+    const phy = p.phy!=null ? p.phy : (p.ov||75);
+    const phyW = clamp(1 + (75-phy)/100, 0.6, 1.5);
+    const reps = Math.max(1, Math.round(w*phyW*2));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
   return weighted[Math.floor(Math.random()*weighted.length)] || players[0];
 }
-function planCardsAndPenalties(cardMult=1, players=[]){
+// attackDriAvg/oppDefenseAvg (both optional): the calling team's average Dribbling vs. the opponent's
+// average Defending - a dribble-heavy attack draws slightly more penalties against a weak back line.
+// Left null by any caller that doesn't have both sides handy, which keeps the flat 8% baseline exactly
+// as before.
+function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDefenseAvg=null){
+  // a physically weaker team as a whole fouls a bit more often - same 75-baseline nudge as
+  // pickCardRecipient above, just applied to the team's overall card rate instead of who takes them
+  const avgPhy = players.length ? players.reduce((s,p)=>s+(p.phy!=null?p.phy:(p.ov||75)),0)/players.length : 75;
+  cardMult = cardMult * clamp(1 + (75-avgPhy)/150, 0.8, 1.3);
   const cards = [];
   const numYellows = Math.min(3, poissonGoals(0.5*cardMult)); // ~0.5 yellow cards per team per match on average - a card should feel notable, not routine
   // minutes are drawn up front and sorted so cards get assigned to recipients in chronological order -
@@ -22239,7 +22257,13 @@ function planCardsAndPenalties(cardMult=1, players=[]){
   }
   cards.sort((a,b)=>a.minute-b.minute);
   let penalty = null;
-  if(Math.random() < 0.08){ // ~8% chance of a penalty being awarded per team per match
+  // ~8% baseline chance of a penalty per team per match, nudged by how much this team's Dribbling
+  // outclasses the opponent's Defending - stays close to the old flat 8% for a typical matchup, only
+  // drifts for a real mismatch, and is capped so it never gets wildly more/less common
+  const penaltyChance = (attackDriAvg!=null && oppDefenseAvg!=null)
+    ? clamp(0.08 * (1 + (attackDriAvg-oppDefenseAvg)/300), 0.04, 0.14)
+    : 0.08;
+  if(Math.random() < penaltyChance){
     penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<0.78}; // ~78% real-world conversion rate
   }
   return {cards, redMinute, sentOffPlayer, penalty};
@@ -22256,27 +22280,67 @@ function scorerPoolExcluding(players, redMinute, sentOffPlayer, atMinute){
   return filtered.length ? filtered : players;
 }
 
+// PLAYER_IMPACT_WEIGHTS: how much each stat nudges a player's effective attack/defense rating away
+// from their plain Overall - a DELTA around OV, not a replacement for it. A player whose individual
+// stats sit right on their Overall (the normal case) gets delta≈0 and plays exactly as before this
+// existed - only a lopsided stat profile (a blistering-pace winger, a shot-shy target man, ...) now
+// actually plays differently, so the aggregate win-rate across many matches barely moves. Weights are
+// position-dependent (a striker's shooting matters more than a center-back's) and the total delta is
+// capped at ±4 so no single card can swing a match on stats alone.
+const PLAYER_IMPACT_WEIGHTS = {
+  attack: { FWD:{sho:.5, dri:.3, pac:.25}, MID:{sho:.35,dri:.35,pac:.2}, DEF:{sho:.15,dri:.15,pac:.15}, GK:{sho:.05,dri:.05,pac:.05} },
+  defense:{ FWD:{defn:.1, phy:.1, pac:.05}, MID:{defn:.25,phy:.2, pac:.1}, DEF:{defn:.5, phy:.3, pac:.2}, GK:{defn:.5, phy:.2, pac:.05} },
+};
+function playerImpactRating(p, kind){
+  const ov = p.ov || 75;
+  const g = posGroup2(p.pos);
+  const weights = PLAYER_IMPACT_WEIGHTS[kind][g] || {};
+  let delta = 0;
+  Object.entries(weights).forEach(([stat,w])=>{
+    const val = p[stat]!=null ? p[stat] : ov;
+    delta += (val-ov)*w;
+  });
+  delta = clamp(delta, -4, 4);
+  return Math.round(ov+delta);
+}
 function computeTeamProfile(players, fallbackOv){
-  if(!players || !players.length) return {attack: fallbackOv||75, defense: fallbackOv||75};
+  if(!players || !players.length) return {attack: fallbackOv||75, defense: fallbackOv||75, attackPace: fallbackOv||75, defPaceBlend: fallbackOv||75};
   const wA = {FWD:3, MID:1.6, DEF:0.5, GK:0.1};
   const wD = {GK:2.5, DEF:2, MID:1, FWD:0.3};
-  let attackSum=0, attackWeight=0, defenseSum=0, defenseWeight=0, topAttacker=0;
+  let attackSum=0, attackWeight=0, defenseSum=0, defenseWeight=0, topAttacker=0, pasSum=0, pacAtkSum=0, pacDefSum=0;
   players.forEach(p=>{
     const g = posGroup2(p.pos);
     const ov = p.ov || fallbackOv || 75;
-    attackSum += ov*wA[g]; attackWeight += wA[g];
-    defenseSum += ov*wD[g]; defenseWeight += wD[g];
-    if((g==='FWD'||g==='MID') && ov>topAttacker) topAttacker = ov;
+    const attackRating = playerImpactRating(p, 'attack');
+    const defenseRating = playerImpactRating(p, 'defense');
+    attackSum += attackRating*wA[g]; attackWeight += wA[g];
+    defenseSum += defenseRating*wD[g]; defenseWeight += wD[g];
+    if((g==='FWD'||g==='MID') && attackRating>topAttacker) topAttacker = attackRating;
+    pasSum += p.pas!=null ? p.pas : ov;
+    const pac = p.pac!=null ? p.pac : ov;
+    const phy = p.phy!=null ? p.phy : ov;
+    pacAtkSum += pac*wA[g];
+    pacDefSum += (pac*0.5+phy*0.5)*wD[g];
   });
   const attackAvg = attackWeight ? attackSum/attackWeight : (fallbackOv||75);
   const defenseAvg = defenseWeight ? defenseSum/defenseWeight : (fallbackOv||75);
-  // a genuine standout attacker pulls the team's attacking threat up beyond the pure average (star power)
-  const attack = topAttacker ? attackAvg*0.72 + topAttacker*0.28 : attackAvg;
-  return {attack: Math.round(attack), defense: Math.round(defenseAvg)};
+  const attackPace = attackWeight ? pacAtkSum/attackWeight : (fallbackOv||75);
+  const defPaceBlend = defenseWeight ? pacDefSum/defenseWeight : (fallbackOv||75);
+  // a genuine standout attacker pulls the team's attacking threat up beyond the pure average (star
+  // power) - how much that star actually shines through is scaled by the team's average Passing:
+  // a brilliant striker starved of service stands out less than the same striker fed by a team that
+  // passes at 75 (the neutral baseline, where this scaler is exactly 1 and nothing changes from before)
+  const pasAvg = players.length ? pasSum/players.length : 75;
+  const pasScaler = clamp(0.85 + (pasAvg-75)/150, 0.85, 1.15);
+  const attack = topAttacker ? attackAvg + (topAttacker-attackAvg)*0.28*pasScaler : attackAvg;
+  return {attack: Math.round(attack), defense: Math.round(defenseAvg), attackPace, defPaceBlend};
 }
-function computeLambda(attack, oppDefense){
+// paceBonus (optional): a small counter-attack nudge - my attacking Pace vs. the opponent's
+// defensive Pace/Physicality blend - added directly to λ, capped at ±0.15 so it never dominates the
+// attack/defense difference the formula is actually built around.
+function computeLambda(attack, oppDefense, paceBonus=0){
   const diff = attack - oppDefense;
-  return clamp(1.3 + diff/11, 0.22, 4.9);
+  return clamp(1.3 + diff/11 + paceBonus, 0.22, 4.9);
 }
 // allowDraw=false (every non-Liga match: Ranked/WM26/Turniere/...) keeps the old single-number
 // behavior exactly - a real draw isn't a possible final result there (extra time/penalties always
@@ -22309,9 +22373,13 @@ function poissonPMFCapped(lambda, maxK){
 // precision the underlying number never actually had.
 function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, allowDraw=false){
   // calibrated to match simGoals' true expected output (mean = lambda exactly, since it's now a
-  // real Poisson process), so the live estimate matches how the actual scripted match plays out
-  const myFullMean = computeLambda(myProfile.attack, oppProfile.defense);
-  const oppFullMean = computeLambda(oppProfile.attack, myProfile.defense);
+  // real Poisson process), so the live estimate matches how the actual scripted match plays out.
+  // Same pace-based counter-attack nudge computeLambda's callers in buildDecisiveMatch use - falls
+  // back to 0 if either profile doesn't carry pace fields, so this is safe for any caller that never got them.
+  const myPaceBonus = clamp(((myProfile.attackPace||0) - (oppProfile.defPaceBlend||0))/40, -0.15, 0.15);
+  const oppPaceBonus = clamp(((oppProfile.attackPace||0) - (myProfile.defPaceBlend||0))/40, -0.15, 0.15);
+  const myFullMean = computeLambda(myProfile.attack, oppProfile.defense, myPaceBonus);
+  const oppFullMean = computeLambda(oppProfile.attack, myProfile.defense, oppPaceBonus);
   const scaledMyMean = myFullMean * (minutesLeft/90);
   const scaledOppMean = oppFullMean * (minutesLeft/90);
   const tiebreakEdge = clamp(0.5 + ((myProfile.attack+myProfile.defense)-(oppProfile.attack+oppProfile.defense))/500, 0.35, 0.65);
@@ -22467,22 +22535,31 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   const myPress = TACTIC_PRESSING[myT.pressing] || TACTIC_PRESSING.normal;
   const oppPress = TACTIC_PRESSING[oppT.pressing] || TACTIC_PRESSING.normal;
 
-  const myIncidents = planCardsAndPenalties(myPress.cardMult, myPlayers);
-  const oppIncidents = planCardsAndPenalties(oppPress.cardMult, oppPlayers);
+  // simple unweighted team-average of one stat, defaulting to Overall wherever the stat is missing -
+  // deliberately not the heavier weighted computeTeamProfile below, just enough for the penalty-chance
+  // nudge (Dribbling vs. Defending) in planCardsAndPenalties
+  const avgStat = (players, key) => players.length ? players.reduce((s,p)=>s+(p[key]!=null?p[key]:(p.ov||75)),0)/players.length : 75;
+  const myIncidents = planCardsAndPenalties(myPress.cardMult, myPlayers, avgStat(myPlayers,'dri'), avgStat(oppPlayers,'defn'));
+  const oppIncidents = planCardsAndPenalties(oppPress.cardMult, oppPlayers, avgStat(oppPlayers,'dri'), avgStat(myPlayers,'defn'));
 
   const myProfileRaw0 = computeTeamProfile(myPlayers, myRating);
   const oppProfileRaw0 = computeTeamProfile(oppPlayers, oppRating);
-  // tactics shift the raw profile before anything else - this is what gets stored/shown externally too
-  const myProfileRaw = {attack: myProfileRaw0.attack+myMent.attackMod+myPress.attackMod, defense: myProfileRaw0.defense+myMent.defenseMod};
-  const oppProfileRaw = {attack: oppProfileRaw0.attack+oppMent.attackMod+oppPress.attackMod, defense: oppProfileRaw0.defense+oppMent.defenseMod};
+  // tactics shift the raw profile before anything else - this is what gets stored/shown externally too.
+  // Pace fields pass through untouched (tactics affect the overall attack/defense mix, not raw speed).
+  const myProfileRaw = {attack: myProfileRaw0.attack+myMent.attackMod+myPress.attackMod, defense: myProfileRaw0.defense+myMent.defenseMod, attackPace: myProfileRaw0.attackPace, defPaceBlend: myProfileRaw0.defPaceBlend};
+  const oppProfileRaw = {attack: oppProfileRaw0.attack+oppMent.attackMod+oppPress.attackMod, defense: oppProfileRaw0.defense+oppMent.defenseMod, attackPace: oppProfileRaw0.attackPace, defPaceBlend: oppProfileRaw0.defPaceBlend};
 
   const myRedPenalty = myIncidents.redMinute!=null ? (90-myIncidents.redMinute)/90*6 : 0;
   const oppRedPenalty = oppIncidents.redMinute!=null ? (90-oppIncidents.redMinute)/90*6 : 0;
-  const myProfileForLambda = {attack: myProfileRaw.attack-myRedPenalty, defense: myProfileRaw.defense-myRedPenalty};
-  const oppProfileForLambda = {attack: oppProfileRaw.attack-oppRedPenalty, defense: oppProfileRaw.defense-oppRedPenalty};
+  const myProfileForLambda = {attack: myProfileRaw.attack-myRedPenalty, defense: myProfileRaw.defense-myRedPenalty, attackPace: myProfileRaw.attackPace, defPaceBlend: myProfileRaw.defPaceBlend};
+  const oppProfileForLambda = {attack: oppProfileRaw.attack-oppRedPenalty, defense: oppProfileRaw.defense-oppRedPenalty, attackPace: oppProfileRaw.attackPace, defPaceBlend: oppProfileRaw.defPaceBlend};
 
-  const myExp = computeLambda(myProfileForLambda.attack, oppProfileForLambda.defense);
-  const oppExp = computeLambda(oppProfileForLambda.attack, myProfileForLambda.defense);
+  // counter-attack nudge: my attacking Pace vs. the opponent's defensive Pace/Physicality blend,
+  // capped at ±0.15 on λ - symmetric, so it averages out across many matches (the "PAC" row)
+  const myPaceBonus = clamp((myProfileForLambda.attackPace - oppProfileForLambda.defPaceBlend)/40, -0.15, 0.15);
+  const oppPaceBonus = clamp((oppProfileForLambda.attackPace - myProfileForLambda.defPaceBlend)/40, -0.15, 0.15);
+  const myExp = computeLambda(myProfileForLambda.attack, oppProfileForLambda.defense, myPaceBonus);
+  const oppExp = computeLambda(oppProfileForLambda.attack, myProfileForLambda.defense, oppPaceBonus);
   let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
   const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
 
@@ -22628,8 +22705,8 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
     const myAdj = liveRedCardAdjustment(minute, myRedMinute);
     const oppAdj = liveRedCardAdjustment(minute, oppRedMinute);
     return {
-      my: {attack: myProfile.attack+myAdj, defense: myProfile.defense+myAdj},
-      opp: {attack: oppProfile.attack+oppAdj, defense: oppProfile.defense+oppAdj},
+      my: {attack: myProfile.attack+myAdj, defense: myProfile.defense+myAdj, attackPace: myProfile.attackPace, defPaceBlend: myProfile.defPaceBlend},
+      opp: {attack: oppProfile.attack+oppAdj, defense: oppProfile.defense+oppAdj, attackPace: oppProfile.attackPace, defPaceBlend: oppProfile.defPaceBlend},
     };
   };
   const INCIDENT_ICON = {yellow:'\ud83d\udfe8', red:'\ud83d\udfe5', red2:'\ud83d\udfe8\ud83d\udfe5', penalty_miss:'\u274c \u26bd'};
