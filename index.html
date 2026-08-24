@@ -338,28 +338,47 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 /* GOAT (ov>99, hand-picked real-world superstars - the single rarest pull in the whole game, only via
    the GOAT-Quest): previously just inherited the generic .r-ultimate look (same violet card any other
    95+ base card without its own theme gets), so the single best card in the game was visually
-   indistinguishable from an ordinary ultimate pull. Now its own bespoke treatment - obsidian black
-   split by a molten gold/crimson vein, reads as "beyond even the gemstone tiers" rather than just
-   another rarity bracket. */
-.pcard.theme-goat{border:2.5px solid transparent;
+   indistinguishable from an ordinary ultimate pull. Deliberately NOT the same "animated rainbow-foil
+   border-box gradient" every other bespoke theme (bh/saph/rub/dia/wm26k/kapitaen) uses, just recolored
+   gold/crimson - that would still read as generic, only with different colors. Instead: a still, solid
+   gold border around a dark polished-obsidian face, with the motion coming from its own FX layer below
+   (a slow rotating sunburst + flickering molten cracks) - a genuinely different mechanism, not a
+   palette swap of the shared one. */
+.pcard.theme-goat{border:3px solid #c9861f;
   background:
-    repeating-linear-gradient(115deg, rgba(255,255,255,.045) 0 2px, transparent 2px 9px) padding-box,
-    radial-gradient(circle at 50% 30%, #1a0d02 0%, #0a0402 45%, #050202 100%) padding-box,
-    linear-gradient(100deg,#050202,#ffb020,#ff2f3d,#ffe9a8,#ff2f3d,#ffb020,#050202) border-box;
-  background-size:100% 100%,100% 100%,320% 320%;
-  animation: goatBorderShift 4.6s linear infinite, ultimateBreathe 2.6s ease-in-out infinite, goatGlow 2.4s ease-in-out infinite;}
+    radial-gradient(circle at 28% 18%, rgba(255,255,255,.05), transparent 40%),
+    radial-gradient(circle at 72% 82%, rgba(255,176,32,.1), transparent 45%),
+    radial-gradient(circle at 50% 42%, #17110a 0%, #0a0603 55%, #030201 100%);
+  animation: ultimateBreathe 2.6s ease-in-out infinite, goatGlow 2.6s ease-in-out infinite;}
 .pcard.theme-goat::before{animation:autoShine 1.4s ease-in-out infinite;}
 .pcard.theme-goat .name{color:#ffdfa0;text-shadow:0 0 10px rgba(255,176,32,.65);}
-.pcard.theme-goat .name.name-variant{
-  background:linear-gradient(90deg,#ffb020,#ffe9a8,#ff2f3d,#ffe9a8,#ffb020);
-  background-size:320% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
-  animation:goatBorderShift 4.6s linear infinite; text-shadow:none;
-}
-@keyframes goatBorderShift{0%{background-position:0% 0%,0% 0%,0% 50%;}100%{background-position:0% 0%,0% 0%,320% 50%;}}
+.pcard.theme-goat .name.name-variant{color:#ffdfa0;text-shadow:0 0 10px rgba(255,176,32,.65);}
 @keyframes goatGlow{
-  0%,100%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 26px -3px #ffb020;filter:saturate(1);}
-  50%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 50px 2px #ff2f3d;filter:saturate(1.25) brightness(1.06);}
+  0%,100%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 0 1px rgba(255,176,32,.45) inset, 0 0 22px -3px #ffb020;}
+  50%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 0 1px rgba(255,60,60,.55) inset, 0 0 44px 1px #ff2f3d;}
 }
+/* GOAT bespoke FX: a slow-rotating golden/crimson sunburst behind the photo (conic-gradient rays,
+   actually spinning - unlike every other halo here which only pulses opacity, since there's no
+   readable text on this layer to keep still for) plus a handful of thin gold cracks across the face
+   that flicker on/off at their own offset - "molten metal cooling/glowing" rather than particles
+   falling or rising like the other bespoke themes. */
+.pcard .goat-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .goat-halo{position:absolute;top:30%;left:50%;width:200%;height:200%;margin:-100% 0 0 -100%;
+  background:conic-gradient(from 0deg,
+    transparent 0deg 8deg, rgba(255,176,32,.24) 9deg 10deg, transparent 11deg 40deg,
+    rgba(255,176,32,.18) 41deg 42deg, transparent 43deg 76deg, rgba(255,60,60,.2) 77deg 78deg, transparent 79deg 120deg,
+    rgba(255,176,32,.22) 121deg 122deg, transparent 123deg 160deg, rgba(255,176,32,.18) 161deg 162deg, transparent 163deg 200deg,
+    rgba(255,60,60,.2) 201deg 202deg, transparent 203deg 240deg, rgba(255,176,32,.22) 241deg 242deg, transparent 243deg 280deg,
+    rgba(255,176,32,.18) 281deg 282deg, transparent 283deg 320deg, rgba(255,60,60,.2) 321deg 322deg, transparent 323deg 360deg);
+  animation:goatHaloSpin 16s linear infinite;opacity:.85;}
+@keyframes goatHaloSpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+.pcard .goat-crack{position:absolute;height:1.5px;background:linear-gradient(90deg, transparent, #ffdfa0, transparent);
+  opacity:0;filter:drop-shadow(0 0 3px #ffb020);animation:goatCrackFlicker linear infinite;}
+.pcard .goat-crack.g1{top:22%;left:8%;width:46%;transform:rotate(18deg);animation-duration:3.2s;animation-delay:.2s;}
+.pcard .goat-crack.g2{top:48%;left:30%;width:38%;transform:rotate(-12deg);animation-duration:2.6s;animation-delay:1.1s;}
+.pcard .goat-crack.g3{top:70%;left:14%;width:50%;transform:rotate(8deg);animation-duration:3.8s;animation-delay:.6s;}
+.pcard .goat-crack.g4{top:60%;left:52%;width:34%;transform:rotate(-20deg);animation-duration:2.9s;animation-delay:1.8s;}
+@keyframes goatCrackFlicker{0%,100%{opacity:0;}45%{opacity:0;}52%{opacity:.9;}58%{opacity:.2;}70%{opacity:.7;}80%{opacity:0;}}
 /* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
 .pcard.theme-dia{border:2.5px solid transparent;
   background:
@@ -12167,6 +12186,15 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="wm26k-halo"></div>
       ${Array.from({length:10},(_,i)=>`<i class="wm26k-spark k${i+1}"></i>`).join('')}
     </div>` : '';
+  // GOAT (rarest pull in the game): a slowly-rotating golden/crimson sunburst behind the photo plus a
+  // handful of thin molten-gold cracks that individually flicker across the face - own mechanism, not
+  // a recolor of any other tier's FX (no falling/rising particles like Legikone/WM-Kapitän, no rotating
+  // cut-gem facets like the Kronjuwelen), so the single best card in the game reads as its own thing.
+  const isGoatTier = card.theme==='goat';
+  const goatFxHTML = isGoatTier ? `<div class="goat-fx">
+      <div class="goat-halo"></div>
+      ${Array.from({length:4},(_,i)=>`<i class="goat-crack g${i+1}"></i>`).join('')}
+    </div>` : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
@@ -12248,6 +12276,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${refreshFxHTML}
     ${legikoneFxHTML}
     ${wm26kFxHTML}
+    ${goatFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
