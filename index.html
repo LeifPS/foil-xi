@@ -1477,6 +1477,24 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .live-scoreboard-name.me{text-align:right;}
 .live-scoreboard-name.opp{text-align:left;}
 .live-scoreboard .score{margin:0;flex-shrink:0;}
+/* Floating mini scoreboard: shown whenever a match is running (inMatch) AND the player has navigated
+   away from the tab that actually hosts the live scoreboard - see renderMatchMiniWidget(). Lives
+   directly on document.body (not inside #view), so switching tabs (which only replaces #view's
+   contents) never removes it. Sits above the mobile bottom nav (#nav-mobile) on small screens, plain
+   bottom-center on desktop. Score/time only (no goal log, no win-prob bar) - just enough to keep track
+   of the match while browsing elsewhere, not a second full match viewer. */
+.match-mini-widget{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:42;
+  display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,#181c25,#0e1117);
+  border:1px solid var(--line);border-radius:100px;padding:7px 16px;box-shadow:0 8px 24px rgba(0,0,0,.5);
+  animation:matchMiniPulse 2.4s ease-in-out infinite;}
+@media(max-width:820px){ .match-mini-widget{bottom:82px;} }
+@keyframes matchMiniPulse{0%,100%{box-shadow:0 8px 24px rgba(0,0,0,.5);}50%{box-shadow:0 8px 24px rgba(0,0,0,.5), 0 0 0 1px var(--turf-bright);}}
+.mmw-minute{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono';font-size:10.5px;
+  font-weight:600;color:var(--muted);white-space:nowrap;}
+.mmw-minute::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--danger);
+  animation:liveMinuteDotPulse 1.4s ease-in-out infinite;flex-shrink:0;}
+.mmw-teams{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--chalk);white-space:nowrap;}
+.mmw-score{font-family:'JetBrains Mono';color:var(--turf-bright);}
 .winprob-labels{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;
   color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:14px 0 5px;}
 .winprob-labels span:first-child,.winprob-labels span:last-child{max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -12486,8 +12504,7 @@ function renderNav(){
   nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${id==='trade' && !tradeUnlocked() ? '\ud83d\udd12 ' : ''}${label}</button>`).join('')
     + (isAdmin() ? `<button class="nav-btn ${currentTab==='admin'?'active':''}" data-tab="admin" style="color:#ff5f5f;">\u2699 Admin</button>` : '');
   nav.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click', ()=>{
-    if(inMatch){ toast('Bitte zuerst dein aktuelles Match abschließen.'); return; }
-    currentTab=b.dataset.tab; renderNav(); renderView(currentTab);
+    currentTab=b.dataset.tab; renderNav(); renderView(currentTab); renderMatchMiniWidget();
   }));
   const navMobile = document.getElementById('nav-mobile');
   const iconSvg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -12497,8 +12514,7 @@ function renderNav(){
   }).join('')
     + (isAdmin() ? `<button class="nav-btn-m ${currentTab==='admin'?'active':''}" data-tab="admin" title="Admin" aria-label="Admin" style="${currentTab==='admin'?'color:#ff5f5f;':''}">${iconSvg(TAB_ICON.admin)}</button>` : '');
   navMobile.querySelectorAll('.nav-btn-m').forEach(b=>b.addEventListener('click', ()=>{
-    if(inMatch){ toast('Bitte zuerst dein aktuelles Match abschließen.'); return; }
-    currentTab=b.dataset.tab; renderNav(); renderView(currentTab);
+    currentTab=b.dataset.tab; renderNav(); renderView(currentTab); renderMatchMiniWidget();
   }));
   const adminBtn = document.getElementById('admin-fab');
   if(adminBtn) adminBtn.remove();
@@ -22380,6 +22396,36 @@ function updateWinProbEl(pct, drawPct){
   if(meTxt) meTxt.textContent = wTxt2+'%';
   if(oppTxt) oppTxt.textContent = lTxt2+'%';
 }
+// Lets the player switch tabs mid-match (previously blocked entirely) without losing track of it -
+// animateTimedMatch/animateShootout update this on every tick regardless of whether the player is
+// still looking at the real live scoreboard, and renderMatchMiniWidget() only actually shows the
+// floating pill when they're NOT (i.e. #live-match isn't present, meaning they navigated away).
+let matchMiniState = null;
+function setMatchMiniState(meLabel, oppLabel, myScore, oppScore, minuteText){
+  matchMiniState = {meLabel, oppLabel, myScore, oppScore, minuteText};
+  renderMatchMiniWidget();
+}
+function clearMatchMiniState(){
+  matchMiniState = null;
+  renderMatchMiniWidget();
+}
+function renderMatchMiniWidget(){
+  let el = document.getElementById('match-mini-widget');
+  const fullViewVisible = !!document.getElementById('live-match');
+  if(!matchMiniState || fullViewVisible){
+    if(el) el.remove();
+    return;
+  }
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'match-mini-widget';
+    el.className = 'match-mini-widget';
+    document.body.appendChild(el);
+  }
+  const {meLabel, oppLabel, myScore, oppScore, minuteText} = matchMiniState;
+  el.innerHTML = `<div class="mmw-minute">${minuteText}</div>
+    <div class="mmw-teams"><span>${meLabel}</span><span class="mmw-score">${myScore} – ${oppScore}</span><span>${oppLabel}</span></div>`;
+}
 function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactics=null, oppTactics=null, opts={}){
   const myT = myTactics || DEFAULT_TACTICS;
   const oppT = oppTactics || DEFAULT_TACTICS;
@@ -22543,6 +22589,8 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
   // real shares (win/draw/loss) instead of folding the draw share into a single win-vs-loss number.
   const wpHTML = mc => (allowDraw ? winProbRowHTML(mc.win, myName, oppName, oppAbbr, mc.draw) : winProbRowHTML(mc, myName, oppName, oppAbbr));
   const wpUpdate = mc => { if(allowDraw) updateWinProbEl(mc.win, mc.draw); else updateWinProbEl(mc); };
+  const miniMeLabel = ligaTeamAbbr(myName, profile && profile.clubAbbr);
+  const miniOppLabel = oppAbbr || ligaTeamAbbr(oppName);
   const liveProfileAt = (minute)=>{
     const myAdj = liveRedCardAdjustment(minute, myRedMinute);
     const oppAdj = liveRedCardAdjustment(minute, oppRedMinute);
@@ -22572,6 +22620,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         <div class="match-log" id="live-log"></div>`;
       playRefWhistle('start');
     }
+    setMatchMiniState(miniMeLabel, miniOppLabel, carryMy, carryOpp, minuteStart+"'"+(minuteEnd>90?' (V)':''));
     const totalMinutes = minuteEnd-minuteStart;
     const stepMs = durationMs/totalMinutes;
     let lastMinute = minuteStart, myTally = carryMy, oppTally = carryOpp;
@@ -22615,6 +22664,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         }
         const minEl = document.getElementById('live-minute');
         if(minEl) minEl.textContent = minute + "'" + (minuteEnd>90 ? ' (Verl\u00e4ngerung)' : '');
+        setMatchMiniState(miniMeLabel, miniOppLabel, myTally, oppTally, minute+"'"+(minuteEnd>90?' (V)':''));
         const pNow = liveProfileAt(minute);
         wpUpdate(smoothWinProb(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, pNow.my, pNow.opp, allowDraw)));
       }
@@ -22654,6 +22704,9 @@ function animateShootout(shootout, myName, oppName, oppAbbr=null){
         <div class="match-log" id="pk-log"></div>`;
       live.appendChild(sec);
     }
+    const miniMeLabel = ligaTeamAbbr(myName, profile && profile.clubAbbr);
+    const miniOppLabel = oppAbbr || ligaTeamAbbr(oppName);
+    setMatchMiniState(miniMeLabel, miniOppLabel, 0, 0, 'ELFMETER');
     // flat, correctly-ordered kick-by-kick sequence (alternating me/opp), so the panel can end
     // mid-round (shootoutPanelDecided) without the two sides' arrays needing equal length
     const sequence = [];
@@ -22693,6 +22746,7 @@ function animateShootout(shootout, myName, oppName, oppAbbr=null){
         if(logEl){ const row = document.createElement('div'); row.innerHTML = pkRowHTML(idx+1, kick, teamName, side); logEl.prepend(row.firstElementChild); }
         const scoreEl = document.getElementById('pk-score');
         if(scoreEl) scoreEl.textContent = `${myS} \u2013 ${oppS}`;
+        setMatchMiniState(miniMeLabel, miniOppLabel, myS, oppS, 'ELFMETER');
         if(spotlightText){
           spotlightText.textContent = made ? 'TOR!' : 'VERSCHOSSEN!';
           spotlightText.className = 'pk-spotlight-text ' + (made ? 'result-made' : 'result-missed');
@@ -22731,6 +22785,7 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null){
     toast('Auch nach Verl\u00e4ngerung unentschieden \u2014 Elfmeterschie\u00dfen entscheidet!');
     await animateShootout(md.shootout, myName, oppName, oppAbbr);
   }
+  clearMatchMiniState();
   return {myGoals: myTally, oppGoals: oppTally, myScorers};
 }
 const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
