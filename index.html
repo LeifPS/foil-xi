@@ -21866,8 +21866,10 @@ function smoothWinProb(raw){
 }
 function winProbRowHTML(pct, myName, oppName){
   const p = Math.round(pct*100);
+  const meLabel = myName ? ligaTeamAbbr(myName) : 'DU';
+  const oppLabel = oppName ? ligaTeamAbbr(oppName) : 'GEG';
   return `<div class="winprob-row" id="winprob-row">
-    <div class="winprob-labels"><span>${myName||'Du'}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span>${oppName||'Gegner'}</span></div>
+    <div class="winprob-labels"><span title="${myName||''}">${meLabel}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span title="${oppName||''}">${oppLabel}</span></div>
     <div class="winprob-bar"><div class="winprob-fill" id="winprob-fill" style="width:${p}%;"></div></div>
     <div class="winprob-pct-row"><span id="winprob-pct-me">${p}%</span><span id="winprob-pct-opp">${100-p}%</span></div>
   </div>`;
@@ -22059,9 +22061,9 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         <div class="live-scoreboard">
           <div class="live-minute-pill" id="live-minute">${minuteStart}'</div>
           <div class="live-scoreboard-teams">
-            <div class="live-scoreboard-name me">${myName}</div>
+            <div class="live-scoreboard-name me" title="${myName}">${ligaTeamAbbr(myName)}</div>
             <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
-            <div class="live-scoreboard-name opp">${oppName}</div>
+            <div class="live-scoreboard-name opp" title="${oppName}">${ligaTeamAbbr(oppName)}</div>
           </div>
           ${winProbRowHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp)), myName, oppName)}
         </div>
