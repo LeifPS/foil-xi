@@ -428,17 +428,20 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
    (duration/12 apart) - a steady one-drops-every-0.6s stream that repeats identically forever. Mixed
    durations per item (tried before) each cycle at a different rate, so items drift in and out of phase
    with each other over time and bunch up into visible "waves" instead of a constant, even rain. */
+/* delays interleave the three shapes (leaf, crown, star, leaf, crown, star, ...) instead of running
+   through all 6 leaves, then all 3 crowns, then all 3 stars in sequence - the sequential order was
+   the exact "waves of one shape at a time" complaint, just by shape instead of by time. */
 .pcard .ogicon-fall.f1{left:6%;animation-duration:7.2s;animation-delay:0s;}
-.pcard .ogicon-fall.f2{left:20%;animation-duration:7.2s;animation-delay:.6s;}
-.pcard .ogicon-fall.f3{left:38%;animation-duration:7.2s;animation-delay:1.2s;}
-.pcard .ogicon-fall.f4{left:54%;animation-duration:7.2s;animation-delay:1.8s;}
-.pcard .ogicon-fall.f5{left:70%;animation-duration:7.2s;animation-delay:2.4s;}
-.pcard .ogicon-fall.f6{left:88%;animation-duration:7.2s;animation-delay:3s;}
-.pcard .ogicon-fall.c1{left:14%;animation-duration:7.2s;animation-delay:3.6s;}
-.pcard .ogicon-fall.c2{left:48%;animation-duration:7.2s;animation-delay:4.2s;}
-.pcard .ogicon-fall.c3{left:80%;animation-duration:7.2s;animation-delay:4.8s;}
-.pcard .ogicon-fall.s1{left:28%;animation-duration:7.2s;animation-delay:5.4s;}
-.pcard .ogicon-fall.s2{left:60%;animation-duration:7.2s;animation-delay:6s;}
+.pcard .ogicon-fall.c1{left:14%;animation-duration:7.2s;animation-delay:.6s;}
+.pcard .ogicon-fall.f2{left:20%;animation-duration:7.2s;animation-delay:1.2s;}
+.pcard .ogicon-fall.s1{left:28%;animation-duration:7.2s;animation-delay:1.8s;}
+.pcard .ogicon-fall.f3{left:38%;animation-duration:7.2s;animation-delay:2.4s;}
+.pcard .ogicon-fall.c2{left:48%;animation-duration:7.2s;animation-delay:3s;}
+.pcard .ogicon-fall.f4{left:54%;animation-duration:7.2s;animation-delay:3.6s;}
+.pcard .ogicon-fall.s2{left:60%;animation-duration:7.2s;animation-delay:4.2s;}
+.pcard .ogicon-fall.f5{left:70%;animation-duration:7.2s;animation-delay:4.8s;}
+.pcard .ogicon-fall.c3{left:80%;animation-duration:7.2s;animation-delay:5.4s;}
+.pcard .ogicon-fall.f6{left:88%;animation-duration:7.2s;animation-delay:6s;}
 .pcard .ogicon-fall.s3{left:94%;animation-duration:7.2s;animation-delay:6.6s;}
 /* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
 .pcard.theme-dia{border:2.5px solid transparent;
@@ -1500,6 +1503,17 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .winprob-bar{height:10px;border-radius:100px;background:var(--danger);overflow:hidden;position:relative;
   box-shadow:inset 0 1px 3px rgba(0,0,0,.35);}
 .winprob-fill{height:100%;background:linear-gradient(90deg,#268a58,#3dc482);transition:width .4s ease;}
+/* three-way bar (win/draw/loss) for anything where the final result can actually stand as a draw -
+   Liga matches and any other buildDecisiveMatch caller with opts.allowDraw. Three flex segments
+   instead of the two-way bar's single fill-over-background trick, since there's a third real state
+   to show, not just "my share vs. the rest". */
+.winprob-bar3{height:10px;border-radius:100px;overflow:hidden;position:relative;display:flex;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.35);}
+.wp3-seg{height:100%;transition:width .4s ease;}
+.wp3-win{background:linear-gradient(90deg,#268a58,#3dc482);}
+.wp3-draw{background:linear-gradient(90deg,#9aa04a,#d4c95c);}
+.wp3-loss{background:var(--danger);}
+.winprob-pct-row .wp3-draw-label{color:#d4c95c;}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';font-weight:700;text-align:center;}
@@ -22160,7 +22174,13 @@ function computeLambda(attack, oppDefense){
   const diff = attack - oppDefense;
   return clamp(1.3 + diff/11, 0.22, 4.9);
 }
-function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, iterations=1500){
+// allowDraw=false (every non-Liga match: Ranked/WM26/Turniere/...) keeps the old single-number
+// behavior exactly - a real draw isn't a possible final result there (extra time/penalties always
+// follow), so a drawn iteration gets folded into win/loss by the same tiebreakEdge extra time would
+// realistically favor. allowDraw=true (Liga fixtures, and anything else where a 90-minute tie stands)
+// instead returns the three real shares {win, draw, loss} so the bar can show all three honestly
+// instead of pretending the draw share doesn't exist.
+function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, iterations=1500, allowDraw=false){
   // calibrated to match simGoals' true expected output (mean = lambda exactly, since it's now a
   // real Poisson process), so the live estimate matches how the actual scripted match plays out
   const myFullMean = computeLambda(myProfile.attack, oppProfile.defense);
@@ -22168,40 +22188,89 @@ function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile
   const scaledMyMean = myFullMean * (minutesLeft/90);
   const scaledOppMean = oppFullMean * (minutesLeft/90);
   const tiebreakEdge = clamp(0.5 + ((myProfile.attack+myProfile.defense)-(oppProfile.attack+oppProfile.defense))/500, 0.35, 0.65);
-  let wins = 0;
+  let wins = 0, draws = 0, losses = 0;
   for(let i=0;i<iterations;i++){
     const ms = myTally + poissonGoals(scaledMyMean);
     const os = oppTally + poissonGoals(scaledOppMean);
     if(ms>os) wins++;
-    else if(ms===os){ if(Math.random()<tiebreakEdge) wins++; }
+    else if(ms===os) draws++;
+    else losses++;
   }
-  return clamp(wins/iterations, 0.01, 0.99);
+  if(allowDraw){
+    return {
+      win: clamp(wins/iterations, 0.01, 0.98),
+      draw: clamp(draws/iterations, 0.01, 0.98),
+      loss: clamp(losses/iterations, 0.01, 0.98),
+    };
+  }
+  return clamp((wins + draws*tiebreakEdge)/iterations, 0.01, 0.99);
 }
 // smooths the displayed win probability across the last couple of updates so it doesn't jitter
-// from run-to-run Monte Carlo sampling noise, while still tracking real swings (goals, time) quickly
+// from run-to-run Monte Carlo sampling noise, while still tracking real swings (goals, time) quickly.
+// Handles both monteCarloWinProb's shapes: a plain number (allowDraw=false) or a {win,draw,loss}
+// object (allowDraw=true), smoothing whichever one it's given the same way, field-by-field for the
+// object case.
 let winProbSmoothState = null;
 function resetWinProbSmoothing(){ winProbSmoothState = null; }
 function smoothWinProb(raw){
-  if(winProbSmoothState===null){ winProbSmoothState = raw; return raw; }
-  winProbSmoothState = winProbSmoothState*0.4 + raw*0.6;
-  return clamp(winProbSmoothState, 0.01, 0.99);
+  if(typeof raw === 'number'){
+    if(typeof winProbSmoothState !== 'number'){ winProbSmoothState = raw; return raw; }
+    winProbSmoothState = winProbSmoothState*0.4 + raw*0.6;
+    return clamp(winProbSmoothState, 0.01, 0.99);
+  }
+  if(typeof winProbSmoothState !== 'object' || winProbSmoothState===null){ winProbSmoothState = raw; return raw; }
+  const s = winProbSmoothState;
+  winProbSmoothState = {
+    win: s.win*0.4 + raw.win*0.6,
+    draw: s.draw*0.4 + raw.draw*0.6,
+    loss: s.loss*0.4 + raw.loss*0.6,
+  };
+  return winProbSmoothState;
 }
 // My own side always uses the real clubAbbr from Einstellungen (same one Liga fixture cards use) when
 // set, via ligaTeamAbbr's customAbbr param - falls back to auto-deriving from the name otherwise. The
 // opponent side only gets its REAL Liga Kürzel when the caller actually has it (see playLigaLiveMatch's
 // oppAbbr passthrough); every other match context (Ranked, WM26, Turniere, Freundschaftsspiele) has no
 // such concept for an opponent, so it auto-derives from their display name same as before.
-function winProbRowHTML(pct, myName, oppName, oppAbbr){
-  const p = Math.round(pct*100);
+// drawPct: pass whenever the match can actually end in a draw (Liga, or any other allowDraw match) to
+// render a three-way win/draw/loss bar instead of the plain two-way one - omit for everything that
+// always needs a winner (extra time/penalties follow instead of a real tie).
+function winProbRowHTML(pct, myName, oppName, oppAbbr, drawPct){
   const meLabel = ligaTeamAbbr(myName||profile.displayName||'Du', profile && profile.clubAbbr);
   const oppLabel = oppAbbr || (oppName ? ligaTeamAbbr(oppName) : 'GEG');
+  const labelsHTML = `<div class="winprob-labels"><span title="${myName||''}">${meLabel}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span title="${oppName||''}">${oppLabel}</span></div>`;
+  if(drawPct!=null){
+    const w = Math.round(pct*100), d = Math.round(drawPct*100), l = Math.max(0, 100-w-d);
+    return `<div class="winprob-row" id="winprob-row">
+      ${labelsHTML}
+      <div class="winprob-bar3" id="winprob-bar3">
+        <div class="wp3-seg wp3-win" id="wp3-win" style="width:${w}%;"></div>
+        <div class="wp3-seg wp3-draw" id="wp3-draw" style="width:${d}%;"></div>
+        <div class="wp3-seg wp3-loss" id="wp3-loss" style="width:${l}%;"></div>
+      </div>
+      <div class="winprob-pct-row"><span id="winprob-pct-me">${w}%</span><span id="winprob-pct-draw" class="wp3-draw-label">${d}%</span><span id="winprob-pct-opp">${l}%</span></div>
+    </div>`;
+  }
+  const p = Math.round(pct*100);
   return `<div class="winprob-row" id="winprob-row">
-    <div class="winprob-labels"><span title="${myName||''}">${meLabel}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span title="${oppName||''}">${oppLabel}</span></div>
+    ${labelsHTML}
     <div class="winprob-bar"><div class="winprob-fill" id="winprob-fill" style="width:${p}%;"></div></div>
     <div class="winprob-pct-row"><span id="winprob-pct-me">${p}%</span><span id="winprob-pct-opp">${100-p}%</span></div>
   </div>`;
 }
-function updateWinProbEl(pct){
+function updateWinProbEl(pct, drawPct){
+  if(drawPct!=null){
+    const w = Math.round(pct*100), d = Math.round(drawPct*100), l = Math.max(0, 100-w-d);
+    const winEl = document.getElementById('wp3-win'), drawEl = document.getElementById('wp3-draw'), lossEl = document.getElementById('wp3-loss');
+    const meTxt = document.getElementById('winprob-pct-me'), drawTxt = document.getElementById('winprob-pct-draw'), oppTxt = document.getElementById('winprob-pct-opp');
+    if(winEl) winEl.style.width = w+'%';
+    if(drawEl) drawEl.style.width = d+'%';
+    if(lossEl) lossEl.style.width = l+'%';
+    if(meTxt) meTxt.textContent = w+'%';
+    if(drawTxt) drawTxt.textContent = d+'%';
+    if(oppTxt) oppTxt.textContent = l+'%';
+    return;
+  }
   const p = Math.round(pct*100);
   const fill = document.getElementById('winprob-fill');
   const meTxt = document.getElementById('winprob-pct-me');
@@ -22276,7 +22345,7 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   }
   const winnerSide = wentToPK ? shootout.winner : (myGoals>oppGoals?'me':(myGoals<oppGoals?'opp':'draw'));
   return {events90, eventsET, shootout, myGoals, oppGoals, wentToET, wentToPK, winnerSide,
-    myProfile: myProfileRaw, oppProfile: oppProfileRaw, incidents,
+    myProfile: myProfileRaw, oppProfile: oppProfileRaw, incidents, allowDraw: !!opts.allowDraw,
     myRedMinute: myIncidents.redMinute, oppRedMinute: oppIncidents.redMinute};
 }
 // A pre-simulated match's outcome is stored from the perspective of whichever side was passed as
@@ -22367,7 +22436,12 @@ function pkRowHTML(round, kick, teamName, side){
       <span class="gteam">${teamName}</span>
     </div>`;
 }
-function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null, oppAbbr=null){
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null, oppAbbr=null, allowDraw=false){
+  // allowDraw: only ever true for the 90-minute leg of a match where a tie is a real possible final
+  // result (Liga fixtures) - the win-prob bar/monteCarloWinProb call below then show/return all three
+  // real shares (win/draw/loss) instead of folding the draw share into a single win-vs-loss number.
+  const wpHTML = mc => (allowDraw ? winProbRowHTML(mc.win, myName, oppName, oppAbbr, mc.draw) : winProbRowHTML(mc, myName, oppName, oppAbbr));
+  const wpUpdate = mc => { if(allowDraw) updateWinProbEl(mc.win, mc.draw); else updateWinProbEl(mc); };
   const liveProfileAt = (minute)=>{
     const myAdj = liveRedCardAdjustment(minute, myRedMinute);
     const oppAdj = liveRedCardAdjustment(minute, oppRedMinute);
@@ -22392,7 +22466,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
             <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
             <div class="live-scoreboard-name opp" title="${oppName}">${oppAbbr || ligaTeamAbbr(oppName)}</div>
           </div>
-          ${winProbRowHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp)), myName, oppName, oppAbbr)}
+          ${wpHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp, 1500, allowDraw)))}
         </div>
         <div class="match-log" id="live-log"></div>`;
       playRefWhistle('start');
@@ -22441,7 +22515,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         const minEl = document.getElementById('live-minute');
         if(minEl) minEl.textContent = minute + "'" + (minuteEnd>90 ? ' (Verl\u00e4ngerung)' : '');
         const pNow = liveProfileAt(minute);
-        updateWinProbEl(smoothWinProb(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, pNow.my, pNow.opp)));
+        wpUpdate(smoothWinProb(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, pNow.my, pNow.opp, 1500, allowDraw)));
       }
       if(elapsed>=durationMs){ clearInterval(timer); resolve({myTally, oppTally}); }
     }, 250);
@@ -22542,7 +22616,7 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null){
   const myScorers = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
   const incidents = md.incidents || [];
-  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr);
+  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, md.allowDraw);
   if(md.wentToET){
     toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
     md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
