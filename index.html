@@ -22231,7 +22231,30 @@ function computeLambda(attack, oppDefense){
 // realistically favor. allowDraw=true (Liga fixtures, and anything else where a 90-minute tie stands)
 // instead returns the three real shares {win, draw, loss} so the bar can show all three honestly
 // instead of pretending the draw share doesn't exist.
-function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, iterations=1500, allowDraw=false){
+// Poisson(lambda) PMF for k=0..maxK, via the stable iterative ratio p_k = p_{k-1}*lambda/k (no
+// factorial overflow). The negligible tail beyond maxK is folded into the last bucket so the array
+// always sums to exactly 1 - with maxK=40 and realistic goal-expectancy values (well under 10), that
+// tail is astronomically small (Poisson(10), P(X>40) is on the order of 1e-20), so folding it in
+// doesn't cost any real precision.
+function poissonPMFCapped(lambda, maxK){
+  const p = new Array(maxK+1);
+  p[0] = Math.exp(-lambda);
+  let sum = p[0];
+  for(let k=1;k<=maxK;k++){ p[k] = p[k-1]*lambda/k; sum += p[k]; }
+  p[maxK] += Math.max(0, 1-sum);
+  return p;
+}
+// allowDraw=false (every non-Liga match: Ranked/WM26/Turniere/...) keeps the old single-number
+// behavior exactly - a real draw isn't a possible final result there (extra time/penalties always
+// follow), so a drawn iteration gets folded into win/loss by the same tiebreakEdge extra time would
+// realistically favor. allowDraw=true (Liga fixtures, and anything else where a 90-minute tie stands)
+// instead returns the three real shares {win, draw, loss} so the bar can show all three honestly
+// instead of pretending the draw share doesn't exist.
+// Computed EXACTLY (the full joint Poisson distribution of both sides' remaining goals), not sampled -
+// a fixed number of random draws could never reliably tell "0.02%" apart from "0%", which is exactly
+// what winProbRowHTML's sub-1%/sub-0.1%/"<0,01" formatting needs to be trustworthy rather than showing
+// precision the underlying number never actually had.
+function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile, allowDraw=false){
   // calibrated to match simGoals' true expected output (mean = lambda exactly, since it's now a
   // real Poisson process), so the live estimate matches how the actual scripted match plays out
   const myFullMean = computeLambda(myProfile.attack, oppProfile.defense);
@@ -22239,22 +22262,24 @@ function monteCarloWinProb(myTally, oppTally, minutesLeft, myProfile, oppProfile
   const scaledMyMean = myFullMean * (minutesLeft/90);
   const scaledOppMean = oppFullMean * (minutesLeft/90);
   const tiebreakEdge = clamp(0.5 + ((myProfile.attack+myProfile.defense)-(oppProfile.attack+oppProfile.defense))/500, 0.35, 0.65);
-  let wins = 0, draws = 0, losses = 0;
-  for(let i=0;i<iterations;i++){
-    const ms = myTally + poissonGoals(scaledMyMean);
-    const os = oppTally + poissonGoals(scaledOppMean);
-    if(ms>os) wins++;
-    else if(ms===os) draws++;
-    else losses++;
+  const MAX_GOALS = 40;
+  const myPMF = poissonPMFCapped(scaledMyMean, MAX_GOALS);
+  const oppPMF = poissonPMFCapped(scaledOppMean, MAX_GOALS);
+  let winP = 0, drawP = 0, lossP = 0;
+  for(let a=0; a<=MAX_GOALS; a++){
+    const pa = myPMF[a];
+    if(pa<=0) continue;
+    const finalMy = myTally+a;
+    for(let b=0; b<=MAX_GOALS; b++){
+      const pab = pa*oppPMF[b];
+      const finalOpp = oppTally+b;
+      if(finalMy>finalOpp) winP += pab;
+      else if(finalMy===finalOpp) drawP += pab;
+      else lossP += pab;
+    }
   }
-  if(allowDraw){
-    return {
-      win: clamp(wins/iterations, 0.01, 0.98),
-      draw: clamp(draws/iterations, 0.01, 0.98),
-      loss: clamp(losses/iterations, 0.01, 0.98),
-    };
-  }
-  return clamp((wins + draws*tiebreakEdge)/iterations, 0.01, 0.99);
+  if(allowDraw) return { win: winP, draw: drawP, loss: lossP };
+  return clamp(winP + drawP*tiebreakEdge, 0, 1);
 }
 // smooths the displayed win probability across the last couple of updates so it doesn't jitter
 // from run-to-run Monte Carlo sampling noise, while still tracking real swings (goals, time) quickly.
@@ -22267,7 +22292,7 @@ function smoothWinProb(raw){
   if(typeof raw === 'number'){
     if(typeof winProbSmoothState !== 'number'){ winProbSmoothState = raw; return raw; }
     winProbSmoothState = winProbSmoothState*0.4 + raw*0.6;
-    return clamp(winProbSmoothState, 0.01, 0.99);
+    return clamp(winProbSmoothState, 0, 1);
   }
   if(typeof winProbSmoothState !== 'object' || winProbSmoothState===null){ winProbSmoothState = raw; return raw; }
   const s = winProbSmoothState;
@@ -22277,6 +22302,23 @@ function smoothWinProb(raw){
     loss: s.loss*0.4 + raw.loss*0.6,
   };
   return winProbSmoothState;
+}
+// Formats a group of 2 or 3 win-prob fractions (0-1) for display together, matching precision to
+// however close the tightest of them actually is - they all stay whole percents until one dips under
+// 1%, at which point ALL of them switch to one decimal together (a lone "63%, 25%, 0.4%" mixing
+// precisions across the same row reads worse than "63,0% / 25,4% / 0,4%"), and again to two decimals
+// if one dips under 0.1%. Below 0.01% a value shows as the fixed "<0,01" instead of a number, since a
+// probability that small isn't usefully more precise than that anyway. This is only meaningful because
+// monteCarloWinProb now computes the exact Poisson distribution rather than sampling it - the old
+// 1500-draw Monte Carlo could never have told "0.02%" apart from "0%" in the first place.
+function formatWinProbGroup(fractions){
+  const pcts = fractions.map(f=>Math.max(0, f*100));
+  const minPct = Math.min(...pcts);
+  const decimals = minPct < 0.1 ? 2 : (minPct < 1 ? 1 : 0);
+  return pcts.map(v=>{
+    if(v < 0.01) return '<0,01';
+    return decimals===0 ? String(Math.round(v)) : v.toFixed(decimals).replace('.', ',');
+  });
 }
 // My own side always uses the real clubAbbr from Einstellungen (same one Liga fixture cards use) when
 // set, via ligaTeamAbbr's customAbbr param - falls back to auto-deriving from the name otherwise. The
@@ -22291,44 +22333,48 @@ function winProbRowHTML(pct, myName, oppName, oppAbbr, drawPct){
   const oppLabel = oppAbbr || (oppName ? ligaTeamAbbr(oppName) : 'GEG');
   const labelsHTML = `<div class="winprob-labels"><span title="${myName||''}">${meLabel}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span title="${oppName||''}">${oppLabel}</span></div>`;
   if(drawPct!=null){
-    const w = Math.round(pct*100), d = Math.round(drawPct*100), l = Math.max(0, 100-w-d);
+    const lossPct = Math.max(0, 1-pct-drawPct);
+    const [wTxt, dTxt, lTxt] = formatWinProbGroup([pct, drawPct, lossPct]);
     return `<div class="winprob-row" id="winprob-row">
       ${labelsHTML}
       <div class="winprob-bar3" id="winprob-bar3">
-        <div class="wp3-seg wp3-win" id="wp3-win" style="width:${w}%;"></div>
-        <div class="wp3-seg wp3-draw" id="wp3-draw" style="width:${d}%;"></div>
-        <div class="wp3-seg wp3-loss" id="wp3-loss" style="width:${l}%;"></div>
+        <div class="wp3-seg wp3-win" id="wp3-win" style="width:${pct*100}%;"></div>
+        <div class="wp3-seg wp3-draw" id="wp3-draw" style="width:${drawPct*100}%;"></div>
+        <div class="wp3-seg wp3-loss" id="wp3-loss" style="width:${lossPct*100}%;"></div>
       </div>
-      <div class="winprob-pct-row"><span id="winprob-pct-me">${w}%</span><span id="winprob-pct-draw" class="wp3-draw-label">${d}%</span><span id="winprob-pct-opp">${l}%</span></div>
+      <div class="winprob-pct-row"><span id="winprob-pct-me">${wTxt}%</span><span id="winprob-pct-draw" class="wp3-draw-label">${dTxt}%</span><span id="winprob-pct-opp">${lTxt}%</span></div>
     </div>`;
   }
-  const p = Math.round(pct*100);
+  const lossPct2 = Math.max(0, 1-pct);
+  const [wTxt2, lTxt2] = formatWinProbGroup([pct, lossPct2]);
   return `<div class="winprob-row" id="winprob-row">
     ${labelsHTML}
-    <div class="winprob-bar"><div class="winprob-fill" id="winprob-fill" style="width:${p}%;"></div></div>
-    <div class="winprob-pct-row"><span id="winprob-pct-me">${p}%</span><span id="winprob-pct-opp">${100-p}%</span></div>
+    <div class="winprob-bar"><div class="winprob-fill" id="winprob-fill" style="width:${pct*100}%;"></div></div>
+    <div class="winprob-pct-row"><span id="winprob-pct-me">${wTxt2}%</span><span id="winprob-pct-opp">${lTxt2}%</span></div>
   </div>`;
 }
 function updateWinProbEl(pct, drawPct){
   if(drawPct!=null){
-    const w = Math.round(pct*100), d = Math.round(drawPct*100), l = Math.max(0, 100-w-d);
+    const lossPct = Math.max(0, 1-pct-drawPct);
+    const [wTxt, dTxt, lTxt] = formatWinProbGroup([pct, drawPct, lossPct]);
     const winEl = document.getElementById('wp3-win'), drawEl = document.getElementById('wp3-draw'), lossEl = document.getElementById('wp3-loss');
     const meTxt = document.getElementById('winprob-pct-me'), drawTxt = document.getElementById('winprob-pct-draw'), oppTxt = document.getElementById('winprob-pct-opp');
-    if(winEl) winEl.style.width = w+'%';
-    if(drawEl) drawEl.style.width = d+'%';
-    if(lossEl) lossEl.style.width = l+'%';
-    if(meTxt) meTxt.textContent = w+'%';
-    if(drawTxt) drawTxt.textContent = d+'%';
-    if(oppTxt) oppTxt.textContent = l+'%';
+    if(winEl) winEl.style.width = (pct*100)+'%';
+    if(drawEl) drawEl.style.width = (drawPct*100)+'%';
+    if(lossEl) lossEl.style.width = (lossPct*100)+'%';
+    if(meTxt) meTxt.textContent = wTxt+'%';
+    if(drawTxt) drawTxt.textContent = dTxt+'%';
+    if(oppTxt) oppTxt.textContent = lTxt+'%';
     return;
   }
-  const p = Math.round(pct*100);
+  const lossPct2 = Math.max(0, 1-pct);
+  const [wTxt2, lTxt2] = formatWinProbGroup([pct, lossPct2]);
   const fill = document.getElementById('winprob-fill');
   const meTxt = document.getElementById('winprob-pct-me');
   const oppTxt = document.getElementById('winprob-pct-opp');
-  if(fill) fill.style.width = p+'%';
-  if(meTxt) meTxt.textContent = p+'%';
-  if(oppTxt) oppTxt.textContent = (100-p)+'%';
+  if(fill) fill.style.width = (pct*100)+'%';
+  if(meTxt) meTxt.textContent = wTxt2+'%';
+  if(oppTxt) oppTxt.textContent = lTxt2+'%';
 }
 function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactics=null, oppTactics=null, opts={}){
   const myT = myTactics || DEFAULT_TACTICS;
@@ -22517,7 +22563,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
             <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
             <div class="live-scoreboard-name opp" title="${oppName}">${oppAbbr || ligaTeamAbbr(oppName)}</div>
           </div>
-          ${wpHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp, 1500, allowDraw)))}
+          ${wpHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp, allowDraw)))}
         </div>
         <div class="match-log" id="live-log"></div>`;
       playRefWhistle('start');
@@ -22566,7 +22612,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         const minEl = document.getElementById('live-minute');
         if(minEl) minEl.textContent = minute + "'" + (minuteEnd>90 ? ' (Verl\u00e4ngerung)' : '');
         const pNow = liveProfileAt(minute);
-        wpUpdate(smoothWinProb(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, pNow.my, pNow.opp, 1500, allowDraw)));
+        wpUpdate(smoothWinProb(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, pNow.my, pNow.opp, allowDraw)));
       }
       if(elapsed>=durationMs){ clearInterval(timer); resolve({myTally, oppTally}); }
     }, 250);
