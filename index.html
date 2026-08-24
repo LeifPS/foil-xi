@@ -12485,7 +12485,10 @@ function renderNav(){
   const nav = document.getElementById('nav');
   nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${id==='trade' && !tradeUnlocked() ? '\ud83d\udd12 ' : ''}${label}</button>`).join('')
     + (isAdmin() ? `<button class="nav-btn ${currentTab==='admin'?'active':''}" data-tab="admin" style="color:#ff5f5f;">\u2699 Admin</button>` : '');
-  nav.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click', ()=>{ currentTab=b.dataset.tab; renderNav(); renderView(currentTab); }));
+  nav.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click', ()=>{
+    if(inMatch){ toast('Bitte zuerst dein aktuelles Match abschließen.'); return; }
+    currentTab=b.dataset.tab; renderNav(); renderView(currentTab);
+  }));
   const navMobile = document.getElementById('nav-mobile');
   const iconSvg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
   navMobile.innerHTML = TABS.map(([id,label])=>{
@@ -12493,7 +12496,10 @@ function renderNav(){
     return `<button class="nav-btn-m ${id===currentTab?'active':''}" data-tab="${id}" title="${label}" aria-label="${label}">${iconSvg(icon)}</button>`;
   }).join('')
     + (isAdmin() ? `<button class="nav-btn-m ${currentTab==='admin'?'active':''}" data-tab="admin" title="Admin" aria-label="Admin" style="${currentTab==='admin'?'color:#ff5f5f;':''}">${iconSvg(TAB_ICON.admin)}</button>` : '');
-  navMobile.querySelectorAll('.nav-btn-m').forEach(b=>b.addEventListener('click', ()=>{ currentTab=b.dataset.tab; renderNav(); renderView(currentTab); }));
+  navMobile.querySelectorAll('.nav-btn-m').forEach(b=>b.addEventListener('click', ()=>{
+    if(inMatch){ toast('Bitte zuerst dein aktuelles Match abschließen.'); return; }
+    currentTab=b.dataset.tab; renderNav(); renderView(currentTab);
+  }));
   const adminBtn = document.getElementById('admin-fab');
   if(adminBtn) adminBtn.remove();
 }
