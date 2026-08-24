@@ -9137,7 +9137,7 @@ async function playDraftMatch(){
     <div class="vs-teams">
       ${teamBlobHTML(myRating, profile.crest, 'Draft-Elf')}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), opp.owner)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), ligaTeamAbbr(opp.owner, opp.abbr))}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -17489,9 +17489,9 @@ async function playTournamentRound(){
   const area = document.getElementById('tournament-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${round.name})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${round.name})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -19275,9 +19275,9 @@ async function playBallonDorChallenge(){
   const area = document.getElementById('ballondor-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Ballon d'Or Herausforderung)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Ballon d'Or Herausforderung)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -19327,9 +19327,9 @@ async function playBallonDorRodriChallenge(){
   const area = document.getElementById('ballondor-rodri-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Ballon d'Or Herausforderung: Rodri)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Ballon d'Or Herausforderung: Rodri)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -19406,9 +19406,9 @@ async function playPrimeChallenge(ch){
   const area = document.getElementById(ch.matchAreaId);
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (PRIME ${ch.card.n})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (PRIME ${ch.card.n})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -19464,9 +19464,9 @@ async function playWmQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -19603,9 +19603,9 @@ async function playOliseQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -19720,9 +19720,9 @@ async function playAlissonQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -19838,9 +19838,9 @@ async function playYamalQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -19956,9 +19956,9 @@ async function playRudigerQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -20074,9 +20074,9 @@ async function playHaalandQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -20192,9 +20192,9 @@ async function playChongQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -20310,9 +20310,9 @@ async function playPinaQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -20437,9 +20437,9 @@ async function playKaneQuestMatch(m){
   if(btn) btn.style.display = 'none';
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -20573,9 +20573,9 @@ async function playSyllaQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -20690,9 +20690,9 @@ async function playKroosQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -20807,9 +20807,9 @@ async function playNeymarQuestMatch(m){
   if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -20951,9 +20951,9 @@ async function playOReiChallenge(){
   const area = document.getElementById('orei-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (O Rei)`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (O Rei)`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -21047,9 +21047,9 @@ async function playKontinentalpokal(){
   const area = document.getElementById('kontinental-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Kontinentalpokal)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Kontinentalpokal)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -21085,9 +21085,9 @@ async function playWinStreakMatch(){
   const area = document.getElementById('streak-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Serie: ${streak}/5)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Serie: ${streak}/5)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -21169,9 +21169,9 @@ async function runLeaderboardChallenge(squadData, friendly){
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner}${friendly?' (Freundschaftsspiel)':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)}${friendly?' (Freundschaftsspiel)':''}`)}
     </div>
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly});
@@ -22663,9 +22663,9 @@ async function startBotMatch(rating){
     await showMatchIntroCutscene(area, meSide, oppSide, opp.cardRefs);
     if(area) area.innerHTML = `
       <div class="vs-teams">
-        ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+        ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
         <div class="vs-x">VS</div>
-        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Simulation)`)}
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Simulation)`)}
       </div>
       <div id="result-area"></div>`;
     await runLocalMatch(rating, opp, {alreadyLocked:true});
