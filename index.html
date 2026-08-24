@@ -885,6 +885,24 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .liga-badge-gold{background:linear-gradient(160deg,#ffd76a,#c9971f);color:#3a2a00;}
 .liga-badge-silver{background:linear-gradient(160deg,#d7dade,#9297a0);color:#1a1d20;}
 .liga-badge-bronze{background:linear-gradient(160deg,#c9814f,#7a4a24);color:#fff2e6;}
+/* "🏆 Preise" popup (see ligaRewardsModalHTML) - one card per place, colored top border matching the
+   medal (gold/silver/bronze), plus a compact comparison strip across every other league bracket. */
+.liga-reward-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;}
+.liga-reward-card{background:var(--panel2);border:1px solid var(--line);border-top:3px solid var(--accent,var(--line));
+  border-radius:10px;padding:14px 10px;text-align:center;}
+.liga-reward-place{font-family:'Anton';font-size:14px;color:var(--accent,var(--chalk));margin-bottom:8px;}
+.liga-reward-coins{font-family:'Anton';font-size:19px;color:var(--gold);}
+.liga-reward-coins-unit{display:block;font-family:'Inter';font-size:9.5px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.04em;margin-top:1px;}
+.liga-reward-extra{font-size:10.5px;color:var(--chalk);margin-top:7px;line-height:1.3;}
+.liga-reward-compare{background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+.liga-reward-compare-row{display:grid;grid-template-columns:32px repeat(4,1fr);align-items:center;
+  padding:6px 10px;font-size:11.5px;font-family:'JetBrains Mono';text-align:center;border-top:1px solid var(--line);}
+.liga-reward-compare-row:first-child{border-top:none;}
+.liga-reward-compare-row.liga-reward-compare-head{font-family:'Inter';font-size:10px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
+.liga-reward-compare-row.mine{background:rgba(95,225,201,.08);}
+.liga-reward-compare-letter{display:flex;align-items:center;justify-content:center;}
 /* Liga-Buchstaben-Icon (A/B/C/... circle, ligaBadgeHTML): a pulsing glow in the league's own color -
    deliberately NOT a spin/rotation (explicitly rejected earlier, the letter has to stay readable and
    still), just a breathing highlight so the badge doesn't sit completely static/dead in the UI. */
@@ -1304,7 +1322,31 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .team-blob .tb-crest{display:flex;justify-content:center;margin-top:4px;}
 .team-blob .t{font-size:11px;color:var(--muted);margin-top:2px;word-break:break-word;}
 .vs-x{font-family:'Anton';color:var(--muted);font-size:18px;}
-.score{font-family:'Anton';font-size:52px;letter-spacing:.05em;margin:10px 0;}
+.score{font-family:'Anton';font-size:52px;letter-spacing:.05em;margin:10px 0;text-shadow:0 2px 16px rgba(0,0,0,.5);}
+
+/* Live match scoreboard card (see animateTimedMatch) - pulls the score/minute/win-probability out of a
+   plain stack of centered lines into one cohesive scoreboard, team names flanking the score itself. */
+.live-scoreboard{background:linear-gradient(180deg,#181c25,#0e1117);border:1px solid var(--line);
+  border-radius:14px;padding:16px 14px 14px;margin-bottom:14px;}
+.live-minute-pill{display:flex;align-items:center;justify-content:center;gap:6px;font-family:'JetBrains Mono';
+  font-size:11px;font-weight:600;color:var(--chalk);background:var(--panel2);border:1px solid var(--line);
+  border-radius:100px;padding:3px 12px;margin:0 auto 12px;width:fit-content;letter-spacing:.03em;}
+.live-minute-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--danger);
+  animation:liveMinuteDotPulse 1.4s ease-in-out infinite;flex-shrink:0;}
+@keyframes liveMinuteDotPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+.live-scoreboard-teams{display:flex;align-items:center;justify-content:center;gap:14px;}
+.live-scoreboard-name{flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--chalk);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.live-scoreboard-name.me{text-align:right;}
+.live-scoreboard-name.opp{text-align:left;}
+.live-scoreboard .score{margin:0;flex-shrink:0;}
+.winprob-labels{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:14px 0 5px;}
+.winprob-labels span:first-child,.winprob-labels span:last-child{max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.winprob-pct-row{display:flex;justify-content:space-between;margin-top:4px;}
+.winprob-pct-row span{font-family:'JetBrains Mono';font-size:13px;font-weight:700;}
+.winprob-pct-row span:first-child{color:var(--turf-bright);}
+.winprob-pct-row span:last-child{color:var(--danger);}
 
 /* ---- pre-match intro cutscene ---- */
 .match-intro{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:10px 0;}
@@ -1334,9 +1376,10 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .match-intro-lines-stack{width:100%;display:flex;flex-direction:column;align-items:center;gap:10px;}
 .match-intro-line-row{display:flex;justify-content:center;align-items:flex-start;gap:8px;flex-wrap:wrap;animation:matchIntroLineIn .4s cubic-bezier(.3,.8,.4,1);}
 @keyframes matchIntroLineIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
-.winprob-row{margin:10px 0 14px;}
-.winprob-bar{height:8px;border-radius:4px;background:var(--danger);overflow:hidden;position:relative;}
-.winprob-fill{height:100%;background:var(--turf-bright);transition:width .4s ease;}
+.winprob-row{margin:0;}
+.winprob-bar{height:10px;border-radius:100px;background:var(--danger);overflow:hidden;position:relative;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.35);}
+.winprob-fill{height:100%;background:linear-gradient(90deg,#268a58,#3dc482);transition:width .4s ease;}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';font-weight:700;text-align:center;}
@@ -17540,18 +17583,70 @@ function ligaRewardForPlace(letter, place){
   return bracket[place] || bracket.rest;
 }
 const LIGA_BADGE_LABEL = { gold:'Gold', silver:'Silber', bronze:'Bronze' };
-// One-line summary of a league bracket's full reward table (used in the Ligen tab header) - built
-// generically off LIGA_REWARD_TABLE so it never drifts out of sync with the actual payout logic in
-// resolveWeeklyRolloverIfNeeded.
-function ligaRewardLineHTML(letter){
+const LIGA_PLACE_ACCENT = { 1:'#e6c343', 2:'#c7cdd6', 3:'#c9814f', rest:'#4a5468' };
+// One place's reward, built generically off LIGA_REWARD_TABLE so it never drifts out of sync with the
+// actual payout logic in resolveWeeklyRolloverIfNeeded.
+function ligaRewardPlaceCardHTML(placeLabel, r, accent){
+  const packsHTML = (r.packs||[]).map(p=>{
+    const pack = PACKS.find(x=>x.id===p.id);
+    return pack ? `<div class="liga-reward-extra">🎁 ${pack.name}${p.count>1?' ×'+p.count:''}</div>` : '';
+  }).join('');
+  const badgeHTML = r.badge ? `<div class="liga-reward-extra">🏅 ${LIGA_BADGE_LABEL[r.badge]}-Abzeichen <span class="hint" style="font-size:9.5px;">(1 Woche)</span></div>` : '';
+  return `<div class="liga-reward-card" style="--accent:${accent};">
+    <div class="liga-reward-place">${placeLabel}</div>
+    <div class="liga-reward-coins">${formatCoins(r.coins)}<span class="liga-reward-coins-unit">Coins</span></div>
+    ${badgeHTML}${packsHTML}
+  </div>`;
+}
+// Full reward breakdown for one bracket - the "🏆 Preise"-button popup in the Ligen tab header. Every
+// place from 4th down shares the bracket's flat "rest" amount (see LIGA_REWARD_TABLE), so it's always
+// exactly 4 cards regardless of how big the league actually is.
+function ligaRewardsModalHTML(letter){
   const b = ligaRewardBracket(letter);
-  const describe = r=>{
-    let extra = '';
-    if(r.badge) extra += ` + ${LIGA_BADGE_LABEL[r.badge]}-Abzeichen`;
-    (r.packs||[]).forEach(p=>{ const pack = PACKS.find(x=>x.id===p.id); if(pack) extra += ` + ${pack.name}${p.count>1?' x'+p.count:''}`; });
-    return `${formatCoins(r.coins)} Coins${extra}`;
-  };
-  return `🥇 1.: ${describe(b[1])} · 🥈 2.: ${describe(b[2])} · 🥉 3.: ${describe(b[3])} · 4.+: ${describe(b.rest)}`;
+  const cards = [
+    ligaRewardPlaceCardHTML('🥇 1. Platz', b[1], LIGA_PLACE_ACCENT[1]),
+    ligaRewardPlaceCardHTML('🥈 2. Platz', b[2], LIGA_PLACE_ACCENT[2]),
+    ligaRewardPlaceCardHTML('🥉 3. Platz', b[3], LIGA_PLACE_ACCENT[3]),
+    ligaRewardPlaceCardHTML('4. Platz +', b.rest, LIGA_PLACE_ACCENT.rest),
+  ].join('');
+  const championLine = letter==='A' ? `<p class="hint" style="margin:0 0 16px;">🏆 Der 1. Platz in Liga A bekommt zusätzlich immer die exklusive Liga-Meister-Karte.</p>` : '';
+  // Compact side-by-side comparison of every other bracket, so it's clear what's waiting one league up.
+  const compareRows = Object.keys(LIGA_REWARD_TABLE).map(l=>{
+    const bl = LIGA_REWARD_TABLE[l];
+    const mine = l===letter;
+    return `<div class="liga-reward-compare-row${mine?' mine':''}">
+      <div class="liga-reward-compare-letter">${ligaBadgeHTML(l, 22)}</div>
+      <div class="liga-reward-compare-cell">${formatCoins(bl[1].coins)}</div>
+      <div class="liga-reward-compare-cell">${formatCoins(bl[2].coins)}</div>
+      <div class="liga-reward-compare-cell">${formatCoins(bl[3].coins)}</div>
+      <div class="liga-reward-compare-cell">${formatCoins(bl.rest.coins)}</div>
+    </div>`;
+  }).join('');
+  return `<h2 style="margin-bottom:2px;">Preise · Liga ${letter}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">Wird jeden Samstag automatisch ausgezahlt, kein Abholen nötig.</p>
+    <div class="liga-reward-grid">${cards}</div>
+    ${championLine}
+    <div class="lbl" style="margin:4px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Andere Ligen im Vergleich</div>
+    <div class="liga-reward-compare">
+      <div class="liga-reward-compare-row liga-reward-compare-head">
+        <div class="liga-reward-compare-letter"></div>
+        <div class="liga-reward-compare-cell">1.</div><div class="liga-reward-compare-cell">2.</div>
+        <div class="liga-reward-compare-cell">3.</div><div class="liga-reward-compare-cell">4.+</div>
+      </div>
+      ${compareRows}
+      <div class="hint" style="padding:8px 2px 0;">Ab D gilt für jede weitere Liga dasselbe wie D.</div>
+    </div>
+    <button class="action-btn secondary" id="liga-rewards-close" style="width:100%;margin-top:16px;">Schließen</button>`;
+}
+function openLigaRewardsModal(letter){
+  openModal(ligaRewardsModalHTML(letter));
+  document.getElementById('liga-rewards-close').addEventListener('click', closeModal);
+}
+// Wires up the "🏆 Preise" button in the Ligen header - called after every box.innerHTML render that
+// includes the header, since a fresh innerHTML wipes out any previously attached listener.
+function wireLigaRewardsBtn(box, letter){
+  const btn = box.querySelector('.liga-rewards-btn');
+  if(btn) btn.addEventListener('click', ()=>openLigaRewardsModal(letter));
 }
 // ===== Liga-Meister-Karte: the automatic weekly reward for winning Liga A specifically - a rotating
 // cast of players (a new one most weeks, supplied as the season goes on), always boosted to 104 OVR
@@ -18456,10 +18551,10 @@ function renderLigenPanel(view){
     const myBadge = profile.ligaBadge && profile.ligaBadge.expiresAt>Date.now() ? profile.ligaBadge : null;
     const header = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:12px 14px;">
         ${ligaBadgeHTML(membership.letter, 48)}
-        <div><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}${membership.letter==='A'?' <span class="hint" style="font-size:11px;">(1. Platz zusätzlich Liga-Meister-Karte)</span>':''}</div>
-        <div class="hint" style="margin:0;font-size:10.5px;">${ligaRewardLineHTML(membership.letter)}</div>
+        <div style="flex:1;min-width:0;"><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}${membership.letter==='A'?' <span class="hint" style="font-size:11px;">(1. Platz zusätzlich Liga-Meister-Karte)</span>':''}</div>
         <div class="hint" style="margin:2px 0 0;">${myZones.isTop?'Höchste Liga - keine Aufstiegsmöglichkeit':(myZones.isBottom?'Unterste Liga - kein direkter Abstieg':'Auf-/Abstieg mit den Nachbarligen jede Woche')}</div>
         ${myBadge ? `<div class="liga-my-badge liga-badge-${myBadge.tier}" style="margin-top:6px;">🏅 Dein Abzeichen: ${LIGA_BADGE_LABEL[myBadge.tier]}</div>` : ''}</div>
+        <button class="action-btn secondary liga-rewards-btn" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0;">🏆 Preise</button>
       </div>`;
     if(weekStart==null){
       // Between seeding and the season's first Monday, there's no "old week" to recap - but the
@@ -18487,6 +18582,7 @@ function renderLigenPanel(view){
       }
       else if(LIGA_LAST_ERROR) html += `<p class="hint" style="color:var(--danger);">Tabelle konnte nicht geladen werden (${LIGA_LAST_ERROR}).</p>`;
       box.innerHTML = html;
+      wireLigaRewardsBtn(box, membership.letter);
       return;
     }
     // Montag-Freitag, and Samstag before 12:00 (the commissioner pass hasn't run yet): only ever one,
@@ -18558,7 +18654,7 @@ function renderLigenPanel(view){
     let week = isWeekendRecap
       ? await ligaSyncedWeek(membership.letter, membership.members, targetWeekStart)
       : await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
-    if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; return; }
+    if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; wireLigaRewardsBtn(box, membership.letter); return; }
     // Whoever's tab hits a match first after its own reveal moment simulates it, using both sides'
     // CURRENT squad right then - not during the weekend preview week, where nothing is due yet anyway.
     if(!isWeekendRecap) week = await resolveLigaMatchIfNeeded(membership.letter, targetWeekStart, week);
@@ -18592,6 +18688,7 @@ function renderLigenPanel(view){
       }).join('');
     }
     box.innerHTML = html;
+    wireLigaRewardsBtn(box, membership.letter);
     box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
       btn.addEventListener('click', ()=> playLigaLiveMatch(membership.letter, targetWeekStart, btn.dataset.ligaLiveMid));
     });
@@ -21767,20 +21864,22 @@ function smoothWinProb(raw){
   winProbSmoothState = winProbSmoothState*0.4 + raw*0.6;
   return clamp(winProbSmoothState, 0.01, 0.99);
 }
-function winProbRowHTML(pct){
+function winProbRowHTML(pct, myName, oppName){
   const p = Math.round(pct*100);
   return `<div class="winprob-row" id="winprob-row">
-    <div class="mono" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Deine Sieg-Chance</div>
+    <div class="winprob-labels"><span>${myName||'Du'}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span>${oppName||'Gegner'}</span></div>
     <div class="winprob-bar"><div class="winprob-fill" id="winprob-fill" style="width:${p}%;"></div></div>
-    <div class="mono" id="winprob-pct" style="text-align:center;font-size:12px;margin-top:3px;color:var(--gold);">${p}%</div>
+    <div class="winprob-pct-row"><span id="winprob-pct-me">${p}%</span><span id="winprob-pct-opp">${100-p}%</span></div>
   </div>`;
 }
 function updateWinProbEl(pct){
   const p = Math.round(pct*100);
   const fill = document.getElementById('winprob-fill');
-  const txt = document.getElementById('winprob-pct');
+  const meTxt = document.getElementById('winprob-pct-me');
+  const oppTxt = document.getElementById('winprob-pct-opp');
   if(fill) fill.style.width = p+'%';
-  if(txt) txt.textContent = p+'%';
+  if(meTxt) meTxt.textContent = p+'%';
+  if(oppTxt) oppTxt.textContent = (100-p)+'%';
 }
 function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactics=null, oppTactics=null, opts={}){
   const myT = myTactics || DEFAULT_TACTICS;
@@ -21957,9 +22056,15 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
       live = document.createElement('div'); live.id='live-match'; live.style.position='relative'; area.appendChild(live);
       const p0 = liveProfileAt(minuteStart);
       live.innerHTML = `
-        <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
-        <div class="mono" id="live-minute" style="text-align:center;color:var(--muted);margin-bottom:8px;">${minuteStart}'</div>
-        ${winProbRowHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp)))}
+        <div class="live-scoreboard">
+          <div class="live-minute-pill" id="live-minute">${minuteStart}'</div>
+          <div class="live-scoreboard-teams">
+            <div class="live-scoreboard-name me">${myName}</div>
+            <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
+            <div class="live-scoreboard-name opp">${oppName}</div>
+          </div>
+          ${winProbRowHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp)), myName, oppName)}
+        </div>
         <div class="match-log" id="live-log"></div>`;
       playRefWhistle('start');
     }
@@ -22041,7 +22146,7 @@ function animateShootout(shootout, myName, oppName){
           <div class="pk-spotlight-ball">\u26bd</div>
           <div class="pk-spotlight-text" id="pk-spotlight-text">Elfmeterschie\u00dfen beginnt \u2026</div>
         </div>
-        ${winProbRowHTML(smoothWinProb(pkWinProbability(0,0,0,0,shootout.myProb,shootout.oppProb)))}
+        ${winProbRowHTML(smoothWinProb(pkWinProbability(0,0,0,0,shootout.myProb,shootout.oppProb)), myName, oppName)}
         <div class="match-log" id="pk-log"></div>`;
       live.appendChild(sec);
     }
