@@ -18204,11 +18204,13 @@ async function playLigaLiveMatch(letter, weekStart, mid){
   const md = viewerIsA ? {...m.liveMd} : flipMatchDataSides(m.liveMd);
   md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
   const myName = viewerIsA ? a.name : b.name, oppName = viewerIsA ? b.name : a.name;
+  const oppTeam = viewerIsA ? b : a;
+  const oppAbbr = ligaTeamAbbr(oppTeam.name, oppTeam.abbr);
   inMatch = true;
   openModal(`<h2 style="margin-bottom:4px;">Liga ${letter} · ${LIGA_DAY_LABEL[m.day]}</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${myName} vs ${oppName}</p>`);
   const box = document.querySelector('#modal-root .modal-box');
   ensureMatchAreaHost(box);
-  try{ await playFullMatch(md, myName, oppName); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
+  try{ await playFullMatch(md, myName, oppName, oppAbbr); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
   finally{ inMatch = false; }
   try{
     const matches2 = week.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, liveRevealed:true});
@@ -21864,10 +21866,15 @@ function smoothWinProb(raw){
   winProbSmoothState = winProbSmoothState*0.4 + raw*0.6;
   return clamp(winProbSmoothState, 0.01, 0.99);
 }
-function winProbRowHTML(pct, myName, oppName){
+// My own side always uses the real clubAbbr from Einstellungen (same one Liga fixture cards use) when
+// set, via ligaTeamAbbr's customAbbr param - falls back to auto-deriving from the name otherwise. The
+// opponent side only gets its REAL Liga Kürzel when the caller actually has it (see playLigaLiveMatch's
+// oppAbbr passthrough); every other match context (Ranked, WM26, Turniere, Freundschaftsspiele) has no
+// such concept for an opponent, so it auto-derives from their display name same as before.
+function winProbRowHTML(pct, myName, oppName, oppAbbr){
   const p = Math.round(pct*100);
-  const meLabel = myName ? ligaTeamAbbr(myName) : 'DU';
-  const oppLabel = oppName ? ligaTeamAbbr(oppName) : 'GEG';
+  const meLabel = ligaTeamAbbr(myName||profile.displayName||'Du', profile && profile.clubAbbr);
+  const oppLabel = oppAbbr || (oppName ? ligaTeamAbbr(oppName) : 'GEG');
   return `<div class="winprob-row" id="winprob-row">
     <div class="winprob-labels"><span title="${myName||''}">${meLabel}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span title="${oppName||''}">${oppLabel}</span></div>
     <div class="winprob-bar"><div class="winprob-fill" id="winprob-fill" style="width:${p}%;"></div></div>
@@ -22040,7 +22047,7 @@ function pkRowHTML(round, kick, teamName, side){
       <span class="gteam">${teamName}</span>
     </div>`;
 }
-function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null){
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null, oppAbbr=null){
   const liveProfileAt = (minute)=>{
     const myAdj = liveRedCardAdjustment(minute, myRedMinute);
     const oppAdj = liveRedCardAdjustment(minute, oppRedMinute);
@@ -22061,11 +22068,11 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         <div class="live-scoreboard">
           <div class="live-minute-pill" id="live-minute">${minuteStart}'</div>
           <div class="live-scoreboard-teams">
-            <div class="live-scoreboard-name me" title="${myName}">${ligaTeamAbbr(myName)}</div>
+            <div class="live-scoreboard-name me" title="${myName}">${ligaTeamAbbr(myName, profile && profile.clubAbbr)}</div>
             <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
-            <div class="live-scoreboard-name opp" title="${oppName}">${ligaTeamAbbr(oppName)}</div>
+            <div class="live-scoreboard-name opp" title="${oppName}">${oppAbbr || ligaTeamAbbr(oppName)}</div>
           </div>
-          ${winProbRowHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp)), myName, oppName)}
+          ${winProbRowHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp)), myName, oppName, oppAbbr)}
         </div>
         <div class="match-log" id="live-log"></div>`;
       playRefWhistle('start');
@@ -22125,7 +22132,7 @@ function pkDotsHTML(prefix){
   for(let i=0;i<5;i++) html += `<div class="pk-dot pending" id="${prefix}-dot-${i}"></div>`;
   return html;
 }
-function animateShootout(shootout, myName, oppName){
+function animateShootout(shootout, myName, oppName, oppAbbr=null){
   return new Promise(resolve=>{
     const live = document.getElementById('live-match');
     if(live){
@@ -22148,7 +22155,7 @@ function animateShootout(shootout, myName, oppName){
           <div class="pk-spotlight-ball">\u26bd</div>
           <div class="pk-spotlight-text" id="pk-spotlight-text">Elfmeterschie\u00dfen beginnt \u2026</div>
         </div>
-        ${winProbRowHTML(smoothWinProb(pkWinProbability(0,0,0,0,shootout.myProb,shootout.oppProb)), myName, oppName)}
+        ${winProbRowHTML(smoothWinProb(pkWinProbability(0,0,0,0,shootout.myProb,shootout.oppProb)), myName, oppName, oppAbbr)}
         <div class="match-log" id="pk-log"></div>`;
       live.appendChild(sec);
     }
@@ -22209,13 +22216,13 @@ function animateShootout(shootout, myName, oppName){
     nextKick();
   });
 }
-async function playFullMatch(md, myName, oppName){
+async function playFullMatch(md, myName, oppName, oppAbbr=null){
   resetWinProbSmoothing();
   const totalHorizon = md.wentToET ? 120 : 90;
   const myScorers = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
   const incidents = md.incidents || [];
-  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute);
+  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr);
   if(md.wentToET){
     toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
     md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
@@ -22223,11 +22230,11 @@ async function playFullMatch(md, myName, oppName){
     const startedAtET = md.startedAt + md.durationMs;
     const waitET = startedAtET - Date.now();
     if(waitET>0) await new Promise(r=>setTimeout(r, waitET));
-    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute));
+    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr));
   }
   if(md.wentToPK){
     toast('Auch nach Verl\u00e4ngerung unentschieden \u2014 Elfmeterschie\u00dfen entscheidet!');
-    await animateShootout(md.shootout, myName, oppName);
+    await animateShootout(md.shootout, myName, oppName, oppAbbr);
   }
   return {myGoals: myTally, oppGoals: oppTally, myScorers};
 }
