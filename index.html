@@ -17581,12 +17581,21 @@ const LIGA_DEFAULT_COLOR = '#8892a4';
 const LIGA_GLOW_COLOR = { A:'#b46bff', B:'#3d7bff', C:'#2fbd6a', D:'#e6c343', E:'#e2564f' };
 function ligaColor(letter){ return LIGA_COLORS[letter] || LIGA_DEFAULT_COLOR; }
 function ligaGlowColor(letter){ return LIGA_GLOW_COLOR[letter] || LIGA_DEFAULT_COLOR; }
+// Small rank icon overlaid on the letter badge's corner - crown for the top league, working down
+// through trophy/shield/star for B/C/D, so the letter stays the main readable element (the icon is
+// just a quick visual "how high up is this" cue) rather than replacing it outright. Anything below D
+// (E, F, ...) has no icon at all - those never got their own tuned reward tier either, see
+// LIGA_REWARD_TABLE falling back to D's numbers for every league past it.
+const LIGA_RANK_ICON = { A:'👑', B:'🏆', C:'🛡️', D:'⭐' };
 // A pulsing glow, not a spin (explicitly rejected earlier - the letter itself must stay still) - see
 // .liga-badge/@keyframes ligaBadgePulse.
 function ligaBadgeHTML(letter, size=28){
   const color = ligaColor(letter);
   const glow = ligaGlowColor(letter);
-  return `<div class="liga-badge" style="width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;--liga-glow:${glow};">${letter}</div>`;
+  const icon = LIGA_RANK_ICON[letter];
+  const iconSize = Math.max(10, Math.round(size*0.4));
+  const iconHTML = icon ? `<span class="liga-badge-icon" style="position:absolute;top:${-iconSize*0.28}px;right:${-iconSize*0.28}px;font-size:${iconSize}px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));">${icon}</span>` : '';
+  return `<div class="liga-badge" style="position:relative;width:${size}px;height:${size}px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Anton';font-size:${Math.round(size*0.52)}px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);background:${color};flex-shrink:0;--liga-glow:${glow};">${letter}${iconHTML}</div>`;
 }
 // Prize table per league bracket - every place gets a reward now, not just the top two: 1st/2nd/3rd
 // each have their own tuned coins (plus, for A/B, real card packs on top), and everyone from 4th place
