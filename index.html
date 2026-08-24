@@ -384,12 +384,12 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
    dedicated background of its own, nothing that actually reads "archival footage of a legend" rather
    than "another top-rated card". Its own bespoke treatment now: an aged sepia/parchment face with a
    heavy vignette like an old photograph, a static patina-bronze frame (no animated rainbow sweep -
-   same reasoning as GOAT above, an aged-photo look has to stay still, not shimmer), and its own FX
-   layer (ogicon-fx): a slowly rotating engraved bronze Hall-of-Fame medallion with a pulsing star at
-   its center, flanked by a laurel-leaf wreath - a single unmistakable "this is a legend, enshrined"
-   image instead of scattered ambient particles, the same "one bold central shape" idea as the
-   Kronjuwelen's rotating cut-gem facets or Ratings Reload's rotating arrow, just its own shape/meaning
-   rather than a copy of either. */
+   same reasoning as GOAT above, an aged-photo look has to stay still, not shimmer). The FX layer
+   (ogicon-fx) is deliberately minimal after two overdesigned attempts (a medallion+star that was way
+   too large, then leaf shapes that read as a mustache): just one static green laurel wreath centered
+   on the card, plus a handful of loose laurel leaves gently falling from the top - nothing else. The
+   wreath stays the old bronze/sepia card's one departure into green, since a laurel wreath reads as
+   laurel (an actual plant) rather than "Hall of Fame" if it isn't green. */
 .pcard.theme-ogicon{border:3px solid #8a6328;
   background:
     radial-gradient(circle at 50% 42%, #3c2a12 0%, #241a0c 55%, #100b05 100%),
@@ -404,44 +404,51 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
   50%{box-shadow:0 18px 36px rgba(0,0,0,.8), 0 0 0 1px rgba(232,199,138,.5) inset, 0 0 30px -2px #e8c78a;}
 }
 .pcard .ogicon-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
-.pcard .ogicon-medallion{position:absolute;top:34%;left:50%;width:78%;height:78%;margin:-39% 0 0 -39%;
-  border-radius:50%;background:repeating-conic-gradient(from 0deg, #5c3d18 0deg 2deg, #c98a3e 2deg 3deg, #6b4a1e 3deg 5deg);
-  animation:ogiconMedallionSpin 26s linear infinite;opacity:.5;}
-.pcard .ogicon-medallion::after{content:"";position:absolute;inset:15%;border-radius:50%;
-  background:radial-gradient(circle at 40% 34%, #f0d9a8 0%, #c98a3e 45%, #7a5420 80%, #4a3312 100%);
-  box-shadow:inset 0 0 10px rgba(0,0,0,.55), 0 0 10px -2px rgba(201,138,62,.5);}
-@keyframes ogiconMedallionSpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
-.pcard .ogicon-star{position:absolute;top:34%;left:50%;width:24%;height:24%;margin:-12% 0 0 -12%;
-  clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
-  background:linear-gradient(160deg,#f0d9a8,#c98a3e 55%,#7a5420);
-  filter:drop-shadow(0 0 5px rgba(240,217,168,.55));animation:ogiconStarPulse 2.8s ease-in-out infinite;}
-@keyframes ogiconStarPulse{0%,100%{opacity:.75;transform:scale(1);}50%{opacity:1;transform:scale(1.08);}}
-/* laurel wreath: each .ogicon-leaf-slot is a zero-size pivot at the medallion's base, rotated to its
-   own fixed angle - the leaf inside sits at a fixed offset from that pivot (top:-26px), so rotating
-   the (invisible) slot swings the (visible) leaf along an arc at a constant radius, always pointing
-   outward. A proper pointed-leaf clip-path, not the rounded quarter-circle tried before (which read as
-   a curved mustache, not foliage). */
-.pcard .ogicon-wreath{position:absolute;left:50%;top:58%;width:0;height:0;}
+/* the wreath ring: each .ogicon-leaf-slot is a zero-size pivot at the card's center, rotated to its own
+   fixed angle - the leaf inside sits at a fixed offset from that pivot (top:-32px), so rotating the
+   (invisible) slot swings the (visible) leaf to a point on a circle of constant radius, always pointing
+   outward. Left/right branches leave a gap at the very top, like a real laurel wreath emblem (a closed
+   ring reads as a hoop, not laurel). Green, unlike everything else on this card - a laurel wreath only
+   reads as laurel, not just "circle of leaves", if it's the plant's actual color. */
+.pcard .ogicon-wreath{position:absolute;left:50%;top:40%;width:0;height:0;}
 .pcard .ogicon-leaf-slot{position:absolute;left:0;top:0;width:0;height:0;}
-.pcard .ogicon-leaf{position:absolute;left:-5px;top:-26px;width:10px;height:17px;
+.pcard .ogicon-leaf{position:absolute;left:-6px;top:-32px;width:11px;height:19px;
   clip-path:polygon(50% 0%,100% 42%,58% 100%,50% 82%,42% 100%,0% 42%);
-  background:linear-gradient(160deg,#e8c78a,#8a6328 75%);
-  opacity:.7;filter:drop-shadow(0 0 2px rgba(232,199,138,.4));animation:ogiconLeafGlint 3.6s ease-in-out infinite;}
-.pcard .ogicon-leaf-slot.l1{transform:rotate(-15deg);}
-.pcard .ogicon-leaf-slot.l2{transform:rotate(-33deg);}
-.pcard .ogicon-leaf-slot.l3{transform:rotate(-51deg);}
-.pcard .ogicon-leaf-slot.l4{transform:rotate(-69deg);}
-.pcard .ogicon-leaf-slot.l5{transform:rotate(-87deg);}
-.pcard .ogicon-leaf-slot.r1{transform:rotate(15deg);}
-.pcard .ogicon-leaf-slot.r2{transform:rotate(33deg);}
-.pcard .ogicon-leaf-slot.r3{transform:rotate(51deg);}
-.pcard .ogicon-leaf-slot.r4{transform:rotate(69deg);}
-.pcard .ogicon-leaf-slot.r5{transform:rotate(87deg);}
-.pcard .ogicon-leaf-slot.l2 .ogicon-leaf,.pcard .ogicon-leaf-slot.r2 .ogicon-leaf{animation-delay:.3s;}
-.pcard .ogicon-leaf-slot.l3 .ogicon-leaf,.pcard .ogicon-leaf-slot.r3 .ogicon-leaf{animation-delay:.6s;}
-.pcard .ogicon-leaf-slot.l4 .ogicon-leaf,.pcard .ogicon-leaf-slot.r4 .ogicon-leaf{animation-delay:.9s;}
-.pcard .ogicon-leaf-slot.l5 .ogicon-leaf,.pcard .ogicon-leaf-slot.r5 .ogicon-leaf{animation-delay:1.2s;}
-@keyframes ogiconLeafGlint{0%,100%{opacity:.5;}50%{opacity:.85;}}
+  background:linear-gradient(160deg,#a8f0bc,#3ca85c 55%,#1f6e38);
+  opacity:.85;filter:drop-shadow(0 0 3px rgba(63,168,92,.5));}
+.pcard .ogicon-leaf-slot.l1{transform:rotate(-25deg);}
+.pcard .ogicon-leaf-slot.l2{transform:rotate(-50deg);}
+.pcard .ogicon-leaf-slot.l3{transform:rotate(-75deg);}
+.pcard .ogicon-leaf-slot.l4{transform:rotate(-100deg);}
+.pcard .ogicon-leaf-slot.l5{transform:rotate(-125deg);}
+.pcard .ogicon-leaf-slot.l6{transform:rotate(-145deg);}
+.pcard .ogicon-leaf-slot.l7{transform:rotate(-160deg);}
+.pcard .ogicon-leaf-slot.r1{transform:rotate(25deg);}
+.pcard .ogicon-leaf-slot.r2{transform:rotate(50deg);}
+.pcard .ogicon-leaf-slot.r3{transform:rotate(75deg);}
+.pcard .ogicon-leaf-slot.r4{transform:rotate(100deg);}
+.pcard .ogicon-leaf-slot.r5{transform:rotate(125deg);}
+.pcard .ogicon-leaf-slot.r6{transform:rotate(145deg);}
+.pcard .ogicon-leaf-slot.r7{transform:rotate(160deg);}
+/* loose leaves falling from the top, same leaf shape/color as the wreath but drifting down and
+   rotating like they're actually falling, not just fading in place - reuses the "own falling/rising
+   particle" mechanism every other bespoke theme has (Legikone's confetti, WM-Kapitän's rising sparks),
+   just leaves instead. */
+.pcard .ogicon-fall{position:absolute;top:-12%;width:9px;height:16px;
+  clip-path:polygon(50% 0%,100% 42%,58% 100%,50% 82%,42% 100%,0% 42%);
+  background:linear-gradient(160deg,#a8f0bc,#3ca85c 55%,#1f6e38);opacity:0;
+  animation:ogiconLeafFall linear infinite;}
+@keyframes ogiconLeafFall{
+  0%{top:-12%;opacity:0;transform:rotate(0deg);}
+  10%{opacity:.85;}
+  85%{opacity:.75;}
+  100%{top:112%;opacity:0;transform:rotate(210deg);}
+}
+.pcard .ogicon-fall.f1{left:12%;animation-duration:6.2s;animation-delay:0s;}
+.pcard .ogicon-fall.f2{left:30%;animation-duration:7.4s;animation-delay:1.6s;width:8px;height:14px;}
+.pcard .ogicon-fall.f3{left:50%;animation-duration:5.8s;animation-delay:.7s;}
+.pcard .ogicon-fall.f4{left:68%;animation-duration:7s;animation-delay:2.4s;width:8px;height:14px;}
+.pcard .ogicon-fall.f5{left:86%;animation-duration:6.6s;animation-delay:1.1s;}
 /* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
 .pcard.theme-dia{border:2.5px solid transparent;
   background:
@@ -12258,18 +12265,16 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="goat-halo"></div>
       ${Array.from({length:4},(_,i)=>`<i class="goat-crack g${i+1}"></i>`).join('')}
     </div>` : '';
-  // OG Icons: a slowly rotating engraved bronze Hall-of-Fame medallion (milled rim + static coin face)
-  // with a pulsing star at its center, flanked by a laurel wreath - one unmistakable "legend enshrined"
-  // image, the same "single bold rotating shape" idea as the Kronjuwelen gem-facets / Ratings Reload's
-  // arrow, but its own shape and meaning.
+  // OG Icons: one static green laurel wreath centered on the card, plus a few loose leaves gently
+  // falling from the top - nothing else in the background, after two overdesigned attempts (an
+  // oversized medallion+star, then leaf shapes that read as a mustache).
   const isOgIconTier = card.theme==='ogicon';
   const ogiconFxHTML = isOgIconTier ? `<div class="ogicon-fx">
-      <div class="ogicon-medallion"></div>
-      <div class="ogicon-star"></div>
       <div class="ogicon-wreath">
-        ${Array.from({length:5},(_,i)=>`<i class="ogicon-leaf-slot l${i+1}"><i class="ogicon-leaf"></i></i>`).join('')}
-        ${Array.from({length:5},(_,i)=>`<i class="ogicon-leaf-slot r${i+1}"><i class="ogicon-leaf"></i></i>`).join('')}
+        ${Array.from({length:7},(_,i)=>`<i class="ogicon-leaf-slot l${i+1}"><i class="ogicon-leaf"></i></i>`).join('')}
+        ${Array.from({length:7},(_,i)=>`<i class="ogicon-leaf-slot r${i+1}"><i class="ogicon-leaf"></i></i>`).join('')}
       </div>
+      ${Array.from({length:5},(_,i)=>`<i class="ogicon-fall f${i+1}"></i>`).join('')}
     </div>` : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
