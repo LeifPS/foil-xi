@@ -1753,9 +1753,32 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .hint{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5;}
 ::-webkit-scrollbar{width:8px;height:8px;}
 ::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;}
+/* Startup loading screen - see the HTML comment next to #boot-loader for why this exists and when
+   it's removed. Sits above everything (z-index above the topbar's own sticky 40) until then. */
+#boot-loader{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:18px;background:var(--void);}
+.boot-mark{width:56px;height:56px;border-radius:14px;background:linear-gradient(145deg,var(--turf-bright),var(--turf));
+  display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:26px;color:#eafff2;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;animation:bootMarkPulse 1.8s ease-in-out infinite;}
+@keyframes bootMarkPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+.boot-spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--line);
+  border-top-color:var(--turf-bright);animation:bootSpin .8s linear infinite;}
+@keyframes bootSpin{to{transform:rotate(360deg);}}
+.boot-label{font-size:12.5px;color:var(--muted);letter-spacing:.03em;}
+body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
+#boot-loader{transition:opacity .35s ease;}
 </style>
 </head>
 <body>
+<!-- Plain HTML/CSS, no JS - shows the instant the page paints, before boot()/init() even start
+     resolving Firebase, so the ~3s startup never shows a bare topbar over an empty nav/view. Removed
+     by hideBootLoader() the moment there's something real to look at instead (the entry gate, or the
+     fully rendered app after init()) - see its call sites for exactly when each happens. -->
+<div id="boot-loader">
+  <div class="boot-mark">FE</div>
+  <div class="boot-spinner"></div>
+  <div class="boot-label">FOIL ELEVEN wird geladen …</div>
+</div>
 <div id="app">
   <div id="topbar">
     <div class="brand"><div class="brand-mark">FE</div><h1>FOIL<span>ELEVEN</span></h1></div>
@@ -11742,7 +11765,15 @@ function showLevelUpCutscene(levelUps){
 function gateMarkHTML(){
   return APP_LOGO_DATA_URI ? `<img class="gate-mark" src="${APP_LOGO_DATA_URI}" alt="">` : `<div class="gate-mark">FE</div>`;
 }
+// Fades out and removes the static #boot-loader (see its HTML comment) - called the moment there's
+// something real on screen instead: here, right as the entry gate itself appears, and again after
+// init() finishes rendering the actual app for a restored session (that path skips the gate entirely).
+function hideBootLoader(){
+  document.body.classList.add('boot-loader-done');
+  setTimeout(()=>{ const el = document.getElementById('boot-loader'); if(el) el.remove(); }, 400);
+}
 function showEntryGate(prefill){
+  hideBootLoader();
   const root = document.getElementById('modal-root');
   const nosaveBanner = NOSAVE_MODE ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);">Ohne-Speicherung-Modus: nur Test-Accounts k\u00f6nnen sich anmelden.</p>` : '';
   root.innerHTML = `
@@ -11999,6 +12030,7 @@ async function init(){
           <p class="hint" style="margin-top:0;">Dieser Verein wurde von einem Administrator gesperrt und kann nicht weiterspielen.</p>
         </div>
       </div>`;
+    hideBootLoader();
     return;
   }
   soundEnabled = profile.soundOn;
@@ -12042,6 +12074,7 @@ async function init(){
   renderNav();
   renderView('store');
   updateCoinDisplay();
+  hideBootLoader();
   if(profile.pendingWarning){
     const warningMsg = profile.pendingWarning;
     profile.pendingWarning = null;
@@ -23525,7 +23558,9 @@ async function joinQueue(manual=true){
   poll();
 }
 
-boot();
+// Safety net: if boot() itself throws (a fbReady rejection, a network hiccup, ...) the loading screen
+// must never just stay up forever - fall back to the entry gate, which also hides it.
+boot().catch(e=>{ console.warn('boot failed', e); showEntryGate(); });
 
 </script>
 </body>
