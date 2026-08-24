@@ -335,6 +335,31 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ff3d5c;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 44px 1px #ffc2cc;}
 }
+/* GOAT (ov>99, hand-picked real-world superstars - the single rarest pull in the whole game, only via
+   the GOAT-Quest): previously just inherited the generic .r-ultimate look (same violet card any other
+   95+ base card without its own theme gets), so the single best card in the game was visually
+   indistinguishable from an ordinary ultimate pull. Now its own bespoke treatment - obsidian black
+   split by a molten gold/crimson vein, reads as "beyond even the gemstone tiers" rather than just
+   another rarity bracket. */
+.pcard.theme-goat{border:2.5px solid transparent;
+  background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,.045) 0 2px, transparent 2px 9px) padding-box,
+    radial-gradient(circle at 50% 30%, #1a0d02 0%, #0a0402 45%, #050202 100%) padding-box,
+    linear-gradient(100deg,#050202,#ffb020,#ff2f3d,#ffe9a8,#ff2f3d,#ffb020,#050202) border-box;
+  background-size:100% 100%,100% 100%,320% 320%;
+  animation: goatBorderShift 4.6s linear infinite, ultimateBreathe 2.6s ease-in-out infinite, goatGlow 2.4s ease-in-out infinite;}
+.pcard.theme-goat::before{animation:autoShine 1.4s ease-in-out infinite;}
+.pcard.theme-goat .name{color:#ffdfa0;text-shadow:0 0 10px rgba(255,176,32,.65);}
+.pcard.theme-goat .name.name-variant{
+  background:linear-gradient(90deg,#ffb020,#ffe9a8,#ff2f3d,#ffe9a8,#ffb020);
+  background-size:320% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:goatBorderShift 4.6s linear infinite; text-shadow:none;
+}
+@keyframes goatBorderShift{0%{background-position:0% 0%,0% 0%,0% 50%;}100%{background-position:0% 0%,0% 0%,320% 50%;}}
+@keyframes goatGlow{
+  0%,100%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 26px -3px #ffb020;filter:saturate(1);}
+  50%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 50px 2px #ff2f3d;filter:saturate(1.25) brightness(1.06);}
+}
 /* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
 .pcard.theme-dia{border:2.5px solid transparent;
   background:
@@ -693,8 +718,6 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
   radial-gradient(circle at 50% 6%, rgba(255,46,99,.35), transparent 60%),
   repeating-conic-gradient(from 0deg at 50% 6%, rgba(255,215,106,.12) 0deg 4deg, transparent 4deg 11deg);
   opacity:.9;}
-.pcard.theme-goat{animation:ultimateGlow 3.2s linear infinite, ultimateBreathe 2.2s ease-in-out infinite, goatPulse 1.8s ease-in-out infinite;}
-@keyframes goatPulse{0%,100%{filter:saturate(1);}50%{filter:saturate(1.25) brightness(1.06);}}
 /* Kapitäne: a subtle armband stripe wrapping the upper-mid photo area instead of a sparkle burst -
    the one visual borrowed directly from the real thing an armband is. */
 .pcard.pattern-kapitaenpattern .pattern-layer{background:
@@ -7591,7 +7614,7 @@ function rarityInfo(ov){
 const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8fb4d1',
   tots:'#f5d76e',flash:'#ff7a59',sd:'#ff5fa8',icon:'#c78bf5',cent:'#ffd76a',
   phenom:'#6ee7d8',setpiece:'#ffcf5c',derby:'#ff8f6b',iron:'#7d94ad',wonder:'#8ee6a3',
-  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',wpmvp:'#ffd76a',mysteryrare:'#a33dff',sbcx:'#d9eef2',
+  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',goat:'#ffb020',wpmvp:'#ffd76a',mysteryrare:'#a33dff',sbcx:'#d9eef2',
   kontra_gk:'#a78bfa',kontra_def:'#5c9db8',kontra_mid:'#d6a94a',kontra_fwd:'#e14b4b',goat:'#ff2e63',
   wcchamp:'#ffd23f',goldenball:'#ffcc00',ggwm:'#4fd1c5',youngplayer:'#7ee787',
   semifinalist:'#ff9d5c',quarterfinalist:'#9fb4c7',
