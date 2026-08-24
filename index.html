@@ -17949,9 +17949,23 @@ function ligaTieBreakHash(userId, seed){
 // passed (see ligaMatchIsRevealed), not just "its whole day has started" - used for a live, in-progress
 // week. Omit it (as resolveWeeklyRolloverIfNeeded and any already-finished week's history table do)
 // to fall back to the simpler day<=uptoDay cutoff, since a finished week has nothing left to hide.
-function ligaComputeStandings(teams, matches, uptoDay, seed, revealWeekStart){
+// viewerUserId (optional, only meaningful together with revealWeekStart): the viewer's OWN match stays
+// out of the table too until they've actually watched it live (m.liveRevealed) - ligaMatchRowHTML
+// already hides that match's score behind a "Live spielen" button for the exact same reason, so a
+// decided-but-unwatched result showing up in the table above it would spoil it anyway. Only ever pass
+// this for a LIVE display (a finished week's history table has nothing left to spoil and should always
+// show the real, complete table - see resolveWeeklyRolloverIfNeeded's own call, which omits it).
+function ligaComputeStandings(teams, matches, uptoDay, seed, revealWeekStart, viewerUserId){
   const table = teams.map((t,i)=>({idx:i, userId:t.userId, name:t.name, pts:0, w:0, d:0, l:0, gf:0, ga:0}));
-  matches.filter(m=> m.day<=uptoDay && !m.pending && (revealWeekStart==null || ligaMatchIsRevealed(m, revealWeekStart))).forEach(m=>{
+  matches.filter(m=>{
+    if(m.day>uptoDay || m.pending) return false;
+    if(revealWeekStart!=null && !ligaMatchIsRevealed(m, revealWeekStart)) return false;
+    if(viewerUserId && !m.liveRevealed){
+      const a = teams[m.aIdx], b = teams[m.bIdx];
+      if(a.userId===viewerUserId || b.userId===viewerUserId) return false;
+    }
+    return true;
+  }).forEach(m=>{
     const a = table[m.aIdx], b = table[m.bIdx];
     a.gf+=m.aGoals; a.ga+=m.bGoals; b.gf+=m.bGoals; b.ga+=m.aGoals;
     if(m.winnerSide==='draw'){ a.pts+=1; b.pts+=1; a.d++; b.d++; }
@@ -18383,7 +18397,7 @@ async function renderAllLigenOverview(box){
       // Montag-Samstag week counts every match whose own per-round reveal time has already passed.
       const tbl = isUpcoming
         ? ligaComputeStandings(week.teams, week.matches, 0, targetWeekStart)
-        : ligaComputeStandings(week.teams, week.matches, 5, targetWeekStart, targetWeekStart);
+        : ligaComputeStandings(week.teams, week.matches, 5, targetWeekStart, targetWeekStart, clubId);
       html += ligaStandingsTableHTML(tbl, zones);
     } else {
       html += `<p class="hint">Tabelle konnte nicht geladen werden${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}.</p>`;
@@ -18554,7 +18568,7 @@ function renderLigenPanel(view){
     // once at midnight - the standings only count a match once its own reveal moment has passed.
     const standings = isWeekendRecap
       ? ligaComputeStandings(week.teams, week.matches, 0, targetWeekStart)
-      : ligaComputeStandings(week.teams, week.matches, 5, targetWeekStart, targetWeekStart);
+      : ligaComputeStandings(week.teams, week.matches, 5, targetWeekStart, targetWeekStart, clubId);
     const myRow = standings.find(t=>t.userId===clubId);
     let html = header + historyBox + oldSectionHtml;
     if(isWeekendRecap) html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue Woche (ab Montag)</div>`;
