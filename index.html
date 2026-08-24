@@ -18827,7 +18827,7 @@ function wm26OppSide(opp, nation){
   // real national-team crest where one's been added to CLUB_LOGO (see the "National teams" block
   // there); every other nation just keeps the generic monogram shield until its logo is added.
   const crest = CLUB_LOGO[nation] ? {club: nation} : {shape:'shield', primary:'#4dbf6f', secondary:'#0a0d12', letter:(natDE(nation)||'?')[0].toUpperCase()};
-  return {name: opp.owner, rating: opp.rating, managerName: opp.managerName, crest, formation: '433'};
+  return {name: natCode(nation), rating: opp.rating, managerName: opp.managerName, crest, formation: '433'};
 }
 function wm26MatchResult(teamA, teamB, allowDraw){
   const aXI = wm26NationXI(teamA.nation);
@@ -19038,14 +19038,14 @@ async function playWM26GroupMatch(matchIdx){
   inMatch = true;
   try{
     const myMgr = getAssignedManager();
-    const meSide = {name: profile.displayName||'Dein Verein', rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
+    const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
     const oppSide = wm26OppSide(opp, oppTeam.nation);
     await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos})));
     area.innerHTML = `
       <div class="vs-teams">
-        ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+        ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
         <div class="vs-x">VS</div>
-        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (Gruppenphase)`)}
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${natCode(oppTeam.nation)} (Gruppenphase)`)}
       </div>
       <div id="match-area"></div>
       <div id="result-area"></div>`;
@@ -19090,14 +19090,14 @@ async function playWM26KnockoutMatch(){
   let won = false, md = null;
   try{
     const myMgr = getAssignedManager();
-    const meSide = {name: profile.displayName||'Dein Verein', rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
+    const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
     const oppSide = wm26OppSide(opp, oppTeam.nation);
     await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos})));
     area.innerHTML = `
       <div class="vs-teams">
-        ${teamBlobHTML(rating, profile.crest, profile.displayName||'Dein Verein')}
+        ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
         <div class="vs-x">VS</div>
-        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${opp.owner} (${WM26_STAGE_LABEL[roundKey]})`)}
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${natCode(oppTeam.nation)} (${WM26_STAGE_LABEL[roundKey]})`)}
       </div>
       <div id="match-area"></div>
       <div id="result-area"></div>`;
