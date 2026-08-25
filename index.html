@@ -7254,6 +7254,7 @@ function renderWeekPass(view){
     </div>
     <h3 style="font-size:15px;margin:20px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Quests</h3>
     <p class="hint" style="margin-top:0;margin-bottom:12px;">Immer 3 gleichzeitig aktiv. Schaffst du eine, gibt's sofort Bonus-XP fürs Level und eine neue Quest rückt nach.</p>
+    ${quests.some(q=>{ const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id); return def && q.progress>=def.target; }) && active ? `<button class="action-btn secondary" id="wp-claim-all-quests" style="width:auto;padding:8px 14px;font-size:12px;margin-bottom:12px;">Alle fertigen Quests abholen</button>` : ''}
     <div class="wp-quest-grid">${questTiles}</div>
     <div class="wp-track" style="margin-top:22px;">${tiles}</div>`;
   view.querySelectorAll('.wp-claim[data-level]').forEach(btn=>{
@@ -7261,6 +7262,17 @@ function renderWeekPass(view){
   });
   view.querySelectorAll('.wp-claim[data-quest]').forEach(btn=>{
     btn.addEventListener('click', ()=>claimWeekPassQuest(btn.dataset.quest));
+  });
+  const claimAllBtn = document.getElementById('wp-claim-all-quests');
+  if(claimAllBtn) claimAllBtn.addEventListener('click', async ()=>{
+    claimAllBtn.disabled = true;
+    // snapshot the done ids BEFORE claiming any of them - claimWeekPassQuest immediately replaces a
+    // claimed quest with a fresh (not-yet-done) one, so iterating a live/re-read list mid-loop could
+    // skip or double-count entries.
+    const doneIds = (profile.weekPassQuests.quests||[])
+      .filter(q=>{ const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id); return def && q.progress>=def.target; })
+      .map(q=>q.id);
+    for(const id of doneIds) await claimWeekPassQuest(id);
   });
 }
 function iconSwapCardUnlocked(card){ return Date.now() >= iconSwapUnlockTime(card.unlockDay); }
@@ -10669,7 +10681,10 @@ function renderSellFilter(allEligible, usedInSquad){
       <input id="filter-price" type="text" inputmode="decimal" placeholder="Preis pro Karte in Coins (z. B. 1.2m)">
     </div>
     <div id="price-formula-row" style="display:none;margin-bottom:6px;">
-      <input id="filter-formula" placeholder="z.\u00a0B. 1000 + max(0, {ovr} - 88) * 500" style="width:100%;margin-bottom:6px;">
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <input id="filter-formula" placeholder="z.\u00a0B. 1000 + max(0, {ovr} - 88) * 500" style="width:100%;">
+        <button class="action-btn secondary" id="filter-formula-rap" style="width:auto;padding:9px 14px;font-size:11.5px;white-space:nowrap;" title="Setzt die Formel auf {rap}, sodass jede Karte automatisch zu ihrem eigenen Marktwert gelistet wird">{rap} nutzen</button>
+      </div>
       <p class="hint" style="margin:0 0 10px;">Variablen: <code>{ovr}</code> <code>{pot}</code> <code>{pos}</code> <code>{nat}</code> <code>{club}</code> <code>{lg}</code> <code>{variant}</code> <code>{rap}</code> \u2014
         Funktionen: <code>max(a,b,...)</code> <code>min(a,b,...)</code> <code>if(bedingung, dann, sonst)</code> <code>abs()</code> <code>round()</code> <code>floor()</code> <code>ceil()</code> \u2014
         Vergleiche: <code>= != &gt; &lt; &gt;= &lt;=</code>.<br>Beispiel: <code>1000 + max(0,{ovr}-88)*500</code> oder <code>if({pos}="TW", 300, 100 + {ovr}*10)</code></p>
@@ -10684,6 +10699,10 @@ function renderSellFilter(allEligible, usedInSquad){
   const posSelect = document.getElementById('filter-pos');
   const formulaInput = document.getElementById('filter-formula');
   const priceInput = document.getElementById('filter-price');
+  document.getElementById('filter-formula-rap').addEventListener('click', ()=>{
+    formulaInput.value = '{rap}';
+    updatePreview();
+  });
   let priceMode = 'flat';
   let matches = [];
   document.getElementById('price-mode-flat').addEventListener('click', ()=>{
@@ -14565,7 +14584,7 @@ function showCutscene(card, onDone){
 }
 
 // ===== CLUB =====
-let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL', dupOnly:false, favOnly:false};
+let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL', dupOnly:false, favOnly:false, minOv:''};
 // Quick-pick MRU list for the admin "Nutzer verwalten" search - purely a local convenience for
 // whoever's using this browser as an admin, so it lives in localStorage (not Firestore/the save):
 // most-recently-looked-up account first, deduped, capped at a handful of entries.
@@ -15398,12 +15417,14 @@ function renderClub(view){
         <option value="level">Sortierung: Level-Fortschritt (hoch\u2192niedrig)</option>
         <option value="rap">Sortierung: Marktwert/RAP (hoch\u2192niedrig)</option>
       </select>
+      <input id="club-min-ov" type="number" min="1" max="115" placeholder="Min. Rating" value="${clubFilter.minOv||''}" style="max-width:110px;">
       <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;padding:0 4px;">
         <input type="checkbox" id="club-dup-only"> Nur Duplikate
       </label>
       <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;padding:0 4px;">
         <input type="checkbox" id="club-fav-only"> Nur Favoriten
       </label>
+      <button class="action-btn secondary" id="club-filters-reset" style="width:auto;padding:8px 12px;font-size:11.5px;">Filter zurücksetzen</button>
     </div>
     <div class="mono hint" id="club-summary-line" style="margin-bottom:10px;"></div>
     <div class="club-grid" id="club-grid"></div>
@@ -15485,6 +15506,11 @@ function renderClub(view){
   document.getElementById('club-dup-only').addEventListener('change', e=>{ clubFilter.dupOnly=e.target.checked; drawClubGrid(); });
   document.getElementById('club-fav-only').checked = clubFilter.favOnly;
   document.getElementById('club-fav-only').addEventListener('change', e=>{ clubFilter.favOnly=e.target.checked; drawClubGrid(); });
+  document.getElementById('club-min-ov').addEventListener('input', e=>{ clubFilter.minOv=e.target.value; drawClubGrid(); });
+  document.getElementById('club-filters-reset').addEventListener('click', ()=>{
+    clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL', dupOnly:false, favOnly:false, minOv:''};
+    renderClub(view);
+  });
   drawClubGrid();
   if(managerCollection.length) drawManagerClubGrid();
   if(packCollection.length) drawPackClubGrid();
@@ -15564,6 +15590,10 @@ function drawClubGrid(){
     items = items.filter(x=> nameCounts.get(x.card.n)>1);
   }
   if(clubFilter.favOnly) items = items.filter(x=>x.card.favorited);
+  if(clubFilter.minOv){
+    const minOv = Math.floor(Number(clubFilter.minOv)||0);
+    if(minOv>0) items = items.filter(x=>x.card.ov>=minOv);
+  }
   if(clubFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(clubFilter.q.toLowerCase()));
   if(clubFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===clubFilter.pos);
   if(clubFilter.nat!=='ALL') items = items.filter(x=>x.card.nat===clubFilter.nat);
