@@ -17961,7 +17961,6 @@ function ligaRewardsModalHTML(letter){
     ligaRewardPlaceCardHTML('🥉 3. Platz', b[3], LIGA_PLACE_ACCENT[3]),
     ligaRewardPlaceCardHTML('4. Platz +', b.rest, LIGA_PLACE_ACCENT.rest),
   ].join('');
-  const championLine = letter==='A' ? `<p class="hint" style="margin:0 0 16px;">🏆 Der 1. Platz in Liga A bekommt zusätzlich immer die exklusive Liga-Meister-Karte.</p>` : '';
   // Compact side-by-side comparison of every other bracket, so it's clear what's waiting one league up.
   const compareRows = Object.keys(LIGA_REWARD_TABLE).map(l=>{
     const bl = LIGA_REWARD_TABLE[l];
@@ -17977,7 +17976,6 @@ function ligaRewardsModalHTML(letter){
   return `<h2 style="margin-bottom:2px;">Preise · Liga ${letter}</h2>
     <p class="hint" style="margin-top:0;margin-bottom:14px;">Wird jeden Samstag automatisch ausgezahlt, kein Abholen nötig.</p>
     <div class="liga-reward-grid">${cards}</div>
-    ${championLine}
     <div class="lbl" style="margin:4px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Andere Ligen im Vergleich</div>
     <div class="liga-reward-compare">
       <div class="liga-reward-compare-row liga-reward-compare-head">
@@ -18665,18 +18663,33 @@ async function playLigaLiveMatch(letter, weekStart, mid){
   if(!viewerIsA && !viewerIsB) return;
   const md = viewerIsA ? {...m.liveMd} : flipMatchDataSides(m.liveMd);
   md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+  md.allowDraw = true; // Liga-Matches sind immer 3-way (Sieg/Unentschieden/Niederlage) - unabhängig
+  // davon, ob ein älterer, vor Einführung des allowDraw-Felds gespeicherter liveMd-Datensatz das Feld
+  // überhaupt trägt (dann wäre es undefined -> falsy -> fälschlich 2-way-Anzeige).
   const myName = viewerIsA ? a.name : b.name, oppName = viewerIsA ? b.name : a.name;
   const oppTeam = viewerIsA ? b : a;
   const oppAbbr = ligaTeamAbbr(oppTeam.name, oppTeam.abbr);
   inMatch = true;
-  openModal(`<h2 style="margin-bottom:4px;">Liga ${letter} · ${LIGA_DAY_LABEL[m.day]}</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${myName} vs ${oppName}</p>`);
+  openModal(`<h2 style="margin-bottom:4px;">Liga ${letter} · ${LIGA_DAY_LABEL[m.day]}</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${myName} vs ${oppName}</p><button type="button" id="liga-skip-match-btn" class="btn-secondary" style="margin-bottom:10px;">Zum Ergebnis springen ⏭</button>`);
   const box = document.querySelector('#modal-root .modal-box');
   ensureMatchAreaHost(box);
+  const skipBtn = document.getElementById('liga-skip-match-btn');
+  if(skipBtn) skipBtn.addEventListener('click', ()=>{ liveMatchSkipAll = true; skipBtn.disabled = true; skipBtn.textContent = 'Wird übersprungen …'; });
   try{ await playFullMatch(md, myName, oppName, oppAbbr); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
   finally{ inMatch = false; }
   try{
-    const matches2 = week.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, liveRevealed:true});
-    await fb.setDoc(ref, {matches: matches2}, {merge:true});
+    if(fb.runTransaction){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const freshSnap = await tx.get(ref);
+        if(!freshSnap.exists()) return;
+        const cur = freshSnap.data();
+        const newMatches = cur.matches.map(mm=> mm.mid===mid ? {...mm, liveRevealed:true} : mm);
+        tx.update(ref, {matches:newMatches});
+      });
+    } else {
+      const matches2 = week.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, liveRevealed:true});
+      await fb.setDoc(ref, {matches: matches2}, {merge:true});
+    }
   }catch(e){ console.warn('mark liga match revealed failed', e); }
   closeModal();
   renderView('ligen');
@@ -18790,10 +18803,12 @@ async function resolveWeeklyRolloverIfNeeded(){
     if(!table.length) continue;
     // Every placement earns something now, not just the top two - places 1/2/3 each have their own
     // tuned reward (see LIGA_REWARD_TABLE), everyone from 4th down shares the bracket's flat amount.
+    // 1st place in Liga A no longer additionally grants the Liga-Meister card - just its normal
+    // coins/badge/packs reward like every other placement.
     table.forEach((row, idx)=>{
       const place = idx+1;
       const r = ligaRewardForPlace(letter, place);
-      rewards.push({userId:row.userId, letter, coins:r.coins, championCard: letter==='A' && place===1, badge:r.badge||null, packs:r.packs||[]});
+      rewards.push({userId:row.userId, letter, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
     });
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
     if(!lettersInUse.includes(upperLetter)) continue; // no league above this one (letter is 'A')
@@ -19015,7 +19030,7 @@ function renderLigenPanel(view){
     const myBadge = profile.ligaBadge && profile.ligaBadge.expiresAt>Date.now() ? profile.ligaBadge : null;
     const header = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:12px 14px;">
         ${ligaBadgeHTML(membership.letter, 48)}
-        <div style="flex:1;min-width:0;"><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}${membership.letter==='A'?' <span class="hint" style="font-size:11px;">(1. Platz zusätzlich Liga-Meister-Karte)</span>':''}</div>
+        <div style="flex:1;min-width:0;"><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}</div>
         <div class="hint" style="margin:2px 0 0;">${myZones.isTop?'Höchste Liga - keine Aufstiegsmöglichkeit':(myZones.isBottom?'Unterste Liga - kein direkter Abstieg':'Auf-/Abstieg mit den Nachbarligen jede Woche')}</div>
         ${myBadge ? `<div class="liga-my-badge liga-badge-${myBadge.tier}" style="margin-top:6px;">🏅 Dein Abzeichen: ${LIGA_BADGE_LABEL[myBadge.tier]}</div>` : ''}</div>
         <button class="action-btn secondary liga-rewards-btn" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0;">🏆 Preise</button>
@@ -22530,6 +22545,12 @@ function updateWinProbEl(pct, drawPct){
 // still looking at the real live scoreboard, and renderMatchMiniWidget() only actually shows the
 // floating pill when they're NOT (i.e. #live-match isn't present, meaning they navigated away).
 let matchMiniState = null;
+// "Zum Ergebnis springen" (currently wired up for Liga matches only - see playLigaLiveMatch): the
+// final result is already fully determined BEFORE the animation ever starts (buildDecisiveMatch has
+// already rolled every goal/card/penalty), so "skipping" never re-simulates anything - it just makes
+// animateTimedMatch/animateShootout race through their already-fixed script instead of pacing it out
+// in real time. Reset to false at the start of every new match (playFullMatch).
+let liveMatchSkipAll = false;
 function setMatchMiniState(meLabel, oppLabel, myScore, oppScore, minuteText){
   matchMiniState = {meLabel, oppLabel, myScore, oppScore, minuteText};
   renderMatchMiniWidget();
@@ -22763,7 +22784,10 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
     const stepMs = durationMs/totalMinutes;
     let lastMinute = minuteStart, myTally = carryMy, oppTally = carryOpp;
     const timer = setInterval(()=>{
-      const elapsed = Date.now()-startedAt;
+      // liveMatchSkipAll: pretend the full duration has already elapsed - the very next tick (at
+      // most 250ms away) then plays out every remaining minute/event in one pass through the exact
+      // same code below, and the "elapsed>=durationMs" check further down resolves it immediately.
+      const elapsed = liveMatchSkipAll ? durationMs : (Date.now()-startedAt);
       const minute = Math.max(minuteStart, Math.min(minuteEnd, minuteStart+Math.floor(elapsed/stepMs)));
       if(minute>lastMinute){
         let scored = false;
@@ -22897,14 +22921,15 @@ function animateShootout(shootout, myName, oppName, oppAbbr=null){
           spotlight.appendChild(burst);
         }
         seqI++;
-        setTimeout(nextKick, isLastKick ? 1700 : 1200);
-      }, 1000+Math.random()*500);
+        setTimeout(nextKick, liveMatchSkipAll ? 0 : (isLastKick ? 1700 : 1200));
+      }, liveMatchSkipAll ? 0 : 1000+Math.random()*500);
     };
     nextKick();
   });
 }
 async function playFullMatch(md, myName, oppName, oppAbbr=null){
   resetWinProbSmoothing();
+  liveMatchSkipAll = false;
   const totalHorizon = md.wentToET ? 120 : 90;
   const myScorers = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
@@ -22916,7 +22941,7 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null){
     const durET = Math.max(2000, Math.round(md.durationMs*(30/90)));
     const startedAtET = md.startedAt + md.durationMs;
     const waitET = startedAtET - Date.now();
-    if(waitET>0) await new Promise(r=>setTimeout(r, waitET));
+    if(waitET>0 && !liveMatchSkipAll) await new Promise(r=>setTimeout(r, waitET));
     ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr));
   }
   if(md.wentToPK){
