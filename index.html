@@ -1460,6 +1460,8 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .preset-chip{cursor:pointer;display:flex;align-items:center;gap:6px;}
 .preset-del{color:var(--danger);font-weight:700;padding:0 2px;}
 .preset-del:hover{color:#ff8b85;}
+.preset-update{color:var(--muted);font-weight:700;padding:0 2px;}
+.preset-update:hover{color:var(--turf-bright);}
 .chip.active{border-color:var(--turf-bright);color:var(--chalk);}
 .action-btn{background:var(--turf);color:#eafff2;padding:11px;border-radius:9px;font-weight:700;font-size:13px;text-align:center;}
 .action-btn.secondary{background:var(--panel2);color:var(--chalk);border:1px solid var(--line);}
@@ -9814,7 +9816,10 @@ async function openSBCBuilder(sbc){
       <div class="chip sbc-mode-chip" data-mode="cheapest" title="Minimiert den Gesamtwert (RAP) der genutzten Karten \u2014 schont deine wertvollen Karten.">G\u00fcnstigste L\u00f6sung</div>
       <div class="chip sbc-mode-chip" data-mode="duplicates" title="Bevorzugt Spieler, von denen du mehrere Exemplare besitzt.">Nur Duplikate</div>
     </div>
-    <div class="toolbar"><button class="action-btn secondary" id="sbc-autofill" style="width:auto;padding:9px 16px;">Automatisch ausf\u00fcllen</button></div>
+    <div class="toolbar">
+      <button class="action-btn secondary" id="sbc-autofill" style="width:auto;padding:9px 16px;">Automatisch ausf\u00fcllen</button>
+      <button class="action-btn secondary" id="sbc-reset" style="width:auto;padding:9px 16px;">Auswahl zur\u00fccksetzen</button>
+    </div>
     <div id="sbc-reqs" style="margin-bottom:14px;"></div>
     <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / ${sbc.size} ausgew\u00e4hlt</div>
     <div class="toolbar" style="margin-bottom:12px;">
@@ -9849,6 +9854,11 @@ async function openSBCBuilder(sbc){
     <button class="action-btn" id="sbc-submit" disabled style="opacity:.4;margin-top:16px;width:220px;">Kader abgeben</button>
   `;
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  document.getElementById('sbc-reset').addEventListener('click', ()=>{
+    if(!sbcSelection.size && !sbcManagerSelection){ toast('Noch nichts ausgewählt.'); return; }
+    openSBCBuilder(activeSBC);
+    toast('Auswahl zurückgesetzt.');
+  });
   const grid = document.getElementById('sbc-club-grid');
   const uidToEl = new Map();
   const searchableWraps = []; // {wrap, card} - lets the filter bar re-filter without rebuilding the grid
@@ -13094,6 +13104,7 @@ function renderStore(view){
           ${isWM ? `<div class="mono" id="wm-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur dieses Wochenende verf\u00fcgbar</div>` : ''}
           ${isRatings27 ? `<div class="mono" id="ratings27-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur 14 Tage verf\u00fcgbar</div>` : ''}
           <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
+          ${pack.cost>0 && pack.count>0 ? `<div class="hint" style="margin:0;font-size:10.5px;">~${formatCoins(Math.round(pack.cost/pack.count))} pro Karte</div>` : ''}
           <div class="buyrow">
             <div class="price-pill"><div class="pdot"></div>${formatCoins(pack.cost)}</div>
             <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
@@ -15898,7 +15909,7 @@ function renderSquad(view){
         <div>
           <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Gespeicherte Kader</div>
           <div class="formation-select" id="preset-list" style="margin-bottom:8px;">
-            ${squadPresets.map(p=>`<div class="chip preset-chip" data-id="${p.id}">${p.name} <span style="color:var(--muted);">(${(FORMATIONS[p.formation]||{}).label||p.formation})</span><span class="preset-del" data-id="${p.id}">\u00d7</span></div>`).join('') || '<p class="hint" style="margin:0;">Noch keine gespeichert.</p>'}
+            ${squadPresets.map(p=>`<div class="chip preset-chip" data-id="${p.id}">${p.name} <span style="color:var(--muted);">(${(FORMATIONS[p.formation]||{}).label||p.formation})</span><span class="preset-update" data-id="${p.id}" title="Mit aktuellem Kader \u00fcberschreiben">\u27f3</span><span class="preset-del" data-id="${p.id}">\u00d7</span></div>`).join('') || '<p class="hint" style="margin:0;">Noch keine gespeichert.</p>'}
           </div>
           <button class="action-btn secondary" id="save-preset" style="margin-bottom:10px;">Als neuen Kader speichern</button>
         </div>
@@ -15924,6 +15935,11 @@ function renderSquad(view){
       if(e.target.classList.contains('preset-del')){
         e.stopPropagation();
         deleteSquadPreset(chip.dataset.id);
+        return;
+      }
+      if(e.target.classList.contains('preset-update')){
+        e.stopPropagation();
+        updateSquadPreset(chip.dataset.id);
         return;
       }
       loadSquadPreset(chip.dataset.id);
@@ -16267,6 +16283,18 @@ async function loadSquadPreset(id){
   await sSet('squad', squad);
   toast(dropped ? `Kader "${preset.name}" geladen \u2014 ${dropped} Spieler nicht mehr verf\u00fcgbar oder doppelt, Positionen leer gelassen.` : `Kader "${preset.name}" geladen.`);
   renderSquad(document.getElementById('view'));
+}
+// QoL: update an already-saved preset in place with whatever the squad currently looks like, instead
+// of only ever being able to save a brand new preset (which used to be the only way to "update" one -
+// leaving the stale old version still sitting in the list under the same old name).
+async function updateSquadPreset(id){
+  const preset = squadPresets.find(p=>p.id===id);
+  if(!preset) return;
+  preset.formation = squad.formation;
+  preset.slots = {...squad.slots};
+  preset.managerUid = squad.managerUid;
+  await sSet('squadPresets', squadPresets);
+  toast(`"${preset.name}" mit dem aktuellen Kader überschrieben.`);
 }
 async function deleteSquadPreset(id){
   squadPresets = squadPresets.filter(p=>p.id!==id);
