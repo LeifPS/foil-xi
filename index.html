@@ -1379,6 +1379,10 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .sbc-inuse-badge{position:absolute;top:6px;left:50%;transform:translateX(-50%);background:var(--gold);color:#0a0d12;
   font-family:'JetBrains Mono';font-size:8px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:100px;
   z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.4);white-space:nowrap;}
+.picker-compare-btn{position:absolute;bottom:6px;right:6px;width:22px;height:22px;border-radius:50%;
+  background:rgba(6,8,12,.8);border:1px solid var(--line);color:var(--chalk);font-size:12px;font-weight:700;
+  z-index:6;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer;}
+.picker-compare-btn:hover{background:var(--turf-bright);color:#06110b;border-color:var(--turf-bright);}
 .empty-state{padding:60px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px;}
 .empty-state h3{color:var(--chalk);margin-bottom:6px;font-size:18px;}
 
@@ -15834,6 +15838,12 @@ function renderSquad(view){
   });
   document.getElementById('publish-squad').addEventListener('click', publishSquad);
 }
+// Sort modes for openPicker's card list: 'rating' (default, effOv desc - the rating the card would
+// actually have on this slot), 'chem' (how many chemistry stars the card would get if slotted here,
+// computed against the squad's OTHER already-filled slots exactly as squadRating() does), 'name'
+// (alphabetical - useful once you already know who you're looking for).
+const PICKER_SORT_LABEL = {rating:'Rating', chem:'Chemie', name:'Alphabetisch'};
+let pickerSortMode = 'rating';
 async function openPicker(slot){
   const used = allSquadUids();
   const externalLocked = await getExternalLockedUids();
@@ -15841,8 +15851,15 @@ async function openPicker(slot){
   const usedNames = allSquadNames('slots:'+slot.id);
   let items = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   items = items.map(x=>({...x, effOv: previewEffectiveOvAtSlot(x.card, slot, x.uid, profile.showDecimalEffOv)})).filter(x=>x.effOv!==null);
-  items.sort((a,b)=>b.effOv-a.effOv);
   const currentUid = squad.slots[slot.id];
+  const currentCard = currentUid ? ownedCard(currentUid) : null;
+  const mgr = getAssignedManager();
+  const otherSlotted = Object.entries(squad.slots).filter(([sId])=>sId!==slot.id).map(([,uid])=>ownedCard(uid)).filter(Boolean);
+  const chemFor = card=>{
+    const list = otherSlotted.map(c=>({club:c.club, nat:c.nat, lg:c.lg, variant:c.variant})).concat([{club:card.club, nat:card.nat, lg:card.lg, variant:card.variant}]);
+    return computeChemistry(list, mgr?mgr.nat:null)[list.length-1].chem;
+  };
+  items = items.map(x=>({...x, chem: chemFor(x.card)}));
   const primeUidsInSquad = new Set();
   Object.entries(squad.slots).forEach(([sId,uid])=>{
     if(sId===slot.id || !uid) return;
@@ -15850,9 +15867,18 @@ async function openPicker(slot){
     if(c && c.variant==='prime') primeUidsInSquad.add(uid);
   });
   const primeAlreadyUsed = primeUidsInSquad.size>0;
+  const sortItems = ()=>{
+    if(pickerSortMode==='chem') items.sort((a,b)=> b.chem-a.chem || b.effOv-a.effOv);
+    else if(pickerSortMode==='name') items.sort((a,b)=> a.card.n.localeCompare(b.card.n,'de'));
+    else items.sort((a,b)=>b.effOv-a.effOv);
+  };
+  sortItems();
   openModal(`
     <h2 style="margin-bottom:4px;">${posDE(slot.label)} ausw\u00e4hlen</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur Spieler, die ${posDE(slot.label)} tats\u00e4chlich spielen k\u00f6nnen (eigene Position der Karte), werden angezeigt \u2014 sortiert nach dem Rating, das die Karte mit Chemie und Positionsbonus auf diesem Platz h\u00e4tte (in Klammern). Karten im Transfermarkt kannst du direkt einsetzen \u2014 das Angebot wird dabei automatisch zur\u00fcckgezogen. Karten in einem laufenden Handelsangebot sind weiterhin nicht verf\u00fcgbar. Derselbe Spieler (auch als andere Variante) kann nur einmal gleichzeitig aufgestellt werden. Maximal 1 PRIME-Karte gleichzeitig im Kader.</p>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:12px;">Nur Spieler, die ${posDE(slot.label)} tats\u00e4chlich spielen k\u00f6nnen (eigene Position der Karte), werden angezeigt \u2014 die Rating-Zahl in Klammern ist das Rating, das die Karte mit Chemie und Positionsbonus auf diesem Platz h\u00e4tte. Karten im Transfermarkt kannst du direkt einsetzen \u2014 das Angebot wird dabei automatisch zur\u00fcckgezogen. Karten in einem laufenden Handelsangebot sind weiterhin nicht verf\u00fcgbar. Derselbe Spieler (auch als andere Variante) kann nur einmal gleichzeitig aufgestellt werden. Maximal 1 PRIME-Karte gleichzeitig im Kader.</p>
+    <div id="picker-sort-chips" style="display:flex;gap:6px;margin-bottom:12px;">
+      ${Object.entries(PICKER_SORT_LABEL).map(([mode,label])=>`<button class="action-btn secondary picker-sort-chip${pickerSortMode===mode?' active':''}" data-sort="${mode}" style="width:auto;padding:6px 12px;font-size:11.5px;${pickerSortMode===mode?'background:var(--turf-bright);color:#06110b;':''}">${label}</button>`).join('')}
+    </div>
     ${currentUid?`<button class="action-btn secondary" id="clear-slot" style="margin-bottom:14px;width:180px;">Spieler entfernen</button>`:''}
     <div class="picker-list" id="picker-list"></div>
     ${!items.length?'<p class="hint">Noch keine passenden Spieler in deinem Verein f\u00fcr diese Position.</p>':''}`);
@@ -15862,48 +15888,103 @@ async function openPicker(slot){
       await sSet('squad', squad); closeModal(); renderSquad(document.getElementById('view'));
     });
   }
-  const list = document.getElementById('picker-list');
-  items.forEach(({uid,card,effOv})=>{
-    const onMarket = uid!==currentUid && marketLocked.has(uid);
-    const tradeLocked = uid!==currentUid && externalLocked.has(uid) && !onMarket;
-    const nameDupe = uid!==currentUid && usedNames.has(card.n);
-    const primeBlocked = uid!==currentUid && card.variant==='prime' && primeAlreadyUsed;
-    const blocked = tradeLocked || nameDupe || primeBlocked;
-    const wrap = document.createElement('div');
-    wrap.style.cursor = blocked ? 'not-allowed' : 'pointer';
-    wrap.style.position='relative';
-    wrap.style.opacity = uid===currentUid ? '1' : (blocked ? '.35' : (used.has(uid) ? '.35':'1'));
-    wrap.appendChild(cardEl(card,'mini', [effOv], slot.label));
-    if(tradeLocked){
-      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM HANDEL';
-      wrap.appendChild(badge);
-    } else if(onMarket){
-      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.style.background='var(--gold)'; badge.style.color='#2a1d00'; badge.textContent='IM ANGEBOT';
-      wrap.appendChild(badge);
-    } else if(nameDupe){
-      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='SCHON AUFGESTELLT';
-      wrap.appendChild(badge);
-    } else if(primeBlocked){
-      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='MAX. 1 PRIME';
-      wrap.appendChild(badge);
-    }
-    wrap.addEventListener('click', async ()=>{
-      if(tradeLocked){ toast('Diese Karte ist gerade in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier einzusetzen.'); return; }
-      if(nameDupe){ toast(`${card.n} steht bereits an anderer Stelle in deiner Aufstellung \u2014 derselbe Spieler kann nicht doppelt aufgestellt werden.`); return; }
-      if(primeBlocked){ toast('Du hast bereits eine PRIME-Karte im Kader \u2014 maximal 1 PRIME-Karte gleichzeitig erlaubt.'); return; }
-      if(onMarket){
-        const ok = await withdrawMarketListingByCardUid(uid);
-        if(!ok){ toast('Angebot konnte nicht zur\u00fcckgezogen werden \u2014 bitte erneut versuchen.'); return; }
-        toast(`${card.n} wurde vom Transfermarkt zur\u00fcckgezogen und eingesetzt.`);
-      }
-      Object.keys(squad.slots).forEach(s=>{ if(squad.slots[s]===uid) delete squad.slots[s]; });
-      squad.slots[slot.id]=uid;
-      await sSet('squad', squad);
-      closeModal();
-      renderSquad(document.getElementById('view'));
+  document.querySelectorAll('.picker-sort-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      pickerSortMode = chip.dataset.sort;
+      sortItems();
+      renderPickerList();
+      document.querySelectorAll('.picker-sort-chip').forEach(c2=>{
+        const active = c2.dataset.sort===pickerSortMode;
+        c2.classList.toggle('active', active);
+        c2.style.background = active ? 'var(--turf-bright)' : '';
+        c2.style.color = active ? '#06110b' : '';
+      });
     });
-    list.appendChild(wrap);
   });
+  function renderPickerList(){
+    const list = document.getElementById('picker-list');
+    list.innerHTML = '';
+    items.forEach(({uid,card,effOv,chem})=>{
+      const onMarket = uid!==currentUid && marketLocked.has(uid);
+      const tradeLocked = uid!==currentUid && externalLocked.has(uid) && !onMarket;
+      const nameDupe = uid!==currentUid && usedNames.has(card.n);
+      const primeBlocked = uid!==currentUid && card.variant==='prime' && primeAlreadyUsed;
+      const blocked = tradeLocked || nameDupe || primeBlocked;
+      const wrap = document.createElement('div');
+      wrap.style.cursor = blocked ? 'not-allowed' : 'pointer';
+      wrap.style.position='relative';
+      wrap.style.opacity = uid===currentUid ? '1' : (blocked ? '.35' : (used.has(uid) ? '.35':'1'));
+      wrap.appendChild(cardEl(card,'mini', [effOv], slot.label));
+      if(tradeLocked){
+        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM HANDEL';
+        wrap.appendChild(badge);
+      } else if(onMarket){
+        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.style.background='var(--gold)'; badge.style.color='#2a1d00'; badge.textContent='IM ANGEBOT';
+        wrap.appendChild(badge);
+      } else if(nameDupe){
+        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='SCHON AUFGESTELLT';
+        wrap.appendChild(badge);
+      } else if(primeBlocked){
+        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='MAX. 1 PRIME';
+        wrap.appendChild(badge);
+      }
+      // Direct current-vs-candidate comparison, only meaningful when a slot is already occupied by a
+      // DIFFERENT card - opens a compact side-by-side modal instead of forcing a mental diff of two
+      // stat blocks seen minutes apart.
+      if(currentCard && uid!==currentUid){
+        const cmpBtn = document.createElement('button');
+        cmpBtn.type = 'button'; cmpBtn.className = 'picker-compare-btn'; cmpBtn.title = 'Mit aktuellem Spieler vergleichen';
+        cmpBtn.textContent = '\u21c4';
+        cmpBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openCardCompareModal(currentCard, card, slot); });
+        wrap.appendChild(cmpBtn);
+      }
+      wrap.addEventListener('click', async ()=>{
+        if(tradeLocked){ toast('Diese Karte ist gerade in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier einzusetzen.'); return; }
+        if(nameDupe){ toast(`${card.n} steht bereits an anderer Stelle in deiner Aufstellung \u2014 derselbe Spieler kann nicht doppelt aufgestellt werden.`); return; }
+        if(primeBlocked){ toast('Du hast bereits eine PRIME-Karte im Kader \u2014 maximal 1 PRIME-Karte gleichzeitig erlaubt.'); return; }
+        if(onMarket){
+          const ok = await withdrawMarketListingByCardUid(uid);
+          if(!ok){ toast('Angebot konnte nicht zur\u00fcckgezogen werden \u2014 bitte erneut versuchen.'); return; }
+          toast(`${card.n} wurde vom Transfermarkt zur\u00fcckgezogen und eingesetzt.`);
+        }
+        Object.keys(squad.slots).forEach(s=>{ if(squad.slots[s]===uid) delete squad.slots[s]; });
+        squad.slots[slot.id]=uid;
+        await sSet('squad', squad);
+        closeModal();
+        renderSquad(document.getElementById('view'));
+      });
+      list.appendChild(wrap);
+    });
+  }
+  renderPickerList();
+}
+// Compact side-by-side comparison of the currently-slotted card vs a candidate replacement - OVR plus
+// every substat, with a colored delta so the direction of the swap is obvious at a glance.
+function openCardCompareModal(currentCard, candidateCard, slot){
+  const rows = [
+    ['OVR', 'ov'], ['Tempo','pac'], ['Schuss','sho'], ['Passen','pas'], ['Dribbling','dri'], ['Verteidigung','defn'], ['Physis','phy'],
+  ];
+  const statRow = ([label,key])=>{
+    const a = currentCard[key]??0, b = candidateCard[key]??0, d = b-a;
+    const color = d>0 ? 'var(--turf-bright)' : (d<0 ? 'var(--danger)' : 'var(--muted)');
+    const sign = d>0 ? '+' : '';
+    return `<div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
+      <div style="flex:1;text-align:right;font-family:'JetBrains Mono';font-weight:700;">${a}</div>
+      <div style="width:90px;text-align:center;color:var(--muted);font-size:11px;text-transform:uppercase;">${label}</div>
+      <div style="flex:1;font-family:'JetBrains Mono';font-weight:700;">${b}</div>
+      <div style="width:44px;text-align:right;font-family:'JetBrains Mono';font-size:11px;color:${color};">${d!==0?sign+d:''}</div>
+    </div>`;
+  };
+  openModal(`
+    <h2 style="margin-bottom:2px;">Vergleich: ${posDE(slot.label)}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">Aktuell im Kader vs. Kandidat.</p>
+    <div style="display:flex;justify-content:space-around;gap:10px;margin-bottom:14px;">
+      <div style="text-align:center;">${cardEl(currentCard,'mini').outerHTML}<div class="hint" style="margin-top:4px;">Aktuell</div></div>
+      <div style="text-align:center;">${cardEl(candidateCard,'mini').outerHTML}<div class="hint" style="margin-top:4px;">Kandidat</div></div>
+    </div>
+    <div>${rows.map(statRow).join('')}</div>
+    <button class="action-btn secondary" id="compare-close" style="width:100%;margin-top:16px;">Zur\u00fcck zur Auswahl</button>`);
+  document.getElementById('compare-close').addEventListener('click', ()=> openPicker(slot));
 }
 async function openManagerPicker(){
   const items = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr);
