@@ -15756,6 +15756,25 @@ function posGroup2(label){
   if(['CDM','CM','CAM','LM','RM'].includes(label)) return 'MID';
   return 'FWD';
 }
+// Formation-switch preview: how many of your CURRENTLY assigned players would still have a legal spot
+// somewhere in a different formation - a simple greedy first-fit against that formation's slot labels,
+// not a full optimal assignment, but enough to warn "switching to 4-4-2 would strand 3 of your players"
+// before you actually lose their slot assignments by picking it.
+function formationCompatibilityCount(formationKey){
+  const targetForm = FORMATIONS[formationKey];
+  if(!targetForm) return 0;
+  const myCards = Object.values(squad.slots).map(uid=>ownedCard(uid)).filter(Boolean);
+  const targetLabels = targetForm.slots.map(s=>s.label);
+  const usedSlotIdx = new Set();
+  let count = 0;
+  myCards.forEach(card=>{
+    for(let i=0;i<targetLabels.length;i++){
+      if(usedSlotIdx.has(i)) continue;
+      if(positionEligibility(card, targetLabels[i])){ usedSlotIdx.add(i); count++; break; }
+    }
+  });
+  return count;
+}
 function renderSquad(view){
   const form = FORMATIONS[squad.formation];
   const {rating, filled, preciseRating} = squadRating();
@@ -15778,8 +15797,9 @@ function renderSquad(view){
         <div class="chem-meter" id="chem-meter"></div>
         <div><div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Formation</div>
         <div class="formation-select" id="form-select">
-          ${Object.entries(FORMATIONS).map(([k,f])=>`<div class="chip ${k===squad.formation?'active':''}" data-f="${k}">${f.label}</div>`).join('')}
+          ${Object.entries(FORMATIONS).map(([k,f])=>`<div class="chip ${k===squad.formation?'active':''}" data-f="${k}" title="${k===squad.formation?'':`${formationCompatibilityCount(k)}/${f.slots.length} deiner aktuellen Spieler passen direkt auf eine Position in dieser Formation`}">${f.label}${k===squad.formation||filled===0?'':`<span style="display:block;font-size:9px;color:var(--muted);margin-top:2px;">${formationCompatibilityCount(k)}/${f.slots.length} passen</span>`}</div>`).join('')}
         </div></div>
+        <button class="action-btn secondary" id="fill-next-slot" style="margin-bottom:10px;">Nächste freie Position füllen</button>
         <div>
           <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
           <div id="mgr-slot" style="cursor:pointer;"></div>
@@ -15819,6 +15839,11 @@ function renderSquad(view){
     });
   });
   document.getElementById('save-preset').addEventListener('click', saveSquadAsPreset);
+  document.getElementById('fill-next-slot').addEventListener('click', ()=>{
+    const nextSlot = form.slots.find(s=>!squad.slots[s.id]);
+    if(!nextSlot){ toast('Alle 11 Positionen sind bereits besetzt.'); return; }
+    openPicker(nextSlot);
+  });
   const mgrSlot = document.getElementById('mgr-slot');
   if(mgr){
     const mgrCard = cardEl(mgr, 'mini');
