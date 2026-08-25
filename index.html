@@ -18268,7 +18268,7 @@ async function buildLeagueWeekPayload(letter, members, weekStart){
     for(let c=0;c<count;c++){
       (rounds[roundIdx]||[]).forEach(([aIdx,bIdx])=>{
         matches.push({day:dayIdx+1, roundInDay:c, roundsInDay:count, aIdx, bIdx, mid:genId(),
-          pending:true, aGoals:null, bGoals:null, winnerSide:null, liveMd:null, liveRevealed:false});
+          pending:true, aGoals:null, bGoals:null, winnerSide:null, liveMd:null, revealedBy:[]});
       });
       roundIdx++;
     }
@@ -18325,7 +18325,7 @@ async function resolveLigaMatchIfNeeded(letter, weekStart, week, opts={}){
           const r = m.pending ? resultsByMid.get(m.mid) : null;
           if(!r) return m;
           changed = true;
-          return {...m, ...r, liveRevealed:false, pending:false};
+          return {...m, ...r, revealedBy:[], pending:false};
         });
         if(!changed) return;
         tx.update(ref, {matches:newMatches});
@@ -18402,17 +18402,19 @@ function ligaTieBreakHash(userId, seed){
 // week. Omit it (as resolveWeeklyRolloverIfNeeded and any already-finished week's history table do)
 // to fall back to the simpler day<=uptoDay cutoff, since a finished week has nothing left to hide.
 // viewerUserId (optional, only meaningful together with revealWeekStart): the viewer's OWN match stays
-// out of the table too until they've actually watched it live (m.liveRevealed) - ligaMatchRowHTML
-// already hides that match's score behind a "Live spielen" button for the exact same reason, so a
-// decided-but-unwatched result showing up in the table above it would spoil it anyway. Only ever pass
-// this for a LIVE display (a finished week's history table has nothing left to spoil and should always
-// show the real, complete table - see resolveWeeklyRolloverIfNeeded's own call, which omits it).
+// out of the table too until THEY PERSONALLY have watched/skipped it live (m.revealedBy includes their
+// own userId - each participant tracks their own reveal separately, since one side watching their match
+// must not silently spoil it for the other side) - ligaMatchRowHTML already hides that match's score
+// behind a "Live spielen" button for the exact same reason, so a decided-but-unwatched result showing up
+// in the table above it would spoil it anyway. Only ever pass this for a LIVE display (a finished week's
+// history table has nothing left to spoil and should always show the real, complete table - see
+// resolveWeeklyRolloverIfNeeded's own call, which omits it).
 function ligaComputeStandings(teams, matches, uptoDay, seed, revealWeekStart, viewerUserId){
   const table = teams.map((t,i)=>({idx:i, userId:t.userId, name:t.name, pts:0, w:0, d:0, l:0, gf:0, ga:0}));
   matches.filter(m=>{
     if(m.day>uptoDay || m.pending) return false;
     if(revealWeekStart!=null && !ligaMatchIsRevealed(m, revealWeekStart)) return false;
-    if(viewerUserId && !m.liveRevealed){
+    if(viewerUserId && !(m.revealedBy||[]).includes(viewerUserId)){
       const a = teams[m.aIdx], b = teams[m.bIdx];
       if(a.userId===viewerUserId || b.userId===viewerUserId) return false;
     }
@@ -18623,7 +18625,10 @@ function ligaTeamAbbr(name, customAbbr){
 function ligaMatchRowHTML(m, teams, viewerUserId, opts={}){
   const a = teams[m.aIdx], b = teams[m.bIdx];
   const isMine = viewerUserId && (a.userId===viewerUserId || b.userId===viewerUserId);
-  const pendingForViewer = !opts.fixtureOnly && isMine && !m.liveRevealed;
+  // revealedBy tracks per-participant, not a single shared flag - otherwise whichever side plays their
+  // "Live spielen" first would silently reveal the result to the OTHER side too, robbing them of their
+  // own live reveal (see playLigaLiveMatch).
+  const pendingForViewer = !opts.fixtureOnly && isMine && !(m.revealedBy||[]).includes(viewerUserId);
   const decided = !opts.fixtureOnly && !pendingForViewer;
   const aWon = decided && m.winnerSide==='me';
   const bWon = decided && m.winnerSide==='opp';
@@ -18690,11 +18695,11 @@ async function playLigaLiveMatch(letter, weekStart, mid){
         const freshSnap = await tx.get(ref);
         if(!freshSnap.exists()) return;
         const cur = freshSnap.data();
-        const newMatches = cur.matches.map(mm=> mm.mid===mid ? {...mm, liveRevealed:true} : mm);
+        const newMatches = cur.matches.map(mm=> mm.mid===mid ? {...mm, revealedBy:[...new Set([...(mm.revealedBy||[]), clubId])]} : mm);
         tx.update(ref, {matches:newMatches});
       });
     } else {
-      const matches2 = week.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, liveRevealed:true});
+      const matches2 = week.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, revealedBy:[...new Set([...(mm.revealedBy||[]), clubId])]});
       await fb.setDoc(ref, {matches: matches2}, {merge:true});
     }
   }catch(e){ console.warn('mark liga match revealed failed', e); }
