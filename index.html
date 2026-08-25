@@ -10137,7 +10137,7 @@ function renderDirectOffersSection(el){
   document.getElementById('trade-new').addEventListener('click', openTradeBuilder);
   loadTrades();
 }
-let marketFilter = {q:'', pos:'ALL', sort:'newest'};
+let marketFilter = {q:'', pos:'ALL', sort:'newest', maxPrice:''};
 function renderMarketSection(el){
   el.innerHTML = `
     <div class="toolbar" style="margin-bottom:14px;">
@@ -10159,6 +10159,7 @@ function renderMarketSection(el){
         <option value="price_desc">Preis absteigend</option>
         <option value="rating_desc">Rating absteigend</option>
       </select>
+      <input id="market-max-price" inputmode="decimal" placeholder="Max. Preis (z. B. 500k)" value="${marketFilter.maxPrice}" style="max-width:170px;">
     </div>
     <div id="market-note"></div>
     <div class="club-grid" id="market-grid"><p class="hint">L\u00e4dt...</p></div>
@@ -10169,6 +10170,7 @@ function renderMarketSection(el){
   document.getElementById('market-search').addEventListener('input', e=>{ marketFilter.q=e.target.value; drawMarketGrid(); });
   document.getElementById('market-pos').addEventListener('change', e=>{ marketFilter.pos=e.target.value; drawMarketGrid(); });
   document.getElementById('market-sort').addEventListener('change', e=>{ marketFilter.sort=e.target.value; drawMarketGrid(); });
+  document.getElementById('market-max-price').addEventListener('input', e=>{ marketFilter.maxPrice=e.target.value; drawMarketGrid(); });
   loadMarketListings();
 }
 let marketListingsCache = [];
@@ -10199,6 +10201,10 @@ function drawMarketGrid(){
   if(marketFilter.q) items = items.filter(x=>(x.card?x.card.n:x.pack.name).toLowerCase().includes(marketFilter.q.toLowerCase()));
   if(marketFilter.pos==='MGR') items = items.filter(x=>x.listing.itemType==='manager');
   else if(marketFilter.pos!=='ALL') items = items.filter(x=>x.card && x.listing.itemType!=='manager' && posGroup(x.card.pos)===marketFilter.pos);
+  if(marketFilter.maxPrice){
+    const max = parseCoinInput(marketFilter.maxPrice);
+    if(max>0) items = items.filter(x=>x.listing.price<=max);
+  }
   if(marketFilter.sort==='price_asc') items.sort((a,b)=>a.listing.price-b.listing.price);
   else if(marketFilter.sort==='price_desc') items.sort((a,b)=>b.listing.price-a.listing.price);
   else if(marketFilter.sort==='rating_desc') items.sort((a,b)=>(b.card?b.card.ov:0)-(a.card?a.card.ov:0));
@@ -15758,14 +15764,27 @@ function showCardInfoModal(card, uid){
     <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Rating je Position in deinem Verein</div>
     ${rowsHtml}
     <p class="hint" style="margin:10px 0 0;">Inklusive Trainer-Boost, Chemie und Positionsbonus — so, als würde die Karte gerade dort aufgestellt.</p>
-    <div style="display:flex;gap:10px;margin-top:16px;">
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
       <button class="action-btn secondary" id="card-info-rap" style="flex:1;">RAP ~${formatCoins(computeRAP(card))}</button>
       ${uid!=null && !card.isManager ? `<button class="action-btn secondary" id="card-info-fav" style="flex:1;">${card.favorited?'★ Favorit entfernen':'☆ Als Favorit markieren'}</button>` : ''}
       <button class="modal-close" id="card-info-close" style="flex:1;">Schließen</button>
     </div>
+    ${(()=>{
+      if(equippedSlot || card.isManager || uid==null) return '';
+      const emptySlot = form.slots.find(s=>!squad.slots[s.id] && positionEligibility(card, s.label));
+      if(!emptySlot) return '';
+      return `<button class="action-btn" id="card-info-fill" style="width:100%;margin-top:10px;">Direkt auf ${posDE(emptySlot.label)} einsetzen</button>`;
+    })()}
   `);
   document.getElementById('card-info-close').addEventListener('click', closeModal);
   document.getElementById('card-info-rap').addEventListener('click', ()=>showPriceHistoryModal(card));
+  const fillBtn = document.getElementById('card-info-fill');
+  if(fillBtn) fillBtn.addEventListener('click', ()=>{
+    const emptySlot = form.slots.find(s=>!squad.slots[s.id] && positionEligibility(card, s.label));
+    if(!emptySlot) return;
+    closeModal();
+    openPicker(emptySlot);
+  });
   const favBtn = document.getElementById('card-info-fav');
   if(favBtn) favBtn.addEventListener('click', async ()=>{
     const nowFav = await toggleCardFavorite(uid);
