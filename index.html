@@ -9846,6 +9846,9 @@ async function openSBCBuilder(sbc){
         <option value="ALL">Alle Vereine</option>
         ${clubOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
       </select>
+      <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;">
+        <input type="checkbox" id="sbc-filter-available"> Nur verfügbare
+      </label>
     </div>
     <div class="club-grid" id="sbc-club-grid"></div>
     ${sbc.managerReq ? `
@@ -9873,7 +9876,7 @@ async function openSBCBuilder(sbc){
     const el = cardEl(card, 'mini');
     wrap.appendChild(el);
     uidToEl.set(uid, el);
-    searchableWraps.push({wrap, card});
+    searchableWraps.push({wrap, card, unavailable});
     if(unavailable){
       const badge = document.createElement('div');
       badge.className = 'sbc-inuse-badge';
@@ -9900,11 +9903,14 @@ async function openSBCBuilder(sbc){
   const natSelect = document.getElementById('sbc-filter-nat');
   const lgSelect = document.getElementById('sbc-filter-lg');
   const clubSelect = document.getElementById('sbc-filter-club');
+  const availableOnlyCheckbox = document.getElementById('sbc-filter-available');
   const applySbcFilters = ()=>{
     const q = searchInput.value.trim().toLowerCase();
     const pos = posSelect.value, bonus = bonusSelect.value, nat = natSelect.value, lg = lgSelect.value, club = clubSelect.value;
-    searchableWraps.forEach(({wrap,card})=>{
+    const availableOnly = availableOnlyCheckbox.checked;
+    searchableWraps.forEach(({wrap,card,unavailable})=>{
       let show = !q || card.n.toLowerCase().includes(q);
+      if(show && availableOnly) show = !unavailable;
       if(show && nat!=='ALL') show = card.nat===nat;
       if(show && lg!=='ALL') show = card.lg===lg;
       if(show && club!=='ALL') show = card.club===club;
@@ -9915,7 +9921,7 @@ async function openSBCBuilder(sbc){
       wrap.style.display = show ? '' : 'none';
     });
   };
-  [searchInput, posSelect, bonusSelect, natSelect, lgSelect, clubSelect].forEach(elm=>{
+  [searchInput, posSelect, bonusSelect, natSelect, lgSelect, clubSelect, availableOnlyCheckbox].forEach(elm=>{
     elm.addEventListener(elm===searchInput ? 'input' : 'change', applySbcFilters);
   });
   if(sbc.managerReq){
@@ -12281,6 +12287,9 @@ function toast(msg){
   const wrap = document.getElementById('toast-wrap');
   const el = document.createElement('div');
   el.className='toast'; el.textContent=msg;
+  el.style.cursor = 'pointer';
+  el.title = 'Zum Ausblenden klicken';
+  el.addEventListener('click', ()=>el.remove()); // QoL: dismiss early instead of waiting the full 2.6s
   wrap.appendChild(el);
   setTimeout(()=>el.remove(), 2600);
 }
