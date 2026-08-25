@@ -14406,7 +14406,7 @@ function showCutscene(card, onDone){
 }
 
 // ===== CLUB =====
-let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL'};
+let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL', dupOnly:false};
 // Quick-pick MRU list for the admin "Nutzer verwalten" search - purely a local convenience for
 // whoever's using this browser as an admin, so it lives in localStorage (not Firestore/the save):
 // most-recently-looked-up account first, deduped, capped at a handful of entries.
@@ -15236,7 +15236,11 @@ function renderClub(view){
       <select id="club-sort">
         <option value="ov">Sortierung: Rating (hoch\u2192niedrig)</option>
         <option value="name">Sortierung: Name (A\u2192Z)</option>
+        <option value="level">Sortierung: Level-Fortschritt (hoch\u2192niedrig)</option>
       </select>
+      <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;padding:0 4px;">
+        <input type="checkbox" id="club-dup-only"> Nur Duplikate
+      </label>
     </div>
     <div class="club-grid" id="club-grid"></div>
     ${managerCollection.length ? `
@@ -15313,6 +15317,8 @@ function renderClub(view){
   document.getElementById('club-lg').addEventListener('change', e=>{ clubFilter.lg=e.target.value; drawClubGrid(); });
   document.getElementById('club-club').addEventListener('change', e=>{ clubFilter.club=e.target.value; drawClubGrid(); });
   document.getElementById('club-sort').addEventListener('change', e=>{ clubFilter.sort=e.target.value; drawClubGrid(); });
+  document.getElementById('club-dup-only').checked = clubFilter.dupOnly;
+  document.getElementById('club-dup-only').addEventListener('change', e=>{ clubFilter.dupOnly=e.target.checked; drawClubGrid(); });
   drawClubGrid();
   if(managerCollection.length) drawManagerClubGrid();
   if(packCollection.length) drawPackClubGrid();
@@ -15382,12 +15388,25 @@ function drawClubGrid(){
   const grid = document.getElementById('club-grid');
   if(!grid) return;
   let items = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
+  // "Nur Duplikate": the same real player owned more than once, whatever the variant (a base card plus
+  // a special of the same player still counts - you clearly don't need both to fill one slot) - counted
+  // BEFORE the other filters below so toggling position/nation filters doesn't change what counts as a
+  // duplicate out from under you.
+  if(clubFilter.dupOnly){
+    const nameCounts = new Map();
+    items.forEach(x=> nameCounts.set(x.card.n, (nameCounts.get(x.card.n)||0)+1));
+    items = items.filter(x=> nameCounts.get(x.card.n)>1);
+  }
   if(clubFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(clubFilter.q.toLowerCase()));
   if(clubFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===clubFilter.pos);
   if(clubFilter.nat!=='ALL') items = items.filter(x=>x.card.nat===clubFilter.nat);
   if(clubFilter.lg!=='ALL') items = items.filter(x=>x.card.lg===clubFilter.lg);
   if(clubFilter.club!=='ALL') items = items.filter(x=>x.card.club===clubFilter.club);
-  items.sort((a,b)=> clubFilter.sort==='ov' ? b.card.ov-a.card.ov : a.card.n.localeCompare(b.card.n));
+  items.sort((a,b)=>{
+    if(clubFilter.sort==='name') return a.card.n.localeCompare(b.card.n,'de');
+    if(clubFilter.sort==='level') return (b.card.xp||0)-(a.card.xp||0);
+    return b.card.ov-a.card.ov;
+  });
   renderLazyGrid(grid, items, ({uid,card})=>{
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap';
