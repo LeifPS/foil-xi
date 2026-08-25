@@ -1462,6 +1462,8 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .preset-del:hover{color:#ff8b85;}
 .preset-update{color:var(--muted);font-weight:700;padding:0 2px;}
 .preset-update:hover{color:var(--turf-bright);}
+.preset-dup{color:var(--muted);font-weight:700;padding:0 2px;}
+.preset-dup:hover{color:var(--gold);}
 .chip.active{border-color:var(--turf-bright);color:var(--chalk);}
 .action-btn{background:var(--turf);color:#eafff2;padding:11px;border-radius:9px;font-weight:700;font-size:13px;text-align:center;}
 .action-btn.secondary{background:var(--panel2);color:var(--chalk);border:1px solid var(--line);}
@@ -15388,6 +15390,7 @@ function renderClub(view){
         <option value="ov">Sortierung: Rating (hoch\u2192niedrig)</option>
         <option value="name">Sortierung: Name (A\u2192Z)</option>
         <option value="level">Sortierung: Level-Fortschritt (hoch\u2192niedrig)</option>
+        <option value="rap">Sortierung: Marktwert/RAP (hoch\u2192niedrig)</option>
       </select>
       <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;padding:0 4px;">
         <input type="checkbox" id="club-dup-only"> Nur Duplikate
@@ -15563,6 +15566,7 @@ function drawClubGrid(){
   items.sort((a,b)=>{
     if(clubFilter.sort==='name') return a.card.n.localeCompare(b.card.n,'de');
     if(clubFilter.sort==='level') return (b.card.xp||0)-(a.card.xp||0);
+    if(clubFilter.sort==='rap') return computeRAP(b.card)-computeRAP(a.card);
     return b.card.ov-a.card.ov;
   });
   // Quick "what am I looking at" summary line - total RAP value of exactly what's currently filtered
@@ -15937,7 +15941,7 @@ function renderSquad(view){
         <div>
           <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Gespeicherte Kader</div>
           <div class="formation-select" id="preset-list" style="margin-bottom:8px;">
-            ${squadPresets.map(p=>`<div class="chip preset-chip" data-id="${p.id}">${p.name} <span style="color:var(--muted);">(${(FORMATIONS[p.formation]||{}).label||p.formation})</span><span class="preset-update" data-id="${p.id}" title="Mit aktuellem Kader \u00fcberschreiben">\u27f3</span><span class="preset-del" data-id="${p.id}">\u00d7</span></div>`).join('') || '<p class="hint" style="margin:0;">Noch keine gespeichert.</p>'}
+            ${squadPresets.map(p=>`<div class="chip preset-chip" data-id="${p.id}">${p.name} <span style="color:var(--muted);">(${(FORMATIONS[p.formation]||{}).label||p.formation})</span><span class="preset-dup" data-id="${p.id}" title="Als Kopie speichern">\u29c9</span><span class="preset-update" data-id="${p.id}" title="Mit aktuellem Kader \u00fcberschreiben">\u27f3</span><span class="preset-del" data-id="${p.id}">\u00d7</span></div>`).join('') || '<p class="hint" style="margin:0;">Noch keine gespeichert.</p>'}
           </div>
           <button class="action-btn secondary" id="save-preset" style="margin-bottom:10px;">Als neuen Kader speichern</button>
         </div>
@@ -15968,6 +15972,11 @@ function renderSquad(view){
       if(e.target.classList.contains('preset-update')){
         e.stopPropagation();
         updateSquadPreset(chip.dataset.id);
+        return;
+      }
+      if(e.target.classList.contains('preset-dup')){
+        e.stopPropagation();
+        duplicateSquadPreset(chip.dataset.id);
         return;
       }
       loadSquadPreset(chip.dataset.id);
@@ -16323,6 +16332,22 @@ async function updateSquadPreset(id){
   preset.managerUid = squad.managerUid;
   await sSet('squadPresets', squadPresets);
   toast(`"${preset.name}" mit dem aktuellen Kader überschrieben.`);
+}
+// QoL: clone a saved preset under a new name, e.g. to try a variation ("Startelf gegen starke
+// Abwehr") without losing the original.
+async function duplicateSquadPreset(id){
+  const preset = squadPresets.find(p=>p.id===id);
+  if(!preset) return;
+  askTextModal('Name für die Kopie', preset.name+' (Kopie)', async (name)=>{
+    if(!name) return;
+    squadPresets.push({
+      id: genId(), name: name.slice(0,30),
+      formation: preset.formation, slots: {...preset.slots}, managerUid: preset.managerUid
+    });
+    await sSet('squadPresets', squadPresets);
+    toast('Kopie gespeichert.');
+    renderSquad(document.getElementById('view'));
+  }, 30);
 }
 async function deleteSquadPreset(id){
   squadPresets = squadPresets.filter(p=>p.id!==id);
