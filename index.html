@@ -1392,6 +1392,15 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .rating-hero{display:flex;align-items:center;gap:14px;}
 .rating-hero .num{font-family:'Anton';font-size:44px;line-height:1;}
 .rating-hero .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+/* Team-Rating (above) is a flat average of all 11 Overalls - what the match engine actually uses is
+   two SEPARATE numbers with heavy position-weighting (attack favors FWD/MID, defense favors DEF/GK)
+   plus a star-player/pace/passing adjustment - so two squads with an identical Team-Rating can still
+   have quite different Angriff/Abwehr. This row shows those two real numbers directly instead of
+   leaving them invisible, computed via the same computeTeamProfile() the engine itself calls. */
+.atk-def-row{display:flex;gap:10px;margin:2px 0 4px;}
+.atk-def-tile{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;text-align:center;}
+.atk-def-tile .num{font-family:'Anton';font-size:22px;line-height:1;}
+.atk-def-tile .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
 .chem-meter{display:flex;flex-direction:column;gap:7px;}
 .chem-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;justify-content:space-between;align-items:center;}
 .chem-label b{color:var(--chalk);font-family:'JetBrains Mono';text-transform:none;letter-spacing:0;}
@@ -15570,12 +15579,20 @@ function renderSquad(view){
   const form = FORMATIONS[squad.formation];
   const {rating, filled, preciseRating} = squadRating();
   const mgr = getAssignedManager();
+  // Team-Rating (above) is a flat average - Angriff/Abwehr are the two real numbers the match engine
+  // actually plays with (computeTeamProfile), shown directly so a squad's real playing strength isn't
+  // hidden behind a single averaged number. Only meaningful once at least one player is assigned.
+  const teamProfile = filled ? computeTeamProfile(getMySquadPlayers(), rating) : null;
   view.innerHTML = `
     <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position tats\u00e4chlich spielen k\u00f6nnen, werden angeboten \u2014 Karten mit mehreren Positionen bekommen auf ihrer 1. bzw. 2. gelisteten Position einen Rating-Bonus (++/+). F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></div>
     <div class="squad-layout">
       <div class="pitch" id="pitch"></div>
       <div class="side-panel">
         <div class="rating-hero"><div class="num" style="display:flex;align-items:baseline;">${rating||'--'}<span class="mono" style="font-size:15px;font-weight:400;color:var(--muted);margin-left:1px;">${filled?ratingDecimalSuffix(preciseRating):''}</span></div><div><div class="lbl">Team-Rating</div><div class="lbl">${filled}/11 besetzt</div></div></div>
+        <div class="atk-def-row" title="Das hier benutzt die Match-Engine wirklich - nicht die Team-Rating oben, die nur ein flacher Durchschnitt ist.">
+          <div class="atk-def-tile"><div class="num">${teamProfile ? teamProfile.attack : '--'}</div><div class="lbl">Angriff</div></div>
+          <div class="atk-def-tile"><div class="num">${teamProfile ? teamProfile.defense : '--'}</div><div class="lbl">Abwehr</div></div>
+        </div>
         <div class="chem-meter" id="chem-meter"></div>
         <div><div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Formation</div>
         <div class="formation-select" id="form-select">
@@ -17623,7 +17640,7 @@ function boostBotXI(xi, slots, forceManager){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn};
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
@@ -18037,7 +18054,7 @@ function squadRatingFromSaveData(data){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slot.label);
     if(info) ov += info.bonus;
-    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn});
+    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas});
   });
   const chemmed = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   const filled = chemmed.length;
@@ -21984,7 +22001,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -23275,7 +23292,7 @@ function pickRealisticOpponent(targetRating){
     attempt = {xi: weakenedBase, chemPlayers: weakenedChem, rating: weakenedRating};
   }
   const {xi, chemPlayers, rating} = attempt;
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img, id:p.id, sho:p.sho, defn:p.defn}));
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img, id:p.id, sho:p.sho, defn:p.defn, pac:p.pac, dri:p.dri, phy:p.phy, pas:p.pas}));
   const cardRefs = xi.map((p,i)=>({id:p.id, pos:slots[i].label}));
   return {owner:chosen.club, rating, players, cardRefs, formation:'433', isBot:true, managerName: mgr?mgr.n:null};
 }
