@@ -73,9 +73,12 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 
 /* ---- nav ---- */
 #nav{display:flex;gap:2px;padding:0 20px;background:var(--void);border-bottom:1px solid var(--line);overflow-x:auto;}
-.nav-btn{padding:13px 16px;background:none;color:var(--muted);font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border-bottom:2px solid transparent;white-space:nowrap;transition:.15s;}
+.nav-btn{padding:13px 16px;background:none;color:var(--muted);font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border-bottom:2px solid transparent;white-space:nowrap;transition:.15s;position:relative;}
 .nav-btn:hover{color:var(--chalk);}
 .nav-btn.active{color:var(--chalk);border-bottom-color:var(--turf-bright);}
+.nav-badge{position:absolute;top:6px;right:2px;min-width:15px;height:15px;padding:0 4px;border-radius:20px;
+  background:#e2564f;color:#fff;font-size:9.5px;font-weight:700;font-family:'JetBrains Mono';line-height:15px;
+  text-align:center;box-shadow:0 0 0 2px var(--void);}
 
 /* ---- mobile bottom nav ----
    Desktop keeps the top #nav exactly as it was (text tabs in a row). Below the 820px breakpoint (same
@@ -95,9 +98,10 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   }
   #nav-mobile::-webkit-scrollbar{display:none;}
   .nav-btn-m{flex:0 0 20%;scroll-snap-align:start;display:flex;align-items:center;justify-content:center;
-    padding:11px 2px;background:none;border:none;color:var(--muted);}
+    padding:11px 2px;background:none;border:none;color:var(--muted);position:relative;}
   .nav-btn-m svg{width:22px;height:22px;}
   .nav-btn-m.active{color:var(--turf-bright);background:rgba(61,196,130,.12);}
+  .nav-btn-m .nav-badge{top:4px;right:14%;}
 }
 
 #view{flex:1;padding:22px 20px 60px;}
@@ -110,6 +114,7 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .view-head p{color:var(--muted);font-size:13.5px;margin-top:4px;max-width:640px;line-height:1.5;}
 
 /* ---- pack grid ---- */
+.liga-quickpreview-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:18px;}
 .pack-tier-section{margin-bottom:28px;}
 .pack-tier-section:last-child{margin-bottom:0;}
 .pack-tier-heading{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
@@ -12105,6 +12110,7 @@ async function init(){
   renderView('store');
   updateCoinDisplay();
   hideBootLoader();
+  refreshLigaPendingBadge();
   if(profile.pendingWarning){
     const warningMsg = profile.pendingWarning;
     profile.pendingWarning = null;
@@ -12562,6 +12568,83 @@ const TAB_ICON = {
 };
 const ADMIN_USERS = new Set(['leifps','test']);
 function isAdmin(){ return clubId && ADMIN_USERS.has(clubId); }
+// How many of the viewer's OWN Liga matches are revealed-and-decided but not yet watched/skipped by
+// them (see revealedBy) - shown as a small red nav badge on the Ligen tab so you know there's something
+// waiting without having to open the tab first. Refreshed on boot, whenever the Ligen tab itself loads
+// fresh data, and right after finishing a live Liga match (see refreshLigaPendingBadge's call sites).
+let ligaPendingCount = 0;
+async function refreshLigaPendingBadge(){
+  try{
+    await fbReady;
+    if(!fb){ ligaPendingCount = 0; renderNavBadges(); return; }
+    const membership = await loadMyLeagueMembership();
+    const weekStart = ligaCurrentWeekStart();
+    if(!membership || weekStart==null){ ligaPendingCount = 0; renderNavBadges(); return; }
+    const snap = await fb.getDoc(fb.doc(fb.db,'leagueWeeks', membership.letter+'_'+weekStart));
+    if(!snap.exists()){ ligaPendingCount = 0; renderNavBadges(); return; }
+    const week = snap.data();
+    ligaPendingCount = week.matches.filter(m=>{
+      if(m.pending || !ligaMatchIsRevealed(m, weekStart)) return false;
+      const a = week.teams[m.aIdx], b = week.teams[m.bIdx];
+      if(a.userId!==clubId && b.userId!==clubId) return false;
+      return !(m.revealedBy||[]).includes(clubId);
+    }).length;
+  }catch(e){ console.warn('liga pending badge refresh failed', e); }
+  renderNavBadges();
+}
+// Compact "your next Liga matches" widget on the Kartenladen landing tab, so a ready-to-watch or
+// upcoming match is visible immediately without navigating into the Ligen tab first (the nav badge -
+// see refreshLigaPendingBadge - covers "is there anything at all", this covers "what/when exactly").
+// Fills in asynchronously and checks the host element still exists before writing, since the user may
+// have already navigated away by the time the Firestore reads resolve.
+async function renderLigaQuickPreview(){
+  const host = document.getElementById('liga-quickpreview');
+  if(!host) return;
+  try{
+    await fbReady;
+    if(!fb) return;
+    const membership = await loadMyLeagueMembership();
+    const weekStart = ligaCurrentWeekStart();
+    if(!membership || weekStart==null) return;
+    const snap = await fb.getDoc(fb.doc(fb.db,'leagueWeeks', membership.letter+'_'+weekStart));
+    if(!snap.exists()) return;
+    const week = snap.data();
+    week.teams = await ligaRefreshTeamDisplay(week.teams);
+    const mine = week.matches.filter(m=>{
+      const a = week.teams[m.aIdx], b = week.teams[m.bIdx];
+      return a.userId===clubId || b.userId===clubId;
+    }).sort((x,y)=>x.day-y.day);
+    const upcoming = mine.filter(m=> m.pending || !(m.revealedBy||[]).includes(clubId)).slice(0,3);
+    const stillHost = document.getElementById('liga-quickpreview');
+    if(!stillHost || !upcoming.length) return;
+    const rows = upcoming.map(m=>{
+      if(!m.pending && ligaMatchIsRevealed(m, weekStart)) return ligaMatchRowHTML(m, week.teams, clubId);
+      const dayStart = weekStart + (m.day-1)*24*60*60*1000;
+      const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
+      const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+      return ligaMatchRowHTML(m, week.teams, clubId, {fixtureOnly:true, revealTime, letter:membership.letter});
+    }).join('');
+    stillHost.innerHTML = `<div class="liga-quickpreview-box">
+      <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">🏆 Deine nächsten Liga-Spiele</div>
+      ${rows}
+    </div>`;
+    stillHost.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
+      btn.addEventListener('click', ()=> playLigaLiveMatch(membership.letter, weekStart, btn.dataset.ligaLiveMid));
+    });
+  }catch(e){ console.warn('liga quick preview failed', e); }
+}
+// Cheap DOM-only patch (no re-render of the whole nav/current view) so refreshLigaPendingBadge can be
+// called freely without disturbing whatever's currently on screen.
+function renderNavBadges(){
+  document.querySelectorAll('#nav .nav-badge, #nav-mobile .nav-badge').forEach(el=>el.remove());
+  if(ligaPendingCount<=0) return;
+  document.querySelectorAll('[data-tab="ligen"]').forEach(btn=>{
+    const badge = document.createElement('span');
+    badge.className = 'nav-badge';
+    badge.textContent = ligaPendingCount>9 ? '9+' : String(ligaPendingCount);
+    btn.appendChild(badge);
+  });
+}
 function renderNav(){
   const nav = document.getElementById('nav');
   nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${id==='trade' && !tradeUnlocked() ? '\ud83d\udd12 ' : ''}${label}</button>`).join('')
@@ -12581,6 +12664,7 @@ function renderNav(){
   }));
   const adminBtn = document.getElementById('admin-fab');
   if(adminBtn) adminBtn.remove();
+  renderNavBadges();
 }
 
 function renderView(tab){
@@ -12843,11 +12927,13 @@ function renderStore(view){
   view.innerHTML = `
     <div class="view-head"><h2>Kartenladen</h2><p>\u00d6ffne Packs, um Spieler zu deinem Verein hinzuzuf\u00fcgen. Die angegebenen Werte sind garantierte Mindestwerte \u2014 jedes Pack kann auch mehr liefern.</p></div>
     ${renderDailyBanner()}
+    <div id="liga-quickpreview"></div>
     <div class="toolbar" style="margin-bottom:18px;">
       <input id="redeem-input" placeholder="Code einl\u00f6sen..." style="max-width:220px;">
       <button class="action-btn secondary" id="redeem-btn" style="width:auto;padding:9px 16px;">Einl\u00f6sen</button>
     </div>
     <div id="pack-sections"></div>`;
+  renderLigaQuickPreview();
   const claimBtn = document.getElementById('daily-claim');
   if(claimBtn && !claimBtn.disabled) claimBtn.addEventListener('click', (e)=>{ e.target.disabled=true; claimDailyReward(); });
   const sectionsEl = document.getElementById('pack-sections');
@@ -18713,6 +18799,7 @@ async function playLigaLiveMatch(letter, weekStart, mid){
   }catch(e){ console.warn('mark liga match revealed failed', e); }
   closeModal();
   renderView('ligen');
+  refreshLigaPendingBadge();
 }
 // ===== Ligen Stufe 3: Auf-/Abstieg, Relegation, Belohnungen, Neuzugänge, Sperr-Austausch =====
 // Two-legged relegation tie: aggregate goals across both legs decide it; a tied aggregate goes to one
@@ -19191,6 +19278,7 @@ function renderLigenPanel(view){
     box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
       btn.addEventListener('click', ()=> playLigaLiveMatch(membership.letter, targetWeekStart, btn.dataset.ligaLiveMid));
     });
+    refreshLigaPendingBadge();
   })();
 }
 // ===== WM 2026: the real 48-team format end to end - 12 groups of 4, top 2 plus the best 8 thirds
