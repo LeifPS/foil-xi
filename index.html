@@ -1398,12 +1398,11 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
    have quite different Angriff/Abwehr. This row shows those two real numbers directly instead of
    leaving them invisible, computed via the same computeTeamProfile() the engine itself calls. */
 .atk-def-row{display:flex;gap:10px;margin:2px 0 4px;}
-.atk-def-tile{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;
+.atk-def-tile{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
   border:1px solid var(--line);border-radius:12px;padding:9px 12px;}
 .atk-def-tile.atk{background:linear-gradient(135deg, rgba(226,86,79,.18), rgba(226,86,79,.02) 70%);}
 .atk-def-tile.def{background:linear-gradient(135deg, rgba(77,168,255,.18), rgba(77,168,255,.02) 70%);}
-.atk-def-icon{font-size:19px;line-height:1;flex-shrink:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));}
-.atk-def-body{display:flex;flex-direction:column;min-width:0;}
+.atk-def-body{display:flex;flex-direction:column;align-items:center;min-width:0;}
 .atk-def-tile .num{font-family:'Anton';font-size:20px;line-height:1;font-variant-numeric:tabular-nums;}
 .atk-def-tile.atk .num{color:#ff7b72;}
 .atk-def-tile.def .num{color:#6fb4ff;}
@@ -15590,7 +15589,7 @@ function renderSquad(view){
   // actually plays with (computeTeamProfile), shown directly so a squad's real playing strength isn't
   // hidden behind a single averaged number. Only meaningful once at least one player is assigned.
   const teamProfile = filled ? computeTeamProfile(getMySquadPlayers(), rating) : null;
-  const fmtAtkDef = v => v.toFixed(1).replace('.', ',');
+  const fmtAtkDef = v => v.toFixed(2).replace('.', ',');
   view.innerHTML = `
     <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position tats\u00e4chlich spielen k\u00f6nnen, werden angeboten \u2014 Karten mit mehreren Positionen bekommen auf ihrer 1. bzw. 2. gelisteten Position einen Rating-Bonus (++/+). F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></div>
     <div class="squad-layout">
@@ -15598,8 +15597,8 @@ function renderSquad(view){
       <div class="side-panel">
         <div class="rating-hero"><div class="num" style="display:flex;align-items:baseline;">${rating||'--'}<span class="mono" style="font-size:15px;font-weight:400;color:var(--muted);margin-left:1px;">${filled?ratingDecimalSuffix(preciseRating):''}</span></div><div><div class="lbl">Team-Rating</div><div class="lbl">${filled}/11 besetzt</div></div></div>
         <div class="atk-def-row" title="Das hier benutzt die Match-Engine wirklich - nicht die Team-Rating oben, die nur ein flacher Durchschnitt ist.">
-          <div class="atk-def-tile atk"><div class="atk-def-icon">⚔️</div><div class="atk-def-body"><div class="num">${teamProfile ? fmtAtkDef(teamProfile.preciseAttack) : '--'}</div><div class="lbl">Offensive</div></div></div>
-          <div class="atk-def-tile def"><div class="atk-def-icon">🛡️</div><div class="atk-def-body"><div class="num">${teamProfile ? fmtAtkDef(teamProfile.preciseDefense) : '--'}</div><div class="lbl">Defensive</div></div></div>
+          <div class="atk-def-tile atk"><div class="atk-def-body"><div class="num">${teamProfile ? fmtAtkDef(teamProfile.preciseAttack) : '--'}</div><div class="lbl">Offensive</div></div></div>
+          <div class="atk-def-tile def"><div class="atk-def-body"><div class="num">${teamProfile ? fmtAtkDef(teamProfile.preciseDefense) : '--'}</div><div class="lbl">Defensive</div></div></div>
         </div>
         <div class="chem-meter" id="chem-meter"></div>
         <div><div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Formation</div>
