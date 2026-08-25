@@ -1379,13 +1379,13 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .sbc-inuse-badge{position:absolute;top:6px;left:50%;transform:translateX(-50%);background:var(--gold);color:#0a0d12;
   font-family:'JetBrains Mono';font-size:8px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:100px;
   z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.4);white-space:nowrap;}
-/* Top-left corner (nothing else lives there on a mini card - the variant badge sits lower-right of the
-   photo, and favorite/untradable/level badges all poke out along the bottom edge), sized and colored to
-   stand out rather than blend into the card like a status badge would. */
-.picker-compare-btn{position:absolute;top:6px;left:6px;width:26px;height:26px;border-radius:8px;
-  background:var(--gold);border:none;color:#2a1d00;font-size:15px;font-weight:700;
-  z-index:8;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;}
-.picker-compare-btn:hover{background:var(--turf-bright);}
+/* Deliberately NOT overlaid on the card face - every corner/edge is already taken (OVR+pos top-left/
+   right, variant badge lower-right of the photo, favorite/untradable/level badges poking out along the
+   bottom edge), so this sits in normal flow right below the card instead of fighting for space on it. */
+.picker-compare-btn{display:block;width:100%;margin-top:4px;padding:4px 0;border-radius:7px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--chalk);font-size:12px;font-weight:700;
+  cursor:pointer;}
+.picker-compare-btn:hover{background:var(--turf-bright);color:#06110b;border-color:var(--turf-bright);}
 #scroll-top-btn{position:fixed;right:18px;bottom:24px;width:42px;height:42px;border-radius:50%;
   background:var(--panel);border:1px solid var(--line);color:var(--chalk);font-size:18px;font-weight:700;
   box-shadow:0 4px 14px rgba(0,0,0,.4);cursor:pointer;z-index:39;display:none;}
@@ -16209,7 +16209,7 @@ async function openPicker(slot){
       if(currentCard && uid!==currentUid){
         const cmpBtn = document.createElement('button');
         cmpBtn.type = 'button'; cmpBtn.className = 'picker-compare-btn'; cmpBtn.title = 'Mit aktuellem Spieler vergleichen';
-        cmpBtn.textContent = '\u21c4';
+        cmpBtn.textContent = '\u21c4 Vergleichen';
         cmpBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openCardCompareModal(currentCard, card, slot); });
         wrap.appendChild(cmpBtn);
       }
