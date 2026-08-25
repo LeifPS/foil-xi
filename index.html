@@ -11993,6 +11993,13 @@ function applyGraphicsPreset(){
   document.body.classList.toggle('perf-lite', profile && profile.graphicsPreset==='lite');
 }
 async function init(){
+  // WM-Variante/WM-Kapitän cards are otherwise only registered into BY_ID lazily, on first actual use
+  // (e.g. opening a World Cup Pack) - a session that never happened to touch them would then fail every
+  // BY_ID.get() lookup for such a card (undefined -> treated as "not owned"/empty), which is exactly
+  // what made WM-Kapitäne intermittently show as empty positions in OTHER players' published squads
+  // (and could equally corrupt that squad's rating in Liga-Matches, resolved by whichever client happens
+  // to be online). Force-building both pools once at boot means every session's BY_ID is always complete.
+  wm26VarianteSpecials(); wm26KapitaenSpecials();
   profile = await sGet('profile');
   if(!profile){
     profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false};
@@ -21903,6 +21910,13 @@ async function loadLeaderboard(){
 // full real card objects via BY_ID so viewers get real stats/variant styling, not a stale snapshot.
 // Keeps null entries in place (alignment with FORMATIONS[...].slots matters for rendering).
 function resolveSquadDataPlayers(squadData){
+  // WM-Variante/WM-Kapitän cards (see wm26VarianteSpecials/wm26KapitaenSpecials) are only registered
+  // into BY_ID lazily, the first time this session actually needs them (e.g. opening a World Cup Pack).
+  // A viewer who never did that would otherwise find nothing under BY_ID.get(p.cardId) for such a slot
+  // in someone else's published squad, silently rendering it as an empty position - force-build both
+  // pools here (cheap no-op once already built) so every published squad resolves fully regardless of
+  // what the viewing session happens to have touched already.
+  wm26VarianteSpecials(); wm26KapitaenSpecials();
   return (squadData.players||[]).map(p=>{
     const base = p && p.cardId!=null ? BY_ID.get(p.cardId) : null;
     if(!base) return null;
