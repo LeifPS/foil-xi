@@ -8276,16 +8276,24 @@ const RATINGS27_IMG_OVERRIDE = {
   251854: 'https://cdn3.futbin.com/content/fifa26/img/players/p134469582.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=47e8daa7114bf30d33359f62555e197f', // Pedri
   192119: 'https://cdn3.futbin.com/content/fifa26/img/players/p100855415.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=2a4627f82de80524c5fd2c7251eff8e1', // T. Courtois
 };
+// The RATINGS27_IMG_OVERRIDE real action photos are reserved for the rare 100+ "Ratings Reload" pull
+// below, not the base 88-91 "27 Ratings" cards - those stay on the plain sofifa image (p.img) so the
+// real photo remains something worth pulling for, not something every copy of the pack already has.
 const RATINGS27_CARDS = RATINGS27_ROSTER.map((p,i)=>({
   id:RATINGS27_ID_BASE+i+1, n:p.n, pos:p.pos, ov:p.ov, pot:p.ov, nat:p.nat, lg:p.lg, club:p.club,
   pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy, foot:p.foot,
-  img:RATINGS27_IMG_OVERRIDE[p.baseId] || p.img, gk:!!p.gk,
+  img:p.img, gk:!!p.gk,
   baseId:p.baseId, variant:'ratings27', variantLabel:'27 Ratings', theme:'ratings27',
 }));
 RATINGS27_CARDS.forEach(c=>BY_ID.set(c.id,c));
 // rare pull: +15 OVR over the ABOVE (refreshed) values, not the player's old/original rating - the
 // substat gain is computed from RATINGS27_CARDS' own .ov, so it stacks on top of the FC27 refresh.
-const RATINGS27_RELOAD_CARDS = RATINGS27_CARDS.map((c,i)=>boostBaseToOv(c, c.ov+15, RATINGS27_RELOAD_ID_BASE+i+1, 'ratings27reload', 'Ratings Reload', 'ratings27reload'));
+// The real action photo (RATINGS27_IMG_OVERRIDE) is applied here, only to the 100+ Reload card.
+const RATINGS27_RELOAD_CARDS = RATINGS27_CARDS.map((c,i)=>{
+  const card = boostBaseToOv(c, c.ov+15, RATINGS27_RELOAD_ID_BASE+i+1, 'ratings27reload', 'Ratings Reload', 'ratings27reload');
+  if(RATINGS27_IMG_OVERRIDE[c.baseId]) card.img = RATINGS27_IMG_OVERRIDE[c.baseId];
+  return card;
+});
 RATINGS27_RELOAD_CARDS.forEach(c=>BY_ID.set(c.id,c));
 // two-tier split for the pack odds: a 105+ Reload card (base 90/91 players) is rarer than a 103-104
 // one (base 88/89 players), even though both are "a Reload card" for the overall 15%-per-pack figure.
