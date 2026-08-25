@@ -10145,7 +10145,7 @@ function renderDirectOffersSection(el){
   document.getElementById('trade-new').addEventListener('click', openTradeBuilder);
   loadTrades();
 }
-let marketFilter = {q:'', pos:'ALL', sort:'newest', maxPrice:''};
+let marketFilter = {q:'', pos:'ALL', sort:'newest', maxPrice:'', minOv:''};
 function renderMarketSection(el){
   el.innerHTML = `
     <div class="toolbar" style="margin-bottom:14px;">
@@ -10168,6 +10168,7 @@ function renderMarketSection(el){
         <option value="rating_desc">Rating absteigend</option>
       </select>
       <input id="market-max-price" inputmode="decimal" placeholder="Max. Preis (z. B. 500k)" value="${marketFilter.maxPrice}" style="max-width:170px;">
+      <input id="market-min-ov" type="number" min="1" max="115" placeholder="Min. Rating" value="${marketFilter.minOv}" style="max-width:110px;">
     </div>
     <div id="market-note"></div>
     <div class="club-grid" id="market-grid"><p class="hint">L\u00e4dt...</p></div>
@@ -10179,6 +10180,7 @@ function renderMarketSection(el){
   document.getElementById('market-pos').addEventListener('change', e=>{ marketFilter.pos=e.target.value; drawMarketGrid(); });
   document.getElementById('market-sort').addEventListener('change', e=>{ marketFilter.sort=e.target.value; drawMarketGrid(); });
   document.getElementById('market-max-price').addEventListener('input', e=>{ marketFilter.maxPrice=e.target.value; drawMarketGrid(); });
+  document.getElementById('market-min-ov').addEventListener('input', e=>{ marketFilter.minOv=e.target.value; drawMarketGrid(); });
   loadMarketListings();
 }
 let marketListingsCache = [];
@@ -10212,6 +10214,10 @@ function drawMarketGrid(){
   if(marketFilter.maxPrice){
     const max = parseCoinInput(marketFilter.maxPrice);
     if(max>0) items = items.filter(x=>x.listing.price<=max);
+  }
+  if(marketFilter.minOv){
+    const minOv = Math.floor(Number(marketFilter.minOv)||0);
+    if(minOv>0) items = items.filter(x=>x.card && x.card.ov>=minOv);
   }
   if(marketFilter.sort==='price_asc') items.sort((a,b)=>a.listing.price-b.listing.price);
   else if(marketFilter.sort==='price_desc') items.sort((a,b)=>b.listing.price-a.listing.price);
@@ -19628,7 +19634,26 @@ function renderLigenPanel(view){
     const myRow = standings.find(t=>t.userId===clubId);
     let html = header + historyBox + oldSectionHtml;
     if(isWeekendRecap) html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue Woche (ab Montag)</div>`;
-    else if(myRow) html += `<div class="hint" style="margin:0 0 8px;">Aktuell: <b style="color:var(--turf-bright);">Platz ${myRow.displayRank}</b> von ${standings.length} · Spieltag ${Math.min(visibleDay,5)}/5</div>`;
+    else if(myRow){
+      html += `<div class="hint" style="margin:0 0 8px;">Aktuell: <b style="color:var(--turf-bright);">Platz ${myRow.displayRank}</b> von ${standings.length} · Spieltag ${Math.min(visibleDay,5)}/5</div>`;
+      // Quick "what's next for me" line - the first of my own matches not yet fully done (still pending,
+      // or already decided but not yet watched by me - see revealedBy), so you don't have to scroll the
+      // whole week's fixture list below just to find it.
+      const myNext = week.matches.filter(m=>{
+        const a = week.teams[m.aIdx], b = week.teams[m.bIdx];
+        return a.userId===clubId || b.userId===clubId;
+      }).sort((x,y)=>x.day-y.day).find(m=> m.pending || !(m.revealedBy||[]).includes(clubId));
+      if(myNext){
+        if(!myNext.pending && ligaMatchIsRevealed(myNext, targetWeekStart)){
+          html += `<p class="hint" style="margin:0 0 8px;">🔔 Dein nächstes Spiel ist bereit zum Anschauen!</p>`;
+        } else {
+          const dayStart = targetWeekStart + (myNext.day-1)*24*60*60*1000;
+          const t = new Date(dayStart + ligaMatchRevealOffsetMs(myNext));
+          const timeStr = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+          html += `<p class="hint" style="margin:0 0 8px;">Nächstes Spiel: ${LIGA_DAY_LABEL[myNext.day]} ab ${timeStr} Uhr.</p>`;
+        }
+      }
+    }
     html += ligaStandingsTableHTML(standings, myZones);
     if(isWeekendRecap) html += `<p class="hint">Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
     // The whole week's fixtures (who plays whom, which day) are shown up front, all 5 days at once -
