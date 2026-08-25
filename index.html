@@ -12207,6 +12207,12 @@ function openModal(innerHTML){
   document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.target.id==='modal-overlay') closeModal(); });
 }
 function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+// QoL: Escape closes whatever modal is currently open, matching the existing click-outside-to-close
+// behavior (see openModal's overlay listener) instead of forcing a mouse reach for the close/cancel
+// button every time.
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape' && document.getElementById('modal-root').innerHTML.trim()) closeModal();
+});
 function askTextModal(title, placeholder, callback, maxLen=30){
   openModal(`
     <h2 style="margin-bottom:10px;">${title}</h2>
@@ -12640,17 +12646,42 @@ async function renderLigaQuickPreview(){
     });
   }catch(e){ console.warn('liga quick preview failed', e); }
 }
+// How many Wochen-Pass rewards (level tiles + the 3 rotating quests) are unlocked/done and just
+// waiting on a "Holen" click - all purely local `profile` state, no async needed, unlike the Liga
+// badge above.
+function weekPassClaimableCount(){
+  const wp = profile.weekPass;
+  if(!wp || !weekPassActive()) return 0;
+  const level = weekPassLevel(wp.xp);
+  let count = 0;
+  for(let lv=1; lv<=WEEK_PASS_MAX_LEVEL; lv++){ if(level>=lv && !wp.claimed.includes(lv)) count++; }
+  const quests = (profile.weekPassQuests && profile.weekPassQuests.quests) || [];
+  quests.forEach(q=>{
+    const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id);
+    if(def && q.progress>=def.target) count++;
+  });
+  return count;
+}
 // Cheap DOM-only patch (no re-render of the whole nav/current view) so refreshLigaPendingBadge can be
-// called freely without disturbing whatever's currently on screen.
+// called freely without disturbing whatever's currently on screen. Also covers the two purely-local
+// badges (daily reward, Wochen-Pass) which need no async refresh of their own - just recomputed here
+// every time the nav (re)draws.
 function renderNavBadges(){
   document.querySelectorAll('#nav .nav-badge, #nav-mobile .nav-badge').forEach(el=>el.remove());
-  if(ligaPendingCount<=0) return;
-  document.querySelectorAll('[data-tab="ligen"]').forEach(btn=>{
-    const badge = document.createElement('span');
-    badge.className = 'nav-badge';
-    badge.textContent = ligaPendingCount>9 ? '9+' : String(ligaPendingCount);
-    btn.appendChild(badge);
-  });
+  const addBadge = (tab, count)=>{
+    if(count<=0) return;
+    document.querySelectorAll(`[data-tab="${tab}"]`).forEach(btn=>{
+      const badge = document.createElement('span');
+      badge.className = 'nav-badge';
+      badge.textContent = count>9 ? '9+' : String(count);
+      btn.appendChild(badge);
+    });
+  };
+  addBadge('ligen', ligaPendingCount);
+  if(profile){
+    addBadge('store', computeStreakDay().canClaim ? 1 : 0);
+    addBadge('week', weekPassClaimableCount());
+  }
 }
 function renderNav(){
   const nav = document.getElementById('nav');
@@ -14409,7 +14440,7 @@ function showCutscene(card, onDone){
 }
 
 // ===== CLUB =====
-let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL', dupOnly:false};
+let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL', dupOnly:false, favOnly:false};
 // Quick-pick MRU list for the admin "Nutzer verwalten" search - purely a local convenience for
 // whoever's using this browser as an admin, so it lives in localStorage (not Firestore/the save):
 // most-recently-looked-up account first, deduped, capped at a handful of entries.
@@ -15244,7 +15275,11 @@ function renderClub(view){
       <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;padding:0 4px;">
         <input type="checkbox" id="club-dup-only"> Nur Duplikate
       </label>
+      <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;padding:0 4px;">
+        <input type="checkbox" id="club-fav-only"> Nur Favoriten
+      </label>
     </div>
+    <div class="mono hint" id="club-summary-line" style="margin-bottom:10px;"></div>
     <div class="club-grid" id="club-grid"></div>
     ${managerCollection.length ? `
       <h3 style="font-size:15px;margin:26px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine Trainer</h3>
@@ -15322,6 +15357,8 @@ function renderClub(view){
   document.getElementById('club-sort').addEventListener('change', e=>{ clubFilter.sort=e.target.value; drawClubGrid(); });
   document.getElementById('club-dup-only').checked = clubFilter.dupOnly;
   document.getElementById('club-dup-only').addEventListener('change', e=>{ clubFilter.dupOnly=e.target.checked; drawClubGrid(); });
+  document.getElementById('club-fav-only').checked = clubFilter.favOnly;
+  document.getElementById('club-fav-only').addEventListener('change', e=>{ clubFilter.favOnly=e.target.checked; drawClubGrid(); });
   drawClubGrid();
   if(managerCollection.length) drawManagerClubGrid();
   if(packCollection.length) drawPackClubGrid();
@@ -15400,6 +15437,7 @@ function drawClubGrid(){
     items.forEach(x=> nameCounts.set(x.card.n, (nameCounts.get(x.card.n)||0)+1));
     items = items.filter(x=> nameCounts.get(x.card.n)>1);
   }
+  if(clubFilter.favOnly) items = items.filter(x=>x.card.favorited);
   if(clubFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(clubFilter.q.toLowerCase()));
   if(clubFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===clubFilter.pos);
   if(clubFilter.nat!=='ALL') items = items.filter(x=>x.card.nat===clubFilter.nat);
@@ -15410,6 +15448,16 @@ function drawClubGrid(){
     if(clubFilter.sort==='level') return (b.card.xp||0)-(a.card.xp||0);
     return b.card.ov-a.card.ov;
   });
+  // Quick "what am I looking at" summary line - total RAP value of exactly what's currently filtered
+  // in (so it tracks the position/nation/duplicate/favorite filters above, not the whole collection)
+  // plus a per-position-group breakdown, without having to count the grid by eye.
+  const summaryEl = document.getElementById('club-summary-line');
+  if(summaryEl){
+    const totalRap = items.reduce((s,x)=>s+computeRAP(x.card), 0);
+    const byGroup = {GK:0, DEF:0, MID:0, FWD:0};
+    items.forEach(x=>{ const g = posGroup(x.card.pos); if(byGroup[g]!=null) byGroup[g]++; });
+    summaryEl.textContent = `${items.length} Karte${items.length===1?'':'n'} · TW ${byGroup.GK} · ABW ${byGroup.DEF} · MF ${byGroup.MID} · ANG ${byGroup.FWD} · Gesamtwert ~${formatCoins(totalRap)}`;
+  }
   renderLazyGrid(grid, items, ({uid,card})=>{
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap';
