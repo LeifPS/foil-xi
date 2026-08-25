@@ -19443,6 +19443,12 @@ async function ligaSwapBannedAccount(bannedUserId){
   return {ok:true, replacedWith:replacement.userId, movedOut:bannedUserId, letter:hostDoc.id};
 }
 let ligenSubTab = 'mine';
+// The Montag-Freitag fixture list defaults to only upcoming matches plus anything revealed in the last
+// 6 hours - not the whole week at once - so the list stays focused on "what's relevant right now"
+// instead of a long scroll of long-decided results. "Mehr anzeigen" (see renderLigenPanel) lifts this
+// for the current panel visit; reset back to collapsed the next time the Ligen tab is opened fresh.
+let ligaFixturesShowAll = false;
+const LIGA_FIXTURE_RECENT_WINDOW_MS = 6*60*60*1000;
 // Read-only overview of every currently active league, not just the viewer's own - reuses the same
 // "which week to show" logic as the personal view (current week Mon-Sat, next week's 0-Punkte preview
 // on Sonntag, or the season's very first preview before the epoch), just looped over every letter.
@@ -19497,6 +19503,7 @@ async function renderAllLigenOverview(box){
   box.innerHTML = html;
 }
 function renderLigenPanel(view){
+  ligaFixturesShowAll = false;
   view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Ruhetag. Auf- und Abstieg jede Woche.</p></div>
     <div id="ligen-subnav" style="display:flex;gap:2px;padding:0;background:none;border:none;margin-bottom:14px;">
       <button class="nav-btn ${ligenSubTab==='mine'?'active':''}" id="ligen-subtab-mine" style="padding:9px 14px;">Meine Liga</button>
@@ -19686,26 +19693,60 @@ function renderLigenPanel(view){
     }
     html += ligaStandingsTableHTML(standings, myZones);
     if(isWeekendRecap) html += `<p class="hint">Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
-    // The whole week's fixtures (who plays whom, which day) are shown up front, all 5 days at once -
-    // Sonntag through Freitag, so you always know what's coming. Only the RESULT of a given match is
-    // held back until its own reveal moment (see ligaMatchIsRevealed): a not-yet-revealed match still
-    // shows up as a plain "A vs B, ab HH:MM Uhr" fixture row instead of vanishing from the list.
-    for(let d=1; d<=5; d++){
-      const dayMatches = week.matches.filter(m=>m.day===d);
-      if(!dayMatches.length) continue;
-      html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
-      const dayStart = targetWeekStart + (d-1)*24*60*60*1000;
-      html += dayMatches.map(m=>{
-        if(!m.pending && ligaMatchIsRevealed(m, targetWeekStart)) return ligaMatchRowHTML(m, week.teams, clubId);
-        const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
-        const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
-        return ligaMatchRowHTML(m, week.teams, clubId, {fixtureOnly:true, revealTime, letter:membership.letter});
-      }).join('');
-    }
+    // The whole week's fixtures (who plays whom, which day) exist up front, all 5 days at once - Sonntag
+    // through Freitag - but by default only matches still upcoming OR revealed within the last 6 hours
+    // are actually SHOWN, so the list stays focused on what's relevant right now instead of a long
+    // scroll of long-decided results. "Mehr anzeigen" (below) lifts the cutoff for this panel visit.
+    // Only the RESULT of a given match is held back until its own reveal moment (see
+    // ligaMatchIsRevealed): a not-yet-revealed match still shows up as a plain "A vs B, ab HH:MM Uhr"
+    // fixture row instead of vanishing from the list.
+    const buildFixturesHtml = ()=>{
+      const now = Date.now();
+      let out = '', hiddenCount = 0;
+      for(let d=1; d<=5; d++){
+        const dayStart = targetWeekStart + (d-1)*24*60*60*1000;
+        const dayMatches = week.matches.filter(m=>{
+          if(m.day!==d) return false;
+          if(ligaFixturesShowAll) return true;
+          if(m.pending) return true;
+          const revealTime = dayStart + ligaMatchRevealOffsetMs(m);
+          if(revealTime>now) return true;
+          if(now-revealTime<=LIGA_FIXTURE_RECENT_WINDOW_MS) return true;
+          hiddenCount++;
+          return false;
+        });
+        if(!dayMatches.length) continue;
+        out += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
+        out += dayMatches.map(m=>{
+          if(!m.pending && ligaMatchIsRevealed(m, targetWeekStart)) return ligaMatchRowHTML(m, week.teams, clubId);
+          const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
+          const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+          return ligaMatchRowHTML(m, week.teams, clubId, {fixtureOnly:true, revealTime, letter:membership.letter});
+        }).join('');
+      }
+      return {out, hiddenCount};
+    };
+    const {out: fixturesHtml, hiddenCount} = buildFixturesHtml();
+    html += `<div style="display:flex;justify-content:flex-end;margin-top:8px;">
+      <button class="action-btn secondary" id="liga-fixtures-toggle" style="width:auto;padding:6px 12px;font-size:11.5px;${hiddenCount||ligaFixturesShowAll?'':'display:none;'}">${ligaFixturesShowAll ? 'Weniger anzeigen' : `Mehr anzeigen (${hiddenCount} ältere)`}</button>
+    </div>
+    <div id="liga-fixtures-days">${fixturesHtml}</div>`;
     box.innerHTML = html;
     wireLigaRewardsBtn(box, membership.letter);
-    box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
-      btn.addEventListener('click', ()=> playLigaLiveMatch(membership.letter, targetWeekStart, btn.dataset.ligaLiveMid));
+    const wireFixtureLiveButtons = ()=>{
+      box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
+        btn.addEventListener('click', ()=> playLigaLiveMatch(membership.letter, targetWeekStart, btn.dataset.ligaLiveMid));
+      });
+    };
+    wireFixtureLiveButtons();
+    const toggleBtn = document.getElementById('liga-fixtures-toggle');
+    if(toggleBtn) toggleBtn.addEventListener('click', ()=>{
+      ligaFixturesShowAll = !ligaFixturesShowAll;
+      const {out: newHtml, hiddenCount: newHidden} = buildFixturesHtml();
+      document.getElementById('liga-fixtures-days').innerHTML = newHtml;
+      toggleBtn.textContent = ligaFixturesShowAll ? 'Weniger anzeigen' : `Mehr anzeigen (${newHidden} ältere)`;
+      toggleBtn.style.display = (newHidden || ligaFixturesShowAll) ? '' : 'none';
+      wireFixtureLiveButtons();
     });
     refreshLigaPendingBadge();
   })();
