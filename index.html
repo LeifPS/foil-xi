@@ -10336,13 +10336,18 @@ function renderSellManual(allEligible, usedInSquad){
         ${posOptions}
       </select>
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button class="action-btn secondary" id="sell-select-all" style="width:auto;padding:6px 12px;font-size:11.5px;">Alle sichtbaren ausw\u00e4hlen</button>
+      <button class="action-btn secondary" id="sell-select-none" style="width:auto;padding:6px 12px;font-size:11.5px;">Auswahl leeren</button>
+    </div>
     <div class="club-grid" id="sell-pick-grid" style="max-height:240px;overflow:auto;margin-bottom:12px;"></div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
     <div class="club-grid" id="sell-pick-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Packs</div>
     <div class="club-grid" id="sell-pick-pack-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
-    <div class="toolbar" style="margin-bottom:14px;">
+    <div class="toolbar" style="margin-bottom:6px;">
       <input id="sell-price" type="text" inputmode="decimal" placeholder="Preis pro Karte in Coins (z. B. 1.2m)">
+      <button class="action-btn secondary" id="sell-price-rap" style="width:auto;padding:9px 14px;font-size:12px;white-space:nowrap;">RAP-\u00d8 vorschlagen</button>
     </div>
     <div class="mono" id="sell-selected-info" style="color:var(--muted);margin-bottom:12px;">0 Karten ausgew\u00e4hlt</div>
     <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:260px;">Zum Markt hinzuf\u00fcgen</button>`;
@@ -10388,6 +10393,37 @@ function renderSellManual(allEligible, usedInSquad){
   searchInput.addEventListener('input', renderPlayerGrid);
   posFilter.addEventListener('change', renderPlayerGrid);
   renderPlayerGrid();
+  document.getElementById('sell-select-all').addEventListener('click', ()=>{
+    const q = searchInput.value.trim().toLowerCase();
+    const pos = posFilter.value;
+    allEligible.filter(({card})=>{
+      if(q && !card.n.toLowerCase().includes(q)) return false;
+      if(pos!=='ANY' && mainPos(card.pos)!==pos) return false;
+      return true;
+    }).forEach(({uid,card,cardId})=>{
+      if(usedInSquad.has(uid)) return;
+      selected.set(uid, {uid, itemType:'player', cardId, xp:card.xp||0});
+    });
+    renderPlayerGrid();
+    updateSel();
+  });
+  document.getElementById('sell-select-none').addEventListener('click', ()=>{
+    selected.clear();
+    openSellModal();
+  });
+  document.getElementById('sell-price-rap').addEventListener('click', ()=>{
+    if(!selected.size){ toast('Bitte zuerst Karten auswählen.'); return; }
+    let sum = 0, n = 0;
+    selected.forEach(item=>{
+      if(item.itemType==='player'){ const found = allEligible.find(x=>x.uid===item.uid); if(found){ sum+=computeRAP(found.card); n++; } }
+      else if(item.itemType==='manager'){ const mgr = MGR_BY_ID.get(item.cardId); if(mgr){ sum+=computeRAP(mgr); n++; } }
+      else if(item.itemType==='pack'){ const pack = PACKS.find(p=>p.id===item.cardId); if(pack){ sum+=computePackRAP(pack); n++; } }
+    });
+    if(!n){ toast('Konnte keinen RAP-Wert ermitteln.'); return; }
+    const suggested = Math.max(1, Math.round(sum/n));
+    document.getElementById('sell-price').value = suggested;
+    toast(`Preisvorschlag: ${formatCoins(suggested)} Coins (RAP-Durchschnitt der Auswahl).`);
+  });
   const mGrid = document.getElementById('sell-pick-mgr-grid');
   const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId), mgrId:m.mgrId})).filter(x=>x.mgr && !x.mgr.untradable);
   if(!ownedMgrs.length){ mGrid.innerHTML = '<p class="hint">Keine Trainer im Besitz.</p>'; }
@@ -10680,7 +10716,14 @@ function renderSellFilter(allEligible, usedInSquad){
         grid.appendChild(wrap);
       });
     }
-    previewEl.textContent = matches.length ? `${matches.length} passende Karte${matches.length===1?'':'n'} gefunden${matches.length>40?' (zeige/liste nur die ersten 40)':''}.` : 'Keine passenden Karten gefunden.';
+    let totalProceedsText = '';
+    if(ok && matches.length){
+      try{
+        const total = capped.reduce((s,{card})=>s+(priceFor(card)||0), 0);
+        if(total>0) totalProceedsText = ` Gesamterlös bei Listung: ~${formatCoins(total)} Coins.`;
+      }catch(e){ /* formula error already shown above */ }
+    }
+    previewEl.textContent = matches.length ? `${matches.length} passende Karte${matches.length===1?'':'n'} gefunden${matches.length>40?' (zeige/liste nur die ersten 40)':''}.${totalProceedsText}` : 'Keine passenden Karten gefunden.';
     const hasPriceInput = priceMode==='flat' ? !!Math.max(0, Math.floor(parseCoinInput(priceInput.value)||0)) : !!formulaInput.value.trim();
     const btn = document.getElementById('filter-submit');
     const enabled = capped.length && ok && hasPriceInput;
@@ -16081,13 +16124,23 @@ function openCardCompareModal(currentCard, candidateCard, slot){
     <button class="action-btn secondary" id="compare-close" style="width:100%;margin-top:16px;">Zur\u00fcck zur Auswahl</button>`);
   document.getElementById('compare-close').addEventListener('click', ()=> openPicker(slot));
 }
+const MGR_PICKER_SORT_LABEL = {tier:'Tier', boost:'Boost-Wert', name:'Alphabetisch'};
+let mgrPickerSortMode = 'tier';
 async function openManagerPicker(){
   const items = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr);
-  items.sort((a,b)=> (MGR_TIER_ORDER[b.mgr.tier]-MGR_TIER_ORDER[a.mgr.tier]));
+  const sortItems = ()=>{
+    if(mgrPickerSortMode==='boost') items.sort((a,b)=> b.mgr.boostValue-a.mgr.boostValue);
+    else if(mgrPickerSortMode==='name') items.sort((a,b)=> a.mgr.n.localeCompare(b.mgr.n,'de'));
+    else items.sort((a,b)=> (MGR_TIER_ORDER[b.mgr.tier]-MGR_TIER_ORDER[a.mgr.tier]));
+  };
+  sortItems();
   const externalLocked = await getExternalLockedUids();
   openModal(`
     <h2 style="margin-bottom:4px;">Trainer ausw\u00e4hlen</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Nur ein Trainer kann gleichzeitig zugewiesen sein. Trainer erh\u00e4ltst du \u00fcber das Trainer Pack im Kartenladen. Trainer im Transfermarkt oder in einem Handelsangebot sind gerade nicht verf\u00fcgbar.</p>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:12px;">Nur ein Trainer kann gleichzeitig zugewiesen sein. Trainer erh\u00e4ltst du \u00fcber das Trainer Pack im Kartenladen. Trainer im Transfermarkt oder in einem Handelsangebot sind gerade nicht verf\u00fcgbar.</p>
+    <div id="mgr-sort-chips" style="display:flex;gap:6px;margin-bottom:12px;">
+      ${Object.entries(MGR_PICKER_SORT_LABEL).map(([mode,label])=>`<button class="action-btn secondary mgr-sort-chip" data-sort="${mode}" style="width:auto;padding:6px 12px;font-size:11.5px;${mgrPickerSortMode===mode?'background:var(--turf-bright);color:#06110b;':''}">${label}</button>`).join('')}
+    </div>
     ${squad.managerUid?`<button class="action-btn secondary" id="clear-mgr" style="margin-bottom:14px;width:180px;">Trainer entfernen</button>`:''}
     <div class="picker-list" id="mgr-picker-list"></div>
     ${!items.length?'<p class="hint">Noch keine Trainer im Besitz. \u00d6ffne ein Trainer Pack im Kartenladen.</p>':''}`);
@@ -16097,27 +16150,43 @@ async function openManagerPicker(){
       await sSet('squad', squad); closeModal(); renderSquad(document.getElementById('view'));
     });
   }
-  const list = document.getElementById('mgr-picker-list');
-  items.forEach(({uid,mgr})=>{
-    const locked = uid!==squad.managerUid && externalLocked.has(uid);
-    const wrap = document.createElement('div');
-    wrap.style.cursor = locked ? 'not-allowed' : 'pointer';
-    wrap.style.position = 'relative';
-    wrap.style.opacity = uid===squad.managerUid ? '1' : (locked ? '.35' : '.9');
-    wrap.appendChild(cardEl(mgr,'mini'));
-    if(locked){
-      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM ANGEBOT';
-      wrap.appendChild(badge);
-    }
-    wrap.addEventListener('click', async ()=>{
-      if(locked){ toast('Dieser Trainer ist gerade im Transfermarkt gelistet oder in einem Handelsangebot. Ziehe ihn dort zur\u00fcck, um ihn hier einzusetzen.'); return; }
-      squad.managerUid = uid;
-      await sSet('squad', squad);
-      closeModal();
-      renderSquad(document.getElementById('view'));
+  document.querySelectorAll('.mgr-sort-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      mgrPickerSortMode = chip.dataset.sort;
+      sortItems();
+      renderMgrPickerList();
+      document.querySelectorAll('.mgr-sort-chip').forEach(c2=>{
+        const active = c2.dataset.sort===mgrPickerSortMode;
+        c2.style.background = active ? 'var(--turf-bright)' : '';
+        c2.style.color = active ? '#06110b' : '';
+      });
     });
-    list.appendChild(wrap);
   });
+  function renderMgrPickerList(){
+    const list = document.getElementById('mgr-picker-list');
+    list.innerHTML = '';
+    items.forEach(({uid,mgr})=>{
+      const locked = uid!==squad.managerUid && externalLocked.has(uid);
+      const wrap = document.createElement('div');
+      wrap.style.cursor = locked ? 'not-allowed' : 'pointer';
+      wrap.style.position = 'relative';
+      wrap.style.opacity = uid===squad.managerUid ? '1' : (locked ? '.35' : '.9');
+      wrap.appendChild(cardEl(mgr,'mini'));
+      if(locked){
+        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM ANGEBOT';
+        wrap.appendChild(badge);
+      }
+      wrap.addEventListener('click', async ()=>{
+        if(locked){ toast('Dieser Trainer ist gerade im Transfermarkt gelistet oder in einem Handelsangebot. Ziehe ihn dort zur\u00fcck, um ihn hier einzusetzen.'); return; }
+        squad.managerUid = uid;
+        await sSet('squad', squad);
+        closeModal();
+        renderSquad(document.getElementById('view'));
+      });
+      list.appendChild(wrap);
+    });
+  }
+  renderMgrPickerList();
 }
 function saveSquadAsPreset(){
   askTextModal('Name f\u00fcr diesen Kader', 'z.\u00a0B. Startelf Bundesliga', async (name)=>{
