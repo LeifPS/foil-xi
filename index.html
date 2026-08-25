@@ -10956,6 +10956,8 @@ async function loadTrades(){
     row.appendChild(btns);
     outBox.appendChild(row);
   });
+  tradeIncomingCount = incoming.length;
+  renderNavBadges();
 }
 function showTradeCardsModal(t){
   openModal(`
@@ -12161,6 +12163,7 @@ async function init(){
   updateCoinDisplay();
   hideBootLoader();
   refreshLigaPendingBadge();
+  refreshTradeIncomingBadge();
   if(profile.pendingWarning){
     const warningMsg = profile.pendingWarning;
     profile.pendingWarning = null;
@@ -12705,6 +12708,19 @@ function weekPassClaimableCount(){
   });
   return count;
 }
+// Count of pending INCOMING trade offers - shown as a nav badge on "Handel" so a new offer is visible
+// without opening the tab, same idea as the Liga badge above. Refreshed on boot and whenever the trade
+// tab's own incoming list reloads (see loadTrades).
+let tradeIncomingCount = 0;
+async function refreshTradeIncomingBadge(){
+  try{
+    await fbReady;
+    if(!fb || !tradeUnlocked()){ tradeIncomingCount = 0; renderNavBadges(); return; }
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('toUserId','==',profile.userId), fb.limit(30)));
+    tradeIncomingCount = snap.docs.map(d=>d.data()).filter(t=>t.status==='pending').length;
+  }catch(e){ console.warn('trade incoming badge refresh failed', e); }
+  renderNavBadges();
+}
 // Cheap DOM-only patch (no re-render of the whole nav/current view) so refreshLigaPendingBadge can be
 // called freely without disturbing whatever's currently on screen. Also covers the two purely-local
 // badges (daily reward, Wochen-Pass) which need no async refresh of their own - just recomputed here
@@ -12721,6 +12737,7 @@ function renderNavBadges(){
     });
   };
   addBadge('ligen', ligaPendingCount);
+  addBadge('trade', tradeIncomingCount);
   if(profile){
     addBadge('store', computeStreakDay().canClaim ? 1 : 0);
     addBadge('week', weekPassClaimableCount());
