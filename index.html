@@ -12816,6 +12816,12 @@ function weekPassClaimableCount(){
 // without opening the tab, same idea as the Liga badge above. Refreshed on boot and whenever the trade
 // tab's own incoming list reloads (see loadTrades).
 let tradeIncomingCount = 0;
+// Pending incoming 1v1 challenges (see loadIncomingDuels) - shown as a nav badge on "Online spielen",
+// same idea as the trade/liga badges above. Only refreshed when that panel's own list loads (no
+// separate boot-time fetch, unlike Liga/trade - challenges are much more ephemeral/short-lived, so a
+// stale badge left over from a much earlier boot would be more misleading than just showing 0 until
+// the tab is actually opened once this session).
+let duelIncomingCount = 0;
 async function refreshTradeIncomingBadge(){
   try{
     await fbReady;
@@ -12842,6 +12848,7 @@ function renderNavBadges(){
   };
   addBadge('ligen', ligaPendingCount);
   addBadge('trade', tradeIncomingCount);
+  addBadge('play', duelIncomingCount);
   if(profile){
     addBadge('store', computeStreakDay().canClaim ? 1 : 0);
     addBadge('week', weekPassClaimableCount());
@@ -18094,13 +18101,15 @@ async function loadIncomingDuels(){
   const box = document.getElementById('duel-incoming');
   if(!box) return;
   await fbReady;
-  if(!fb){ box.innerHTML = ''; return; }
+  if(!fb){ box.innerHTML = ''; duelIncomingCount = 0; renderNavBadges(); return; }
   try{
     const incoming = await cachedRead('incoming-duels:'+profile.userId, 12000, async ()=>{
       const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'duels'), fb.where('toUserId','==',profile.userId), fb.limit(20)));
       return snap.docs.map(d=>({id:d.id, ...d.data()})).filter(d=>d.status==='pending');
     });
     if(!box) return;
+    duelIncomingCount = incoming.length;
+    renderNavBadges();
     if(!incoming.length){ box.innerHTML = `<p class="hint">Keine eingehenden Herausforderungen.</p>`; return; }
     box.innerHTML = '';
     incoming.forEach(duel=>{
@@ -22456,16 +22465,22 @@ async function loadLeaderboard(){
   if(!box) return;
   const bannedIds = await getLeaderboardBannedUserIds();
   let squads = [];
+  let myRankInfo = null;
   if(fb){
     try{
       const raw = await cachedRead('squad-leaderboard', 45000, async ()=>{
         const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'squads'), fb.orderBy('rating','desc'), fb.limit(20)));
         return snap.docs.map(d=>d.data());
       });
-      squads = raw
+      const eligible = raw
         .filter(s=>!LEADERBOARD_EXCLUDED_USERS.has(s.userId) && !bannedIds.has(s.userId))
-        .filter(s=>countPrimeCards(s.players)<=1)
-        .slice(0,8);
+        .filter(s=>countPrimeCards(s.players)<=1);
+      squads = eligible.slice(0,8);
+      // "Dein Rang": only meaningful within this same fetched top-20 (no full-collection count query
+      // available here) - shown only when your own published squad actually placed inside it, since
+      // an exact rank beyond that isn't knowable without a much heavier query.
+      const myIdx = eligible.findIndex(s=>s.userId===profile.userId);
+      if(myIdx>=8) myRankInfo = {rank:myIdx+1, of:eligible.length};
     }catch(e){ console.warn('Firebase leaderboard read failed', e); }
   }
   if(!fb || !squads.length){
@@ -22507,6 +22522,13 @@ async function loadLeaderboard(){
     row.append(info, challengeBtn);
     box.appendChild(row);
   });
+  if(myRankInfo){
+    const rankRow = document.createElement('p');
+    rankRow.className = 'hint';
+    rankRow.style.cssText = 'margin:8px 0 0;';
+    rankRow.textContent = `Dein Rang: #${myRankInfo.rank} von ${myRankInfo.of}`;
+    box.appendChild(rankRow);
+  }
 }
 // squads are published as {pos, cardId, variant} per slot (see publishSquad) - resolve back to
 // full real card objects via BY_ID so viewers get real stats/variant styling, not a stale snapshot.
