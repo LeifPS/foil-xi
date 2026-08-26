@@ -7154,7 +7154,6 @@ const WEEK_PASS_QUEST_DEFS = [
   {id:'cleanSheet3', type:'cleanSheet', target:3, xp:170, label:'Gewinne 3 Matches ohne Gegentor'},
   {id:'bigWin3', type:'bigWin', target:3, xp:170, label:'Gewinne 3 Matches mit mind. 3 Toren Unterschied'},
   {id:'shootoutWin1', type:'shootoutWin', target:1, xp:130, label:'Gewinne ein Elfmeterschießen'},
-  {id:'winLiga2', type:'winLigaMatch', target:2, xp:150, label:'Gewinne 2 Liga-Matches'},
   {id:'levelUp1', type:'levelUpCard', target:1, xp:110, label:'Leveln eine Karte hoch (Bronze/Silber/Gold)'},
 ];
 // picks one quest definition not already among the given active ids - falls back to the full pool
@@ -19211,7 +19210,6 @@ async function playLigaLiveMatch(letter, weekStart, mid){
   if(skipBtn) skipBtn.addEventListener('click', ()=>{ liveMatchSkipAll = true; skipBtn.disabled = true; skipBtn.textContent = 'Wird übersprungen …'; });
   try{ await playFullMatch(md, myName, oppName, oppAbbr); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
   finally{ inMatch = false; }
-  if(md.winnerSide==='me' && bumpWeekPassQuest('winLigaMatch', 1)) await sSet('profile', profile);
   try{
     if(fb.runTransaction){
       await fb.runTransaction(fb.db, async (tx)=>{
