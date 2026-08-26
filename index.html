@@ -9982,13 +9982,9 @@ async function openSBCBuilder(sbc){
     </div>
     <div id="sbc-reqs" style="margin-bottom:14px;"></div>
     <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="sbc-count">0 / ${sbc.size} ausgew\u00e4hlt</div>
-    <div class="toolbar" style="margin-bottom:12px;">
+    <div class="toolbar" style="margin-bottom:8px;">
       <input id="sbc-card-search" placeholder="Spielername filtern..." style="flex:1;min-width:160px;">
-      <select id="sbc-filter-pos">
-        <option value="ALL">Alle Positionen</option>
-        ${Object.entries(POS_DE).map(([k,label])=>`<option value="${k}">${label}</option>`).join('')}
-      </select>
-      <select id="sbc-filter-bonus" title="Nur zusammen mit einer gewählten Position aktiv - der Positions-Bonus hängt davon ab, auf welcher Position eine Karte eingesetzt wird.">
+      <select id="sbc-filter-bonus" title="Nur aktiv, wenn genau eine Position unten ausgewählt ist - der Positions-Bonus hängt davon ab, auf welcher Position eine Karte eingesetzt wird.">
         <option value="ALL">Bonus: beliebig</option>
         <option value="2">++ (Hauptposition)</option>
         <option value="1">+ (Nebenposition)</option>
@@ -10010,6 +10006,10 @@ async function openSBCBuilder(sbc){
         <input type="checkbox" id="sbc-filter-available"> Nur verfügbare
       </label>
     </div>
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Positionen (mehrere wählbar)</div>
+    <div class="formation-select" id="sbc-filter-pos-chips" style="margin-bottom:12px;">
+      ${Object.entries(POS_DE).map(([k,label])=>`<div class="chip sbc-pos-chip" data-pos="${k}">${label}</div>`).join('')}
+    </div>
     <div class="club-grid" id="sbc-club-grid"></div>
     ${sbc.managerReq ? `
       <div class="lbl" style="margin:18px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer (Stufe ${sbc.managerReq.minTier}+ ben\u00f6tigt)</div>
@@ -10022,10 +10022,7 @@ async function openSBCBuilder(sbc){
     openSBCBuilder(activeSBC);
     toast('Auswahl zurückgesetzt.');
   });
-  const grid = document.getElementById('sbc-club-grid');
-  const uidToEl = new Map();
-  const searchableWraps = []; // {wrap, card} - lets the filter bar re-filter without rebuilding the grid
-  ownedPool.forEach(({uid,card})=>{
+  function renderSbcCard({uid,card}){
     const inSquad = squadLocked.has(uid);
     const isListed = externalLocked.has(uid);
     const unavailable = inSquad || isListed;
@@ -10033,10 +10030,8 @@ async function openSBCBuilder(sbc){
     wrap.className = 'club-card-wrap';
     wrap.style.cursor = unavailable ? 'not-allowed' : 'pointer';
     wrap.style.opacity = unavailable ? '.45' : '1';
-    const el = cardEl(card, 'mini');
-    wrap.appendChild(el);
-    uidToEl.set(uid, el);
-    searchableWraps.push({wrap, card, unavailable});
+    if(sbcSelection.has(uid)){ wrap.style.outline='3px solid var(--turf-bright)'; wrap.style.transform='translateY(-4px)'; }
+    wrap.appendChild(cardEl(card, 'mini'));
     if(unavailable){
       const badge = document.createElement('div');
       badge.className = 'sbc-inuse-badge';
@@ -10046,44 +10041,62 @@ async function openSBCBuilder(sbc){
     wrap.addEventListener('click', ()=>{
       if(unavailable){ toast(inSquad ? 'Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung. Entferne ihn dort zuerst, oder nutze "Automatisch ausf\u00fcllen".' : 'Diese Karte ist gerade im Transfermarkt gelistet oder in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier zu verwenden.'); return; }
       if(sbcSelection.has(uid)){
-        sbcSelection.delete(uid); el.style.outline=''; el.style.transform='';
+        sbcSelection.delete(uid);
       } else {
         if(sbcSelection.size>=activeSBC.size){ toast(`${activeSBC.size} Spieler bereits ausgew\u00e4hlt \u2014 w\u00e4hle zuerst einen ab.`); return; }
-        sbcSelection.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)';
+        sbcSelection.add(uid);
       }
+      applySbcFilters();
       updateSBCState();
     });
-    grid.appendChild(wrap);
-  });
-  // combined filter bar (name search + position/bonus/nation/liga/club) re-applies on every change of
-  // any field, purely by toggling wrap.style.display on the already-built cards - no rebuild needed.
+    return wrap;
+  }
+  // combined filter bar (name search + Positionen (mehrfach)/Bonus/Nation/Liga/Verein/verf\u00fcgbar) -
+  // already-selected cards are always sorted to the front before handing the list to renderLazyGrid,
+  // so they stay visible/highlighted no matter how far its incremental scroll-loading currently reaches.
   const searchInput = document.getElementById('sbc-card-search');
-  const posSelect = document.getElementById('sbc-filter-pos');
   const bonusSelect = document.getElementById('sbc-filter-bonus');
   const natSelect = document.getElementById('sbc-filter-nat');
   const lgSelect = document.getElementById('sbc-filter-lg');
   const clubSelect = document.getElementById('sbc-filter-club');
   const availableOnlyCheckbox = document.getElementById('sbc-filter-available');
+  const selectedPositions = new Set();
   const applySbcFilters = ()=>{
     const q = searchInput.value.trim().toLowerCase();
-    const pos = posSelect.value, bonus = bonusSelect.value, nat = natSelect.value, lg = lgSelect.value, club = clubSelect.value;
+    const bonus = bonusSelect.value, nat = natSelect.value, lg = lgSelect.value, club = clubSelect.value;
     const availableOnly = availableOnlyCheckbox.checked;
-    searchableWraps.forEach(({wrap,card,unavailable})=>{
+    const matches = ownedPool.filter(({uid,card})=>{
+      const unavailable = squadLocked.has(uid) || externalLocked.has(uid);
       let show = !q || card.n.toLowerCase().includes(q);
       if(show && availableOnly) show = !unavailable;
       if(show && nat!=='ALL') show = card.nat===nat;
       if(show && lg!=='ALL') show = card.lg===lg;
       if(show && club!=='ALL') show = card.club===club;
-      if(show && pos!=='ALL'){
-        const elig = positionEligibility(card, pos);
-        show = !!elig && (bonus==='ALL' || String(elig.bonus)===bonus);
+      if(show && selectedPositions.size){
+        show = [...selectedPositions].some(pos=>{
+          const elig = positionEligibility(card, pos);
+          if(!elig) return false;
+          if(selectedPositions.size===1 && bonus!=='ALL') return String(elig.bonus)===bonus;
+          return true;
+        });
       }
-      wrap.style.display = show ? '' : 'none';
+      return show;
     });
+    matches.sort((a,b)=>(sbcSelection.has(b.uid)?1:0)-(sbcSelection.has(a.uid)?1:0));
+    renderLazyGrid(document.getElementById('sbc-club-grid'), matches, renderSbcCard, {emptyHtml:'<p class="hint">Keine passenden Karten.</p>'});
   };
-  [searchInput, posSelect, bonusSelect, natSelect, lgSelect, clubSelect, availableOnlyCheckbox].forEach(elm=>{
+  [searchInput, bonusSelect, natSelect, lgSelect, clubSelect, availableOnlyCheckbox].forEach(elm=>{
     elm.addEventListener(elm===searchInput ? 'input' : 'change', applySbcFilters);
   });
+  document.querySelectorAll('.sbc-pos-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const pos = chip.dataset.pos;
+      if(selectedPositions.has(pos)){ selectedPositions.delete(pos); chip.classList.remove('active'); chip.style.borderColor=''; chip.style.color=''; }
+      else { selectedPositions.add(pos); chip.classList.add('active'); chip.style.borderColor='var(--turf-bright)'; chip.style.color='var(--turf-bright)'; }
+      applySbcFilters();
+    });
+  });
+  applySbcFilters();
   if(sbc.managerReq){
     const mgrGrid = document.getElementById('sbc-mgr-grid');
     const minRank = MGR_TIER_ORDER[sbc.managerReq.minTier] ?? 0;
@@ -10127,10 +10140,7 @@ async function openSBCBuilder(sbc){
     const result = trySolveSBC(activeSBC, poolFree, activeSBC.size, sbcAutofillMode);
     if(!result){ toast('Mit deiner aktuellen Sammlung aktuell nicht erf\u00fcllbar (ohne Karten aus deinem aktiven Kader).'); return; }
     sbcSelection = new Set(result);
-    uidToEl.forEach((el,uid)=>{
-      if(sbcSelection.has(uid)){ el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
-      else { el.style.outline=''; el.style.transform=''; }
-    });
+    applySbcFilters();
     updateSBCState();
     toast('Automatisch ausgef\u00fcllt.');
   });
@@ -16425,59 +16435,58 @@ async function openPicker(slot){
     });
   });
   function renderPickerList(){
-    const list = document.getElementById('picker-list');
-    list.innerHTML = '';
-    items.forEach(({uid,card,effOv,chem})=>{
-      const onMarket = uid!==currentUid && marketLocked.has(uid);
-      const tradeLocked = uid!==currentUid && externalLocked.has(uid) && !onMarket;
-      const nameDupe = uid!==currentUid && usedNames.has(card.n);
-      const primeBlocked = uid!==currentUid && card.variant==='prime' && primeAlreadyUsed;
-      const blocked = tradeLocked || nameDupe || primeBlocked;
-      const wrap = document.createElement('div');
-      wrap.style.cursor = blocked ? 'not-allowed' : 'pointer';
-      wrap.style.position='relative';
-      wrap.style.opacity = uid===currentUid ? '1' : (blocked ? '.35' : (used.has(uid) ? '.35':'1'));
-      wrap.appendChild(cardEl(card,'mini', [effOv], slot.label));
-      if(tradeLocked){
-        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM HANDEL';
-        wrap.appendChild(badge);
-      } else if(onMarket){
-        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.style.background='var(--gold)'; badge.style.color='#2a1d00'; badge.textContent='IM ANGEBOT';
-        wrap.appendChild(badge);
-      } else if(nameDupe){
-        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='SCHON AUFGESTELLT';
-        wrap.appendChild(badge);
-      } else if(primeBlocked){
-        const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='MAX. 1 PRIME';
-        wrap.appendChild(badge);
+    renderLazyGrid(document.getElementById('picker-list'), items, ({uid,card,effOv})=>renderPickerCard(uid,card,effOv));
+  }
+  function renderPickerCard(uid,card,effOv){
+    const onMarket = uid!==currentUid && marketLocked.has(uid);
+    const tradeLocked = uid!==currentUid && externalLocked.has(uid) && !onMarket;
+    const nameDupe = uid!==currentUid && usedNames.has(card.n);
+    const primeBlocked = uid!==currentUid && card.variant==='prime' && primeAlreadyUsed;
+    const blocked = tradeLocked || nameDupe || primeBlocked;
+    const wrap = document.createElement('div');
+    wrap.style.cursor = blocked ? 'not-allowed' : 'pointer';
+    wrap.style.position='relative';
+    wrap.style.opacity = uid===currentUid ? '1' : (blocked ? '.35' : (used.has(uid) ? '.35':'1'));
+    wrap.appendChild(cardEl(card,'mini', [effOv], slot.label));
+    if(tradeLocked){
+      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='IM HANDEL';
+      wrap.appendChild(badge);
+    } else if(onMarket){
+      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.style.background='var(--gold)'; badge.style.color='#2a1d00'; badge.textContent='IM ANGEBOT';
+      wrap.appendChild(badge);
+    } else if(nameDupe){
+      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='SCHON AUFGESTELLT';
+      wrap.appendChild(badge);
+    } else if(primeBlocked){
+      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='MAX. 1 PRIME';
+      wrap.appendChild(badge);
+    }
+    // Direct current-vs-candidate comparison, only meaningful when a slot is already occupied by a
+    // DIFFERENT card - opens a compact side-by-side modal instead of forcing a mental diff of two
+    // stat blocks seen minutes apart.
+    if(currentCard && uid!==currentUid){
+      const cmpBtn = document.createElement('button');
+      cmpBtn.type = 'button'; cmpBtn.className = 'picker-compare-btn'; cmpBtn.title = 'Mit aktuellem Spieler vergleichen';
+      cmpBtn.textContent = '\u21c4 Vergleichen';
+      cmpBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openCardCompareModal(currentCard, card, slot); });
+      wrap.appendChild(cmpBtn);
+    }
+    wrap.addEventListener('click', async ()=>{
+      if(tradeLocked){ toast('Diese Karte ist gerade in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier einzusetzen.'); return; }
+      if(nameDupe){ toast(`${card.n} steht bereits an anderer Stelle in deiner Aufstellung \u2014 derselbe Spieler kann nicht doppelt aufgestellt werden.`); return; }
+      if(primeBlocked){ toast('Du hast bereits eine PRIME-Karte im Kader \u2014 maximal 1 PRIME-Karte gleichzeitig erlaubt.'); return; }
+      if(onMarket){
+        const ok = await withdrawMarketListingByCardUid(uid);
+        if(!ok){ toast('Angebot konnte nicht zur\u00fcckgezogen werden \u2014 bitte erneut versuchen.'); return; }
+        toast(`${card.n} wurde vom Transfermarkt zur\u00fcckgezogen und eingesetzt.`);
       }
-      // Direct current-vs-candidate comparison, only meaningful when a slot is already occupied by a
-      // DIFFERENT card - opens a compact side-by-side modal instead of forcing a mental diff of two
-      // stat blocks seen minutes apart.
-      if(currentCard && uid!==currentUid){
-        const cmpBtn = document.createElement('button');
-        cmpBtn.type = 'button'; cmpBtn.className = 'picker-compare-btn'; cmpBtn.title = 'Mit aktuellem Spieler vergleichen';
-        cmpBtn.textContent = '\u21c4 Vergleichen';
-        cmpBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openCardCompareModal(currentCard, card, slot); });
-        wrap.appendChild(cmpBtn);
-      }
-      wrap.addEventListener('click', async ()=>{
-        if(tradeLocked){ toast('Diese Karte ist gerade in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier einzusetzen.'); return; }
-        if(nameDupe){ toast(`${card.n} steht bereits an anderer Stelle in deiner Aufstellung \u2014 derselbe Spieler kann nicht doppelt aufgestellt werden.`); return; }
-        if(primeBlocked){ toast('Du hast bereits eine PRIME-Karte im Kader \u2014 maximal 1 PRIME-Karte gleichzeitig erlaubt.'); return; }
-        if(onMarket){
-          const ok = await withdrawMarketListingByCardUid(uid);
-          if(!ok){ toast('Angebot konnte nicht zur\u00fcckgezogen werden \u2014 bitte erneut versuchen.'); return; }
-          toast(`${card.n} wurde vom Transfermarkt zur\u00fcckgezogen und eingesetzt.`);
-        }
-        Object.keys(squad.slots).forEach(s=>{ if(squad.slots[s]===uid) delete squad.slots[s]; });
-        squad.slots[slot.id]=uid;
-        await sSet('squad', squad);
-        closeModal();
-        renderSquad(document.getElementById('view'));
-      });
-      list.appendChild(wrap);
+      Object.keys(squad.slots).forEach(s=>{ if(squad.slots[s]===uid) delete squad.slots[s]; });
+      squad.slots[slot.id]=uid;
+      await sSet('squad', squad);
+      closeModal();
+      renderSquad(document.getElementById('view'));
     });
+    return wrap;
   }
   renderPickerList();
 }
