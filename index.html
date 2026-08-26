@@ -10192,6 +10192,7 @@ function renderMarketSection(el){
         <option value="MID">Mittelfeld</option>
         <option value="FWD">Sturm</option>
         <option value="MGR">Trainer</option>
+        <option value="PACK">Packs</option>
       </select>
       <select id="market-sort">
         <option value="newest">Neueste zuerst</option>
@@ -10245,6 +10246,7 @@ function drawMarketGrid(){
     items = items.filter(x=>(x.card?x.card.n:x.pack.name).toLowerCase().includes(q) || (x.listing.sellerName||'').toLowerCase().includes(q));
   }
   if(marketFilter.pos==='MGR') items = items.filter(x=>x.listing.itemType==='manager');
+  else if(marketFilter.pos==='PACK') items = items.filter(x=>x.listing.itemType==='pack');
   else if(marketFilter.pos!=='ALL') items = items.filter(x=>x.card && x.listing.itemType!=='manager' && posGroup(x.card.pos)===marketFilter.pos);
   if(marketFilter.maxPrice){
     const max = parseCoinInput(marketFilter.maxPrice);
@@ -16059,7 +16061,7 @@ function renderSquad(view){
         <div>
           <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Gespeicherte Kader</div>
           <div class="formation-select" id="preset-list" style="margin-bottom:8px;">
-            ${squadPresets.map(p=>`<div class="chip preset-chip" data-id="${p.id}">${p.name} <span style="color:var(--muted);">(${(FORMATIONS[p.formation]||{}).label||p.formation})</span><span class="preset-dup" data-id="${p.id}" title="Als Kopie speichern">\u29c9</span><span class="preset-update" data-id="${p.id}" title="Mit aktuellem Kader \u00fcberschreiben">\u27f3</span><span class="preset-del" data-id="${p.id}">\u00d7</span></div>`).join('') || '<p class="hint" style="margin:0;">Noch keine gespeichert.</p>'}
+            ${squadPresets.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(p=>`<div class="chip preset-chip" data-id="${p.id}">${p.name} <span style="color:var(--muted);">(${(FORMATIONS[p.formation]||{}).label||p.formation})</span><span class="preset-dup" data-id="${p.id}" title="Als Kopie speichern">\u29c9</span><span class="preset-update" data-id="${p.id}" title="Mit aktuellem Kader \u00fcberschreiben">\u27f3</span><span class="preset-del" data-id="${p.id}">\u00d7</span></div>`).join('') || '<p class="hint" style="margin:0;">Noch keine gespeichert.</p>'}
           </div>
           <button class="action-btn secondary" id="save-preset" style="margin-bottom:10px;">Als neuen Kader speichern</button>
         </div>
@@ -18189,7 +18191,9 @@ async function loadIncomingDuels(){
       const row = document.createElement('div');
       row.className = 'leader-row';
       row.style.flexWrap = 'wrap';
-      row.innerHTML = `<span style="flex:1;"><b>${duel.fromName}</b> fordert dich heraus (Rating ${duel.fromRating})</span>`;
+      const ageMin = duel.createdAt ? Math.max(0, Math.round((Date.now()-duel.createdAt)/60000)) : null;
+      const ageText = ageMin==null ? '' : ageMin<1 ? ' · gerade eben' : ageMin<60 ? ` · vor ${ageMin} Min.` : ` · vor ${Math.round(ageMin/60)} Std.`;
+      row.innerHTML = `<span style="flex:1;"><b>${duel.fromName}</b> fordert dich heraus (Rating ${duel.fromRating})<span class="hint">${ageText}</span></span>`;
       const btns = document.createElement('div');
       btns.style.cssText = 'display:flex;gap:8px;margin-top:6px;width:100%;';
       const acceptBtn = document.createElement('button'); acceptBtn.className='action-btn'; acceptBtn.style.cssText='width:auto;padding:6px 12px;'; acceptBtn.textContent='Annehmen';
