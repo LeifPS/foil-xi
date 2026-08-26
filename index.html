@@ -7891,31 +7891,15 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 //    being split many ways) - the payout that pack economics implies is captured through this curve rather
 //    than a fragile per-pack normalization that was hard to calibrate precisely.
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
-// Werte auf ~die H\u00e4lfte ihres Aufschlags \u00fcber der Basis (1) gestaucht - z.B. war sbcx vorher 25x
-// (ein SBC-Exklusiv-RAP von 25 normalen Basis-Karten), jetzt 13x. Reine Basiskarten (base:1) und
-// Sonderformen ohne eigenen Eintrag (Fallback 1.5, siehe powerScore) bleiben unver\u00e4ndert, nur wie
-// stark eine Variante \u00fcber der Basis liegt wurde ged\u00e4mpft.
-const VARIANT_SPECIALTY_MULT = {
-  base:1, icon:1.6, cent:1.7, hof:1.8, gal:1.6, gg:1.3, wc:2, blk:2.75, bh:3.75, saph:2.4, rub:2.9, dia:3.6, wpmvp:10.5, mysteryrare:3, sbcx:13, kapitaen:2.6,
-  wmquestreward:13, promoquestreward:11.5,
-  kontra_gk:1.25, kontra_def:1.25, kontra_mid:1.25, kontra_fwd:1.25, goat:3.4,
-  signature_icon:2.3, era_definer:2.55, signature_season:2.9,
-  wcchamp:1.5, goldenball:3, ggwm:2.5, youngplayer:2.5, semifinalist:1.15, quarterfinalist:1.08,
-  derbyicon:1.2, underdog:1.28, meistertrainer:1,
-  fs:1.25, otw:1.2, pm:1.25, gb:1.3, wall:1.2, tots:1.5, flash:1.25, sd:1.3,
-  phenom:1.25, setpiece:1.2, derby:1.2, iron:1.2, wonder:1.25,
-};
+// Keine Varianten-Aufschl\u00e4ge mehr - jede Karte (Basis oder jede Sonderform) bewertet sich rein \u00fcber
+// ihr Rating (sellValue) und ihr Level (LEVEL_RAP_MULT), exakt wie eine Basiskarte gleichen Ratings.
 function powerScore(card){
   if(card.untradable) return 0;
-  if(card.isManager){
-    const base = MGR_POWER_VALUE[card.tier] || 1000;
-    return base * (card.variant==='meistertrainer' ? 1.15 : 1);
-  }
+  if(card.isManager) return MGR_POWER_VALUE[card.tier] || 1000;
   const baseOv = card.level ? card.ov - card.level : card.ov;
   const base = sellValue(baseOv);
-  const mult = VARIANT_SPECIALTY_MULT[card.variant] ?? (card.variant && card.variant!=='base' ? 1.25 : 1);
   const levelMult = LEVEL_RAP_MULT[card.level||0] || 1;
-  return base * mult * levelMult;
+  return base * levelMult;
 }
 function getBaselineRAP(card){
   return Math.round(powerScore(card));
