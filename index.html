@@ -15936,6 +15936,18 @@ function showPlayerChemistryModal(card, chem, breakdown){
 // General explainer for the whole mechanic - reachable from the info button next to the aggregate
 // chemistry meter, since right now nothing in the app tells a new player what "Chemie 18/33" even
 // means or how to raise it.
+function showTeamRatingInfoModal(){
+  openModal(`
+    <h2 style="margin-bottom:4px;">Wie kommt die Team-Rating zustande?</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">Ein flacher Durchschnitt über deine 11 Positionen, nicht mehr - für jede besetzte Position zählt:</p>
+    <ul style="margin:0 0 16px;padding-left:20px;color:var(--chalk);font-size:13px;line-height:1.7;">
+      <li>Overall der Karte</li>
+      <li>+ Chemie-Bonus (0 bis +3, siehe Chemie-Erklärung unten)</li>
+      <li>+ Positionsbonus (0/+1/+2, je nachdem ob es die Haupt-, Neben- oder eine weitere Position der Karte ist)</li>
+    </ul>
+    <p class="hint" style="margin:0 0 10px;">Alle 11 Werte werden gemittelt, plus ein kleiner Zusatzbonus, wenn viele Spieler exakt auf ihrer Hauptposition stehen.</p>
+    <p class="hint" style="margin:0;">Wichtig: Die Match-Engine rechnet NICHT direkt mit dieser einen Zahl, sondern mit Offensive und Defensive getrennt (siehe die beiden Kacheln direkt darunter) - dieselbe Team-Rating kann je nach Kader ganz unterschiedliche Offensive/Defensive-Werte ergeben.</p>`);
+}
 function showChemistryInfoModal(){
   openModal(`
     <h2 style="margin-bottom:4px;">Wie funktioniert Chemie?</h2>
@@ -15999,7 +16011,7 @@ function renderSquad(view){
     <div class="squad-layout">
       <div class="pitch" id="pitch"></div>
       <div class="side-panel">
-        <div class="rating-hero"><div class="num" style="display:flex;align-items:baseline;">${rating||'--'}<span class="mono" style="font-size:15px;font-weight:400;color:var(--muted);margin-left:1px;">${filled?ratingDecimalSuffix(preciseRating):''}</span></div><div><div class="lbl">Team-Rating</div><div class="lbl">${filled}/11 besetzt</div></div></div>
+        <div class="rating-hero"><div class="num" style="display:flex;align-items:baseline;">${rating||'--'}<span class="mono" style="font-size:15px;font-weight:400;color:var(--muted);margin-left:1px;">${filled?ratingDecimalSuffix(preciseRating):''}</span></div><div><div class="lbl">Team-Rating <span class="chem-info-btn" id="rating-info-btn">?</span></div><div class="lbl">${filled}/11 besetzt</div></div></div>
         <div class="atk-def-row" title="Das hier benutzt die Match-Engine wirklich - nicht die Team-Rating oben, die nur ein flacher Durchschnitt ist.">
           <div class="atk-def-tile atk"><div class="atk-def-body"><div class="num">${teamProfile ? fmtAtkDef(teamProfile.preciseAttack) : '--'}</div><div class="lbl">Offensive</div></div></div>
           <div class="atk-def-tile def"><div class="atk-def-body"><div class="num">${teamProfile ? fmtAtkDef(teamProfile.preciseDefense) : '--'}</div><div class="lbl">Defensive</div></div></div>
@@ -16028,7 +16040,8 @@ function renderSquad(view){
       </div>
     </div>
     <div class="tactics-section" style="margin-top:22px;">
-      <div class="lbl" style="margin-bottom:10px;color:var(--muted);font-size:11px;text-transform:uppercase;">Taktik (vor dem Spiel festgelegt)</div>
+      <div class="lbl" style="margin-bottom:4px;color:var(--muted);font-size:11px;text-transform:uppercase;">Taktik (vor dem Spiel festgelegt)</div>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Aktuell: <b style="color:var(--turf-bright);">${(TACTIC_MENTALITY[squad.tactics&&squad.tactics.mentality]||TACTIC_MENTALITY.balanced).label}</b> \u00b7 <b style="color:var(--turf-bright);">${(TACTIC_PRESSING[squad.tactics&&squad.tactics.pressing]||TACTIC_PRESSING.normal).label}</b></p>
       <p class="hint" style="margin-top:0;margin-bottom:8px;">Mentalit\u00e4t: verschiebt Angriff/Abwehr sp\u00fcrbar.</p>
       <div class="formation-select" id="tactics-mentality" style="margin-bottom:14px;">
         ${Object.entries(TACTIC_MENTALITY).map(([key,t])=>`<div class="chip tactic-chip" data-group="mentality" data-key="${key}" style="${(squad.tactics&&squad.tactics.mentality||'balanced')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
@@ -16072,6 +16085,8 @@ function renderSquad(view){
     mgrSlot.innerHTML = `<div class="empty-slot-inner" style="width:100%;height:70px;">Kein Trainer</div>`;
   }
   mgrSlot.addEventListener('click', openManagerPicker);
+  const ratingInfoBtn = document.getElementById('rating-info-btn');
+  if(ratingInfoBtn) ratingInfoBtn.addEventListener('click', showTeamRatingInfoModal);
   const pitch = document.getElementById('pitch');
   const chemDetail = getSquadChemistryDetail();
   const chemMeterEl = document.getElementById('chem-meter');
