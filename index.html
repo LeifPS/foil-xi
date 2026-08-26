@@ -14287,6 +14287,7 @@ function openCrestEditor(){
     </div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Buchstabe</div>
     <input id="crest-letter" maxlength="2" value="${c.letter}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:16px;text-align:center;margin-bottom:16px;text-transform:uppercase;">
+    <button class="action-btn secondary" id="crest-random" style="width:100%;margin-bottom:10px;">🎲 Zufällige Form + Farbe</button>
     <button class="action-btn" id="crest-save" style="width:100%;">Speichern</button>`);
   const preview = document.getElementById('crest-preview');
   function redraw(){ preview.innerHTML = renderCrestSVG(c, 110); }
@@ -14345,6 +14346,17 @@ function openCrestEditor(){
     c.letter = (e.target.value||'?').slice(0,2).toUpperCase();
     delete c.club;
     logoClearWrap.style.display = 'none';
+    redraw();
+  });
+  document.getElementById('crest-random').addEventListener('click', ()=>{
+    const shapeKeys = Object.keys(CREST_SHAPES);
+    c.shape = shapeKeys[Math.floor(Math.random()*shapeKeys.length)];
+    c.primary = palette[Math.floor(Math.random()*palette.length)];
+    delete c.club;
+    logoClearWrap.style.display = 'none';
+    document.querySelectorAll('.crest-shape-chip').forEach(x=>x.classList.toggle('active', x.dataset.shape===c.shape));
+    document.querySelectorAll('.crest-color-swatch').forEach(x=>x.classList.toggle('active', x.dataset.color===c.primary));
+    document.querySelectorAll('.crest-logo-thumb').forEach(x=>x.classList.remove('active'));
     redraw();
   });
   document.getElementById('crest-save').addEventListener('click', async ()=>{
@@ -16111,12 +16123,28 @@ function renderSquad(view){
     });
   });
   document.getElementById('form-select').querySelectorAll('.chip').forEach(chip=>{
-    chip.addEventListener('click', async ()=>{
-      squad.formation = chip.dataset.f;
+    chip.addEventListener('click', ()=>{
       const validIds = new Set(FORMATIONS[chip.dataset.f].slots.map(s=>s.id));
-      Object.keys(squad.slots).forEach(k=>{ if(!validIds.has(k)) delete squad.slots[k]; });
-      await sSet('squad', squad);
-      renderSquad(view);
+      const droppedCount = Object.keys(squad.slots).filter(k=>!validIds.has(k)).length;
+      const doSwitch = async ()=>{
+        squad.formation = chip.dataset.f;
+        Object.keys(squad.slots).forEach(k=>{ if(!validIds.has(k)) delete squad.slots[k]; });
+        await sSet('squad', squad);
+        renderSquad(view);
+      };
+      // Only interrupt with a confirmation when the switch actually costs you assignments - a lossless
+      // switch (every current slot ID exists in the new formation too) just applies immediately, same
+      // as before this QoL change.
+      if(droppedCount===0){ doSwitch(); return; }
+      openModal(`
+        <h2 style="margin-bottom:10px;">Formation wechseln?</h2>
+        <p style="color:var(--muted);font-size:13.5px;margin-bottom:16px;">${droppedCount} zugewiesene${droppedCount===1?'r Spieler passt':' Spieler passen'} nicht mehr in ${FORMATIONS[chip.dataset.f].label} und wird${droppedCount===1?'':'en'} aus dem Kader entfernt (deine Karten bleiben im Verein erhalten).</p>
+        <div style="display:flex;gap:10px;justify-content:center;">
+          <button class="action-btn secondary" id="cancel-form-switch" style="width:120px;">Abbrechen</button>
+          <button class="action-btn" id="do-form-switch" style="width:160px;">Trotzdem wechseln</button>
+        </div>`);
+      document.getElementById('cancel-form-switch').addEventListener('click', closeModal);
+      document.getElementById('do-form-switch').addEventListener('click', async ()=>{ closeModal(); await doSwitch(); });
     });
   });
   document.getElementById('save-squad').addEventListener('click', async ()=>{
