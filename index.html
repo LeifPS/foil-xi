@@ -9816,8 +9816,17 @@ async function renderChallengeGrid(){
 async function renderSBCList(view){
   view.innerHTML = `
     <div class="view-head"><h2>Herausforderungen</h2><p>W\u00e4hle eine Karte: Match-Herausforderungen gegen harte Fantasie-Gegner oder SBCs, die einen Kader aus deinem Verein verlangen, der die Anforderungen erf\u00fcllt. Jede zeigt sofort, ob sie mit deinem aktuellen Kader erf\u00fcllbar ist.</p></div>
+    <input id="challenge-search" placeholder="Herausforderung suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:14px;margin-bottom:14px;">
     <div class="sbc-grid" id="challenge-grid"></div>`;
   await renderChallengeGrid();
+  document.getElementById('challenge-search').addEventListener('input', e=>{
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#challenge-grid > *').forEach(tile=>{
+      const nameEl = tile.querySelector('.sbc-name');
+      const name = nameEl ? nameEl.textContent.toLowerCase() : '';
+      tile.style.display = !q || name.includes(q) ? '' : 'none';
+    });
+  });
 }
 function sbcRewardDisplay(sbc){
   if(sbc.directCard==='BALLONDOR_CARD'){
@@ -16134,7 +16143,7 @@ function renderSquad(view){
     const mgrCard = cardEl(mgr, 'mini');
     mgrSlot.appendChild(mgrCard);
   } else {
-    mgrSlot.innerHTML = `<div class="empty-slot-inner" style="width:100%;height:70px;">Kein Trainer</div>`;
+    mgrSlot.innerHTML = `<div class="empty-slot-inner" style="width:100%;height:70px;flex-direction:row;gap:8px;"><span class="empty-slot-plus" style="font-size:18px;">+</span>Kein Trainer</div>`;
   }
   mgrSlot.addEventListener('click', openManagerPicker);
   const ratingInfoBtn = document.getElementById('rating-info-btn');
