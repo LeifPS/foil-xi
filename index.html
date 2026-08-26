@@ -9970,6 +9970,7 @@ async function openSBCBuilder(sbc){
   view.innerHTML = `
     <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Spieler, die aktuell in deiner Kader-Editor-Aufstellung stehen, im Transfermarkt gelistet sind oder in einem Handelsangebot stecken, sind markiert und k\u00f6nnen hier nicht verwendet werden.</p></div>
     <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button></div>
+    <button class="action-btn" id="sbc-submit" disabled style="opacity:.4;margin-bottom:16px;width:220px;">Kader abgeben</button>
     <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Automatisch ausf\u00fcllen \u2014 Strategie</div>
     <div class="formation-select" id="sbc-autofill-mode" style="margin-bottom:12px;">
       <div class="chip sbc-mode-chip active" data-mode="highest" title="Nutzt deine bestbewerteten passenden Karten.">H\u00f6chstes Rating</div>
@@ -10014,7 +10015,6 @@ async function openSBCBuilder(sbc){
     ${sbc.managerReq ? `
       <div class="lbl" style="margin:18px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer (Stufe ${sbc.managerReq.minTier}+ ben\u00f6tigt)</div>
       <div class="club-grid" id="sbc-mgr-grid"></div>` : ''}
-    <button class="action-btn" id="sbc-submit" disabled style="opacity:.4;margin-top:16px;width:220px;">Kader abgeben</button>
   `;
   document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
   document.getElementById('sbc-reset').addEventListener('click', ()=>{
