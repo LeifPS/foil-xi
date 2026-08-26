@@ -9461,12 +9461,8 @@ function renderDraftPanel(){
         ${Object.entries(TACTIC_MENTALITY).map(([key,tm])=>`<div class="chip draft-tactic-chip" data-group="mentality" data-key="${key}" style="${t.mentality===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${tm.desc}">${tm.label}</div>`).join('')}
       </div>
       <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Pressing</div>
-      <div class="formation-select" style="margin-bottom:12px;">
-        ${Object.entries(TACTIC_PRESSING).map(([key,tp])=>`<div class="chip draft-tactic-chip" data-group="pressing" data-key="${key}" style="${t.pressing===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${tp.desc}">${tp.label}</div>`).join('')}
-      </div>
-      <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Spielaufbau</div>
       <div class="formation-select" style="margin-bottom:14px;">
-        ${Object.entries(TACTIC_BUILDUP).map(([key,tb])=>`<div class="chip draft-tactic-chip" data-group="buildup" data-key="${key}" style="${t.buildup===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${tb.desc}">${tb.label}</div>`).join('')}
+        ${Object.entries(TACTIC_PRESSING).map(([key,tp])=>`<div class="chip draft-tactic-chip" data-group="pressing" data-key="${key}" style="${t.pressing===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${tp.desc}">${tp.label}</div>`).join('')}
       </div>
       <button class="action-btn" id="draft-tactics-confirm">Los geht's</button>`;
     document.querySelectorAll('.draft-tactic-chip').forEach(chip=>{
@@ -9486,7 +9482,7 @@ function renderDraftPanel(){
   const myRating = Math.round(chemPlayers.reduce((s,p)=>s+p.chemOv,0)/chemPlayers.length);
   const doneCount = draftState.wins;
   box.innerHTML = `
-    <p class="hint" style="margin-top:0;">Rating ${myRating} (inkl. Chemie) \u2014 ${FORMATIONS[draftState.formation].label} \u2014 <b style="color:var(--turf-bright);">${(TACTIC_MENTALITY[draftState.tactics.mentality]||TACTIC_MENTALITY.balanced).label}</b> / <b style="color:var(--turf-bright);">${(TACTIC_PRESSING[draftState.tactics.pressing]||TACTIC_PRESSING.normal).label}</b> / <b style="color:var(--turf-bright);">${(TACTIC_BUILDUP[draftState.tactics.buildup]||TACTIC_BUILDUP.ausgeglichen).label}</b>
+    <p class="hint" style="margin-top:0;">Rating ${myRating} (inkl. Chemie) \u2014 ${FORMATIONS[draftState.formation].label} \u2014 <b style="color:var(--turf-bright);">${(TACTIC_MENTALITY[draftState.tactics.mentality]||TACTIC_MENTALITY.balanced).label}</b> / <b style="color:var(--turf-bright);">${(TACTIC_PRESSING[draftState.tactics.pressing]||TACTIC_PRESSING.normal).label}</b>
       ${draftState.lives>0 ? ` \u00b7 <span style="color:var(--turf-bright);">${draftState.lives} Leben \u00fcbrig</span>` : ''}</p>
     <div class="sbc-progress-dots" style="margin-bottom:10px;" title="${doneCount} / 4 Siege">${Array.from({length:4},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
     ${draftState.wins>0 ? `<p class="hint" style="margin-top:0;">Belohnung bisher: ${DRAFT_REWARD_TABLE[draftState.wins].desc}</p>` : ''}
@@ -16187,17 +16183,6 @@ function renderSquad(view){
   // hidden behind a single averaged number. Only meaningful once at least one player is assigned.
   const teamProfile = filled ? computeTeamProfile(getMySquadPlayers(), rating) : null;
   const fmtAtkDef = v => v.toFixed(2);
-  // Standards (Kapitän/Elfmeter/Freistoß+Ecke) picken aus genau den Spielern, die gerade wirklich auf
-  // dem Feld stehen - wer rausrotiert wird, verliert die Rolle automatisch (siehe die setPieces-Reads
-  // unten, die einfach nichts mehr treffen), statt eine tote uid stehen zu lassen.
-  const filledSlots = form.slots.map(slot=>{
-    const uid = squad.slots[slot.id];
-    const card = uid ? ownedCard(uid) : null;
-    return card ? {slotId:slot.id, uid, name:card.n, pos:slot.label} : null;
-  }).filter(Boolean);
-  const setPieces = squad.setPieces || {};
-  const roles = squad.roles || {};
-  const planB = (squad.tactics && squad.tactics.planB) || DEFAULT_TACTICS.planB;
   view.innerHTML = `
     <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position tats\u00e4chlich spielen k\u00f6nnen, werden angeboten \u2014 Karten mit mehreren Positionen bekommen auf ihrer 1. bzw. 2. gelisteten Position einen Rating-Bonus (++/+). F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></div>
     <div class="squad-layout">
@@ -16233,72 +16218,15 @@ function renderSquad(view){
     </div>
     <div class="tactics-section" style="margin-top:22px;">
       <div class="lbl" style="margin-bottom:4px;color:var(--muted);font-size:11px;text-transform:uppercase;">Taktik (vor dem Spiel festgelegt)</div>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Aktuell: <b style="color:var(--turf-bright);">${(TACTIC_MENTALITY[squad.tactics&&squad.tactics.mentality]||TACTIC_MENTALITY.balanced).label}</b> \u00b7 <b style="color:var(--turf-bright);">${(TACTIC_PRESSING[squad.tactics&&squad.tactics.pressing]||TACTIC_PRESSING.normal).label}</b> \u00b7 <b style="color:var(--turf-bright);">${(TACTIC_BUILDUP[squad.tactics&&squad.tactics.buildup]||TACTIC_BUILDUP.ausgeglichen).label}</b></p>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Aktuell: <b style="color:var(--turf-bright);">${(TACTIC_MENTALITY[squad.tactics&&squad.tactics.mentality]||TACTIC_MENTALITY.balanced).label}</b> \u00b7 <b style="color:var(--turf-bright);">${(TACTIC_PRESSING[squad.tactics&&squad.tactics.pressing]||TACTIC_PRESSING.normal).label}</b></p>
       <p class="hint" style="margin-top:0;margin-bottom:8px;">Mentalit\u00e4t: verschiebt Angriff/Abwehr sp\u00fcrbar.</p>
       <div class="formation-select" id="tactics-mentality" style="margin-bottom:14px;">
         ${Object.entries(TACTIC_MENTALITY).map(([key,t])=>`<div class="chip tactic-chip" data-group="mentality" data-key="${key}" style="${(squad.tactics&&squad.tactics.mentality||'balanced')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
       </div>
       <p class="hint" style="margin-top:0;margin-bottom:8px;">Pressing: mehr Balleroberungen gegen deutlich mehr Kartenrisiko.</p>
-      <div class="formation-select" id="tactics-pressing" style="margin-bottom:14px;">
+      <div class="formation-select" id="tactics-pressing">
         ${Object.entries(TACTIC_PRESSING).map(([key,t])=>`<div class="chip tactic-chip" data-group="pressing" data-key="${key}" style="${(squad.tactics&&squad.tactics.pressing||'normal')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
       </div>
-      <p class="hint" style="margin-top:0;margin-bottom:8px;">Spielaufbau: dritte Achse \u2014 passt sich zus\u00e4tzlich den Stats deines Kaders an (Konter mit viel Tempo, Kurzpassspiel mit gutem Passspiel, Lange B\u00e4lle mit viel Physis).</p>
-      <div class="formation-select" id="tactics-buildup">
-        ${Object.entries(TACTIC_BUILDUP).map(([key,t])=>`<div class="chip tactic-chip" data-group="buildup" data-key="${key}" style="${(squad.tactics&&squad.tactics.buildup||'ausgeglichen')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
-      </div>
-      <p class="hint" style="margin-top:8px;margin-bottom:0;">Schwache Kader-Chemie schw\u00e4cht diese drei Werte automatisch ab \u2014 gut eingespielte Kader bekommen die volle Wirkung.</p>
-    </div>
-    <div class="tactics-section" style="margin-top:18px;">
-      <div class="lbl" style="margin-bottom:4px;color:var(--muted);font-size:11px;text-transform:uppercase;">Plan B \u2014 automatischer Taktikwechsel zur Halbzeit</div>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Springt zur Halbzeit automatisch auf eine andere Taktik um, wenn die gew\u00e4hlte Bedingung zutrifft \u2014 z.\u00a0B. bei R\u00fcckstand nochmal mehr riskieren.</p>
-      <label style="display:flex;align-items:center;gap:8px;color:var(--chalk);font-size:13.5px;margin-bottom:10px;cursor:pointer;">
-        <input type="checkbox" id="planb-enabled" ${planB.enabled?'checked':''}> Plan B aktivieren
-      </label>
-      <div style="${planB.enabled?'':'opacity:.45;pointer-events:none;'}" id="planb-detail">
-        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Zeitpunkt</div>
-        <select id="planb-trigger" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 12px;border-radius:9px;font-size:13.5px;margin-bottom:12px;">
-          <option value="behind" ${planB.trigger==='behind'?'selected':''}>Nur bei R\u00fcckstand zur Halbzeit</option>
-          <option value="notAhead" ${planB.trigger==='notAhead'?'selected':''}>Bei R\u00fcckstand oder Unentschieden zur Halbzeit</option>
-          <option value="always" ${planB.trigger==='always'?'selected':''}>Immer ab der 46. Minute</option>
-        </select>
-        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Mentalit\u00e4t (Plan B)</div>
-        <div class="formation-select" style="margin-bottom:10px;">
-          ${Object.entries(TACTIC_MENTALITY).map(([key,t])=>`<div class="chip tactic-chip" data-group="planb-mentality" data-key="${key}" style="${(planB.mentality||'offensive')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
-        </div>
-        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Pressing (Plan B)</div>
-        <div class="formation-select" style="margin-bottom:10px;">
-          ${Object.entries(TACTIC_PRESSING).map(([key,t])=>`<div class="chip tactic-chip" data-group="planb-pressing" data-key="${key}" style="${(planB.pressing||'high')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
-        </div>
-        <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Spielaufbau (Plan B)</div>
-        <div class="formation-select">
-          ${Object.entries(TACTIC_BUILDUP).map(([key,t])=>`<div class="chip tactic-chip" data-group="planb-buildup" data-key="${key}" style="${(planB.buildup||'ausgeglichen')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
-        </div>
-      </div>
-    </div>
-    <div class="tactics-section" style="margin-top:18px;">
-      <div class="lbl" style="margin-bottom:4px;color:var(--muted);font-size:11px;text-transform:uppercase;">Standards</div>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Kapit\u00e4n gibt deinem Team einen kleinen Bonus. Elfmetersch\u00fctze bekommt Elfmeter praktisch garantiert, Freisto\u00df-/Eckensch\u00fctze eine sp\u00fcrbar erh\u00f6hte Trefferchance bei normalen Toren.</p>
-      ${!filledSlots.length ? '<p class="hint" style="margin:0;">Besetze zuerst Positionen auf dem Feld.</p>' : ['captain','penalty','freekick','corner'].map(kind=>{
-        const kindLabel = {captain:'Kapit\u00e4n', penalty:'Elfmetersch\u00fctze', freekick:'Freisto\u00dfsch\u00fctze', corner:'Eckensch\u00fctze'}[kind];
-        return `<div style="margin-bottom:10px;">
-          <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">${kindLabel}</div>
-          <select class="setpiece-select" data-kind="${kind}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 12px;border-radius:9px;font-size:13.5px;">
-            <option value="">Keiner</option>
-            ${filledSlots.map(s=>`<option value="${s.uid}" ${setPieces[kind]===s.uid?'selected':''}>${s.name} (${posDE(s.pos)})</option>`).join('')}
-          </select>
-        </div>`;
-      }).join('')}
-    </div>
-    <div class="tactics-section" style="margin-top:18px;">
-      <div class="lbl" style="margin-bottom:4px;color:var(--muted);font-size:11px;text-transform:uppercase;">Rollen</div>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Pro Spieler etwas mehr riskieren oder eher absichern \u2014 kleine, gezielte Verschiebung statt eines pauschalen Team-Modifikators.</p>
-      ${!filledSlots.length ? '<p class="hint" style="margin:0;">Besetze zuerst Positionen auf dem Feld.</p>' : filledSlots.map(s=>`
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <span style="flex:1;font-size:13px;color:var(--chalk);">${s.name} <span style="color:var(--muted);">(${posDE(s.pos)})</span></span>
-          <div class="formation-select role-chip-row" style="flex:0 0 auto;">
-            ${[['defense','Absichernd'],['balanced','Ausgeglichen'],['attack','Offensiv']].map(([key,label])=>`<div class="chip role-chip" data-slot="${s.slotId}" data-role="${key}" style="padding:6px 10px;font-size:11.5px;${(roles[s.slotId]||'balanced')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}">${label}</div>`).join('')}
-          </div>
-        </div>`).join('')}
     </div>`;
   document.querySelectorAll('.preset-chip').forEach(chip=>{
     chip.addEventListener('click', (e)=>{
@@ -16381,42 +16309,7 @@ function renderSquad(view){
     chip.addEventListener('click', async ()=>{
       const group = chip.dataset.group, key = chip.dataset.key;
       squad.tactics = squad.tactics || {...DEFAULT_TACTICS};
-      if(group.startsWith('planb-')){
-        squad.tactics.planB = squad.tactics.planB || {...DEFAULT_TACTICS.planB};
-        squad.tactics.planB[group.slice(6)] = key;
-      } else {
-        squad.tactics[group] = key;
-      }
-      await sSet('squad', squad);
-      renderSquad(document.getElementById('view'));
-    });
-  });
-  const planbEnabledEl = document.getElementById('planb-enabled');
-  if(planbEnabledEl) planbEnabledEl.addEventListener('change', async ()=>{
-    squad.tactics = squad.tactics || {...DEFAULT_TACTICS};
-    squad.tactics.planB = squad.tactics.planB || {...DEFAULT_TACTICS.planB};
-    squad.tactics.planB.enabled = planbEnabledEl.checked;
-    await sSet('squad', squad);
-    renderSquad(document.getElementById('view'));
-  });
-  const planbTriggerEl = document.getElementById('planb-trigger');
-  if(planbTriggerEl) planbTriggerEl.addEventListener('change', async ()=>{
-    squad.tactics = squad.tactics || {...DEFAULT_TACTICS};
-    squad.tactics.planB = squad.tactics.planB || {...DEFAULT_TACTICS.planB};
-    squad.tactics.planB.trigger = planbTriggerEl.value;
-    await sSet('squad', squad);
-  });
-  document.querySelectorAll('.setpiece-select').forEach(sel=>{
-    sel.addEventListener('change', async ()=>{
-      squad.setPieces = squad.setPieces || {};
-      squad.setPieces[sel.dataset.kind] = sel.value || null;
-      await sSet('squad', squad);
-    });
-  });
-  document.querySelectorAll('.role-chip').forEach(chip=>{
-    chip.addEventListener('click', async ()=>{
-      squad.roles = squad.roles || {};
-      squad.roles[chip.dataset.slot] = chip.dataset.role;
+      squad.tactics[group] = key;
       await sSet('squad', squad);
       renderSquad(document.getElementById('view'));
     });
@@ -22992,8 +22885,6 @@ function getMySquadPlayers(){
   const form = FORMATIONS[squad.formation];
   const list = [];
   const mgr = getAssignedManager();
-  const setPieces = squad.setPieces || {};
-  const roles = squad.roles || {};
   form.slots.forEach(slot=>{
     const uid = squad.slots[slot.id];
     const card = uid ? ownedCard(uid) : null;
@@ -23002,11 +22893,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      // Rolle + Standards (Kader-Editor "Taktik"/"Standards") reisen ab hier direkt am Spieler-Objekt
-      // mit - buildDecisiveMatch/playerImpactRating lesen sie unverändert von JEDER Aufstellung, die
-      // hier durchläuft, ohne dass ein einziger Aufrufer von getMySquadPlayers() etwas ändern musste.
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas,
-        role: roles[slot.id]||'balanced', isCaptain: setPieces.captain===uid, isPenalty: setPieces.penalty===uid, isSetPiece: setPieces.freekick===uid || setPieces.corner===uid});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -23064,7 +22951,7 @@ function fallbackScorerPool(){
   FALLBACK_SCORER_POOL = weighted;
   return weighted;
 }
-function pickScorer(players, boostUid=null, boostWeight=1){
+function pickScorer(players){
   if(!players || !players.length){
     const pool = fallbackScorerPool();
     const p = pool[Math.floor(Math.random()*pool.length)];
@@ -23083,11 +22970,7 @@ function pickScorer(players, boostUid=null, boostWeight=1){
     const sho = p.sho!=null ? p.sho : ov;
     const scoreSkill = ov*0.55 + sho*0.45;
     const ratingFactor = Math.pow(1.05, scoreSkill-72);
-    // boostUid (optional): the squad's designated Elfmeter-/Standard-Schütze (see Kader-Editor
-    // "Standards") gets extra weight here - boostWeight=1 (default) is a complete no-op so every
-    // caller that never heard of this feature plays out exactly as before.
-    let w = posW * ratingFactor;
-    if(boostUid && p.uid===boostUid) w *= boostWeight;
+    const w = posW * ratingFactor;
     const reps = Math.max(1, Math.round(w*3));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
@@ -23097,7 +22980,7 @@ function pickScorer(players, boostUid=null, boostWeight=1){
   // can show the correct badge/rating for an opponent's card too, not just my own
   return {n:chosen.n, img:chosen.img, id:chosen.id, uid:chosen.uid, ov:chosen.ov, level:chosen.level};
 }
-function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, myRedMinute=null, oppRedMinute=null, mySentOff=null, oppSentOff=null, myBoostUid=null, oppBoostUid=null){
+function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, myRedMinute=null, oppRedMinute=null, mySentOff=null, oppSentOff=null){
   const used = new Set();
   function uniqueMinute(){
     let m; let tries=0;
@@ -23107,11 +22990,11 @@ function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90
   const events = [];
   for(let i=0;i<myGoals;i++){
     const minute = uniqueMinute()+minuteOffset;
-    events.push({minute, side:'me', scorer:pickScorer(scorerPoolExcluding(myPlayers, myRedMinute, mySentOff, minute), myBoostUid, 1.6)});
+    events.push({minute, side:'me', scorer:pickScorer(scorerPoolExcluding(myPlayers, myRedMinute, mySentOff, minute))});
   }
   for(let i=0;i<oppGoals;i++){
     const minute = uniqueMinute()+minuteOffset;
-    events.push({minute, side:'opp', scorer:pickScorer(scorerPoolExcluding(oppPlayers, oppRedMinute, oppSentOff, minute), oppBoostUid, 1.6)});
+    events.push({minute, side:'opp', scorer:pickScorer(scorerPoolExcluding(oppPlayers, oppRedMinute, oppSentOff, minute))});
   }
   events.sort((a,b)=>a.minute-b.minute);
   return events;
@@ -23152,13 +23035,7 @@ function buildPenaltyOrder(players, sentOff){
     : players;
   const outfield = pool.filter(p=>posGroup2(p.pos)!=='GK');
   const base = outfield.length ? outfield : pool; // only dip into keepers if truly no one else is left
-  const sorted = base.slice().sort((a,b)=>penaltyKickerSkill(b)-penaltyKickerSkill(a));
-  // the squad's designated Elfmeterschütze (Kader-Editor "Standards") steps up first, exactly like a
-  // real captain/coach would hand them the ball - only reorders the list when that player is actually
-  // still on the pitch, everyone else keeps the pure skill-based order behind them
-  const designatedIdx = sorted.findIndex(p=>p.isPenalty);
-  if(designatedIdx>0){ const [d] = sorted.splice(designatedIdx,1); sorted.unshift(d); }
-  return sorted;
+  return base.slice().sort((a,b)=>penaltyKickerSkill(b)-penaltyKickerSkill(a));
 }
 // per-kick success chance: the taker's own penalty skill weighed against the specific goalkeeper
 // facing them, with only a small nudge from overall team strength - a placeholder star should score
@@ -23231,75 +23108,7 @@ const TACTIC_PRESSING = {
   normal: {label:'Normales Pressing', attackMod: 0,   cardMult:1.0, desc:'Ausgewogener Standard-Ansatz.'},
   low:    {label:'Tiefes Pressing',  attackMod:-1,   cardMult:0.6, desc:'Weniger Risiko und Karten, aber weniger Balleroberungen.'},
 };
-// Dritte Taktik-Achse: Spielaufbau-Stil. Wie Mentalit\u00e4t/Pressing ein fester Angriff/Abwehr-Modifikator,
-// zus\u00e4tzlich verst\u00e4rkt/abgeschw\u00e4cht durch genau die Kaderstats, die zum jeweiligen Stil passen (siehe
-// buildupStatBonus) - ein Kader mit viel Tempo profitiert von Konter, einer mit starkem Passspiel von
-// Kurzpassspiel, usw. statKey:null (Ausgeglichen) bekommt nie einen Stat-Bonus.
-const TACTIC_BUILDUP = {
-  kurzpass:     {label:'Kurzpassspiel', attackMod: 0.5, defenseMod: 0.5,  cardMult:0.9, statKey:'pas', desc:'Sicheres Kombinationsspiel \u2014 st\u00e4rker mit gutem Passspiel im Kader, daf\u00fcr weniger Tempo im Umschaltspiel.'},
-  ausgeglichen: {label:'Ausgeglichen',  attackMod: 0,   defenseMod: 0,    cardMult:1.0, statKey:null,  desc:'Kein taktischer Schwerpunkt beim Spielaufbau.'},
-  konter:       {label:'Konter',        attackMod: 1,   defenseMod:-1.5,  cardMult:1.0, statKey:'pac', desc:'Blitzschnelles Umschaltspiel \u2014 st\u00e4rker mit viel Tempo im Kader, daf\u00fcr anf\u00e4llig, wenn der Gegner selbst am Ball ist.'},
-  langebaelle:  {label:'Lange B\u00e4lle',  attackMod: 0.5, defenseMod:-0.5,  cardMult:1.1, statKey:'phy', desc:'Direkt und robust \u2014 st\u00e4rker mit viel Physis im Kader, daf\u00fcr weniger pr\u00e4zise als kurzes Kombinationsspiel.'},
-};
-function buildupStatBonus(buildupKey, players){
-  const t = TACTIC_BUILDUP[buildupKey] || TACTIC_BUILDUP.ausgeglichen;
-  if(!t.statKey || !players || !players.length) return 0;
-  const avg = players.reduce((s,p)=>s+(p[t.statKey]!=null?p[t.statKey]:(p.ov||75)),0)/players.length;
-  return clamp((avg-75)/18, -1.2, 1.8);
-}
-// Chemie-Kopplung (Idee "H"): Mentalit\u00e4t/Pressing/Spielaufbau wirken nur mit voller Kraft, wenn der
-// Kader auch wirklich eingespielt ist - bei 0 Chemie-Sternen (im Schnitt) kommt nur die H\u00e4lfte der
-// Modifikatoren an. Gegner/Bots ohne Chemie-Feld (jede Nicht-Kader-Aufstellung) bekommen bewusst den
-// vollen Effekt (R\u00fcckgabe 1) - das entspricht exakt dem Verhalten vor dieser Funktion.
-function tacticChemScaler(players){
-  if(!players || !players.length || players.some(p=>p.chem==null)) return 1;
-  const avgChem = players.reduce((s,p)=>s+p.chem,0)/players.length; // 0..3
-  return clamp(0.5 + avgChem/3*0.5, 0.5, 1.0);
-}
-// Halbzeit-Taktikwechsel + Pressing-Trigger (Ideen "B" + "D"): ein vor dem Spiel hinterlegter "Plan B"
-// (siehe Kader-Editor "Taktik") wird zur Halbzeit automatisch aktiv, wenn sein Trigger zutrifft. Da das
-// komplette Spiel schon vor der Animation feststeht (siehe buildDecisiveMatch), hei\u00dft "zur Halbzeit
-// wechseln" hier konkret: die 2. Halbzeit wird mit den Plan-B-Werten statt der Grundtaktik simuliert,
-// abh\u00e4ngig vom Spielstand nach der 1. Halbzeit.
-function planBActiveAtHalftime(t, myHalfGoals, oppHalfGoals){
-  if(!t || !t.planB || !t.planB.enabled) return false;
-  const trigger = t.planB.trigger || 'behind';
-  if(trigger==='always') return true;
-  if(trigger==='behind') return myHalfGoals < oppHalfGoals;
-  if(trigger==='notAhead') return myHalfGoals <= oppHalfGoals;
-  return false;
-}
-function activeTacticsForHalf(t, planBActive){
-  if(!planBActive || !t.planB) return t;
-  return {
-    mentality: t.planB.mentality || t.mentality,
-    pressing: t.planB.pressing || t.pressing,
-    buildup: t.planB.buildup || t.buildup,
-  };
-}
-// combined attack/defense delta from mentality+pressing+buildup (incl. its stat bonus), scaled by
-// how well-eingespielt the squad is (tacticChemScaler) - the one function both match halves call.
-function tacticProfileMods(t, players, chemScale){
-  const ment = TACTIC_MENTALITY[t.mentality] || TACTIC_MENTALITY.balanced;
-  const press = TACTIC_PRESSING[t.pressing] || TACTIC_PRESSING.normal;
-  const build = TACTIC_BUILDUP[t.buildup] || TACTIC_BUILDUP.ausgeglichen;
-  const buildBonus = buildupStatBonus(t.buildup, players);
-  return {
-    attackMod: (ment.attackMod + press.attackMod + build.attackMod + buildBonus) * chemScale,
-    defenseMod: (ment.defenseMod + build.defenseMod) * chemScale,
-  };
-}
-// Rote-Karte-Penalty f\u00fcr EIN Zeitfenster (z.B. 1. Halbzeit 0-45, 2. Halbzeit 45-90, Verl\u00e4ngerung
-// 90-120) statt f\u00fcr das ganze Spiel auf einmal - ein Platzverweis vor windowStart wirkt im gesamten
-// Fenster (fractionDown=1), einer w\u00e4hrenddessen nur auf den Rest davon, einer danach gar nicht.
-function redPenaltyForWindow(redMinute, windowStart, windowEnd){
-  if(redMinute==null || redMinute>=windowEnd) return 0;
-  const downFrom = Math.max(redMinute, windowStart);
-  const fractionDown = (windowEnd-downFrom)/(windowEnd-windowStart);
-  return fractionDown*6;
-}
-const DEFAULT_TACTICS = {mentality:'balanced', pressing:'normal', buildup:'ausgeglichen',
-  planB:{enabled:false, trigger:'behind', mentality:'offensive', pressing:'high', buildup:'ausgeglichen'}};
+const DEFAULT_TACTICS = {mentality:'balanced', pressing:'normal'};
 function pickCardRecipient(players){
   if(!players || !players.length) return {n:'Unbekannt'};
   const weighted = [];
@@ -23405,11 +23214,6 @@ function playerImpactRating(p, kind){
     delta += (val-ov)*w;
   });
   delta = clamp(delta, -4, 4);
-  // Individuelle Rolle (Kader-Editor, pro Slot einstellbar): a small extra nudge ON TOP of the
-  // stat-based delta above, applied AFTER its clamp so a player without a role set (the default,
-  // 'balanced') plays exactly as before this existed - only 'attack'/'defense' actually move anything.
-  if(p.role==='attack') delta += (kind==='attack' ? 1.5 : -1);
-  else if(p.role==='defense') delta += (kind==='defense' ? 1.5 : -1);
   return ov+delta;
 }
 function computeTeamProfile(players, fallbackOv){
@@ -23645,92 +23449,48 @@ function renderMatchMiniWidget(){
 function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactics=null, oppTactics=null, opts={}){
   const myT = myTactics || DEFAULT_TACTICS;
   const oppT = oppTactics || DEFAULT_TACTICS;
+  const myMent = TACTIC_MENTALITY[myT.mentality] || TACTIC_MENTALITY.balanced;
+  const oppMent = TACTIC_MENTALITY[oppT.mentality] || TACTIC_MENTALITY.balanced;
   const myPress = TACTIC_PRESSING[myT.pressing] || TACTIC_PRESSING.normal;
   const oppPress = TACTIC_PRESSING[oppT.pressing] || TACTIC_PRESSING.normal;
 
   // simple unweighted team-average of one stat, defaulting to Overall wherever the stat is missing -
   // deliberately not the heavier weighted computeTeamProfile below, just enough for the penalty-chance
-  // nudge (Dribbling vs. Defending) in planCardsAndPenalties. Das Kartenrisiko richtet sich nach der
-  // GRUNDTAKTIK - ein Halbzeit-Planwechsel (siehe unten) betrifft nur Angriff/Abwehr, nicht Karten.
+  // nudge (Dribbling vs. Defending) in planCardsAndPenalties
   const avgStat = (players, key) => players.length ? players.reduce((s,p)=>s+(p[key]!=null?p[key]:(p.ov||75)),0)/players.length : 75;
   const myIncidents = planCardsAndPenalties(myPress.cardMult, myPlayers, avgStat(myPlayers,'dri'), avgStat(oppPlayers,'defn'));
   const oppIncidents = planCardsAndPenalties(oppPress.cardMult, oppPlayers, avgStat(oppPlayers,'dri'), avgStat(myPlayers,'defn'));
 
   const myProfileRaw0 = computeTeamProfile(myPlayers, myRating);
   const oppProfileRaw0 = computeTeamProfile(oppPlayers, oppRating);
+  // tactics shift the raw profile before anything else - this is what gets stored/shown externally too.
+  // Pace fields pass through untouched (tactics affect the overall attack/defense mix, not raw speed).
+  const myProfileRaw = {attack: myProfileRaw0.attack+myMent.attackMod+myPress.attackMod, defense: myProfileRaw0.defense+myMent.defenseMod, attackPace: myProfileRaw0.attackPace, defPaceBlend: myProfileRaw0.defPaceBlend};
+  const oppProfileRaw = {attack: oppProfileRaw0.attack+oppMent.attackMod+oppPress.attackMod, defense: oppProfileRaw0.defense+oppMent.defenseMod, attackPace: oppProfileRaw0.attackPace, defPaceBlend: oppProfileRaw0.defPaceBlend};
 
-  // Standards (Kader-Editor "Standards": Kapitän/Elfmeter/Freistoß+Ecke) - Flags landen direkt am
-  // Spieler-Objekt (siehe getMySquadPlayers), deshalb funktioniert das hier für JEDEN Aufrufer ohne
-  // eigene Anpassung. Fehlen sie (Bot-Aufstellungen, ältere Kader ohne diese Auswahl) ist alles unten
-  // ein reines No-op - exaktes Verhalten wie vor dieser Funktion.
-  const myCaptainBonus = myPlayers.some(p=>p.isCaptain) ? 0.4 : 0;
-  const oppCaptainBonus = oppPlayers.some(p=>p.isCaptain) ? 0.4 : 0;
-  const myPenaltyUid = (myPlayers.find(p=>p.isPenalty)||{}).uid || null;
-  const oppPenaltyUid = (oppPlayers.find(p=>p.isPenalty)||{}).uid || null;
-  const mySetPieceUid = (myPlayers.find(p=>p.isSetPiece)||{}).uid || null;
-  const oppSetPieceUid = (oppPlayers.find(p=>p.isSetPiece)||{}).uid || null;
+  const myRedPenalty = myIncidents.redMinute!=null ? (90-myIncidents.redMinute)/90*6 : 0;
+  const oppRedPenalty = oppIncidents.redMinute!=null ? (90-oppIncidents.redMinute)/90*6 : 0;
+  const myProfileForLambda = {attack: myProfileRaw.attack-myRedPenalty, defense: myProfileRaw.defense-myRedPenalty, attackPace: myProfileRaw.attackPace, defPaceBlend: myProfileRaw.defPaceBlend};
+  const oppProfileForLambda = {attack: oppProfileRaw.attack-oppRedPenalty, defense: oppProfileRaw.defense-oppRedPenalty, attackPace: oppProfileRaw.attackPace, defPaceBlend: oppProfileRaw.defPaceBlend};
 
-  // Chemie-Kopplung + 3. Taktik-Achse (Spielaufbau) - myProfileRaw (Grundtaktik/1. Halbzeit) ist das,
-  // was extern gespeichert/angezeigt wird (Atk/Def-Kacheln, Liga-Tabellen, ...), genau wie zuvor.
-  const myChemScale = tacticChemScaler(myPlayers);
-  const oppChemScale = tacticChemScaler(oppPlayers);
-  const myMods1 = tacticProfileMods(myT, myPlayers, myChemScale);
-  const oppMods1 = tacticProfileMods(oppT, oppPlayers, oppChemScale);
-  const myProfileRaw = {attack: myProfileRaw0.attack+myMods1.attackMod+myCaptainBonus, defense: myProfileRaw0.defense+myMods1.defenseMod+myCaptainBonus, attackPace: myProfileRaw0.attackPace, defPaceBlend: myProfileRaw0.defPaceBlend};
-  const oppProfileRaw = {attack: oppProfileRaw0.attack+oppMods1.attackMod+oppCaptainBonus, defense: oppProfileRaw0.defense+oppMods1.defenseMod+oppCaptainBonus, attackPace: oppProfileRaw0.attackPace, defPaceBlend: oppProfileRaw0.defPaceBlend};
-
-  // ----- 1. Halbzeit (0-45): immer die Grundtaktik -----
-  const myRedPenalty1 = redPenaltyForWindow(myIncidents.redMinute, 0, 45);
-  const oppRedPenalty1 = redPenaltyForWindow(oppIncidents.redMinute, 0, 45);
-  const myProfileForLambda1 = {attack: myProfileRaw.attack-myRedPenalty1, defense: myProfileRaw.defense-myRedPenalty1, attackPace: myProfileRaw.attackPace, defPaceBlend: myProfileRaw.defPaceBlend};
-  const oppProfileForLambda1 = {attack: oppProfileRaw.attack-oppRedPenalty1, defense: oppProfileRaw.defense-oppRedPenalty1, attackPace: oppProfileRaw.attackPace, defPaceBlend: oppProfileRaw.defPaceBlend};
   // counter-attack nudge: my attacking Pace vs. the opponent's defensive Pace/Physicality blend,
   // capped at ±0.15 on λ - symmetric, so it averages out across many matches (the "PAC" row)
-  const myPaceBonus1 = clamp((myProfileForLambda1.attackPace - oppProfileForLambda1.defPaceBlend)/40, -0.15, 0.15);
-  const oppPaceBonus1 = clamp((oppProfileForLambda1.attackPace - myProfileForLambda1.defPaceBlend)/40, -0.15, 0.15);
-  const myExp1 = computeLambda(myProfileForLambda1.attack, oppProfileForLambda1.defense, myPaceBonus1);
-  const oppExp1 = computeLambda(oppProfileForLambda1.attack, myProfileForLambda1.defense, oppPaceBonus1);
-  const myGoals1 = simGoals(clamp(myExp1*0.5, 0.05, 3));
-  const oppGoals1 = simGoals(clamp(oppExp1*0.5, 0.05, 3));
-  const events1 = buildMatchEvents(myGoals1, oppGoals1, myPlayers, oppPlayers, 45, 0, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer, mySetPieceUid, oppSetPieceUid);
+  const myPaceBonus = clamp((myProfileForLambda.attackPace - oppProfileForLambda.defPaceBlend)/40, -0.15, 0.15);
+  const oppPaceBonus = clamp((oppProfileForLambda.attackPace - myProfileForLambda.defPaceBlend)/40, -0.15, 0.15);
+  const myExp = computeLambda(myProfileForLambda.attack, oppProfileForLambda.defense, myPaceBonus);
+  const oppExp = computeLambda(oppProfileForLambda.attack, myProfileForLambda.defense, oppPaceBonus);
+  let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
+  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
 
-  // ----- Halbzeit-Taktikwechsel + Pressing-Trigger (Kader-Editor "Taktik" -> Plan B): abhängig vom
-  // Spielstand nach der 1. Halbzeit springt die 2. Halbzeit automatisch auf die Plan-B-Werte um, falls
-  // ihr Trigger zutrifft - das komplette Spiel steht weiterhin schon vor der Animation fest (siehe
-  // "Zum Ergebnis springen"), nur eben aus zwei statt einem vorab feststehenden Abschnitt. -----
-  const myPlanBActive = planBActiveAtHalftime(myT, myGoals1, oppGoals1);
-  const oppPlanBActive = planBActiveAtHalftime(oppT, oppGoals1, myGoals1);
-  const myT2 = activeTacticsForHalf(myT, myPlanBActive);
-  const oppT2 = activeTacticsForHalf(oppT, oppPlanBActive);
-  const myMods2 = tacticProfileMods(myT2, myPlayers, myChemScale);
-  const oppMods2 = tacticProfileMods(oppT2, oppPlayers, oppChemScale);
-
-  // ----- 2. Halbzeit (45-90): Grundtaktik oder Plan B -----
-  const myRedPenalty2 = redPenaltyForWindow(myIncidents.redMinute, 45, 90);
-  const oppRedPenalty2 = redPenaltyForWindow(oppIncidents.redMinute, 45, 90);
-  const myProfileForLambda2 = {attack: myProfileRaw0.attack+myMods2.attackMod+myCaptainBonus-myRedPenalty2, defense: myProfileRaw0.defense+myMods2.defenseMod+myCaptainBonus-myRedPenalty2, attackPace: myProfileRaw0.attackPace, defPaceBlend: myProfileRaw0.defPaceBlend};
-  const oppProfileForLambda2 = {attack: oppProfileRaw0.attack+oppMods2.attackMod+oppCaptainBonus-oppRedPenalty2, defense: oppProfileRaw0.defense+oppMods2.defenseMod+oppCaptainBonus-oppRedPenalty2, attackPace: oppProfileRaw0.attackPace, defPaceBlend: oppProfileRaw0.defPaceBlend};
-  const myPaceBonus2 = clamp((myProfileForLambda2.attackPace - oppProfileForLambda2.defPaceBlend)/40, -0.15, 0.15);
-  const oppPaceBonus2 = clamp((oppProfileForLambda2.attackPace - myProfileForLambda2.defPaceBlend)/40, -0.15, 0.15);
-  const myExp2 = computeLambda(myProfileForLambda2.attack, oppProfileForLambda2.defense, myPaceBonus2);
-  const oppExp2 = computeLambda(oppProfileForLambda2.attack, myProfileForLambda2.defense, oppPaceBonus2);
-  const myGoals2 = simGoals(clamp(myExp2*0.5, 0.05, 3));
-  const oppGoals2 = simGoals(clamp(oppExp2*0.5, 0.05, 3));
-  const events2 = buildMatchEvents(myGoals2, oppGoals2, myPlayers, oppPlayers, 45, 45, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer, mySetPieceUid, oppSetPieceUid);
-
-  let myGoals = myGoals1+myGoals2, oppGoals = oppGoals1+oppGoals2;
-  const events90 = [...events1, ...events2];
-
-  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count -
-  // heavily weighted toward the designated Elfmeterschütze (myPenaltyUid/oppPenaltyUid) when present
+  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count
   if(myIncidents.penalty && myIncidents.penalty.scored){
     const myPkPool = scorerPoolExcluding(myPlayers, myIncidents.redMinute, myIncidents.sentOffPlayer, myIncidents.penalty.minute);
-    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myPkPool, myPenaltyUid, 6), isPenalty:true});
+    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myPkPool), isPenalty:true});
     myGoals++;
   }
   if(oppIncidents.penalty && oppIncidents.penalty.scored){
     const oppPkPool = scorerPoolExcluding(oppPlayers, oppIncidents.redMinute, oppIncidents.sentOffPlayer, oppIncidents.penalty.minute);
-    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppPkPool, oppPenaltyUid, 6), isPenalty:true});
+    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppPkPool), isPenalty:true});
     oppGoals++;
   }
   events90.sort((a,b)=>a.minute-b.minute);
@@ -23746,14 +23506,13 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   let eventsET=null, shootout=null, wentToET=false, wentToPK=false;
   // opts.allowDraw (World Cup group-stage matches): a 90-minute tie stays a tie, same as real group
   // football - every other caller (knockout rounds, online matches, ...) needs a definite winner, so
-  // this only skips extra time/penalties when explicitly asked to. Extra time continues with whichever
-  // tactics were active at the final whistle (myT2/oppT2 - myExp2/oppExp2 already reflect them).
+  // this only skips extra time/penalties when explicitly asked to.
   if(myGoals===oppGoals && !opts.allowDraw){
     wentToET = true;
-    const myExpET = clamp(myExp2*(30/90), 0.05, 2);
-    const oppExpET = clamp(oppExp2*(30/90), 0.05, 2);
+    const myExpET = clamp(myExp*(30/90), 0.05, 2);
+    const oppExpET = clamp(oppExp*(30/90), 0.05, 2);
     const myETGoals = simGoals(myExpET), oppETGoals = simGoals(oppExpET);
-    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer, mySetPieceUid, oppSetPieceUid);
+    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
     myGoals += myETGoals; oppGoals += oppETGoals;
     if(myGoals===oppGoals){
       wentToPK = true;
