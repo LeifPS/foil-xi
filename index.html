@@ -7149,13 +7149,13 @@ const WEEK_PASS_QUEST_DEFS = [
   {id:'openZeitgeist', type:'openPack', packId:'zeitgeist', target:1, xp:180, label:'Öffne 1 Zeitgeist Pack'},
   {id:'openAny2', type:'openPack', packId:null, target:2, xp:110, label:'Öffne 2 beliebige Packs'},
   // New quest types (see bumpWeekPassQuest call sites: commitMatchResult, the WM26/tournament match
-  // flows, submitSBC, and the two market-listing submit handlers) - all reuse data already available
-  // right where a match/SBC/listing already gets committed, no new tracking machinery needed.
+  // flows, playLigaLiveMatch, and awardCardXP) - all reuse data already available right where a match/
+  // level-up already gets committed, no new tracking machinery needed.
   {id:'cleanSheet3', type:'cleanSheet', target:3, xp:170, label:'Gewinne 3 Matches ohne Gegentor'},
   {id:'bigWin3', type:'bigWin', target:3, xp:170, label:'Gewinne 3 Matches mit mind. 3 Toren Unterschied'},
   {id:'shootoutWin1', type:'shootoutWin', target:1, xp:130, label:'Gewinne ein Elfmeterschießen'},
-  {id:'completeSBC1', type:'completeSBC', target:1, xp:130, label:'Schließe 1 Herausforderung (SBC) ab'},
-  {id:'listCard3', type:'listCard', target:3, xp:90, label:'Liste 3 Karten auf dem Transfermarkt'},
+  {id:'winLiga2', type:'winLigaMatch', target:2, xp:150, label:'Gewinne 2 Liga-Matches'},
+  {id:'levelUp1', type:'levelUpCard', target:1, xp:110, label:'Leveln eine Karte hoch (Bronze/Silber/Gold)'},
 ];
 // picks one quest definition not already among the given active ids - falls back to the full pool
 // if every template is somehow already active (can't happen with 8 templates and only 3 active slots).
@@ -10076,7 +10076,6 @@ async function submitSBC(){
   }
   profile.completedSBCs = profile.completedSBCs || {};
   profile.completedSBCs[activeSBC.id] = (profile.completedSBCs[activeSBC.id]||0) + 1;
-  bumpWeekPassQuest('completeSBC', 1);
   await sSet('collection', collection);
   await sSet('profile', profile);
   currentTab = 'sbc';
@@ -10553,7 +10552,6 @@ function renderSellManual(allEligible, usedInSquad){
     toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen (nicht mehr verf\u00fcgbar).` : `${created} Karte(n) zum Transfermarkt hinzugef\u00fcgt!`);
     invalidateReadCache('market-listings');
     invalidateReadCache('external-locks:'+profile.userId);
-    if(created>0 && bumpWeekPassQuest('listCard', created)) await sSet('profile', profile);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
 }
@@ -10834,7 +10832,6 @@ function renderSellFilter(allEligible, usedInSquad){
     toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen.` : `${created} Karte(n) gelistet!`);
     invalidateReadCache('market-listings');
     invalidateReadCache('external-locks:'+profile.userId);
-    if(created>0 && bumpWeekPassQuest('listCard', created)) await sSet('profile', profile);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
   updatePreview();
@@ -11892,7 +11889,10 @@ async function awardCardXP(matchRatings){
     }
   });
   if(changed) await sSet('collection', collection);
-  if(levelUps.length) await showLevelUpCutscene(levelUps);
+  if(levelUps.length){
+    if(bumpWeekPassQuest('levelUpCard', levelUps.length)) await sSet('profile', profile);
+    await showLevelUpCutscene(levelUps);
+  }
 }
 // A card leveling up used to be just a toast, easy to miss during a busy match screen - now it's the
 // biggest thing on screen, one level-up at a time. Tapping anywhere (or a timer, so it never blocks
@@ -19211,6 +19211,7 @@ async function playLigaLiveMatch(letter, weekStart, mid){
   if(skipBtn) skipBtn.addEventListener('click', ()=>{ liveMatchSkipAll = true; skipBtn.disabled = true; skipBtn.textContent = 'Wird übersprungen …'; });
   try{ await playFullMatch(md, myName, oppName, oppAbbr); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
   finally{ inMatch = false; }
+  if(md.winnerSide==='me' && bumpWeekPassQuest('winLigaMatch', 1)) await sSet('profile', profile);
   try{
     if(fb.runTransaction){
       await fb.runTransaction(fb.db, async (tx)=>{
