@@ -12304,7 +12304,17 @@ async function init(){
     checkGreatReset();
   }
   const switchBtn = document.getElementById('switch-club-btn');
-  if(switchBtn) switchBtn.onclick = switchClub;
+  if(switchBtn) switchBtn.onclick = ()=>{
+    openModal(`
+      <h2 style="margin-bottom:10px;">Verein wechseln?</h2>
+      <p style="color:var(--muted);font-size:13.5px;margin-bottom:16px;">Du wirst abgemeldet und zur Vereinsauswahl zurückgebracht. Dein aktueller Verein bleibt gespeichert und kann jederzeit über seine Vereins-ID wieder aufgerufen werden.</p>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button class="action-btn secondary" id="cancel-switch-club" style="width:120px;">Abbrechen</button>
+        <button class="action-btn" id="confirm-switch-club" style="width:120px;background:var(--danger);">Wechseln</button>
+      </div>`);
+    document.getElementById('cancel-switch-club').addEventListener('click', closeModal);
+    document.getElementById('confirm-switch-club').addEventListener('click', ()=>{ closeModal(); switchClub(); });
+  };
   const soundBtn = document.getElementById('sound-toggle');
   if(soundBtn){
     soundBtn.textContent = soundEnabled ? '\u{1F50A}' : '\u{1F507}';
