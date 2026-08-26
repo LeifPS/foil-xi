@@ -7131,6 +7131,11 @@ async function claimWeekPassReward(level){
 // ===== Wochen Pass daily quests: reset every local calendar day, award bonus XP straight into the
 // pass. The intended lever for closing the much steeper 16-30 XP gap without pure match-grinding
 // alone taking forever - see WEEK_PASS_LEVEL_THRESHOLDS above.
+// XP-per-target roughly follows how much real effort/luck a quest takes, not just "bigger number =
+// more XP": earnCoins is mostly passive (happens automatically while doing anything else), so it pays
+// less per unit than active, skill-driven quests like winning or scoring - previously earnCoins/goals
+// paid similarly per target unit despite very different effort, which made the passive coin quests the
+// obvious "free" pick every time they rolled.
 const WEEK_PASS_QUEST_DEFS = [
   {id:'win5', type:'winMatches', target:5, xp:150, label:'Gewinne 5 Matches'},
   {id:'win10', type:'winMatches', target:10, xp:280, label:'Gewinne 10 Matches'},
@@ -7138,11 +7143,19 @@ const WEEK_PASS_QUEST_DEFS = [
   {id:'play10', type:'playMatches', target:10, xp:200, label:'Spiele 10 Matches (Sieg oder Niederlage)'},
   {id:'goals10', type:'scoreGoals', target:10, xp:160, label:'Erziele 10 Tore'},
   {id:'goals20', type:'scoreGoals', target:20, xp:280, label:'Erziele 20 Tore'},
-  {id:'earn20k', type:'earnCoins', target:20000, xp:120, label:'Verdiene 20.000 Coins'},
-  {id:'earn40k', type:'earnCoins', target:40000, xp:220, label:'Verdiene 40.000 Coins'},
+  {id:'earn20k', type:'earnCoins', target:20000, xp:100, label:'Verdiene 20.000 Coins'},
+  {id:'earn40k', type:'earnCoins', target:40000, xp:180, label:'Verdiene 40.000 Coins'},
   {id:'openGold', type:'openPack', packId:'gold', target:2, xp:100, label:'Öffne 2 Gold Rush Packs'},
   {id:'openZeitgeist', type:'openPack', packId:'zeitgeist', target:1, xp:180, label:'Öffne 1 Zeitgeist Pack'},
   {id:'openAny2', type:'openPack', packId:null, target:2, xp:110, label:'Öffne 2 beliebige Packs'},
+  // New quest types (see bumpWeekPassQuest call sites: commitMatchResult, the WM26/tournament match
+  // flows, submitSBC, and the two market-listing submit handlers) - all reuse data already available
+  // right where a match/SBC/listing already gets committed, no new tracking machinery needed.
+  {id:'cleanSheet3', type:'cleanSheet', target:3, xp:170, label:'Gewinne 3 Matches ohne Gegentor'},
+  {id:'bigWin3', type:'bigWin', target:3, xp:170, label:'Gewinne 3 Matches mit mind. 3 Toren Unterschied'},
+  {id:'shootoutWin1', type:'shootoutWin', target:1, xp:130, label:'Gewinne ein Elfmeterschießen'},
+  {id:'completeSBC1', type:'completeSBC', target:1, xp:130, label:'Schließe 1 Herausforderung (SBC) ab'},
+  {id:'listCard3', type:'listCard', target:3, xp:90, label:'Liste 3 Karten auf dem Transfermarkt'},
 ];
 // picks one quest definition not already among the given active ids - falls back to the full pool
 // if every template is somehow already active (can't happen with 8 templates and only 3 active slots).
@@ -10063,6 +10076,7 @@ async function submitSBC(){
   }
   profile.completedSBCs = profile.completedSBCs || {};
   profile.completedSBCs[activeSBC.id] = (profile.completedSBCs[activeSBC.id]||0) + 1;
+  bumpWeekPassQuest('completeSBC', 1);
   await sSet('collection', collection);
   await sSet('profile', profile);
   currentTab = 'sbc';
@@ -10539,6 +10553,7 @@ function renderSellManual(allEligible, usedInSquad){
     toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen (nicht mehr verf\u00fcgbar).` : `${created} Karte(n) zum Transfermarkt hinzugef\u00fcgt!`);
     invalidateReadCache('market-listings');
     invalidateReadCache('external-locks:'+profile.userId);
+    if(created>0 && bumpWeekPassQuest('listCard', created)) await sSet('profile', profile);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
 }
@@ -10819,6 +10834,7 @@ function renderSellFilter(allEligible, usedInSquad){
     toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen.` : `${created} Karte(n) gelistet!`);
     invalidateReadCache('market-listings');
     invalidateReadCache('external-locks:'+profile.userId);
+    if(created>0 && bumpWeekPassQuest('listCard', created)) await sSet('profile', profile);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
   });
   updatePreview();
@@ -20091,7 +20107,12 @@ async function playWM26GroupMatch(matchIdx){
     // WM26-Matches liefen bisher an commitMatchResult vorbei, daher hier dieselben Wochen-Pass-Quest-Bumps
     bumpWeekPassQuest('playMatches', 1);
     if(md.myGoals>0) bumpWeekPassQuest('scoreGoals', md.myGoals);
-    if(md.winnerSide==='me') bumpWeekPassQuest('winMatches', 1);
+    if(md.winnerSide==='me'){
+      bumpWeekPassQuest('winMatches', 1);
+      if(md.oppGoals===0) bumpWeekPassQuest('cleanSheet', 1);
+      if(md.myGoals-md.oppGoals>=3) bumpWeekPassQuest('bigWin', 1);
+      if(md.wentToPK) bumpWeekPassQuest('shootoutWin', 1);
+    }
     const newMatches = t.matches.map((mm,i)=> i!==matchIdx ? mm : {...mm, aGoals:md.myGoals, bGoals:md.oppGoals, winnerSide:md.winnerSide, pending:false});
     profile.wm26 = {...t, matches:newMatches};
     await sSet('profile', profile);
@@ -20142,7 +20163,12 @@ async function playWM26KnockoutMatch(){
     // WM26-Matches liefen bisher an commitMatchResult vorbei, daher hier dieselben Wochen-Pass-Quest-Bumps
     bumpWeekPassQuest('playMatches', 1);
     if(md.myGoals>0) bumpWeekPassQuest('scoreGoals', md.myGoals);
-    if(won) bumpWeekPassQuest('winMatches', 1);
+    if(won){
+      bumpWeekPassQuest('winMatches', 1);
+      if(md.oppGoals===0) bumpWeekPassQuest('cleanSheet', 1);
+      if(md.myGoals-md.oppGoals>=3) bumpWeekPassQuest('bigWin', 1);
+      if(md.wentToPK) bumpWeekPassQuest('shootoutWin', 1);
+    }
   } finally {
     inMatch = false;
   }
@@ -23632,7 +23658,12 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
   let questsChanged = finalReward>0 ? bumpWeekPassQuest('earnCoins', finalReward) : false;
   questsChanged = bumpWeekPassQuest('playMatches', 1) || questsChanged;
   if(myGoals>0) questsChanged = bumpWeekPassQuest('scoreGoals', myGoals) || questsChanged;
-  if(result==='WIN') questsChanged = bumpWeekPassQuest('winMatches', 1) || questsChanged;
+  if(result==='WIN'){
+    questsChanged = bumpWeekPassQuest('winMatches', 1) || questsChanged;
+    if(oppGoals===0) questsChanged = bumpWeekPassQuest('cleanSheet', 1) || questsChanged;
+    if(myGoals-oppGoals>=3) questsChanged = bumpWeekPassQuest('bigWin', 1) || questsChanged;
+    if(wentToPK) questsChanged = bumpWeekPassQuest('shootoutWin', 1) || questsChanged;
+  }
   if(questsChanged) await sSet('profile', profile);
   // deliberately NOT calling updateCoinDisplay() here - profile.coins is updated in memory (needed
   // for other logic that runs before the reveal), but the visible header coin counter must not
