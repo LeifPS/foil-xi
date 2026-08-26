@@ -14625,6 +14625,7 @@ function showCutscene(card, onDone){
 
 // ===== CLUB =====
 let clubFilter = {q:'', pos:'ALL', sort:'ov', nat:'ALL', lg:'ALL', club:'ALL', dupOnly:false, favOnly:false, minOv:''};
+let mgrClubFilter = {q:'', sort:'tier'};
 // Quick-pick MRU list for the admin "Nutzer verwalten" search - purely a local convenience for
 // whoever's using this browser as an admin, so it lives in localStorage (not Firestore/the save):
 // most-recently-looked-up account first, deduped, capped at a handful of entries.
@@ -15470,6 +15471,14 @@ function renderClub(view){
     <div class="club-grid" id="club-grid"></div>
     ${managerCollection.length ? `
       <h3 style="font-size:15px;margin:26px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine Trainer</h3>
+      <div class="toolbar" style="margin-bottom:10px;">
+        <input id="mgr-search" placeholder="Trainer suchen..." value="${mgrClubFilter.q}">
+        <select id="mgr-sort">
+          <option value="tier">Sortierung: Tier (hoch→niedrig)</option>
+          <option value="name">Sortierung: Name (A→Z)</option>
+          <option value="rap">Sortierung: Marktwert/RAP (hoch→niedrig)</option>
+        </select>
+      </div>
       <div class="club-grid" id="mgr-club-grid"></div>` : ''}
     ${packCollection.length ? `
       <h3 style="font-size:15px;margin:26px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine Packs</h3>
@@ -15552,7 +15561,12 @@ function renderClub(view){
     renderClub(view);
   });
   drawClubGrid();
-  if(managerCollection.length) drawManagerClubGrid();
+  if(managerCollection.length){
+    document.getElementById('mgr-sort').value = mgrClubFilter.sort;
+    document.getElementById('mgr-search').addEventListener('input', e=>{ mgrClubFilter.q=e.target.value; drawManagerClubGrid(); });
+    document.getElementById('mgr-sort').addEventListener('change', e=>{ mgrClubFilter.sort=e.target.value; drawManagerClubGrid(); });
+    drawManagerClubGrid();
+  }
   if(packCollection.length) drawPackClubGrid();
   loadSalesHistory().then(()=>{
     if(currentTab==='club'){ drawClubGrid(); if(managerCollection.length) drawManagerClubGrid(); }
@@ -15598,8 +15612,13 @@ async function openOwnedPack(uid){
 function drawManagerClubGrid(){
   const grid = document.getElementById('mgr-club-grid');
   if(!grid) return;
-  const items = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr)
-    .sort((a,b)=> MGR_TIER_ORDER[b.mgr.tier]-MGR_TIER_ORDER[a.mgr.tier]);
+  let items = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr);
+  if(mgrClubFilter.q) items = items.filter(x=>x.mgr.n.toLowerCase().includes(mgrClubFilter.q.toLowerCase()));
+  items.sort((a,b)=>{
+    if(mgrClubFilter.sort==='name') return a.mgr.n.localeCompare(b.mgr.n,'de');
+    if(mgrClubFilter.sort==='rap') return computeRAP(b.mgr)-computeRAP(a.mgr);
+    return MGR_TIER_ORDER[b.mgr.tier]-MGR_TIER_ORDER[a.mgr.tier];
+  });
   renderLazyGrid(grid, items, ({uid,mgr})=>{
     const wrap = document.createElement('div');
     wrap.className = 'club-card-wrap';
