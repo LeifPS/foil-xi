@@ -8239,12 +8239,16 @@ async function loadNetWorthLeaderboard(){
   if(!fb){ box.innerHTML = `<p class="hint">Ben\u00f6tigt das Online-Backend.</p>`; return; }
   const bannedIds = await getLeaderboardBannedUserIds();
   let entries = [];
+  let myRankInfo = null;
   try{
     const raw = await cachedRead('networth-board', 45000, async ()=>{
       const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'networth'), fb.orderBy('netWorth','desc'), fb.limit(20)));
       return snap.docs.map(d=>d.data());
     });
-    entries = raw.filter(e=>!LEADERBOARD_EXCLUDED_USERS.has(e.userId) && !bannedIds.has(e.userId)).slice(0,8);
+    const eligible = raw.filter(e=>!LEADERBOARD_EXCLUDED_USERS.has(e.userId) && !bannedIds.has(e.userId));
+    entries = eligible.slice(0,8);
+    const myIdx = eligible.findIndex(e=>e.userId===profile.userId);
+    if(myIdx>=8) myRankInfo = {rank:myIdx+1, of:eligible.length};
   }catch(e){ console.warn('net worth leaderboard read failed', e); }
   if(!box) return;
   if(!entries.length){ box.innerHTML = `<p class="hint">Noch keine Daten \u2014 besuche "Mein Verein", um teilzunehmen.</p>`; return; }
@@ -8256,6 +8260,13 @@ async function loadNetWorthLeaderboard(){
     row.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(e.crest || fallbackCrestFor(e.name), 20)}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.name||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--gold);">${formatCoins((e.netWorth||0))}</span>`;
     box.appendChild(row);
   });
+  if(myRankInfo){
+    const rankRow = document.createElement('p');
+    rankRow.className = 'hint';
+    rankRow.style.cssText = 'margin:8px 0 0;';
+    rankRow.textContent = `Dein Rang: #${myRankInfo.rank} von ${myRankInfo.of}`;
+    box.appendChild(rankRow);
+  }
 }
 function genId(){ return 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
@@ -12959,7 +12970,7 @@ function renderDailyBanner(){
     <div class="daily-banner">
       <div class="daily-head"><h3>T\u00e4gliche Belohnung</h3><span class="mono" style="color:var(--muted);">Tag ${day} / 7</span></div>
       <div class="daily-dots">
-        ${[1,2,3,4,5,6,7].map(i=>`<div class="daily-dot ${i<=completedUpTo?'done':''} ${i===day&&canClaim?'active':''}">${i}</div>`).join('')}
+        ${[1,2,3,4,5,6,7].map(i=>`<div class="daily-dot ${i<=completedUpTo?'done':''} ${i===day&&canClaim?'active':''}" title="Tag ${i}: +${formatCoins(DAILY_REWARDS[i-1].coins)} Coins, ${DAILY_REWARDS[i-1].desc}">${i}</div>`).join('')}
       </div>
       <button class="action-btn" id="daily-claim" ${canClaim?'':'disabled'} style="${canClaim?'':'opacity:.45;'}">${canClaim?`Tag ${day} abholen`:'Schon abgeholt \u2014 komm morgen wieder'}</button>
     </div>`;
@@ -13101,6 +13112,7 @@ function showPackOdds(pack){
       ${mgrBoostRows ? `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer-Bonus-Verteilung</div>${mgrBoostRows}` : ''}
       <p class="hint" style="margin-top:12px;">Simulation mit ${odds.iterations.toLocaleString('de-DE')} \u00d6ffnungen. Garantien aus der Paketbeschreibung erscheinen entsprechend nahe 100\u00a0%.</p>
       <div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Top-Einzelkarten nach Rating</div>
+      <input id="odds-card-search" placeholder="Spieler suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 12px;border-radius:9px;font-size:13px;margin-bottom:10px;">
       <div id="odds-card-grid" class="club-grid" style="max-height:340px;overflow:auto;"></div>`;
     const CARD_ODDS_LIMIT = 60;
     const cardGrid = document.getElementById('odds-card-grid');
@@ -13109,6 +13121,7 @@ function showPackOdds(pack){
       shown.forEach(({card,pct})=>{
         const wrap = document.createElement('div');
         wrap.className = 'club-card-wrap';
+        wrap.dataset.name = card.n.toLowerCase();
         wrap.appendChild(cardEl(card,'mini'));
         const tag = document.createElement('div');
         tag.className = 'price-pill';
@@ -13124,6 +13137,13 @@ function showPackOdds(pack){
         more.textContent = `+ ${odds.cardPct.length-CARD_ODDS_LIMIT} weitere Karten mit jeweils unter ${fmtPct(shown[shown.length-1].pct)} Chance pro Pack-\u00d6ffnung.`;
         cardGrid.appendChild(more);
       }
+      const searchInput = document.getElementById('odds-card-search');
+      if(searchInput) searchInput.addEventListener('input', e=>{
+        const q = e.target.value.trim().toLowerCase();
+        cardGrid.querySelectorAll('.club-card-wrap[data-name]').forEach(w=>{
+          w.style.display = !q || w.dataset.name.includes(q) ? '' : 'none';
+        });
+      });
     }
   }, 30);
 }
