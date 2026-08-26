@@ -7891,25 +7891,29 @@ function sellValue(ov){ return Math.round(104*Math.pow(1.16, ov-70)); }
 //    being split many ways) - the payout that pack economics implies is captured through this curve rather
 //    than a fragile per-pack normalization that was hard to calibrate precisely.
 const MGR_POWER_VALUE = {Bronze:800, Silber:1600, Gold:2800, Elite:5000, 'Legend\u00e4r':9000};
+// Werte auf ~die H\u00e4lfte ihres Aufschlags \u00fcber der Basis (1) gestaucht - z.B. war sbcx vorher 25x
+// (ein SBC-Exklusiv-RAP von 25 normalen Basis-Karten), jetzt 13x. Reine Basiskarten (base:1) und
+// Sonderformen ohne eigenen Eintrag (Fallback 1.5, siehe powerScore) bleiben unver\u00e4ndert, nur wie
+// stark eine Variante \u00fcber der Basis liegt wurde ged\u00e4mpft.
 const VARIANT_SPECIALTY_MULT = {
-  base:1, icon:2.2, cent:2.4, hof:2.6, gal:2.2, gg:1.6, wc:3, blk:4.5, bh:6.5, saph:3.8, rub:4.8, dia:6.2, wpmvp:20, mysteryrare:5, sbcx:25, kapitaen:4.2,
-  wmquestreward:25, promoquestreward:22,
-  kontra_gk:1.5, kontra_def:1.5, kontra_mid:1.5, kontra_fwd:1.5, goat:5.8,
-  signature_icon:3.6, era_definer:4.1, signature_season:4.8,
-  wcchamp:2, goldenball:5, ggwm:4, youngplayer:4, semifinalist:1.3, quarterfinalist:1.15,
-  derbyicon:1.4, underdog:1.55, meistertrainer:1,
-  fs:1.5, otw:1.4, pm:1.5, gb:1.6, wall:1.4, tots:2, flash:1.5, sd:1.6,
-  phenom:1.5, setpiece:1.4, derby:1.4, iron:1.4, wonder:1.5,
+  base:1, icon:1.6, cent:1.7, hof:1.8, gal:1.6, gg:1.3, wc:2, blk:2.75, bh:3.75, saph:2.4, rub:2.9, dia:3.6, wpmvp:10.5, mysteryrare:3, sbcx:13, kapitaen:2.6,
+  wmquestreward:13, promoquestreward:11.5,
+  kontra_gk:1.25, kontra_def:1.25, kontra_mid:1.25, kontra_fwd:1.25, goat:3.4,
+  signature_icon:2.3, era_definer:2.55, signature_season:2.9,
+  wcchamp:1.5, goldenball:3, ggwm:2.5, youngplayer:2.5, semifinalist:1.15, quarterfinalist:1.08,
+  derbyicon:1.2, underdog:1.28, meistertrainer:1,
+  fs:1.25, otw:1.2, pm:1.25, gb:1.3, wall:1.2, tots:1.5, flash:1.25, sd:1.3,
+  phenom:1.25, setpiece:1.2, derby:1.2, iron:1.2, wonder:1.25,
 };
 function powerScore(card){
   if(card.untradable) return 0;
   if(card.isManager){
     const base = MGR_POWER_VALUE[card.tier] || 1000;
-    return base * (card.variant==='meistertrainer' ? 1.3 : 1);
+    return base * (card.variant==='meistertrainer' ? 1.15 : 1);
   }
   const baseOv = card.level ? card.ov - card.level : card.ov;
   const base = sellValue(baseOv);
-  const mult = VARIANT_SPECIALTY_MULT[card.variant] ?? (card.variant && card.variant!=='base' ? 1.5 : 1);
+  const mult = VARIANT_SPECIALTY_MULT[card.variant] ?? (card.variant && card.variant!=='base' ? 1.25 : 1);
   const levelMult = LEVEL_RAP_MULT[card.level||0] || 1;
   return base * mult * levelMult;
 }
@@ -11956,7 +11960,7 @@ const CARD_LEVEL_LABEL = {0:'Kein Level', 1:'Bronze', 2:'Silber', 3:'Gold', 4:'D
 // Shared between the small in-card .level-badge (cardEl) and the big center-screen level-up cutscene
 // (showLevelUpCutscene) so both always show the exact same star, just at very different sizes.
 const LEVEL_BADGE_ICON_SVG = `<svg viewBox="0 0 24 24"><path d="M12 4l2 4.8 5 .4-3.8 3.4 1.2 5-4.4-2.6-4.4 2.6 1.2-5-3.8-3.4 5-.4z" fill="currentColor"/></svg>`;
-const LEVEL_RAP_MULT = {0:1, 1:1.25, 2:1.75, 3:3, 4:5}; // RAP multiplier over the base card's value: Bronze +25%, Silber +75%, Gold +200%, Diamant +400%
+const LEVEL_RAP_MULT = {0:1, 1:1.125, 2:1.375, 3:2, 4:3}; // RAP multiplier over the base card's value (Aufschlag halbiert): Bronze +12,5%, Silber +37,5%, Gold +100%, Diamant +200%
 function cardLevelForXp(xp){
   if(xp>=CARD_XP_THRESHOLDS[3]) return 4;
   if(xp>=CARD_XP_THRESHOLDS[2]) return 3;
@@ -12503,11 +12507,12 @@ function toast(msg){
 
 // ===== modal =====
 function openModal(innerHTML){
+  disconnectAllLazyGrids();
   const root = document.getElementById('modal-root');
   root.innerHTML = `<div class="modal-overlay" id="modal-overlay"><div class="modal-box">${innerHTML}</div></div>`;
   document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.target.id==='modal-overlay') closeModal(); });
 }
-function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+function closeModal(){ disconnectAllLazyGrids(); document.getElementById('modal-root').innerHTML=''; }
 // QoL: Escape closes whatever modal is currently open, matching the existing click-outside-to-close
 // behavior (see openModal's overlay listener) instead of forcing a mouse reach for the close/cancel
 // button every time.
@@ -13036,6 +13041,7 @@ function renderNav(){
 }
 
 function renderView(tab){
+  disconnectAllLazyGrids();
   const view = document.getElementById('view');
   if(tab==='store') return renderStore(view);
   if(tab==='club') return renderClub(view);
@@ -15506,6 +15512,21 @@ function openAdminSendUnopenedPackModal(targetId, data){
     list.appendChild(btn);
   });
 }
+// Every live IntersectionObserver renderLazyGrid has ever created for a not-yet-fully-scrolled grid -
+// a detached container (view switched away, modal closed via innerHTML replacement elsewhere) never
+// intersects the viewport again, so its callback simply never fires and never reaches its own
+// observer.disconnect() call below. Left alone, that's a real per-navigation leak: every visit to
+// Markt/Mein Verein/Kader-Editor/SBC-Abgabe that didn't scroll all the way through its grid abandons
+// one more live observer (holding the whole items/renderItem closure alive) for the rest of the
+// session, which is exactly the kind of slow memory growth that eventually shows up as a browser tab
+// crashing and Chrome's "diese Seite wurde neu geladen, weil wiederholt ein Problem aufgetreten ist".
+// disconnectAllLazyGrids() sweeps all of them and is called on every tab switch and modal
+// open/close (see renderView/openModal/closeModal) so nothing outlives the view that created it.
+let activeLazyObservers = new Set();
+function disconnectAllLazyGrids(){
+  activeLazyObservers.forEach(o=>o.disconnect());
+  activeLazyObservers.clear();
+}
 // Renders a large list of cards incrementally instead of building DOM for every item up front.
 // With 1000+ owned cards, cardEl() building the full stat/photo markup for every single one in one
 // synchronous pass is what actually costs the 1s+ load time on "Mein Verein" - most of that list is
@@ -15515,7 +15536,7 @@ function openAdminSendUnopenedPackModal(targetId, data){
 function renderLazyGrid(container, items, renderItem, opts={}){
   if(!container) return;
   const batchSize = opts.batchSize || 60;
-  if(container._lazyObserver){ container._lazyObserver.disconnect(); }
+  if(container._lazyObserver){ container._lazyObserver.disconnect(); activeLazyObservers.delete(container._lazyObserver); }
   container.innerHTML = '';
   if(!items.length){
     if(opts.emptyHtml) container.innerHTML = opts.emptyHtml;
@@ -15528,16 +15549,17 @@ function renderLazyGrid(container, items, renderItem, opts={}){
     if(entries.some(e=>e.isIntersecting)) renderNextBatch();
   }, {rootMargin:'800px'});
   function renderNextBatch(){
-    if(!container.isConnected){ observer.disconnect(); return; } // navigated away - stop working on a detached view
+    if(!container.isConnected){ observer.disconnect(); activeLazyObservers.delete(observer); return; } // navigated away - stop working on a detached view
     const frag = document.createDocumentFragment();
     const end = Math.min(rendered+batchSize, items.length);
     for(let i=rendered;i<end;i++) frag.appendChild(renderItem(items[i]));
     container.insertBefore(frag, sentinel);
     rendered = end;
-    if(rendered>=items.length){ observer.disconnect(); sentinel.remove(); }
+    if(rendered>=items.length){ observer.disconnect(); activeLazyObservers.delete(observer); sentinel.remove(); }
   }
   container.appendChild(sentinel);
   container._lazyObserver = observer;
+  activeLazyObservers.add(observer);
   renderNextBatch(); // first batch renders immediately, synchronously - the page never looks empty
   observer.observe(sentinel);
 }
