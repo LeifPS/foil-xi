@@ -10296,6 +10296,12 @@ function drawMarketGrid(){
     const item = card || pack;
     if(listing.sellerUserId===profile.userId){
       wrap.title = 'Klicken zum Verwalten';
+      wrap.style.outline = '2px solid var(--gold)';
+      const ownTag = document.createElement('div');
+      ownTag.className = 'sbc-inuse-badge';
+      ownTag.style.cssText = 'background:var(--gold);color:#2a1d00;';
+      ownTag.textContent = 'DEIN ANGEBOT';
+      wrap.appendChild(ownTag);
       wrap.addEventListener('click', ()=>openManageListingModal(listing, item));
     } else {
       wrap.title = `Verkäufer: ${listing.sellerName||listing.sellerUserId} — Klicken zum Kaufen`;
