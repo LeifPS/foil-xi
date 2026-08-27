@@ -478,27 +478,36 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
   box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 30px -6px #ffd76a;}
 .pcard.theme-iconpromo::before{animation:autoShine 1.6s ease-in-out infinite;}
 @keyframes iconpromoBorderShift{0%{background-position:0% 0%,0% 0%,0% 50%;}100%{background-position:0% 0%,0% 0%,300% 50%;}}
+/* Richer foil texture than a plain crossing-lines grid - scattered glint points (the "facet sparkle"
+   trick sbcx/promocard use above) layered over the diagonal foil lines, plus a slow opacity breathe so
+   it actually reads as shifting foil rather than a flat static print. */
 .pcard.pattern-iconpromopattern .pattern-layer{background:
-    repeating-linear-gradient(50deg, rgba(255,215,100,.14) 0 3px, transparent 3px 13px),
-    repeating-linear-gradient(-50deg, rgba(255,255,255,.08) 0 2px, transparent 2px 16px);}
+    radial-gradient(circle at 22% 18%, rgba(255,255,255,.4), transparent 4%),
+    radial-gradient(circle at 78% 32%, rgba(255,215,100,.45), transparent 4%),
+    radial-gradient(circle at 55% 62%, rgba(255,255,255,.3), transparent 3.5%),
+    radial-gradient(circle at 30% 82%, rgba(255,215,100,.35), transparent 4%),
+    radial-gradient(circle at 85% 88%, rgba(255,255,255,.3), transparent 3.5%),
+    repeating-linear-gradient(50deg, rgba(255,215,100,.16) 0 3px, transparent 3px 13px),
+    repeating-linear-gradient(-50deg, rgba(255,255,255,.09) 0 2px, transparent 2px 16px);
+  animation:iconpromoPatternBreathe 4.5s ease-in-out infinite;}
+@keyframes iconpromoPatternBreathe{0%,100%{opacity:.75;}50%{opacity:1;}}
 .pcard .iconpromo-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
 .pcard .iconpromo-bw-shimmer{position:absolute;inset:-60%;
   background:linear-gradient(100deg, transparent 42%, rgba(255,255,255,.5) 49%, rgba(10,10,10,.4) 53%, transparent 60%);
   animation:iconpromoBwSweep 3.4s ease-in-out infinite;}
 @keyframes iconpromoBwSweep{0%{transform:translate(-35%,-35%);}100%{transform:translate(35%,35%);}}
+/* Position/rotation/delay come from inline styles (see iconpromoFxHTML in cardEl) instead of fixed
+   classes - randomized per render so no two card instances flash the same 3 slashes in the same spots. */
 .pcard .iconpromo-slashes{position:absolute;inset:0;}
-.pcard .iconpromo-slashes i{position:absolute;left:-45%;width:190%;height:5px;
+.pcard .iconpromo-slashes i{position:absolute;width:190%;height:5px;
   background:linear-gradient(90deg, transparent, #fff6d0, #ffd76a, transparent);
-  transform:rotate(-24deg);opacity:0;animation:iconpromoSlashFlash 3.8s ease-in-out infinite;}
-.pcard .iconpromo-slashes .gs1{top:20%;animation-delay:0s;}
-.pcard .iconpromo-slashes .gs2{top:50%;animation-delay:1.25s;}
-.pcard .iconpromo-slashes .gs3{top:78%;animation-delay:2.5s;}
+  opacity:0;animation:iconpromoSlashFlash 3.8s ease-in-out infinite;}
 @keyframes iconpromoSlashFlash{0%,78%,100%{opacity:0;}86%{opacity:.95;}92%{opacity:0;}}
 .pcard .iconpromo-fx .shard{background:linear-gradient(135deg,#fff6d0,#ffd76a);}
-.pcard .iconpromo-fx .confetti.c1,.pcard .iconpromo-fx .confetti.c5,.pcard .iconpromo-fx .confetti.c9,.pcard .iconpromo-fx .confetti.c13,.pcard .iconpromo-fx .confetti.c17,.pcard .iconpromo-fx .confetti.c21{background:#ffd76a;}
-.pcard .iconpromo-fx .confetti.c2,.pcard .iconpromo-fx .confetti.c6,.pcard .iconpromo-fx .confetti.c10,.pcard .iconpromo-fx .confetti.c14,.pcard .iconpromo-fx .confetti.c18,.pcard .iconpromo-fx .confetti.c22{background:#050403;}
-.pcard .iconpromo-fx .confetti.c3,.pcard .iconpromo-fx .confetti.c7,.pcard .iconpromo-fx .confetti.c11,.pcard .iconpromo-fx .confetti.c15,.pcard .iconpromo-fx .confetti.c19,.pcard .iconpromo-fx .confetti.c23{background:#fff6d0;}
-.pcard .iconpromo-fx .confetti.c4,.pcard .iconpromo-fx .confetti.c8,.pcard .iconpromo-fx .confetti.c12,.pcard .iconpromo-fx .confetti.c16,.pcard .iconpromo-fx .confetti.c20,.pcard .iconpromo-fx .confetti.c24{background:#c9a227;}
+/* Same falling mechanism as Legikone's .confetti, own class + own randomized inline colors/sizes/
+   timing (see iconpromoFxHTML) instead of fixed per-index classes, since this pool goes past 30. */
+.pcard .iconpromo-confetti{position:absolute;inset:0;}
+.pcard .iconpromo-confetti i{position:absolute;top:-12%;border-radius:1px;opacity:0;animation:confettiFall linear infinite;}
 /* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
 .pcard.theme-dia{border:2.5px solid transparent;
   background:
@@ -12828,17 +12837,38 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     return `<div class="ogicon-fx">${items}</div>`;
   })() : '';
   // Icon Promo Pack (Liga-Belohnung): the showiest treatment in the game on purpose - gold/white/black
-  // confetti falling (reuses the same .confetti mechanism as Legikone, just recolored via the
-  // .iconpromo-fx scope), twinkling gold foil shards (reuses .shard the same way), a diagonal black/
-  // white shimmer sweep and a few flashing golden light-slashes - four independent effects layered on
-  // one card, own dedicated element like every other bespoke tier above.
+  // confetti falling, twinkling gold foil shards (reuses .shard the same way as Ratings Reload above),
+  // a diagonal black/white shimmer sweep, and flashing golden light-slashes - four independent effects
+  // layered on one card, own dedicated element like every other bespoke tier above. Slashes and confetti
+  // are randomized per render (position/rotation/color/timing, own inline styles rather than fixed
+  // classes) so no two card instances rain/flash in exactly the same pattern - same "never looks
+  // mechanically ordered" reasoning as the OG Icons rain above.
   const isIconPromoTier = card.theme==='iconpromo';
-  const iconpromoFxHTML = isIconPromoTier ? `<div class="iconpromo-fx">
+  const iconpromoFxHTML = isIconPromoTier ? (()=>{
+    const slashCount = 6;
+    const slashesHTML = Array.from({length:slashCount},(_,i)=>{
+      const top = (4 + Math.random()*90).toFixed(1);
+      const left = (-55 + Math.random()*25).toFixed(1);
+      const rot = (-40 + Math.random()*28).toFixed(1);
+      const delay = (i*3.8/slashCount + Math.random()*0.5).toFixed(2);
+      return `<i style="top:${top}%;left:${left}%;transform:rotate(${rot}deg);animation-delay:${delay}s;"></i>`;
+    }).join('');
+    const confettiColors = ['#ffd76a','#050403','#fff6d0','#c9a227'];
+    const confettiHTML = Array.from({length:34},(_,i)=>{
+      const left = (2 + Math.random()*96).toFixed(1);
+      const color = confettiColors[i%confettiColors.length];
+      const dur = (2.5 + Math.random()*2).toFixed(2);
+      const delay = (Math.random()*4.2).toFixed(2);
+      const w = Math.random()<0.5 ? 5 : 4, h = w===5 ? 10 : 8;
+      return `<i style="left:${left}%;width:${w}px;height:${h}px;background:${color};animation-duration:${dur}s;animation-delay:${delay}s;"></i>`;
+    }).join('');
+    return `<div class="iconpromo-fx">
       <div class="iconpromo-bw-shimmer"></div>
-      <div class="iconpromo-slashes"><i class="gs1"></i><i class="gs2"></i><i class="gs3"></i></div>
+      <div class="iconpromo-slashes">${slashesHTML}</div>
       ${Array.from({length:8},(_,i)=>`<i class="shard s${i+1}"></i>`).join('')}
-      ${Array.from({length:24},(_,i)=>`<i class="confetti c${i+1}"></i>`).join('')}
-    </div>` : '';
+      <div class="iconpromo-confetti">${confettiHTML}</div>
+    </div>`;
+  })() : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
