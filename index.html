@@ -247,7 +247,8 @@ body.perf-lite .pcard::before{ display:none !important; }
 body.perf-lite .pcard .gem-facets,
 body.perf-lite .pcard .refresh-fx,
 body.perf-lite .pcard .legikone-fx,
-body.perf-lite .pcard .wm26k-fx{ display:none !important; }
+body.perf-lite .pcard .wm26k-fx,
+body.perf-lite .pcard .iconpromo-fx{ display:none !important; }
 body.perf-lite .wm26-trophy-cutscene *{ animation:none !important; }
 body.perf-lite .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
@@ -462,6 +463,42 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
    time. The random delays still anchor to evenly-spaced slots (duration/12 apart) with only small
    jitter within each slot, and durations only vary slightly around the same base - keeping the
    steady, non-"wavy" cadence from before while no longer looking mechanically ordered. */
+/* Icon Promo Pack (Liga-Belohnung): the single showiest card treatment in the game, by design - a
+   shimmering animated gold/silver foil border (same border-box-gradient trick as r-ultimate below),
+   plus FOUR independent effects layered in .iconpromo-fx (see cardEl): gold foil shards, gold/white/
+   black confetti falling from the top, a diagonal black/white shimmer sweep, and flashing golden
+   light-slashes. */
+.pcard.theme-iconpromo{border:2.5px solid transparent;
+  background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 9px) padding-box,
+    linear-gradient(160deg,#1a1408,#0d0a04 60%) padding-box,
+    linear-gradient(120deg,#fff6d0,#ffd76a,#c9a227,#fff6d0,#ffd76a) border-box;
+  background-size:100% 100%, 100% 100%, 300% 300%;
+  animation:iconpromoBorderShift 4s linear infinite, ultimateBreathe 2.6s ease-in-out infinite;
+  box-shadow:0 10px 26px rgba(0,0,0,.55), 0 0 30px -6px #ffd76a;}
+.pcard.theme-iconpromo::before{animation:autoShine 1.6s ease-in-out infinite;}
+@keyframes iconpromoBorderShift{0%{background-position:0% 0%,0% 0%,0% 50%;}100%{background-position:0% 0%,0% 0%,300% 50%;}}
+.pcard.pattern-iconpromopattern .pattern-layer{background:
+    repeating-linear-gradient(50deg, rgba(255,215,100,.14) 0 3px, transparent 3px 13px),
+    repeating-linear-gradient(-50deg, rgba(255,255,255,.08) 0 2px, transparent 2px 16px);}
+.pcard .iconpromo-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .iconpromo-bw-shimmer{position:absolute;inset:-60%;
+  background:linear-gradient(100deg, transparent 42%, rgba(255,255,255,.5) 49%, rgba(10,10,10,.4) 53%, transparent 60%);
+  animation:iconpromoBwSweep 3.4s ease-in-out infinite;}
+@keyframes iconpromoBwSweep{0%{transform:translate(-35%,-35%);}100%{transform:translate(35%,35%);}}
+.pcard .iconpromo-slashes{position:absolute;inset:0;}
+.pcard .iconpromo-slashes i{position:absolute;left:-45%;width:190%;height:5px;
+  background:linear-gradient(90deg, transparent, #fff6d0, #ffd76a, transparent);
+  transform:rotate(-24deg);opacity:0;animation:iconpromoSlashFlash 3.8s ease-in-out infinite;}
+.pcard .iconpromo-slashes .gs1{top:20%;animation-delay:0s;}
+.pcard .iconpromo-slashes .gs2{top:50%;animation-delay:1.25s;}
+.pcard .iconpromo-slashes .gs3{top:78%;animation-delay:2.5s;}
+@keyframes iconpromoSlashFlash{0%,78%,100%{opacity:0;}86%{opacity:.95;}92%{opacity:0;}}
+.pcard .iconpromo-fx .shard{background:linear-gradient(135deg,#fff6d0,#ffd76a);}
+.pcard .iconpromo-fx .confetti.c1,.pcard .iconpromo-fx .confetti.c5,.pcard .iconpromo-fx .confetti.c9,.pcard .iconpromo-fx .confetti.c13,.pcard .iconpromo-fx .confetti.c17,.pcard .iconpromo-fx .confetti.c21{background:#ffd76a;}
+.pcard .iconpromo-fx .confetti.c2,.pcard .iconpromo-fx .confetti.c6,.pcard .iconpromo-fx .confetti.c10,.pcard .iconpromo-fx .confetti.c14,.pcard .iconpromo-fx .confetti.c18,.pcard .iconpromo-fx .confetti.c22{background:#050403;}
+.pcard .iconpromo-fx .confetti.c3,.pcard .iconpromo-fx .confetti.c7,.pcard .iconpromo-fx .confetti.c11,.pcard .iconpromo-fx .confetti.c15,.pcard .iconpromo-fx .confetti.c19,.pcard .iconpromo-fx .confetti.c23{background:#fff6d0;}
+.pcard .iconpromo-fx .confetti.c4,.pcard .iconpromo-fx .confetti.c8,.pcard .iconpromo-fx .confetti.c12,.pcard .iconpromo-fx .confetti.c16,.pcard .iconpromo-fx .confetti.c20,.pcard .iconpromo-fx .confetti.c24{background:#c9a227;}
 /* Diamant: the ceiling of this pack - the most spectacular treatment, prismatic rainbow foil */
 .pcard.theme-dia{border:2.5px solid transparent;
   background:
@@ -8502,9 +8539,9 @@ const PACKS = [
       const third = (UCLW_MANAGER && Math.random()<0.05) ? UCLW_MANAGER : weighted[Math.floor(Math.random()*weighted.length)];
       return [first, second, third];
     }},
-  {id:'ligapack',name:'Liga Pack',cost:0,tier:'ultimate',count:1,hidden:true,
-    desc:'1 garantierte Karte mit mindestens 97 OVR, aus dem gesamten Kartenpool des Spiels - nie eine Karte, die sonst nicht handelbar wäre. Nicht käuflich, nur als Liga-Belohnung (Platz 1/2 in Liga A) erhältlich.',
-    draw(){ return [pick(ligaPackPool())]; }},
+  {id:'ligapack',name:'Icon Promo Pack',cost:0,tier:'ultimate',count:1,hidden:true,
+    desc:'1 garantierte Karte aus 7 brandneuen Icon-Promo-Karten: meistens 102 OVR (Figo, Totti), seltener 103 OVR (Roberto Carlos, Rivaldo, Casillas), extrem selten 104 OVR (Cafu, Eusébio). Nicht käuflich, nur als Liga-Belohnung (Platz 1/2 in Liga A) erhältlich.',
+    draw(){ return [drawLigaPackCard()]; }},
   {id:'worldcuppack',name:'World Cup Pack',cost:0,tier:'ultimate',count:5,hidden:true,
     desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit einer 7,5%-Chance pro Pack auf einen WM-Kapitän (+16 OVR, ein Spieler pro Nation) - bevorzugt der Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
     draw(opts={}){
@@ -12695,6 +12732,7 @@ const PATTERN_FAMILY = {
   kapitaen:'kapitaenpattern',
   ratings27reload:'ratings27reloadpattern',
   wm26k:'wm26kpattern',
+  iconpromo:'iconpromopattern',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
@@ -12789,6 +12827,18 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     }).join('');
     return `<div class="ogicon-fx">${items}</div>`;
   })() : '';
+  // Icon Promo Pack (Liga-Belohnung): the showiest treatment in the game on purpose - gold/white/black
+  // confetti falling (reuses the same .confetti mechanism as Legikone, just recolored via the
+  // .iconpromo-fx scope), twinkling gold foil shards (reuses .shard the same way), a diagonal black/
+  // white shimmer sweep and a few flashing golden light-slashes - four independent effects layered on
+  // one card, own dedicated element like every other bespoke tier above.
+  const isIconPromoTier = card.theme==='iconpromo';
+  const iconpromoFxHTML = isIconPromoTier ? `<div class="iconpromo-fx">
+      <div class="iconpromo-bw-shimmer"></div>
+      <div class="iconpromo-slashes"><i class="gs1"></i><i class="gs2"></i><i class="gs3"></i></div>
+      ${Array.from({length:8},(_,i)=>`<i class="shard s${i+1}"></i>`).join('')}
+      ${Array.from({length:24},(_,i)=>`<i class="confetti c${i+1}"></i>`).join('')}
+    </div>` : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
@@ -12871,6 +12921,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${wm26kFxHTML}
     ${goatFxHTML}
     ${ogiconFxHTML}
+    ${iconpromoFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
@@ -15012,15 +15063,40 @@ function adminFullCardPool(){
   wm26VarianteSpecials(); wm26KapitaenSpecials();
   return Array.from(BY_ID.values()).filter(c=>!c.isManager);
 }
-// Liga Pack (see PACKS' 'ligapack'): every real, otherwise-tradable card in the game rated 97+ - built
-// once, lazily, off the same "every card that exists" source as adminFullCardPool. Excludes anything
-// with .untradable set (quest/SBC-exclusive rewards), per the explicit design call: a Liga Pack should
-// never hand out a card that couldn't otherwise be traded/sold.
-let LIGA_PACK_POOL_CACHE = null;
-function ligaPackPool(){
-  if(LIGA_PACK_POOL_CACHE) return LIGA_PACK_POOL_CACHE;
-  LIGA_PACK_POOL_CACHE = adminFullCardPool().filter(c=>c.ov>=97 && !c.untradable);
-  return LIGA_PACK_POOL_CACHE;
+// Icon Promo Pack (see PACKS' 'ligapack' - id kept as-is so existing LIGA_REWARD_TABLE entries and any
+// already-scheduled reward keep working unchanged, only the display name/pool/odds changed): 7 brand-
+// new hand-authored legend cards, never reused from any other pool in the game. Each is boosted from
+// its real career-peak base rating (targetOv below) straight to its pack tier, same distributeStatGain
+// mechanism as the Kroos/Neymar/Marcelo quest cards - just tradable (a real repeatable pack pull, not a
+// one-time quest claim, so no .untradable flag).
+const PLAYERS_LIGAPACK_BASE = [
+  {id:9802100,n:'Cafu',pos:'RB, CB, LB',ov:91,pot:91,nat:'Brazil',lg:'Legenden',club:'AC Milan',pac:90,sho:56,pas:83,dri:85,defn:88,phy:83,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p134222731.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=e04a1fe73fdbde49f39614cbec66b39a',gk:false,targetOv:104},
+  {id:9802101,n:'Roberto Carlos',pos:'LB',ov:90,pot:90,nat:'Brazil',lg:'Legenden',club:'Real Madrid',pac:91,sho:83,pas:83,dri:80,defn:85,phy:86,foot:'Left',img:'https://cdn3.futbin.com/content/fifa26/img/players/p50570078.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=efd07b133ce845a772d621075b4ee4c5',gk:false,targetOv:103},
+  {id:9802102,n:'Luís Figo',pos:'RW, RM, CAM',ov:89,pot:89,nat:'Portugal',lg:'Legenden',club:'Real Madrid',pac:89,sho:84,pas:86,dri:90,defn:38,phy:77,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67114453.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=ec595998f6825a40e00fcf2279ad020d',gk:false,targetOv:102},
+  {id:9802103,n:'Francesco Totti',pos:'ST, CAM',ov:89,pot:89,nat:'Italy',lg:'Legenden',club:'AS Roma',pac:85,sho:91,pas:89,dri:90,defn:40,phy:75,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67110102.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=ebfb499c97ac90f8b5e3526def1823b1',gk:false,targetOv:102},
+  {id:9802104,n:'Rivaldo',pos:'LW, LM, CAM',ov:90,pot:90,nat:'Brazil',lg:'Legenden',club:'FC Barcelona',pac:87,sho:88,pas:87,dri:91,defn:42,phy:75,foot:'Left',img:'https://cdn3.futbin.com/content/fifa26/img/players/p100667527.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=240b8472852b70a70f04228b06f24293',gk:false,targetOv:103},
+  {id:9802105,n:'Iker Casillas',pos:'GK',ov:90,pot:90,nat:'Spain',lg:'Legenden',club:'Real Madrid',pac:59,sho:84,pas:88,dri:93,defn:90,phy:88,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p83891559.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=550e6c0d62aeab46b5148068d370ea83',gk:true,targetOv:103},
+  {id:9802106,n:'Eusébio',pos:'ST, RW, LW',ov:91,pot:91,nat:'Portugal',lg:'Legenden',club:'SL Benfica',pac:92,sho:92,pas:84,dri:91,defn:44,phy:77,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p84128599.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=13f08ac140a36dbb44a24d1b2cf24533',gk:false,targetOv:104},
+];
+const PLAYERS_LIGAPACK = PLAYERS_LIGAPACK_BASE.map((base,i)=>{
+  const card = boostBaseToOv(base, base.targetOv, 9802000+i, 'iconpromo', 'Icon Promo', 'iconpromo');
+  card.img = base.img;
+  return card;
+});
+PLAYERS_LIGAPACK.forEach(c=>BY_ID.set(c.id,c));
+function ligaPackPool(){ return PLAYERS_LIGAPACK; }
+// Weighted so most pulls land on the lowest tier: 102 OVR (Figo/Totti) 50% combined, 103 OVR
+// (Roberto Carlos/Rivaldo/Casillas) 30% combined, 104 OVR (Cafu/Eusébio, the rarest) 20% combined -
+// every card within a tier shares that tier's odds equally.
+const LIGAPACK_TIER_WEIGHT = {102:50, 103:30, 104:20};
+function drawLigaPackCard(){
+  const weighted = [];
+  PLAYERS_LIGAPACK.forEach(c=>{
+    const tierSize = PLAYERS_LIGAPACK.filter(x=>x.ov===c.ov).length;
+    const perCardShare = (LIGAPACK_TIER_WEIGHT[c.ov] || 1) / tierSize;
+    for(let i=0;i<Math.round(perCardShare*10);i++) weighted.push(c); // 10 reps per 1% keeps this precise to 0.1%
+  });
+  return weighted[Math.floor(Math.random()*weighted.length)];
 }
 function openAdminPackPicker(){
   openModal(`
