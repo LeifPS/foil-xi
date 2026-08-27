@@ -8548,8 +8548,8 @@ const PACKS = [
       const third = (UCLW_MANAGER && Math.random()<0.05) ? UCLW_MANAGER : weighted[Math.floor(Math.random()*weighted.length)];
       return [first, second, third];
     }},
-  {id:'ligapack',name:'Icon Promo Pack',cost:0,tier:'ultimate',count:1,hidden:true,
-    desc:'1 garantierte Karte aus 7 brandneuen Icon-Promo-Karten: meistens 102 OVR (Figo, Totti), seltener 103 OVR (Roberto Carlos, Rivaldo, Casillas), extrem selten 104 OVR (Cafu, Eusébio). Nicht käuflich, nur als Liga-Belohnung (Platz 1/2 in Liga A) erhältlich.',
+  {id:'ligapack',get name(){ return `Icon Promo Pack W${currentIconPromoWeekIndex()+1}`; },cost:0,tier:'ultimate',count:1,hidden:true,
+    get desc(){ return `1 garantierte Icon-Promo-Karte aus dem Pool dieser Woche (${ligaPackPool().length} Icons, OVR 86-95, jede Karte gleich wahrscheinlich). Jede Woche rotiert der Pool (W1-W7). Nicht käuflich, nur als Liga-Belohnung (Platz 1/2 in Liga A) erhältlich.`; },
     draw(){ return [drawLigaPackCard()]; }},
   {id:'worldcuppack',name:'World Cup Pack',cost:0,tier:'ultimate',count:5,hidden:true,
     desc:'5 Karten aus den 48 WM-2026-Teilnehmern: meist die neue WM-Variante (+5 OVR über die eigene Basis-Karte), mit einer 7,5%-Chance pro Pack auf einen WM-Kapitän (+16 OVR, ein Spieler pro Nation) - bevorzugt der Kapitän der Nation, die du im Finale besiegt hast. Nicht käuflich, nur als Pokalsieg bei der WM 2026 erhältlich.',
@@ -15094,39 +15094,147 @@ function adminFullCardPool(){
   return Array.from(BY_ID.values()).filter(c=>!c.isManager);
 }
 // Icon Promo Pack (see PACKS' 'ligapack' - id kept as-is so existing LIGA_REWARD_TABLE entries and any
-// already-scheduled reward keep working unchanged, only the display name/pool/odds changed): 7 brand-
-// new hand-authored legend cards, never reused from any other pool in the game. Each is boosted from
-// its real career-peak base rating (targetOv below) straight to its pack tier, same distributeStatGain
-// mechanism as the Kroos/Neymar/Marcelo quest cards - just tradable (a real repeatable pack pull, not a
-// one-time quest claim, so no .untradable flag).
-const PLAYERS_LIGAPACK_BASE = [
-  {id:9802100,n:'Cafu',pos:'RB, CB, LB',ov:91,pot:91,nat:'Brazil',lg:'Legenden',club:'AC Milan',pac:90,sho:56,pas:83,dri:85,defn:88,phy:83,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p134222731.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=e04a1fe73fdbde49f39614cbec66b39a',gk:false,targetOv:104},
-  {id:9802101,n:'Roberto Carlos',pos:'LB',ov:90,pot:90,nat:'Brazil',lg:'Legenden',club:'Real Madrid',pac:91,sho:83,pas:83,dri:80,defn:85,phy:86,foot:'Left',img:'https://cdn3.futbin.com/content/fifa26/img/players/p50570078.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=efd07b133ce845a772d621075b4ee4c5',gk:false,targetOv:103},
-  {id:9802102,n:'Luís Figo',pos:'RW, RM, CAM',ov:89,pot:89,nat:'Portugal',lg:'Legenden',club:'Real Madrid',pac:89,sho:84,pas:86,dri:90,defn:38,phy:77,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67114453.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=ec595998f6825a40e00fcf2279ad020d',gk:false,targetOv:102},
-  {id:9802103,n:'Francesco Totti',pos:'ST, CAM',ov:89,pot:89,nat:'Italy',lg:'Legenden',club:'AS Roma',pac:85,sho:91,pas:89,dri:90,defn:40,phy:75,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p67110102.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=ebfb499c97ac90f8b5e3526def1823b1',gk:false,targetOv:102},
-  {id:9802104,n:'Rivaldo',pos:'LW, LM, CAM',ov:90,pot:90,nat:'Brazil',lg:'Legenden',club:'FC Barcelona',pac:87,sho:88,pas:87,dri:91,defn:42,phy:75,foot:'Left',img:'https://cdn3.futbin.com/content/fifa26/img/players/p100667527.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=240b8472852b70a70f04228b06f24293',gk:false,targetOv:103},
-  {id:9802105,n:'Iker Casillas',pos:'GK',ov:90,pot:90,nat:'Spain',lg:'Legenden',club:'Real Madrid',pac:59,sho:84,pas:88,dri:93,defn:90,phy:88,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p83891559.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=550e6c0d62aeab46b5148068d370ea83',gk:true,targetOv:103},
-  {id:9802106,n:'Eusébio',pos:'ST, RW, LW',ov:91,pot:91,nat:'Portugal',lg:'Legenden',club:'SL Benfica',pac:92,sho:92,pas:84,dri:91,defn:44,phy:77,foot:'Right',img:'https://cdn3.futbin.com/content/fifa26/img/players/p84128599.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=13f08ac140a36dbb44a24d1b2cf24533',gk:false,targetOv:104},
+// already-scheduled reward keep working unchanged): a weekly-rotating roster of 109 real Icon legends
+// (OVR 86-95), split evenly across 7 weeks (~15-16 each, balanced by OVR via round-robin dealing so no
+// week is stronger than another) and cycling W1->W7->W1 forever. Cards are used at their listed OVR
+// directly (no boostBaseToOv scaling - these ratings already are the pack ratings). No photos yet for
+// this new roster, so every card uses the universal NOTFOUND_FACE_IMG placeholder until real photos are
+// added later.
+const PLAYERS_ICONPROMO_W1 = [
+  {id:9803000,n:"Maradona",pos:"CAM, ST",ov:95,pot:95,nat:"Argentina",lg:"Legenden",club:"Napoli",pac:90,sho:91,pas:91,dri:96,defn:40,phy:77,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803001,n:"Puskás",pos:"ST",ov:92,pot:92,nat:"Hungary",lg:"Legenden",club:"Real Madrid",pac:90,sho:94,pas:89,dri:91,defn:45,phy:74,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803002,n:"Zico",pos:"CAM, CM",ov:91,pot:91,nat:"Brazil",lg:"Legenden",club:"Flamengo",pac:89,sho:92,pas:91,dri:91,defn:62,phy:71,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803003,n:"Cafu",pos:"RB",ov:91,pot:91,nat:"Brazil",lg:"Legenden",club:"AC Milan",pac:90,sho:56,pas:83,dri:85,defn:88,phy:83,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803004,n:"Pirlo",pos:"CM, CDM",ov:90,pot:90,nat:"Italy",lg:"Legenden",club:"Juventus",pac:73,sho:79,pas:93,dri:89,defn:69,phy:66,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803005,n:"Lahm",pos:"RB, LB, CDM",ov:89,pot:89,nat:"Germany",lg:"Legenden",club:"FC Bayern München",pac:84,sho:68,pas:83,dri:83,defn:86,phy:70,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803006,n:"Robinho",pos:"RW, RM, ST",ov:89,pot:89,nat:"Brazil",lg:"Legenden",club:"Santos",pac:91,sho:89,pas:84,dri:90,defn:49,phy:73,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803007,n:"Cannavaro",pos:"CB",ov:89,pot:89,nat:"Italy",lg:"Legenden",club:"Real Madrid",pac:80,sho:44,pas:62,dri:67,defn:93,phy:83,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803008,n:"Owen",pos:"ST",ov:88,pot:88,nat:"England",lg:"Legenden",club:"Liverpool",pac:89,sho:88,pas:69,dri:87,defn:35,phy:66,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803009,n:"Beckham",pos:"RM, CM, RW",ov:88,pot:88,nat:"England",lg:"Legenden",club:"Manchester United",pac:80,sho:85,pas:92,dri:85,defn:66,phy:80,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803010,n:"Hagi",pos:"CAM, CM, LM",ov:88,pot:88,nat:"Romania",lg:"Legenden",club:"Galatasaray",pac:82,sho:86,pas:88,dri:88,defn:41,phy:64,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803011,n:"Laudrup",pos:"CAM, LW",ov:88,pot:88,nat:"Denmark",lg:"Legenden",club:"FC Barcelona",pac:84,sho:80,pas:88,dri:90,defn:40,phy:63,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803012,n:"Pirès",pos:"LM, RM, CAM",ov:87,pot:87,nat:"France",lg:"Legenden",club:"Arsenal",pac:86,sho:79,pas:84,dri:86,defn:38,phy:64,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803013,n:"Vidic",pos:"CB",ov:87,pot:87,nat:"Serbia",lg:"Legenden",club:"Manchester United",pac:78,sho:48,pas:62,dri:62,defn:90,phy:89,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803014,n:"Verón",pos:"CM, CAM",ov:86,pot:86,nat:"Argentina",lg:"Legenden",club:"Lazio",pac:75,sho:81,pas:86,dri:81,defn:73,phy:81,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803015,n:"Zambrotta",pos:"RB, LB",ov:86,pot:86,nat:"Italy",lg:"Legenden",club:"Juventus",pac:87,sho:69,pas:80,dri:81,defn:84,phy:82,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
 ];
-const PLAYERS_LIGAPACK = PLAYERS_LIGAPACK_BASE.map((base,i)=>{
-  const card = boostBaseToOv(base, base.targetOv, 9802000+i, 'iconpromo', 'Icon Promo', 'iconpromo');
-  card.img = base.img;
-  return card;
-});
-PLAYERS_LIGAPACK.forEach(c=>BY_ID.set(c.id,c));
-function ligaPackPool(){ return PLAYERS_LIGAPACK; }
-// Weighted so most pulls land on the lowest tier: 102 OVR (Figo/Totti) 50% combined, 103 OVR
-// (Roberto Carlos/Rivaldo/Casillas) 30% combined, 104 OVR (Cafu/Eusébio, the rarest) 20% combined -
-// every card within a tier shares that tier's odds equally.
-const LIGAPACK_TIER_WEIGHT = {102:50, 103:30, 104:20};
+const PLAYERS_ICONPROMO_W2 = [
+  {id:9803016,n:"Pelé",pos:"CAM, ST",ov:95,pot:95,nat:"Brazil",lg:"Legenden",club:"Santos",pac:93,sho:94,pas:91,dri:94,defn:58,phy:74,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803017,n:"Garrincha",pos:"RW, RM",ov:92,pot:92,nat:"Brazil",lg:"Legenden",club:"Botafogo",pac:89,sho:85,pas:92,dri:94,defn:40,phy:66,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803018,n:"Xavi",pos:"CM, CDM, CAM",ov:91,pot:91,nat:"Spain",lg:"Legenden",club:"FC Barcelona",pac:80,sho:78,pas:92,dri:91,defn:69,phy:70,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803019,n:"Buffon",pos:"GK",ov:91,pot:91,nat:"Italy",lg:"Legenden",club:"Juventus",pac:94,sho:86,pas:78,dri:93,defn:51,phy:89,foot:"Right",img:NOTFOUND_FACE_IMG,gk:true},
+  {id:9803020,n:"Casillas",pos:"GK",ov:90,pot:90,nat:"Spain",lg:"Legenden",club:"Real Madrid",pac:90,sho:88,pas:84,dri:93,defn:59,phy:88,foot:"Right",img:NOTFOUND_FACE_IMG,gk:true},
+  {id:9803021,n:"Figo",pos:"RW, RM, CAM",ov:89,pot:89,nat:"Portugal",lg:"Legenden",club:"Real Madrid",pac:89,sho:84,pas:86,dri:90,defn:38,phy:77,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803022,n:"Shearer",pos:"ST",ov:89,pot:89,nat:"England",lg:"Legenden",club:"Newcastle United",pac:82,sho:91,pas:76,dri:78,defn:49,phy:84,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803023,n:"Deco",pos:"CAM",ov:89,pot:89,nat:"Portugal",lg:"Legenden",club:"FC Barcelona",pac:82,sho:88,pas:89,dri:88,defn:43,phy:82,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803024,n:"Gerrard",pos:"CM, CDM",ov:88,pot:88,nat:"England",lg:"Legenden",club:"Liverpool",pac:78,sho:88,pas:88,dri:83,defn:75,phy:82,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803025,n:"Schweinsteiger",pos:"CM, LM",ov:88,pot:88,nat:"Germany",lg:"Legenden",club:"FC Bayern München",pac:76,sho:83,pas:86,dri:83,defn:83,phy:83,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803026,n:"Thuram",pos:"RB, CB",ov:88,pot:88,nat:"France",lg:"Legenden",club:"Juventus",pac:88,sho:58,pas:76,dri:75,defn:90,phy:90,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803027,n:"Riquelme",pos:"CAM",ov:88,pot:88,nat:"Argentina",lg:"Legenden",club:"Boca Juniors",pac:71,sho:84,pas:90,dri:90,defn:33,phy:66,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803028,n:"Kluivert",pos:"ST",ov:87,pot:87,nat:"Netherlands",lg:"Legenden",club:"FC Barcelona",pac:84,sho:86,pas:76,dri:81,defn:40,phy:79,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803029,n:"Makélélé",pos:"CDM, RM, CM",ov:87,pot:87,nat:"France",lg:"Legenden",club:"Chelsea",pac:81,sho:48,pas:76,dri:78,defn:86,phy:86,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803030,n:"Chicharito Hernández",pos:"ST",ov:86,pot:86,nat:"Mexico",lg:"Legenden",club:"Manchester United",pac:89,sho:85,pas:71,dri:86,defn:45,phy:67,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803031,n:"Roy Keane",pos:"CM, CDM",ov:86,pot:86,nat:"Republic of Ireland",lg:"Legenden",club:"Manchester United",pac:72,sho:69,pas:82,dri:78,defn:84,phy:87,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+];
+const PLAYERS_ICONPROMO_W3 = [
+  {id:9803032,n:"Ronaldo (R9)",pos:"ST",ov:94,pot:94,nat:"Brazil",lg:"Legenden",club:"Inter Milan",pac:94,sho:94,pas:79,dri:94,defn:43,phy:75,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803033,n:"Iniesta",pos:"CM, CAM, LW",ov:92,pot:92,nat:"Spain",lg:"Legenden",club:"FC Barcelona",pac:83,sho:80,pas:91,dri:92,defn:62,phy:66,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803034,n:"Baggio",pos:"CAM",ov:91,pot:91,nat:"Italy",lg:"Legenden",club:"Juventus",pac:84,sho:82,pas:90,dri:91,defn:38,phy:60,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803035,n:"van Basten",pos:"ST",ov:91,pot:91,nat:"Netherlands",lg:"Legenden",club:"AC Milan",pac:84,sho:92,pas:74,dri:87,defn:37,phy:73,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803036,n:"Matthäus",pos:"CM, CB, CDM",ov:90,pot:90,nat:"Germany",lg:"Legenden",club:"FC Bayern München",pac:88,sho:87,pas:88,dri:81,defn:89,phy:82,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803037,n:"Zanetti",pos:"RB, LB, CM",ov:89,pot:89,nat:"Argentina",lg:"Legenden",club:"Inter Milan",pac:83,sho:60,pas:84,dri:81,defn:86,phy:78,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803038,n:"Schmeichel",pos:"GK",ov:89,pot:89,nat:"Denmark",lg:"Legenden",club:"Manchester United",pac:89,sho:84,pas:86,dri:91,defn:47,phy:87,foot:"Right",img:NOTFOUND_FACE_IMG,gk:true},
+  {id:9803039,n:"Puyol",pos:"CB, RB",ov:89,pot:89,nat:"Spain",lg:"Legenden",club:"FC Barcelona",pac:72,sho:46,pas:66,dri:59,defn:91,phy:88,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803040,n:"Chiellini",pos:"CB",ov:88,pot:88,nat:"Italy",lg:"Legenden",club:"Juventus",pac:78,sho:55,pas:62,dri:63,defn:92,phy:89,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803041,n:"Nedved",pos:"LM, CAM, LW",ov:88,pot:88,nat:"Czechia",lg:"Legenden",club:"Juventus",pac:84,sho:84,pas:86,dri:87,defn:58,phy:77,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803042,n:"Vieira",pos:"CM, CDM",ov:88,pot:88,nat:"France",lg:"Legenden",club:"Arsenal",pac:82,sho:78,pas:80,dri:82,defn:88,phy:90,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803043,n:"van Persie",pos:"ST",ov:88,pot:88,nat:"Netherlands",lg:"Legenden",club:"Arsenal",pac:84,sho:91,pas:84,dri:87,defn:45,phy:73,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803044,n:"Ian Wright",pos:"ST",ov:87,pot:87,nat:"England",lg:"Legenden",club:"Arsenal",pac:88,sho:89,pas:69,dri:81,defn:40,phy:76,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803045,n:"Rijkaard",pos:"CDM, CB, CM",ov:87,pot:87,nat:"Netherlands",lg:"Legenden",club:"AC Milan",pac:77,sho:73,pas:80,dri:77,defn:87,phy:86,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803046,n:"Gattuso",pos:"CDM, CM",ov:86,pot:86,nat:"Italy",lg:"Legenden",club:"AC Milan",pac:73,sho:62,pas:69,dri:70,defn:88,phy:87,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803047,n:"Essien",pos:"CDM, CM",ov:86,pot:86,nat:"Ghana",lg:"Legenden",club:"Chelsea",pac:82,sho:73,pas:77,dri:78,defn:85,phy:86,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+];
+const PLAYERS_ICONPROMO_W4 = [
+  {id:9803048,n:"Zidane",pos:"CAM, CM",ov:94,pot:94,nat:"France",lg:"Legenden",club:"Real Madrid",pac:83,sho:90,pas:94,dri:94,defn:73,phy:84,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803049,n:"Bobby Charlton",pos:"CAM",ov:92,pot:92,nat:"England",lg:"Legenden",club:"Manchester United",pac:90,sho:91,pas:87,dri:91,defn:50,phy:74,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803050,n:"Henry",pos:"ST, LW",ov:91,pot:91,nat:"France",lg:"Legenden",club:"Arsenal",pac:93,sho:90,pas:82,dri:89,defn:51,phy:78,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803051,n:"Kahn",pos:"GK",ov:91,pot:91,nat:"Germany",lg:"Legenden",club:"FC Bayern München",pac:93,sho:86,pas:70,dri:95,defn:57,phy:89,foot:"Right",img:NOTFOUND_FACE_IMG,gk:true},
+  {id:9803052,n:"Bobby Moore",pos:"CB",ov:90,pot:90,nat:"England",lg:"Legenden",club:"West Ham United",pac:70,sho:62,pas:81,dri:76,defn:92,phy:83,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803053,n:"Dalglish",pos:"ST",ov:89,pot:89,nat:"Scotland",lg:"Legenden",club:"Liverpool",pac:89,sho:90,pas:75,dri:88,defn:41,phy:72,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803054,n:"Lineker",pos:"ST",ov:89,pot:89,nat:"England",lg:"Legenden",club:"FC Barcelona",pac:86,sho:89,pas:71,dri:84,defn:40,phy:75,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803055,n:"Drogba",pos:"ST",ov:89,pot:89,nat:"Côte d'Ivoire",lg:"Legenden",club:"Chelsea",pac:87,sho:90,pas:74,dri:80,defn:44,phy:87,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803056,n:"Cech",pos:"GK",ov:88,pot:88,nat:"Czechia",lg:"Legenden",club:"Chelsea",pac:86,sho:85,pas:76,dri:88,defn:54,phy:90,foot:"Right",img:NOTFOUND_FACE_IMG,gk:true},
+  {id:9803057,n:"Ferdinand",pos:"CB",ov:88,pot:88,nat:"England",lg:"Legenden",club:"Manchester United",pac:82,sho:48,pas:65,dri:64,defn:90,phy:85,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803058,n:"van der Sar",pos:"GK",ov:88,pot:88,nat:"Netherlands",lg:"Legenden",club:"Manchester United",pac:84,sho:87,pas:79,dri:86,defn:39,phy:92,foot:"Right",img:NOTFOUND_FACE_IMG,gk:true},
+  {id:9803059,n:"Bale",pos:"RW, ST, LW",ov:88,pot:88,nat:"Wales",lg:"Legenden",club:"Real Madrid",pac:95,sho:89,pas:84,dri:89,defn:65,phy:79,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803060,n:"Xabi Alonso",pos:"CDM, CM",ov:87,pot:87,nat:"Spain",lg:"Legenden",club:"Real Madrid",pac:71,sho:77,pas:86,dri:78,defn:82,phy:80,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803061,n:"Šuker",pos:"ST",ov:87,pot:87,nat:"Croatia",lg:"Legenden",club:"Real Madrid",pac:83,sho:89,pas:79,dri:88,defn:43,phy:75,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803062,n:"Larsson",pos:"ST",ov:86,pot:86,nat:"Sweden",lg:"Legenden",club:"Celtic",pac:87,sho:86,pas:73,dri:82,defn:45,phy:71,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803063,n:"Cha Bum-Kun",pos:"ST, RW",ov:86,pot:86,nat:"Korea Republic",lg:"Legenden",club:"Bayer Leverkusen",pac:87,sho:85,pas:78,dri:84,defn:60,phy:83,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+];
+const PLAYERS_ICONPROMO_W5 = [
+  {id:9803064,n:"Ronaldinho",pos:"LW, LM, CAM",ov:93,pot:93,nat:"Brazil",lg:"Legenden",club:"FC Barcelona",pac:91,sho:89,pas:90,dri:95,defn:38,phy:80,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803065,n:"Franz Beckenbauer",pos:"CB, CDM, CM",ov:92,pot:92,nat:"Germany",lg:"Legenden",club:"FC Bayern München",pac:82,sho:73,pas:88,dri:84,defn:93,phy:81,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803066,n:"Eusébio",pos:"ST",ov:91,pot:91,nat:"Portugal",lg:"Legenden",club:"SL Benfica",pac:92,sho:92,pas:84,dri:91,defn:44,phy:77,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803067,n:"Ibrahimović",pos:"ST",ov:91,pot:91,nat:"Sweden",lg:"Legenden",club:"AC Milan",pac:84,sho:93,pas:82,dri:90,defn:46,phy:89,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803068,n:"Kroos",pos:"CM, CDM, CAM",ov:90,pot:90,nat:"Germany",lg:"Legenden",club:"Real Madrid",pac:71,sho:82,pas:91,dri:86,defn:76,phy:74,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803069,n:"Nesta",pos:"CB",ov:89,pot:89,nat:"Italy",lg:"Legenden",club:"AC Milan",pac:76,sho:44,pas:63,dri:68,defn:92,phy:84,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803070,n:"Butragueño",pos:"ST",ov:89,pot:89,nat:"Spain",lg:"Legenden",club:"Real Madrid",pac:92,sho:89,pas:78,dri:90,defn:40,phy:65,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803071,n:"van Nistelrooy",pos:"ST",ov:89,pot:89,nat:"Netherlands",lg:"Legenden",club:"Manchester United",pac:84,sho:89,pas:71,dri:83,defn:38,phy:80,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803072,n:"Shevchenko",pos:"ST, RW",ov:88,pot:88,nat:"Ukraine",lg:"Legenden",club:"AC Milan",pac:86,sho:90,pas:71,dri:85,defn:35,phy:73,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803073,n:"Ribéry",pos:"LM, LW",ov:88,pot:88,nat:"France",lg:"Legenden",club:"FC Bayern München",pac:89,sho:85,pas:85,dri:90,defn:37,phy:65,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803074,n:"Blanc",pos:"CB, CAM",ov:88,pot:88,nat:"France",lg:"Legenden",club:"Olympique Marseille",pac:78,sho:67,pas:68,dri:76,defn:90,phy:85,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803075,n:"Geoff Hurst",pos:"ST",ov:88,pot:88,nat:"England",lg:"Legenden",club:"West Ham United",pac:84,sho:91,pas:72,dri:83,defn:39,phy:78,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803076,n:"Petit",pos:"CDM, LB, CM",ov:87,pot:87,nat:"France",lg:"Legenden",club:"Arsenal",pac:77,sho:77,pas:79,dri:76,defn:85,phy:87,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803077,n:"John Barnes",pos:"LW, LM, CAM",ov:87,pot:87,nat:"England",lg:"Legenden",club:"Liverpool",pac:89,sho:85,pas:83,dri:89,defn:44,phy:83,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803078,n:"Ashley Cole",pos:"LB",ov:86,pot:86,nat:"England",lg:"Legenden",club:"Chelsea",pac:87,sho:65,pas:79,dri:80,defn:84,phy:77,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+];
+const PLAYERS_ICONPROMO_W6 = [
+  {id:9803079,n:"Cruyff",pos:"CAM, ST",ov:93,pot:93,nat:"Netherlands",lg:"Legenden",club:"Ajax",pac:90,sho:91,pas:90,dri:93,defn:42,phy:73,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803080,n:"Yashin",pos:"GK",ov:92,pot:92,nat:"Russia",lg:"Legenden",club:"Dynamo Moscow",pac:93,sho:89,pas:75,dri:94,defn:60,phy:93,foot:"Right",img:NOTFOUND_FACE_IMG,gk:true},
+  {id:9803081,n:"Carlos Alberto Torres",pos:"RB, CB",ov:91,pot:91,nat:"Brazil",lg:"Legenden",club:"Santos",pac:89,sho:64,pas:80,dri:84,defn:88,phy:85,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803082,n:"Gullit",pos:"CAM, CM, ST",ov:90,pot:90,nat:"Netherlands",lg:"Legenden",club:"AC Milan",pac:85,sho:88,pas:88,dri:86,defn:80,phy:87,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803083,n:"Del Piero",pos:"CAM, ST",ov:90,pot:90,nat:"Italy",lg:"Legenden",club:"Juventus",pac:83,sho:90,pas:87,dri:91,defn:41,phy:66,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803084,n:"Alexis Sánchez",pos:"ST",ov:89,pot:89,nat:"Chile",lg:"Legenden",club:"Arsenal",pac:89,sho:90,pas:78,dri:88,defn:41,phy:72,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803085,n:"Totti",pos:"ST, CAM",ov:89,pot:89,nat:"Italy",lg:"Legenden",club:"AS Roma",pac:85,sho:91,pas:89,dri:90,defn:40,phy:75,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803086,n:"Cantona",pos:"ST",ov:89,pot:89,nat:"France",lg:"Legenden",club:"Manchester United",pac:86,sho:89,pas:86,dri:89,defn:50,phy:88,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803087,n:"Rooney",pos:"ST, CAM",ov:88,pot:88,nat:"England",lg:"Legenden",club:"Manchester United",pac:88,sho:90,pas:81,dri:86,defn:53,phy:87,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803088,n:"Scholes",pos:"CM, CAM",ov:88,pot:88,nat:"England",lg:"Legenden",club:"Manchester United",pac:74,sho:86,pas:89,dri:78,defn:62,phy:80,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803089,n:"Desailly",pos:"CB, CDM",ov:88,pot:88,nat:"France",lg:"Legenden",club:"AC Milan",pac:82,sho:51,pas:65,dri:66,defn:88,phy:88,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803090,n:"Kempes",pos:"ST, CAM, LW",ov:88,pot:88,nat:"Argentina",lg:"Legenden",club:"River Plate",pac:86,sho:91,pas:77,dri:86,defn:47,phy:82,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803091,n:"Lampard",pos:"CM, CDM, CAM",ov:87,pot:87,nat:"England",lg:"Legenden",club:"Chelsea",pac:77,sho:88,pas:86,dri:84,defn:71,phy:80,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803092,n:"Zola",pos:"CAM, ST",ov:87,pot:87,nat:"Italy",lg:"Legenden",club:"Chelsea",pac:85,sho:88,pas:85,dri:89,defn:41,phy:63,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803093,n:"Crespo",pos:"ST",ov:86,pot:86,nat:"Argentina",lg:"Legenden",club:"Inter Milan",pac:86,sho:86,pas:70,dri:85,defn:36,phy:70,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+];
+const PLAYERS_ICONPROMO_W7 = [
+  {id:9803094,n:"Maldini",pos:"CB, LB",ov:92,pot:92,nat:"Italy",lg:"Legenden",club:"AC Milan",pac:85,sho:55,pas:74,dri:69,defn:95,phy:82,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803095,n:"Gerd Müller",pos:"ST",ov:92,pot:92,nat:"Germany",lg:"Legenden",club:"FC Bayern München",pac:87,sho:92,pas:76,dri:85,defn:44,phy:74,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803096,n:"Baresi",pos:"CB",ov:91,pot:91,nat:"Italy",lg:"Legenden",club:"AC Milan",pac:73,sho:48,pas:75,dri:70,defn:94,phy:83,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803097,n:"Raúl",pos:"ST",ov:90,pot:90,nat:"Spain",lg:"Legenden",club:"Real Madrid",pac:86,sho:90,pas:80,dri:88,defn:45,phy:72,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803098,n:"Rivellino",pos:"CAM, LM, LW",ov:90,pot:90,nat:"Brazil",lg:"Legenden",club:"Corinthians",pac:87,sho:88,pas:90,dri:93,defn:46,phy:72,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803099,n:"Stoichkov",pos:"ST, RW, LW",ov:89,pot:89,nat:"Bulgaria",lg:"Legenden",club:"FC Barcelona",pac:90,sho:91,pas:84,dri:90,defn:49,phy:84,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803100,n:"Eto'o",pos:"ST",ov:89,pot:89,nat:"Cameroon",lg:"Legenden",club:"FC Barcelona",pac:92,sho:90,pas:79,dri:87,defn:45,phy:80,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803101,n:"Batistuta",pos:"ST",ov:89,pot:89,nat:"Argentina",lg:"Legenden",club:"Fiorentina",pac:86,sho:92,pas:74,dri:82,defn:38,phy:81,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803102,n:"Koeman",pos:"CB",ov:88,pot:88,nat:"Netherlands",lg:"Legenden",club:"FC Barcelona",pac:76,sho:86,pas:85,dri:78,defn:88,phy:84,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803103,n:"Klose",pos:"ST",ov:88,pot:88,nat:"Germany",lg:"Legenden",club:"FC Bayern München",pac:86,sho:87,pas:73,dri:80,defn:40,phy:79,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803104,n:"Hierro",pos:"CB",ov:88,pot:88,nat:"Spain",lg:"Legenden",club:"Real Madrid",pac:74,sho:67,pas:74,dri:68,defn:92,phy:84,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803105,n:"Fernando Torres",pos:"ST",ov:87,pot:87,nat:"Spain",lg:"Legenden",club:"Liverpool",pac:89,sho:87,pas:75,dri:85,defn:43,phy:75,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803106,n:"Ian Rush",pos:"ST",ov:87,pot:87,nat:"Wales",lg:"Legenden",club:"Liverpool",pac:84,sho:89,pas:69,dri:83,defn:43,phy:78,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803107,n:"Bledorn Verri",pos:"CDM, CM",ov:87,pot:87,nat:"Brazil",lg:"Legenden",club:"Free Agent",pac:75,sho:77,pas:82,dri:81,defn:87,phy:85,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+  {id:9803108,n:"Sol Campbell",pos:"CB",ov:86,pot:86,nat:"England",lg:"Legenden",club:"Arsenal",pac:81,sho:45,pas:60,dri:58,defn:87,phy:88,foot:"Right",img:NOTFOUND_FACE_IMG,gk:false},
+];
+const ICONPROMO_WEEKLY_POOLS = [PLAYERS_ICONPROMO_W1, PLAYERS_ICONPROMO_W2, PLAYERS_ICONPROMO_W3, PLAYERS_ICONPROMO_W4, PLAYERS_ICONPROMO_W5, PLAYERS_ICONPROMO_W6, PLAYERS_ICONPROMO_W7];
+ICONPROMO_WEEKLY_POOLS.forEach(pool=>pool.forEach(c=>{ c.variant='iconpromo'; c.variantLabel='Icon Promo'; c.theme='iconpromo'; BY_ID.set(c.id,c); }));
+// Same Monday-epoch pattern as LIGA_SEASON_EPOCH - advances one pool per real week, wraps after W7.
+const ICONPROMO_WEEK_EPOCH = new Date(2026,7,24,0,0,0,0).getTime();
+function currentIconPromoWeekIndex(){
+  const weeksSince = Math.max(0, Math.floor((mostRecentMondayBerlin() - ICONPROMO_WEEK_EPOCH) / (7*24*60*60*1000)));
+  return weeksSince % ICONPROMO_WEEKLY_POOLS.length;
+}
+function ligaPackPool(){ return ICONPROMO_WEEKLY_POOLS[currentIconPromoWeekIndex()]; }
 function drawLigaPackCard(){
-  const weighted = [];
-  PLAYERS_LIGAPACK.forEach(c=>{
-    const tierSize = PLAYERS_LIGAPACK.filter(x=>x.ov===c.ov).length;
-    const perCardShare = (LIGAPACK_TIER_WEIGHT[c.ov] || 1) / tierSize;
-    for(let i=0;i<Math.round(perCardShare*10);i++) weighted.push(c); // 10 reps per 1% keeps this precise to 0.1%
-  });
-  return weighted[Math.floor(Math.random()*weighted.length)];
+  const pool = ligaPackPool();
+  return pool[Math.floor(Math.random()*pool.length)];
 }
 function openAdminPackPicker(){
   openModal(`
