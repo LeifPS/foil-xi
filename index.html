@@ -12704,17 +12704,19 @@ function proxyImg(url){
 // image-proxy service some ad-blockers/DNS filters and school/tablet MDM profiles block outright
 // (reported: images loading fine on most devices but falling back to initials-only on iPad/Android
 // tablets - consistent with the proxy itself being blocked there, not the underlying source images).
-// Before giving up and showing initials, this tries the original un-proxied URL directly first - costs
-// nothing when the proxy works fine (the vast majority of devices), but recovers automatically on a
-// device where wsrv.nl specifically is unreachable. Only falls through to initials if BOTH fail.
+// Before giving up, this tries the original un-proxied URL directly first - costs nothing when the
+// proxy works fine (the vast majority of devices), but recovers automatically on a device where
+// wsrv.nl specifically is unreachable. Only falls through to the generic "no photo" placeholder below
+// if BOTH fail.
+const NOTFOUND_FACE_IMG = 'https://cdn3.futbin.com/content/fifa27/img/players/notfound_0.png?fm=png&ixlib=java-2.1.0&w=128&s=a8ec7414763ceb91efed5e5209ef35cc';
 function handleFacePhotoError(img){
   if(!img.dataset.fallbackTried){
     img.dataset.fallbackTried = '1';
     img.src = img.dataset.raw;
     return;
   }
-  img.style.display = 'none';
-  img.nextElementSibling.style.display = 'flex';
+  img.onerror = null; // never retry past the placeholder itself, even if it somehow fails to load too
+  img.src = NOTFOUND_FACE_IMG;
 }
 function initialsOf(name){
   const parts = name.replace(/\./g,'').trim().split(/\s+/);
@@ -12805,9 +12807,8 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const photoInner = card.isManager
     ? `<div class="avatar">${initialsOf(card.n)}</div>`
     : (card.img
-        ? `<img class="face-photo" src="${proxyImg(card.img)}" data-raw="${card.img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">
-           <div class="avatar" style="display:none;">${initialsOf(card.n)}</div>`
-        : `<div class="avatar">${initialsOf(card.n)}</div>`);
+        ? `<img class="face-photo" src="${proxyImg(card.img)}" data-raw="${card.img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">`
+        : `<img class="face-photo" src="${NOTFOUND_FACE_IMG}" alt="" loading="lazy">`);
   // effOvs: one entry per listed position (see previewEffectiveOvsForCard), null/undefined for a
   // given index means "no preview for that position". Cycles in lockstep with the position label.
   const effOvAt = idx => (effOvs && effOvs[idx]!=null && effOvs[idx]!==card.ov) ? `(${effOvs[idx]})` : '';
@@ -23773,13 +23774,12 @@ function flipMatchDataSides(md){
   };
 }
 function goalRowHTML(minute, scorer, teamName, side){
-  const initials = initialsOf(scorer.n || '??');
   const imgTag = scorer.img
     ? `<img src="${proxyImg(scorer.img)}" data-raw="${scorer.img}" alt="" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">`
-    : '';
+    : `<img src="${NOTFOUND_FACE_IMG}" alt="">`;
   return `<div class="goal-row ${side}">
       <span class="gm">${minute}'</span>
-      <span class="gav-wrap"><span class="gav-fallback">${initials}</span>${imgTag}</span>
+      <span class="gav-wrap">${imgTag}</span>
       <span class="gname">${scorer.n}</span>
       <span class="gteam">${teamName}</span>
     </div>`;
