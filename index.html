@@ -17161,6 +17161,7 @@ function normalizeTournamentDoc(t){
   if(!t) return t;
   if(!Array.isArray(t.participantIds)) t.participantIds = (t.participants||[]).map(p=>p.userId);
   if(t.prizeType!=='card'){ t.prizeType='coins'; t.prizeCoins = t.prizeCoins||0; }
+  t.entryFee = t.entryFee||0; // older docs predate the entry-fee feature and never had this field
   if(!BOT_STRENGTH_TIERS[t.botStrength]) t.botStrength = HOSTED_TOURNAMENT_DEFAULT_BOT_STRENGTH;
   if(t.botStrength==='custom'){
     let lo = Number(t.botStrengthMin), hi = Number(t.botStrengthMax);
@@ -17479,25 +17480,39 @@ function fillAndSimulateHostedTournament(t){
 function prepareHostedTournamentRun(t, participantsBeforeBots){
   const {participants, rounds, winnerUserId, winnerName, runnerUpUserId, runnerUpName} = fillAndSimulateHostedTournament({...t, participants: participantsBeforeBots});
   const isCard = t.prizeType==='card';
-  const {winnerPrizeCoins, runnerUpPrizeCoins} = isCard ? {winnerPrizeCoins:0, runnerUpPrizeCoins:0} : computeCoinPrizeSplit(t.prizeCoins||0);
+  const {winnerPrizeCoins: baseWinnerCoins, runnerUpPrizeCoins} = isCard ? {winnerPrizeCoins:0, runnerUpPrizeCoins:0} : computeCoinPrizeSplit(t.prizeCoins||0);
   const botWon = isBotParticipantId(winnerUserId);
   const runnerUpIsBot = isBotParticipantId(runnerUpUserId);
   const hostSelfWonCard = !botWon && winnerUserId===t.hostUserId && isCard;
+  // Teilnahmegebühr (optional, siehe joinHostedTournament/hostTournamentPrompt): jeder REALE
+  // Teilnehmer hat sie schon beim Beitritt bezahlt - CPU-Plätze tragen nichts bei (isBotParticipantId
+  // filtert sie raus). Der komplette Topf geht am Ende zusätzlich zum eigentlichen Preisgeld/zur
+  // Preiskarte an den Sieger - auch wenn der Preis selbst eine Karte ist. Gewinnt stattdessen ein
+  // CPU-Verein, bekommt jeder reale Einzahler seine Gebühr zurück statt sie zu verlieren, exakt
+  // dieselbe "niemand verliert echtes Geld an einen Bot-Sieger" Logik wie beim Host-Preisgeld unten.
+  const realPayers = participantsBeforeBots.filter(p=>!isBotParticipantId(p.userId));
+  const feePoolCoins = (t.entryFee||0) * realPayers.length;
+  const feeRefunds = (botWon && feePoolCoins>0) ? realPayers.map(p=>({userId:p.userId, amount:t.entryFee})) : [];
+  const winnerPrizeCoins = botWon ? baseWinnerCoins : baseWinnerCoins + feePoolCoins;
   // the two prize shares settle completely independently: a bot winning doesn't affect whether the
-  // runner-up share (if any human holds it) gets refunded or paid out, and vice versa.
-  const hostRefundCoins = (!isCard && botWon ? winnerPrizeCoins : 0) + (!isCard && runnerUpIsBot ? runnerUpPrizeCoins : 0);
-  const prizeClaimed = botWon || hostSelfWonCard;
+  // runner-up share (if any human holds it) gets refunded or paid out, and vice versa. Uses
+  // baseWinnerCoins (never the fee pool) - the fee pool has its own separate refund path above.
+  const hostRefundCoins = (!isCard && botWon ? baseWinnerCoins : 0) + (!isCard && runnerUpIsBot ? runnerUpPrizeCoins : 0);
+  // hostSelfWonCard alone used to mean "nothing left to claim" (the card never moves, no runner-up
+  // split on a card prize) - no longer true once a fee-pool coin bonus can sit on top of a card prize,
+  // so it only counts as already-settled when there's also no such bonus waiting to be claimed.
+  const prizeClaimed = botWon || (hostSelfWonCard && winnerPrizeCoins<=0);
   // a card prize never has a runner-up payout at all (nothing to split), so its claim is always
   // already "settled" - same idea as a bot winning a coin share needing no separate claim step.
   const runnerUpPrizeClaimed = isCard || runnerUpIsBot;
-  return {participants, rounds, winnerUserId, winnerName, runnerUpUserId, runnerUpName, botWon, hostSelfWonCard, prizeClaimed, runnerUpPrizeClaimed, hostRefundCoins, winnerPrizeCoins, runnerUpPrizeCoins};
+  return {participants, rounds, winnerUserId, winnerName, runnerUpUserId, runnerUpName, botWon, hostSelfWonCard, prizeClaimed, runnerUpPrizeClaimed, hostRefundCoins, winnerPrizeCoins, runnerUpPrizeCoins, feePoolCoins, feeRefunds};
 }
 function resolveHostedTournamentOutcome(t, participantsBeforeBots){
   const run = prepareHostedTournamentRun(t, participantsBeforeBots);
   return {participants: run.participants, rounds: run.rounds, winnerUserId: run.winnerUserId, winnerName: run.winnerName,
     runnerUpUserId: run.runnerUpUserId, runnerUpName: run.runnerUpName,
     prizeClaimed: run.prizeClaimed, runnerUpPrizeClaimed: run.runnerUpPrizeClaimed, hostRefundCoins: run.hostRefundCoins,
-    winnerPrizeCoins: run.winnerPrizeCoins, runnerUpPrizeCoins: run.runnerUpPrizeCoins};
+    winnerPrizeCoins: run.winnerPrizeCoins, runnerUpPrizeCoins: run.runnerUpPrizeCoins, feePoolCoins: run.feePoolCoins, feeRefunds: run.feeRefunds};
 }
 let hostPrizeCardUid = null; // card selected in the currently-open host-tournament modal, if any
 async function hostTournamentPrompt(){
@@ -17553,6 +17568,13 @@ async function hostTournamentPrompt(){
       <div class="club-grid" id="prize-card-grid" style="max-height:260px;overflow:auto;margin-bottom:6px;"></div>
       <p class="hint" id="prize-card-empty" style="display:none;">Keine verf\u00fcgbaren Karten \u2014 alle sind im Kader, gelistet, in einem Handel oder bereits als Preis in einem anderen Turnier gesperrt.</p>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;color:var(--chalk);font-size:13.5px;margin:6px 0 10px;cursor:pointer;">
+      <input type="checkbox" id="entry-fee-enabled"> Teilnahmegeb\u00fchr verlangen
+    </label>
+    <div id="entry-fee-block" style="display:none;margin-bottom:14px;">
+      <p class="hint" style="margin-top:0;margin-bottom:8px;">Jeder Teilnehmer (auch du selbst) zahlt diesen Betrag beim Beitritt. Der gesamte Topf geht am Ende zus\u00e4tzlich zum Preis an den Sieger. Gewinnt ein CPU-Verein, bekommt jeder echte Teilnehmer seine Geb\u00fchr zur\u00fcck. CPU-Pl\u00e4tze zahlen nichts ein.</p>
+      <input id="entry-fee-input" type="text" inputmode="decimal" placeholder="Teilnahmegeb\u00fchr in Coins (z. B. 20k)" style="width:100%;">
+    </div>
     <div style="display:flex;gap:10px;margin-top:6px;">
       <button class="action-btn secondary" id="prize-cancel" style="flex:1;">Abbrechen</button>
       <button class="action-btn" id="prize-confirm" style="flex:1;">Turnier erstellen</button>
@@ -17573,6 +17595,10 @@ async function hostTournamentPrompt(){
   typeSelect.addEventListener('change', ()=>{
     document.getElementById('prize-coins-block').style.display = typeSelect.value==='coins' ? 'block':'none';
     document.getElementById('prize-card-block').style.display = typeSelect.value==='card' ? 'block':'none';
+  });
+  const entryFeeEnabled = document.getElementById('entry-fee-enabled');
+  entryFeeEnabled.addEventListener('change', ()=>{
+    document.getElementById('entry-fee-block').style.display = entryFeeEnabled.checked ? 'block' : 'none';
   });
   const grid = document.getElementById('prize-card-grid');
   if(!eligibleCards.length){ document.getElementById('prize-card-empty').style.display='block'; }
@@ -17615,13 +17641,24 @@ async function hostTournamentPrompt(){
       if(lo>hi){ const tmp=lo; lo=hi; hi=tmp; }
       baseDoc.botStrengthMin = lo; baseDoc.botStrengthMax = hi;
     }
+    // Teilnahmegeb\u00fchr (optional): der Host zahlt sie wie jeder andere Teilnehmer auch (gleiche
+    // Regeln f\u00fcr alle, inklusive Host), sofort hier lokal abgezogen - genau wie beim Preisgeld
+    // unten. Bei fehlgeschlagener Turniererstellung wird sie zusammen mit dem Preisgeld erstattet.
+    let entryFee = 0;
+    if(document.getElementById('entry-fee-enabled').checked){
+      entryFee = Math.max(1, Math.floor(parseCoinInput(document.getElementById('entry-fee-input').value)||0));
+      if(!entryFee){ toast('Bitte eine Teilnahmegeb\u00fchr angeben, oder den Haken entfernen.'); e.target.disabled=false; return; }
+      if(profile.coins<entryFee){ toast('Nicht genug Coins f\u00fcr diese Teilnahmegeb\u00fchr.'); e.target.disabled=false; return; }
+    }
+    baseDoc.entryFee = entryFee;
+    if(entryFee>0) await atomicCoinChange(-entryFee);
     if(prizeType==='card'){
-      if(!hostPrizeCardUid){ toast('W\u00e4hle eine Karte als Preis aus.'); e.target.disabled=false; return; }
+      if(!hostPrizeCardUid){ toast('W\u00e4hle eine Karte als Preis aus.'); if(entryFee>0) await atomicCoinChange(entryFee); e.target.disabled=false; return; }
       // re-verify the card is still actually available right before locking it in - it may have
       // been sold, traded, or squadded in the time the modal was open
       const stillLocked = await getLockedUids();
       const entry = collection.find(c=>c.uid===hostPrizeCardUid);
-      if(!entry || stillLocked.has(hostPrizeCardUid)){ toast('Diese Karte ist nicht mehr verf\u00fcgbar. Bitte erneut ausw\u00e4hlen.'); hostTournamentPrompt(); return; }
+      if(!entry || stillLocked.has(hostPrizeCardUid)){ toast('Diese Karte ist nicht mehr verf\u00fcgbar. Bitte erneut ausw\u00e4hlen.'); if(entryFee>0) await atomicCoinChange(entryFee); hostTournamentPrompt(); return; }
       const card = BY_ID.get(entry.cardId);
       baseDoc.prizeType = 'card';
       baseDoc.prizeCard = {stakedUid: entry.uid, cardId: entry.cardId, n: card.n, ov: card.ov, pos: card.pos, img: card.img};
@@ -17635,13 +17672,14 @@ async function hostTournamentPrompt(){
         loadOpenTournaments();
       }catch(err){
         console.warn('host tournament (card) failed', err);
+        if(entryFee>0) await atomicCoinChange(entryFee);
         toast('Turnier konnte nicht erstellt werden.');
         e.target.disabled = false;
       }
     } else {
       const prize = Math.max(100, Math.floor(parseCoinInput(document.getElementById('prize-input').value)||0));
-      if(!prize){ toast('Bitte ein Preisgeld angeben.'); e.target.disabled=false; return; }
-      if(profile.coins<prize){ toast('Nicht genug Coins f\u00fcr dieses Preisgeld.'); e.target.disabled=false; return; }
+      if(!prize){ toast('Bitte ein Preisgeld angeben.'); if(entryFee>0) await atomicCoinChange(entryFee); e.target.disabled=false; return; }
+      if(profile.coins<prize){ toast('Nicht genug Coins f\u00fcr dieses Preisgeld.'); if(entryFee>0) await atomicCoinChange(entryFee); e.target.disabled=false; return; }
       await atomicCoinChange(-prize);
       baseDoc.prizeType = 'coins';
       baseDoc.prizeCoins = prize;
@@ -17654,17 +17692,25 @@ async function hostTournamentPrompt(){
       }catch(err){
         console.warn('host tournament (coins) failed', err);
         await atomicCoinChange(prize);
+        if(entryFee>0) await atomicCoinChange(entryFee);
         toast('Turnier konnte nicht erstellt werden \u2014 Preisgeld erstattet.');
       }
     }
   });
 }
-async function joinHostedTournament(id){
+async function joinHostedTournament(id, entryFee=0){
   if(inMatch || queueActive || pendingDuelId) return;
   const {rating, filled} = squadRating();
   if(filled<11){ toast('F\u00fclle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   await fbReady;
   if(!fb) return;
+  // Teilnahmegeb\u00fchr (optional): deducted from the JOINING player's own account up front, same "own
+  // account, no cross-player race" reasoning as the host paying at creation time - refunded below if
+  // the join itself doesn't actually go through (already-full/already-joined/tournament gone/running).
+  if(entryFee>0){
+    if(profile.coins<entryFee){ toast('Nicht genug Coins f\u00fcr die Teilnahmegeb\u00fchr dieses Turniers.'); return; }
+    await atomicCoinChange(-entryFee);
+  }
   const ref = fb.doc(fb.db,'tournaments', id);
   // outcome flags set from inside the transaction (or the no-transaction fallback below),
   // then turned into a single toast after the write has actually landed.
@@ -17688,10 +17734,13 @@ async function joinHostedTournament(id){
           tx.update(ref, {participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
             winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
             prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
-            prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
+            prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
           if(out.hostRefundCoins>0 && fb.increment){
             tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
           }
+          if(fb.increment) out.feeRefunds.forEach(r=>{
+            tx.update(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)});
+          });
           outcome='joined-and-running';
         } else {
           tx.update(ref, {participants, participantIds: participants.map(p=>p.userId), prizeType:t.prizeType, prizeCoins:t.prizeCoins});
@@ -17715,9 +17764,12 @@ async function joinHostedTournament(id){
             await fb.setDoc(ref, {...t, participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
               winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
               winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
-              prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
+              prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
             if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
               try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
+            }
+            if(fb.updateDoc && fb.increment) for(const r of out.feeRefunds){
+              try{ await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)}); }catch(_){}
             }
             outcome='joined-and-running';
           } else {
@@ -17728,6 +17780,8 @@ async function joinHostedTournament(id){
         }
       }
     }
+    // any outcome other than an actual join means the fee never should have been taken - refund it
+    if(entryFee>0 && outcome!=='joined' && outcome!=='joined-and-running') await atomicCoinChange(entryFee);
     const messages = {
       gone:'Turnier existiert nicht mehr.', running:'Dieses Turnier l\u00e4uft bereits oder ist beendet.',
       already:'Du bist bereits angemeldet.', full:'Turnier ist bereits voll.', joined:'Angemeldet!',
@@ -17740,7 +17794,11 @@ async function joinHostedTournament(id){
       invalidateReadCache('my-tournament-results:'+profile.userId);
       loadMyTournamentResults();
     }
-  }catch(e){ console.warn('join tournament failed', e); toast('Beitritt fehlgeschlagen.'); }
+  }catch(e){
+    console.warn('join tournament failed', e);
+    if(entryFee>0) await atomicCoinChange(entryFee);
+    toast('Beitritt fehlgeschlagen.');
+  }
 }
 async function startHostedTournament(id){
   await fbReady;
@@ -17763,10 +17821,13 @@ async function startHostedTournament(id){
         tx.update(ref, {participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
           winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
           prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
-          prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
+          prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
         if(out.hostRefundCoins>0 && fb.increment){
           tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
         }
+        if(fb.increment) out.feeRefunds.forEach(r=>{
+          tx.update(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)});
+        });
         result='started'; winnerName=out.winnerName;
       });
     } else {
@@ -17781,9 +17842,12 @@ async function startHostedTournament(id){
           await fb.setDoc(ref, {...t, participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
             winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
             winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
-            prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed});
+            prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
           if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
             try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
+          }
+          if(fb.updateDoc && fb.increment) for(const r of out.feeRefunds){
+            try{ await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)}); }catch(_){}
           }
           result='started'; winnerName=out.winnerName;
         }
@@ -17977,7 +18041,11 @@ async function claimTournamentPrize(id, role='winner'){
           }
           // if the host won their own staked card back, it never left their collection - nothing to move
           claimed = true; prizeCardName = t.prizeCard.n;
-        } else if(fb.increment) {
+        }
+        // independent of the card branch above (not else-if): a card-prize tournament can still carry
+        // a nonzero winnerPrizeCoins if it had an entry-fee pool (see prepareHostedTournamentRun) -
+        // that bonus is paid out here alongside the card, not instead of it.
+        if(t.winnerPrizeCoins>0 && fb.increment){
           tx.update(saveRef, {'profile.coins': fb.increment(t.winnerPrizeCoins)});
           claimed = true; prizeCoins = t.winnerPrizeCoins;
         }
@@ -18005,7 +18073,11 @@ async function claimTournamentPrize(id, role='winner'){
               await sSet('collection', collection);
             }
             prizeCardName = t.prizeCard.n;
-          } else {
+          }
+          // independent of the card branch above: a card-prize tournament can still carry a nonzero
+          // winnerPrizeCoins if it had an entry-fee pool (see prepareHostedTournamentRun) - paid out
+          // here alongside the card, not instead of it.
+          if(t.winnerPrizeCoins>0){
             await atomicCoinChange(t.winnerPrizeCoins);
             prizeCoins = t.winnerPrizeCoins;
           }
@@ -18016,7 +18088,12 @@ async function claimTournamentPrize(id, role='winner'){
     }
     if(claimed){
       playSfx('coin');
-      toast(prizeCardName ? `\ud83c\udfc6 Preis abgeholt: ${prizeCardName}!` : `\ud83c\udfc6 Preisgeld abgeholt: +${formatCoins(prizeCoins)} Coins!`);
+      // a card-prize win can now carry an extra coin bonus (entry-fee pool, see
+      // prepareHostedTournamentRun) alongside the card itself - mention both when both apply.
+      const msg = prizeCardName && prizeCoins>0 ? `\ud83c\udfc6 Preis abgeholt: ${prizeCardName} + ${formatCoins(prizeCoins)} Coins!`
+        : prizeCardName ? `\ud83c\udfc6 Preis abgeholt: ${prizeCardName}!`
+        : `\ud83c\udfc6 Preisgeld abgeholt: +${formatCoins(prizeCoins)} Coins!`;
+      toast(msg);
     }
     invalidateReadCache('my-tournament-results:'+profile.userId);
     loadMyTournamentResults();
@@ -18316,7 +18393,8 @@ async function playTournamentLiveMatch(tournamentId, mid){
   }catch(e){ console.warn('mark liveRevealed failed', e); showBracketModal(t); }
 }
 function showParticipantsModal(t){
-  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:14px;">Preis: ${tournamentPrizeLabel(t)} \u2014 ${t.participants.length}/${t.maxSlots} angemeldet</p>`;
+  const feeLine = t.entryFee>0 ? ` \u00b7 Teilnahmegeb\u00fchr: ${formatCoins(t.entryFee)} (geht am Ende zus\u00e4tzlich an den Sieger)` : '';
+  let html = `<h2 style="margin-bottom:4px;">${t.hostName}s Turnier</h2><p class="hint" style="margin-top:0;margin-bottom:14px;">Preis: ${tournamentPrizeLabel(t)}${feeLine} \u2014 ${t.participants.length}/${t.maxSlots} angemeldet</p>`;
   html += t.participants.map(p=>`<div class="leader-row"><span style="flex:1;">${p.name}</span><span class="mono" style="color:var(--muted);">${p.rating}</span></div>`).join('');
   openModal(html + `<button class="modal-close" id="participants-close" style="margin-top:16px;">Schlie\u00dfen</button>`);
   document.getElementById('participants-close').addEventListener('click', closeModal);
@@ -18351,7 +18429,8 @@ async function loadOpenTournaments(){
       info.style.flex = '1';
       const formatName = TOURNAMENT_FORMATS[t.format]?.name || 'Einfach-K.o.';
       const botTag = t.botStrength && t.botStrength!=='auto' ? ` \u00b7 CPU: ${botStrengthTierLabel(t)}` : '';
-      info.innerHTML = `${isRunning ? liveBadgeHtml() : ''}<b>${t.hostName}</b>s Turnier (${formatName}${botTag}) \u2014 <span class="mono" style="color:var(--gold);">${tournamentPrizeLabel(t)}</span> \u2014 `;
+      const feeTag = t.entryFee>0 ? ` \u00b7 Geb\u00fchr: ${formatCoins(t.entryFee)}` : '';
+      info.innerHTML = `${isRunning ? liveBadgeHtml() : ''}<b>${t.hostName}</b>s Turnier (${formatName}${botTag}${feeTag}) \u2014 <span class="mono" style="color:var(--gold);">${tournamentPrizeLabel(t)}</span> \u2014 `;
       const participantsSpan = document.createElement('span');
       participantsSpan.className = 'mono';
       participantsSpan.style.cssText = 'text-decoration:underline;cursor:pointer;';
@@ -18368,7 +18447,7 @@ async function loadOpenTournaments(){
       btns.style.cssText = 'display:flex;gap:8px;margin-top:6px;width:100%;';
       if(!joined && t.status==='registering' && t.participants.length<t.maxSlots){
         const joinBtn = document.createElement('button'); joinBtn.className='action-btn'; joinBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; joinBtn.textContent='Beitreten';
-        joinBtn.addEventListener('click', ()=>{ joinBtn.disabled=true; joinHostedTournament(t.id); });
+        joinBtn.addEventListener('click', ()=>{ joinBtn.disabled=true; joinHostedTournament(t.id, t.entryFee||0); });
         btns.appendChild(joinBtn);
       } else if(joined && !isRunning){
         const tag = document.createElement('span'); tag.className='mono'; tag.style.cssText='color:var(--turf-bright);align-self:center;'; tag.textContent='\u2713 Angemeldet';
