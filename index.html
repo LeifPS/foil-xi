@@ -1691,6 +1691,13 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .goal-flash-overlay .gf-card-slot{filter:drop-shadow(0 10px 22px rgba(0,0,0,.6));}
 .goal-flash-overlay .gf-meta{font-size:13px;color:var(--chalk);line-height:1.4;}
 .goal-flash-overlay .gf-meta b{color:var(--gold);font-size:15px;}
+/* big referee-style card graphic for showCardFlash (Gelbe/Rote Karte) - a plain rounded rectangle,
+   not a player stat card, since it's the card itself that's the moment here */
+.ref-card{width:120px;height:168px;border-radius:12px;filter:drop-shadow(0 10px 24px rgba(0,0,0,.65));
+  animation:refCardPop .4s cubic-bezier(.3,1.4,.4,1) backwards .1s;}
+.ref-card-yellow{background:linear-gradient(155deg,#fff1a8,#f4d13a 55%,#c9a218);border:2px solid rgba(255,255,255,.35);}
+.ref-card-red{background:linear-gradient(155deg,#ff8a80,#e2564f 55%,#a52b26);border:2px solid rgba(255,255,255,.35);}
+@keyframes refCardPop{0%{transform:scale(.3) rotate(-12deg);opacity:0;}70%{transform:scale(1.08) rotate(3deg);opacity:1;}100%{transform:scale(1) rotate(0deg);opacity:1;}}
 @keyframes goalFlashIn{from{opacity:0;transform:scale(.82);}to{opacity:1;transform:scale(1);}}
 @keyframes goalFlashOut{to{opacity:0;}}
 
@@ -23831,16 +23838,13 @@ function showGoalCardFlash(scorer, side, teamName, isPenalty){
     setTimeout(()=>{ overlay.remove(); resolve(); }, 2500);
   });
 }
-// Same overlay/timing as showGoalCardFlash above (2.5s, identical CSS animation), just for a yellow/red
-// card instead of a goal - card.player carries the same full player object incidents already resolve
-// scorers from, so card ownership (uid -> real owned card) resolves exactly the same way.
+// Same overlay/timing as showGoalCardFlash above (2.5s, identical CSS animation) - but a real
+// referee-style yellow/red card graphic in the middle instead of the player's football card, since a
+// caution/sending-off is about the CARD, not a stat-card moment like a goal is.
 function showCardFlash(player, side, teamName, type){
   return new Promise(resolve=>{
     const host = document.getElementById('live-match');
     if(!host){ resolve(); return; }
-    const myOwned = (side==='me' && player.uid) ? ownedCard(player.uid) : null;
-    const base = player.id!=null ? BY_ID.get(player.id) : null;
-    const card = myOwned || (base ? {...base, level: player.level||0} : null);
     const isRed = type==='red' || type==='red2';
     const label = type==='yellow' ? 'GELBE KARTE' : type==='red2' ? 'GELB-ROT!' : 'ROTE KARTE!';
     const color = isRed ? 'var(--danger)' : '#e8c468';
@@ -23848,9 +23852,8 @@ function showCardFlash(player, side, teamName, type){
     overlay.className = 'goal-flash-overlay';
     overlay.innerHTML = `
       <div class="gf-label" style="color:${color};text-shadow:0 0 16px ${isRed?'rgba(255,90,90,.5)':'rgba(232,196,104,.5)'};">${label}</div>
-      <div class="gf-card-slot"></div>
+      <div class="ref-card ${isRed?'ref-card-red':'ref-card-yellow'}"></div>
       <div class="gf-meta"><b>${player.n}</b><br>${teamName}</div>`;
-    if(card) overlay.querySelector('.gf-card-slot').appendChild(cardEl(card,'mini'));
     host.appendChild(overlay);
     setTimeout(()=>{ overlay.remove(); resolve(); }, 2500);
   });
