@@ -20579,13 +20579,12 @@ async function wm26FinishRun(exitStage, won){
     updateCoinDisplay();
     await showWM26TrophyCutscene();
     toast('Öffne dein Pack…');
-    const useWinnersPack = Math.random()<0.2;
-    const pack = PACKS.find(p=>p.id===(useWinnersPack ? 'wmwinners' : 'worldcuppack'));
+    const pack = PACKS.find(p=>p.id==='worldcuppack');
     // the just-decided Finale is always the last round - the other side is whichever finalist isn't
     // the player.
     const finalMatch = t.knockout.rounds[t.knockout.rounds.length-1].matches[0];
     const finalOpp = finalMatch.aTeam.isPlayer ? finalMatch.bTeam : finalMatch.aTeam;
-    showPackOpening(pack, useWinnersPack ? pack.draw() : pack.draw({finalNation: finalOpp?.nation}), {untradable:true});
+    showPackOpening(pack, pack.draw({finalNation: finalOpp?.nation}), {untradable:true});
   } else {
     profile.wm26 = {...t, stage:'done', eliminatedAt:exitStage};
     await sSet('profile', profile);
