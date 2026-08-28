@@ -9507,7 +9507,7 @@ BY_ID.set(MARCELO_QUEST_CARD.id, MARCELO_QUEST_CARD);
 const JACKPOT_PELE_BASE = findBaseCard(9800300);
 const JACKPOT_PELE_CARD = JACKPOT_PELE_BASE ? boostBaseToOv(JACKPOT_PELE_BASE, 115, 9792001, 'ogicon', 'OG Icons', 'ogicon') : null;
 if(JACKPOT_PELE_CARD) JACKPOT_PELE_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p67345931.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=74dddf76ca46aac3c73138904f7582b2';
-if(JACKPOT_PELE_CARD) JACKPOT_PELE_CARD.traits = ['Tricks+', 'Angeschnittener Schuss+', 'Technik+', 'Akrobat.+'];
+if(JACKPOT_PELE_CARD) JACKPOT_PELE_CARD.traits = ['Tricks+', 'Angeschnittener Schuss+', 'Akrobat.+']; // hard cap: every card has at most 3, see resolveCardTraits
 if(JACKPOT_PELE_CARD) BY_ID.set(JACKPOT_PELE_CARD.id, JACKPOT_PELE_CARD);
 // every SBC is repeatable up to this many times unless it sets its own maxCompletions (the 3
 // exclusive-card ones above set maxCompletions:1) - see sbcCompletions()/sbcMaxCompletions() below.
@@ -24465,6 +24465,11 @@ function resolveCardTraits(card){
     traits = (base && base.traits) || [];
   }
   if(!traits.length) return traits;
+  // Hard cap at 3 - a real player's raw EA data can list 5-7 traits, but every card in this game only
+  // ever HAS 3, full stop. Not "has more but only shows 3": nothing beyond the 3rd is read anywhere
+  // (card face, detail modal, gameplay hooks) because this is the single choke point everything reads
+  // traits through - so the rest simply doesn't exist as far as the game is concerned.
+  traits = traits.slice(0,3);
   // Hand-authored PlayStyles (players with no real base card - OG Icons, Legenden, Poeten, Signature
   // Season entries without a baseId) already have their exact elite count baked in per player, on a
   // finer 0-3 scale than the automatic rule below - never run that rule over them a second time.
