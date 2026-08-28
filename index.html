@@ -12623,8 +12623,9 @@ async function toggleCardFavorite(uid){
 // called out - the elite ones already show right on the card face too (see cardEl's
 // playstylePlusHTML), this is the one place the full list (including the normal-tier ones) is visible.
 function playstyleListHTML(card){
-  if(!card.traits || !card.traits.length) return '';
-  const sorted = card.traits.slice().sort((a,b)=>{
+  const traits = resolveCardTraits(card);
+  if(!traits.length) return '';
+  const sorted = traits.slice().sort((a,b)=>{
     const ea = PLAYSTYLE_INFO[a] ? PLAYSTYLE_INFO[a].elite : false;
     const eb = PLAYSTYLE_INFO[b] ? PLAYSTYLE_INFO[b].elite : false;
     return (eb?1:0)-(ea?1:0);
@@ -13491,7 +13492,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // All playstyles the card actually has now show on the card face, elite ("+") ones first - capped
   // at 4 slots total (card space), with Array.prototype.sort's stability keeping elite ones in front
   // and never dropping them for a normal-tier one (some players carry 5-7 traits total).
-  const cardPlaystyles = (!card.isManager && card.traits) ? card.traits.filter(t=>PLAYSTYLE_INFO[t]) : [];
+  const cardPlaystyles = card.isManager ? [] : resolveCardTraits(card).filter(t=>PLAYSTYLE_INFO[t]);
   const displayedPlaystyles = [...cardPlaystyles].sort((a,b)=>(PLAYSTYLE_INFO[b].elite?1:0)-(PLAYSTYLE_INFO[a].elite?1:0)).slice(0,3);
   const playstylePlusHTML = displayedPlaystyles.length ? `<div class="playstyle-plus-row">${displayedPlaystyles.map(t=>`<img class="playstyle-plus-icon${PLAYSTYLE_INFO[t].elite?' is-elite':''}" src="${PLAYSTYLE_INFO[t].icon}" alt="" title="${t}" loading="lazy">`).join('')}</div>` : '';
   const bodyInner = card.isManager
@@ -19278,7 +19279,7 @@ function boostBotXI(xi, slots, forceManager){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:card.traits};
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card)};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
@@ -19690,7 +19691,7 @@ function squadRatingFromSaveData(data){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slot.label);
     if(info) ov += info.bonus;
-    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:card.traits});
+    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card)});
   });
   const chemmed = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   const filled = chemmed.length;
@@ -23913,7 +23914,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:card.traits});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card)});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -24282,6 +24283,17 @@ const PLAYSTYLE_INFO = {
   'Weiter Pass': {icon:'https://drop-assets.ea.com/images/7jwRDD4zkOsqRpc821t73d/16d46d57a5dfc7dd5dd5f8de0fd26a99/Long_Ball_Pass.png', kind:'attack', elite:false},
   'Weiter Pass+': {icon:'https://drop-assets.ea.com/images/59ogaJFyi7JRTBfMF1MBHf/e7fe84a1da6b070a6a41460257b9ec59/Long_Ball_Pass_.png', kind:'attack', elite:true},
 };
+// Many variant/special cards (Icon Swaps, 27 Ratings, Ratings Reload, ...) are hand-typed stat
+// snapshots built from a real baseId rather than spread from the real base card object, so they never
+// picked up its traits field. Rather than backfilling every one of those pools individually (fragile -
+// easy to miss a pool, or one added later), every reader resolves traits through here: use the card's
+// own traits if it has them, otherwise fall through to its base card's (found in BY_ID by baseId) -
+// so any card with a real baseId automatically gets that base player's PlayStyles.
+function resolveCardTraits(card){
+  if(card.traits && card.traits.length) return card.traits;
+  const base = card.baseId ? BY_ID.get(card.baseId) : null;
+  return (base && base.traits) || [];
+}
 
 // PLAYER_IMPACT_WEIGHTS: how much each stat nudges a player's effective attack/defense rating away
 // from their plain Overall - a DELTA around OV, not a replacement for it. A player whose individual
@@ -24304,9 +24316,10 @@ const PLAYER_IMPACT_WEIGHTS = {
 // helps defense and vice versa). Capped separately at ±1.5 so a player stacked with 6-7 playstyles
 // still can't out-swing the ±4 stat-based cap above by much.
 function playerPlaystyleBonus(p, kind){
-  if(!p.traits || !p.traits.length) return 0;
+  const traits = resolveCardTraits(p);
+  if(!traits.length) return 0;
   let bonus = 0;
-  p.traits.forEach(label=>{
+  traits.forEach(label=>{
     const info = PLAYSTYLE_INFO[label];
     if(info && info.kind===kind) bonus += info.elite ? 0.6 : 0.3;
   });
