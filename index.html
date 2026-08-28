@@ -6860,6 +6860,28 @@ const PLAYERS_OGICONS = [
     "theme": "ogicon"
   },
   {
+    "id": 9800309,
+    "n": "Birgit Prinz",
+    "pos": "ST",
+    "ov": 101,
+    "pot": 101,
+    "nat": "Germany",
+    "lg": "OG Icons",
+    "club": "1. FFC Frankfurt",
+    "pac": 83,
+    "sho": 92,
+    "pas": 80,
+    "dri": 82,
+    "defn": 52,
+    "phy": 88,
+    "foot": "Right",
+    "img": "https://cdn3.futbin.com/content/fifa26/img/players/275276.png?fm=png&ixlib=java-2.1.0&verzion=3&w=324&s=088843ead098ebc2f211f66cfcfe2f42",
+    "gk": false,
+    "variant": "ogicon",
+    "variantLabel": "Legende",
+    "theme": "ogicon"
+  },
+  {
     "id": 9800303,
     "n": "Sir Alex Ferguson",
     "club": "Manchester United",
@@ -8125,6 +8147,7 @@ const OG_BECKENBAUER = OGICON_CARDS.find(p=>p.n==='Franz Beckenbauer');
 const OG_RONALDO_NAZARIO = OGICON_CARDS.find(p=>p.n==='Ronaldo Naz\u00e1rio');
 const OG_BEST = OGICON_CARDS.find(p=>p.n==='George Best');
 const OG_HAMM = OGICON_CARDS.find(p=>p.n==='Mia Hamm');
+const OG_PRINZ = OGICON_CARDS.find(p=>p.n==='Birgit Prinz');
 const OG_MANAGER = PLAYERS_OGICONS.find(c=>c.variant==='og_mgr');
 if(OG_MANAGER){
   OG_MANAGER.isManager = true;
@@ -9020,7 +9043,7 @@ const PACKS = [
       return Array.from({length:5}, (_,i)=> i===captainSlot ? (finalCaptain || pick(kapitaene)) : pick(variante));
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
-    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Mia Hamm (105), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
+    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Birgit Prinz (101), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Mia Hamm (105), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
     draw(){
       if(!ogPackTierPools){
         const all = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS).filter(c=>!c.isManager);
@@ -9033,7 +9056,7 @@ const PACKS = [
       // per-slot budgets; every named legend individually clears ~0.5%+ chance per 5-card pack
       const P = {
         ferguson:0.0012, pele:0.003, maradona:0.008, zidane:0.008,
-        cruyff:0.009, hamm:0.0105, beckenbauer:0.012, ronaldoNazario:0.02, best:0.03,
+        cruyff:0.009, hamm:0.0105, beckenbauer:0.012, ronaldoNazario:0.02, prinz:0.025, best:0.03,
         rare:0.06, good:0.18,
       };
       return Array.from({length:5}, ()=>{
@@ -9047,6 +9070,7 @@ const PACKS = [
         if(r<(acc+=P.hamm)) return OG_HAMM;
         if(r<(acc+=P.beckenbauer)) return OG_BECKENBAUER;
         if(r<(acc+=P.ronaldoNazario)) return OG_RONALDO_NAZARIO;
+        if(r<(acc+=P.prinz)) return OG_PRINZ;
         if(r<(acc+=P.best)) return OG_BEST;
         if(r<(acc+=P.rare)) return pick(ogPackTierPools.rare);
         if(r<(acc+=P.good)) return pick(ogPackTierPools.good);
