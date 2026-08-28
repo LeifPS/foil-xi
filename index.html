@@ -9918,6 +9918,14 @@ const SBC_DEFS = [
            req('Kein Spieler unter 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} unter 88`),
            req('2+ Torh\u00fcter', c=>c.filter(x=>cardInPosGroup(x,'GK')).length>=2, c=>`${c.filter(x=>cardInPosGroup(x,'GK')).length} / 2`),
            req('3+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=3, c=>`${c.filter(x=>x.variant!=='base').length} / 3 Sonderkarten`) ]},
+  // --- 10-minute flash SBC: give up Paul Breitner or Jürgen Kohler for a WM Winners Pack, one-time
+  // only. Gated by activeCheck (see BREITNER_KOHLER_SBC_START/_DEADLINE below and its use in
+  // standaloneSbcDefs) rather than a whole quest-hub tile like the WM/PROMO events above - this is a
+  // single ordinary SBC that just happens to only be visible for a short window, not a multi-SBC event.
+  {id:'breitner_oder_kohler', name:'Legenden-Abgabe: Breitner oder Kohler', reward:'wmwinners', size:1, tier:'Einzigartig', maxCompletions:1,
+    activeCheck:()=>breitnerKohlerSbcActive(),
+    desc:'Nur für 10 Minuten verfügbar: Gib Paul Breitner ODER Jürgen Kohler ab. Belohnung: 1x WM Winners Pack. Nur einmal machbar.',
+    reqs:[ req('Paul Breitner oder Jürgen Kohler', c=>c.length===1 && (c[0].id===9970023 || c[0].id===9970015), c=>c.length===1 ? c[0].n : `${c.length} / 1 Karte`) ]},
   // --- Marcelo-Sonderaufgaben limited event (see MARCELO_QUEST_DEADLINE): 8 SBCs, all themed around
   // Marcelo's real career (Linksverteidiger, Fl\u00fcgelspiel, Sele\u00e7\u00e3o, Real Madrid, Box-to-Box-Vielseitigkeit,
   // Ikonen, reine Weltklasse, Balance) - deutlich h\u00e4rter als jedes vorherige Quest-Event (siehe goat_quest
@@ -10196,8 +10204,14 @@ const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'
 // Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
 // opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
 function standaloneSbcDefs(){
-  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id) && !KANE_QUEST_SBC_IDS.includes(sbc.id) && !SYLLA_QUEST_SBC_IDS.includes(sbc.id) && !KROOS_QUEST_SBC_IDS.includes(sbc.id) && !NEYMAR_QUEST_SBC_IDS.includes(sbc.id) && !MARCELO_QUEST_SBC_IDS.includes(sbc.id));
+  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id) && !KANE_QUEST_SBC_IDS.includes(sbc.id) && !SYLLA_QUEST_SBC_IDS.includes(sbc.id) && !KROOS_QUEST_SBC_IDS.includes(sbc.id) && !NEYMAR_QUEST_SBC_IDS.includes(sbc.id) && !MARCELO_QUEST_SBC_IDS.includes(sbc.id) && (!sbc.activeCheck || sbc.activeCheck()));
 }
+// 10-minute flash window for the 'breitner_oder_kohler' SBC above - a plain start/end timestamp check,
+// not the full quest-hub machinery (WM_QUEST_DEADLINE etc.) since this is just one ordinary SBC that
+// happens to disappear from the grid again shortly after it appears.
+const BREITNER_KOHLER_SBC_START = Date.UTC(2026,7,28,20,5,0);
+const BREITNER_KOHLER_SBC_DEADLINE = Date.UTC(2026,7,28,20,15,0);
+function breitnerKohlerSbcActive(){ const t=Date.now(); return t>=BREITNER_KOHLER_SBC_START && t<BREITNER_KOHLER_SBC_DEADLINE; }
 const FEAS_INFO = {
   free:{label:'Erf\u00fcllbar', color:'var(--turf-bright)'},
   squad:{label:'Nur mit Kader-Aufl\u00f6sung', color:'var(--gold)'},
