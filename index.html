@@ -13067,11 +13067,21 @@ async function init(){
 
 // abbreviates coin amounts >=1,000,000 to 3 significant figures (1.32m, 52.2m, 921m, 1.53b, ...t, ...q);
 // below that, full number with German thousands separators as before
+// Short-scale illion ladder, each tier x1000 above the last - m/b/t/q were the original 4; the rest
+// extends the same naming convention (un-/duo-/tre-/quattuor-/quin-/sex-/septen-/octo-/novem- prefixes
+// on -decillion/-vigintillion) all the way up to trigintillion (1e93), for accounts whose balance
+// eventually needs it.
 function formatCoins(n){
   n = Math.round(n);
   const abs = Math.abs(n);
   if(abs < 1000000) return n.toLocaleString('de-DE');
-  const tiers = [[1e6,'m'],[1e9,'b'],[1e12,'t'],[1e15,'q']];
+  const tiers = [
+    [1e6,'m'],[1e9,'b'],[1e12,'t'],[1e15,'q'],[1e18,'qi'],[1e21,'sx'],[1e24,'se'],[1e27,'ok'],
+    [1e30,'no'],[1e33,'dz'],[1e36,'udz'],[1e39,'ddz'],[1e42,'tdz'],[1e45,'qdz'],[1e48,'qidz'],
+    [1e51,'sxdz'],[1e54,'sedz'],[1e57,'okdz'],[1e60,'nodz'],[1e63,'vg'],[1e66,'uvg'],[1e69,'dvg'],
+    [1e72,'tvg'],[1e75,'qvg'],[1e78,'qivg'],[1e81,'sxvg'],[1e84,'sevg'],[1e87,'okvg'],[1e90,'novg'],
+    [1e93,'te'],
+  ];
   let i = tiers.length-1;
   while(i>0 && abs < tiers[i][0]) i--;
   let [div, suffix] = tiers[i];
@@ -13098,13 +13108,23 @@ function positionEligibility(card, slotLabel){
   return {rankIndex:idx, bonus: positionBonusTier(card.ov, idx)};
 }
 // inverse of formatCoins() - lets coin input fields accept shorthand like "1.2m"/"52.2m"/"921m"/"1.53b"
-// (also t/q), in addition to a plain number. Returns NaN if the string isn't a valid number/shorthand.
+// (also every tier up through "te", same ladder as formatCoins), in addition to a plain number. Returns
+// NaN if the string isn't a valid number/shorthand. The end-anchor ($) makes alternative order harmless
+// even though some suffixes are prefixes of others ("q" vs "qi"/"qdz"/"qvg"/"qivg") - regex backtracking
+// tries every alternative until one lets the whole pattern reach end of string.
+const COIN_SUFFIX_MULT = {
+  m:1e6, b:1e9, t:1e12, q:1e15, qi:1e18, sx:1e21, se:1e24, ok:1e27,
+  no:1e30, dz:1e33, udz:1e36, ddz:1e39, tdz:1e42, qdz:1e45, qidz:1e48,
+  sxdz:1e51, sedz:1e54, okdz:1e57, nodz:1e60, vg:1e63, uvg:1e66, dvg:1e69,
+  tvg:1e72, qvg:1e75, qivg:1e78, sxvg:1e81, sevg:1e84, okvg:1e87, novg:1e90,
+  te:1e93,
+};
 function parseCoinInput(str){
   if(str==null) return NaN;
   const s = String(str).trim().replace(',', '.');
-  const m = s.match(/^(-?\d+(?:\.\d+)?)\s*([mbtq])?$/i);
+  const m = s.match(/^(-?\d+(?:\.\d+)?)\s*(qivg|qidz|sxvg|sevg|okvg|novg|udz|ddz|tdz|qdz|sxdz|sedz|okdz|nodz|uvg|dvg|tvg|qvg|qi|sx|se|ok|no|dz|vg|te|m|b|t|q)?$/i);
   if(!m) return NaN;
-  const mult = {m:1e6,b:1e9,t:1e12,q:1e15}[(m[2]||'').toLowerCase()] || 1;
+  const mult = COIN_SUFFIX_MULT[(m[2]||'').toLowerCase()] || 1;
   return parseFloat(m[1]) * mult;
 }
 function updateCoinDisplay(){ document.getElementById('coin-display').textContent = formatCoins(profile.coins); }
