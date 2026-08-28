@@ -8129,12 +8129,18 @@ const MYSTERY_RARE_ROSTER = (function(){
   const targets = [104,105,106,107,108];
   return picks.slice(0,5).map((base,i)=>boostBaseToOv(base, targets[i], 9780000+i, 'mysteryrare', 'Mystery Elite', 'mysteryrare'));
 })();
+// keyed by baseId so it keeps applying automatically to whichever real player the roster above
+// currently resolves to for that slot - the ratings data shifts over time (Donnarumma has since
+// overtaken Alisson as the real DB's top-rated keeper, Putellas now edges out as the 5th/next-best-
+// outfield pick), the img override just needs to be ready for whoever ends up there.
 const MYSTERY_RARE_IMG_OVERRIDE = {
   252371: 'https://cdn3.futbin.com/content/fifa26/img/players/p151247315.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=6dba18b24e49ff9c6e463e3e239cfb61', // J. Bellingham
   212831: 'https://cdn3.futbin.com/content/fifa25/img/players/p50544479.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=9f49dabb53bc97d2c2f05bb989ec6d87', // Alisson
   203376: 'https://cdn3.futbin.com/content/fifa26/img/players/p167975536.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=fcbd79be74a28deed8275ba74513cedf', // V. van Dijk
   209331: 'https://cdn3.futbin.com/content/fifa25/img/players/p100872627.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=7c3ea53215e51f771307930a2ae14a65', // M. Salah
   231747: 'https://cdn3.futbin.com/content/fifa25/img/players/p84117827.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=d1d6ce066b85e6646ebec095d869970d', // K. Mbappé
+  227203: 'https://cdn3.futbin.com/content/fifa26/img/players/p151222147.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=0b8500bdbd97f36342b24147ed83f84e', // A. Putellas
+  230621: 'https://cdn3.futbin.com/content/fifa24/img/players/p134448349.png?fm=png&ixlib=java-2.1.0&w=448&s=bb97952c27279194b2426e7f1050f3a7', // G. Donnarumma
 };
 MYSTERY_RARE_ROSTER.forEach(c=>{ if(MYSTERY_RARE_IMG_OVERRIDE[c.baseId]) c.img = MYSTERY_RARE_IMG_OVERRIDE[c.baseId]; BY_ID.set(c.id,c); });
 // Recompute every special/variant card's substats from its real base card's own DB values plus a flat
