@@ -24023,7 +24023,11 @@ function pickScorer(players){
     const sho = p.sho!=null ? p.sho : ov;
     const scoreSkill = ov*0.55 + sho*0.45;
     const ratingFactor = Math.pow(1.05, scoreSkill-72);
-    const w = posW * ratingFactor;
+    // finishing-flavoured PlayStyles (Finesse/Power/Chip/Low Driven Shot, Acrobatic, Precision Header)
+    // make a player disproportionately likely to be THE one who scores among their own teammates -
+    // same "doesn't change how many goals, only who gets them" scope as the SHO blend above.
+    const finishMult = 1 + playerTraitScore(p, FINISHING_TRAITS)*0.35;
+    const w = posW * ratingFactor * finishMult;
     const reps = Math.max(1, Math.round(w*3));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
@@ -24076,7 +24080,10 @@ function kickCouldDecideShootout(myScore, oppScore, myTaken, oppTaken, side, pan
 function penaltyKickerSkill(p){
   const pos = posGroup2(p.pos);
   const posMult = pos==='FWD' ? 1.18 : pos==='MID' ? 1.0 : pos==='DEF' ? 0.78 : 0.35;
-  return (p.sho!=null ? p.sho : (p.ov||70)) * posMult;
+  // a real Dead Ball specialist is a genuinely better penalty taker than their Shooting stat alone
+  // suggests - also bumps them up buildPenaltyOrder's ranking, so they actually step up earlier
+  const deadBallMult = 1 + playerTraitTier(p, 'Ruhender Ball')*0.05;
+  return (p.sho!=null ? p.sho : (p.ov||70)) * posMult * deadBallMult;
 }
 // the automatic, pre-shootout kicker order: best takers step up first (exactly like a real captain/
 // coach would set the list), and - critically - every kicker is used at most once per full pass
@@ -24097,7 +24104,9 @@ function penaltyKickProb(shooter, keeper, teamDiff){
   const shooterSkill = penaltyKickerSkill(shooter);
   // a goalkeeper's DEF stat is their "Paraden" (saves) stat (see STAT_DE_GK) - the real save-relevant
   // number, not their overall rating
-  const keeperAbility = keeper ? (keeper.defn!=null ? keeper.defn : (keeper.ov||75)) : 75;
+  // a keeper with real shot-stopping PlayStyles (Deflector/1v1 Close Down/Far Reach) reads penalties
+  // better than their Paraden stat alone suggests
+  const keeperAbility = (keeper ? (keeper.defn!=null ? keeper.defn : (keeper.ov||75)) : 75) + (keeper ? playerTraitScore(keeper, GK_SHOTSTOP_TRAITS)*4 : 0);
   const p = 0.76 + (shooterSkill-88)/260 - (keeperAbility-80)/260 + teamDiff/500;
   return clamp(p, 0.35, 0.94);
 }
@@ -24172,7 +24181,12 @@ function pickCardRecipient(players){
     // (an average Physicality stat), not a rewrite of the position weighting above
     const phy = p.phy!=null ? p.phy : (p.ov||75);
     const phyW = clamp(1 + (75-phy)/100, 0.6, 1.5);
-    const reps = Math.max(1, Math.round(w*phyW*2));
+    // duel-hungry PlayStyles (Slide Tackle, Bruiser, Enforcer, Relentless) fly into more challenges and
+    // pick up more cards for it; ones built around reading the game instead (Intercept, Anticipate,
+    // Block) commit fewer needless fouls in the first place - both nudge this specific player's own
+    // foul rate, not just a flat team-wide number.
+    const traitFoulMult = clamp(1 + playerTraitScore(p, AGGRESSIVE_DEFENSE_TRAITS)*0.4 - playerTraitScore(p, CLEAN_DEFENSE_TRAITS)*0.3, 0.5, 2.2);
+    const reps = Math.max(1, Math.round(w*phyW*traitFoulMult*2));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
   return weighted[Math.floor(Math.random()*weighted.length)] || players[0];
@@ -24181,7 +24195,7 @@ function pickCardRecipient(players){
 // average Defending - a dribble-heavy attack draws slightly more penalties against a weak back line.
 // Left null by any caller that doesn't have both sides handy, which keeps the flat 8% baseline exactly
 // as before.
-function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDefenseAvg=null){
+function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDefenseAvg=null, oppPlayers=[]){
   // a physically weaker team as a whole fouls a bit more often - same 75-baseline nudge as
   // pickCardRecipient above, just applied to the team's overall card rate instead of who takes them
   const avgPhy = players.length ? players.reduce((s,p)=>s+(p.phy!=null?p.phy:(p.ov||75)),0)/players.length : 75;
@@ -24226,7 +24240,14 @@ function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDef
     ? clamp(0.08 * (1 + (attackDriAvg-oppDefenseAvg)/300), 0.04, 0.14)
     : 0.08;
   if(Math.random() < penaltyChance){
-    penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<0.78}; // ~78% real-world conversion rate
+    // a Dead Ball specialist on the taking team converts more often; an opposing keeper with real
+    // shot-stopping PlayStyles (Deflector/1v1 Close Down/Far Reach) saves more - each tier (normal/
+    // elite) nudges the ~78% real-world baseline by 4 points, capped so it stays a nudge, not a coinflip
+    const deadBallTier = teamBestTraitTier(players, DEADBALL_TRAITS);
+    const oppGK = (oppPlayers||[]).find(p=>posGroup2(mainPos(p.pos))==='GK');
+    const gkStopTier = oppGK ? playerTraitScore(oppGK, GK_SHOTSTOP_TRAITS) : 0;
+    const pkChance = clamp(0.78 + deadBallTier*0.04 - gkStopTier*0.04, 0.62, 0.90);
+    penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<pkChance};
   }
   return {cards, redMinute, sentOffPlayer, penalty};
 }
@@ -24382,6 +24403,36 @@ function resolveCardTraits(card){
     return shouldUpgrade ? (PLAYSTYLE_ELITE_OF[label] || label) : label;
   });
 }
+
+// Beyond the flat team-wide attack/defense nudge below, specific PlayStyles hook into specific match
+// mechanics that already exist (who scores, who picks up cards, penalty conversion) - so a Dead Ball
+// specialist actually converts more penalties, a Slide Tackle/Bruiser type actually racks up more
+// cards, and a clinical finisher actually gets picked as the scorer more often among their own
+// teammates, instead of every PlayStyle only ever moving one aggregate number.
+// tier: 0 = doesn't have it, 1 = has the normal version, 2 = has the elite ("+") version.
+function playerTraitTier(p, baseLabel){
+  const traits = resolveCardTraits(p);
+  if(traits.includes(baseLabel+'+')) return 2;
+  if(traits.includes(baseLabel)) return 1;
+  return 0;
+}
+// sums 0.3 (normal) / 0.6 (elite) across every label in the list this player actually has - used to
+// bias per-player weights (e.g. scorer selection) rather than a single team-wide number
+function playerTraitScore(p, baseLabels){
+  let score = 0;
+  baseLabels.forEach(lbl=>{ const tier=playerTraitTier(p, lbl); score += tier===2?0.6:tier===1?0.3:0; });
+  return score;
+}
+function teamBestTraitTier(players, baseLabels){
+  let best = 0;
+  (players||[]).forEach(p=>{ baseLabels.forEach(lbl=>{ best = Math.max(best, playerTraitTier(p, lbl)); }); });
+  return best;
+}
+const FINISHING_TRAITS = ['Angeschn. Schuss','Powerschuss','Lupfer','Flacher Vollspannschuss','Akrobat.','Präziser Kopfball'];
+const DEADBALL_TRAITS = ['Ruhender Ball'];
+const AGGRESSIVE_DEFENSE_TRAITS = ['Grätsche','Kante','Durchsetzungskraft','Unerbittlich'];
+const CLEAN_DEFENSE_TRAITS = ['Abfangen','Antizipation','Block'];
+const GK_SHOTSTOP_TRAITS = ['Deflector','Herauskommen','Große Reichweite'];
 
 // PLAYER_IMPACT_WEIGHTS: how much each stat nudges a player's effective attack/defense rating away
 // from their plain Overall - a DELTA around OV, not a replacement for it. A player whose individual
@@ -24669,8 +24720,8 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   // deliberately not the heavier weighted computeTeamProfile below, just enough for the penalty-chance
   // nudge (Dribbling vs. Defending) in planCardsAndPenalties
   const avgStat = (players, key) => players.length ? players.reduce((s,p)=>s+(p[key]!=null?p[key]:(p.ov||75)),0)/players.length : 75;
-  const myIncidents = planCardsAndPenalties(myPress.cardMult, myPlayers, avgStat(myPlayers,'dri'), avgStat(oppPlayers,'defn'));
-  const oppIncidents = planCardsAndPenalties(oppPress.cardMult, oppPlayers, avgStat(oppPlayers,'dri'), avgStat(myPlayers,'defn'));
+  const myIncidents = planCardsAndPenalties(myPress.cardMult, myPlayers, avgStat(myPlayers,'dri'), avgStat(oppPlayers,'defn'), oppPlayers);
+  const oppIncidents = planCardsAndPenalties(oppPress.cardMult, oppPlayers, avgStat(oppPlayers,'dri'), avgStat(myPlayers,'defn'), myPlayers);
 
   const myProfileRaw0 = computeTeamProfile(myPlayers, myRating);
   const oppProfileRaw0 = computeTeamProfile(oppPlayers, oppRating);
