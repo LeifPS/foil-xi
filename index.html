@@ -1187,11 +1187,11 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
   100%{background-position:-100% 0%;}
 }
 .pcard .nat-club-icons{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:3px;height:16px;}
-.pcard .playstyle-plus-row{position:absolute;left:-15px;top:38%;transform:translateY(-50%);z-index:3;display:flex;flex-direction:column;gap:8px;}
+.pcard .playstyle-plus-row{position:absolute;left:-15px;top:28%;transform:translateY(-50%);z-index:3;display:flex;flex-direction:column;gap:8px;}
 .pcard .playstyle-plus-icon{width:28px;height:28px;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7));}
-.pcard.mini .playstyle-plus-row{left:-8px;top:38%;gap:4px;}
+.pcard.mini .playstyle-plus-row{left:-8px;top:28%;gap:4px;}
 .pcard.mini .playstyle-plus-icon,.pcard.xs .playstyle-plus-icon{width:17px;height:17px;}
-.pcard.xs .playstyle-plus-row{left:-7px;top:38%;gap:4px;}
+.pcard.xs .playstyle-plus-row{left:-7px;top:28%;gap:4px;}
 .pcard .nc-flag{width:20px;height:14px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.15);}
 .pcard .nc-flag-mono{width:20px;height:14px;border-radius:2px;background:rgba(255,255,255,.12);color:var(--muted);
   font-family:'JetBrains Mono';font-size:6.5px;font-weight:700;display:flex;align-items:center;justify-content:center;}
@@ -6692,8 +6692,8 @@ const PLAYERS_OGICONS = [
     "id": 9800300,
     "n": "Pelé",
     "pos": "ST, CAM, RW",
-    "ov": 111,
-    "pot": 111,
+    "ov": 115,
+    "pot": 115,
     "nat": "Brazil",
     "lg": "OG Icons",
     "club": "Santos",
@@ -6706,6 +6706,7 @@ const PLAYERS_OGICONS = [
     "foot": "Right",
     "img": "https://cdn3.futbin.com/content/fifa25/img/players/237067.png?fm=png&ixlib=java-2.1.0&verzion=2&w=512&s=fc840d97b0411f924f5f1037768bcff0",
     "gk": false,
+    "traits": ["Tricks+", "Angeschnittener Schuss+", "Technik+", "Akrobat.+"],
     "variant": "ogicon",
     "variantLabel": "Legende",
     "theme": "ogicon"
@@ -13487,11 +13488,12 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const favoriteBadge = (opts.onToggleFavorite && !card.isManager)
     ? `<div class="favorite-badge${card.favorited?' is-fav':''}" title="${card.favorited?'Favorit entfernen':'Als Favorit markieren (nicht in SBCs/Handel/Verkauf nutzbar)'}">${favoriteStarSvg}</div>`
     : '';
-  // Elite playstyles ("+", the rarer/stronger tier - see PLAYSTYLE_INFO) show right on the card face;
-  // normal-tier ones only show in the detail view (openCardDetailModal) - keeps the compact card from
-  // getting cluttered given some players carry 5-7 of them.
-  const elitePlaystyles = (!card.isManager && card.traits) ? card.traits.filter(t=>PLAYSTYLE_INFO[t] && PLAYSTYLE_INFO[t].elite) : [];
-  const playstylePlusHTML = elitePlaystyles.length ? `<div class="playstyle-plus-row">${elitePlaystyles.map(t=>`<img class="playstyle-plus-icon" src="${PLAYSTYLE_INFO[t].icon}" alt="" title="${t}" loading="lazy">`).join('')}</div>` : '';
+  // All playstyles the card actually has now show on the card face, elite ("+") ones first - capped
+  // at 4 slots total (card space), with Array.prototype.sort's stability keeping elite ones in front
+  // and never dropping them for a normal-tier one (some players carry 5-7 traits total).
+  const cardPlaystyles = (!card.isManager && card.traits) ? card.traits.filter(t=>PLAYSTYLE_INFO[t]) : [];
+  const displayedPlaystyles = [...cardPlaystyles].sort((a,b)=>(PLAYSTYLE_INFO[b].elite?1:0)-(PLAYSTYLE_INFO[a].elite?1:0)).slice(0,4);
+  const playstylePlusHTML = displayedPlaystyles.length ? `<div class="playstyle-plus-row">${displayedPlaystyles.map(t=>`<img class="playstyle-plus-icon${PLAYSTYLE_INFO[t].elite?' is-elite':''}" src="${PLAYSTYLE_INFO[t].icon}" alt="" title="${t}" loading="lazy">`).join('')}</div>` : '';
   const bodyInner = card.isManager
     ? `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
@@ -13535,7 +13537,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // Level-0 cards have no level-badge to click - the elite-playstyle row (only present when there's
   // something to actually show) doubles as the click target for those, so a fresh pull still has a way
   // to see its full playstyle list without needing to level up first.
-  if(elitePlaystyles.length && card.uid){
+  if(displayedPlaystyles.length && card.uid){
     div.querySelectorAll('.playstyle-plus-row').forEach(row=>{
       row.style.cursor = 'pointer';
       row.addEventListener('click', (e)=>{ e.stopPropagation(); openCardXpModal(card); });
