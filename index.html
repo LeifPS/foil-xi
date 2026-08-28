@@ -24025,30 +24025,66 @@ function fallbackScorerPool(){
   FALLBACK_SCORER_POOL = weighted;
   return weighted;
 }
-function pickScorer(players){
+// oppPlayers/opts are optional so every existing call site keeps working - see buildMatchEvents and
+// the penalty-scorer calls in buildDecisiveMatch for what actually gets passed.
+// opts: {minute, paceBonus} - minute gates Gamechanger's late-goal bonus, paceBonus (the same ±0.15
+// counter-attack number already computed for computeLambda) scales Raserei/Schneller Schritt.
+function pickScorer(players, oppPlayers=null, opts={}){
   if(!players || !players.length){
     const pool = fallbackScorerPool();
     const p = pool[Math.floor(Math.random()*pool.length)];
     return {n:p.n, img:p.img, id:p.id, ov:p.ov};
   }
+  const minute = opts.minute!=null ? opts.minute : 45;
+  const paceBonus = clamp(opts.paceBonus||0, 0, 0.15); // only ever a bonus - a pace DISadvantage never penalises Raserei/Schneller Schritt holders
+  const scoreSkillOf = p => (p.ov||75)*0.55 + (p.sho!=null?p.sho:(p.ov||75))*0.45;
+  // === providers: these PlayStyles boost a TEAMMATE's chance of scoring, not their own - a
+  // genuinely different mechanic from every self-boosting finishing trait above, and each targets a
+  // different kind of teammate (the single most likely finisher, the whole forward line, the pace
+  // outlet, or everyone a little via constant combination play).
+  let bestTeammate=null, bestSkill=-1, fastestTeammate=null, fastestPac=-1;
+  players.forEach(p=>{
+    const skill = scoreSkillOf(p); if(skill>bestSkill){ bestSkill=skill; bestTeammate=p; }
+    const pac = p.pac!=null?p.pac:(p.ov||75); if(pac>fastestPac){ fastestPac=pac; fastestTeammate=p; }
+  });
+  let assistAll=0, assistFwd=0, assistBest=0, assistPace=0;
+  players.forEach(provider=>{
+    assistAll += hookValue(provider,'assistAll');
+    assistFwd += hookValue(provider,'assistFwd');
+    assistBest += hookValue(provider,'assistBest');
+    assistPace += hookValue(provider,'assistPace');
+  });
+  // === opponent-side suppression: a specific opposing PlayStyle dampens a specific type of attacker
+  // on THIS team - a Bruiser centre-back shackles the opposing striker, a Jockey full-back nullifies
+  // opposing wingers, a keeper's positioning/reach/claiming denies a specific kind of finish -
+  // completely different from a flat team-wide defense number.
+  let fwdSuppress=0, wideSuppress=0, longshotSuppress=0, aerialSuppress=0;
+  if(oppPlayers && oppPlayers.length){
+    oppPlayers.forEach(op=>{ fwdSuppress += hookValue(op,'shutdownOppFwd'); wideSuppress += hookValue(op,'shutdownOppWide'); });
+    const oppGK = oppPlayers.find(p=>posGroup2(mainPos(p.pos))==='GK');
+    if(oppGK){ fwdSuppress += hookValue(oppGK,'gkAnti1v1'); longshotSuppress += hookValue(oppGK,'gkAntiLongshot'); aerialSuppress += hookValue(oppGK,'gkAntiAerial'); }
+  }
+  // own team's quick-outlet (long throw / keeper distribution -> fast transition) - boosts the whole
+  // forward line's chance of finishing the resulting counter
+  let outlet=0; players.forEach(p=>{ outlet += hookValue(p,'counterOutlet'); });
+
   const weighted = [];
   players.forEach(p=>{
     const g = posGroup2(p.pos);
+    const pos = mainPos(p.pos);
     const posW = g==='FWD' ? 4.4 : g==='MID' ? 2.4 : g==='DEF' ? 0.55 : 0.04;
-    const ov = p.ov || 75;
-    // rating matters within a position too: an elite forward should noticeably outscore a mediocre one -
-    // blended with Shooting rather than pure Overall, so a clinical finisher scores more often than a
-    // teammate with the same Overall but a weaker shot, and vice versa. Doesn't change how MANY goals a
-    // match has (decided before this function is ever called) - only WHO scores them, so it never
-    // touches win probability, exactly the "SHO, zweite Rolle" row.
-    const sho = p.sho!=null ? p.sho : ov;
-    const scoreSkill = ov*0.55 + sho*0.45;
-    const ratingFactor = Math.pow(1.05, scoreSkill-72);
-    // finishing-flavoured PlayStyles (Finesse/Power/Chip/Low Driven Shot, Acrobatic, Precision Header)
-    // make a player disproportionately likely to be THE one who scores among their own teammates -
-    // same "doesn't change how many goals, only who gets them" scope as the SHO blend above.
-    const finishMult = 1 + playerTraitScore(p, FINISH_WEIGHT)*0.35;
-    const w = posW * ratingFactor * finishMult;
+    const ratingFactor = Math.pow(1.05, scoreSkillOf(p)-72);
+    let mult = 1;
+    mult *= 1 + hookValue(p,'scorerSelf')*0.35;
+    if(minute>75) mult *= 1 + hookValue(p,'scorerLate')*0.45; // Gamechanger: a real super-sub/late-impact bonus, worthless before minute 75
+    if(paceBonus>0) mult *= 1 + hookValue(p,'scorerPace')*(paceBonus/0.15)*0.3; // Raserei/Schneller Schritt: only pays off when this team actually has the pace edge
+    mult *= 1 + assistAll*0.5 + (p===bestTeammate?assistBest*0.7:0) + (g==='FWD'?assistFwd*0.6:0) + (p===fastestTeammate?assistPace*0.6:0);
+    if(g==='FWD') mult *= clamp(1-fwdSuppress*0.12, 0.55, 1);
+    if(pos==='LW'||pos==='RW'||pos==='LM'||pos==='RM') mult *= clamp(1-wideSuppress*0.12, 0.55, 1);
+    if(playerTraitTier(p,'Powerschuss')) mult *= clamp(1-longshotSuppress*0.15, 0.55, 1);
+    if(playerTraitTier(p,'Präziser Kopfball')||playerTraitTier(p,'Kopfballmacht')) mult *= clamp(1-aerialSuppress*0.15, 0.55, 1);
+    if(g==='FWD') mult *= 1 + outlet*0.2;
+    const w = posW * ratingFactor * clamp(mult, 0.4, 3);
     const reps = Math.max(1, Math.round(w*3));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
@@ -24058,7 +24094,7 @@ function pickScorer(players){
   // can show the correct badge/rating for an opponent's card too, not just my own
   return {n:chosen.n, img:chosen.img, id:chosen.id, uid:chosen.uid, ov:chosen.ov, level:chosen.level};
 }
-function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, myRedMinute=null, oppRedMinute=null, mySentOff=null, oppSentOff=null){
+function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, myRedMinute=null, oppRedMinute=null, mySentOff=null, oppSentOff=null, myPaceBonus=0, oppPaceBonus=0){
   const used = new Set();
   function uniqueMinute(){
     let m; let tries=0;
@@ -24068,11 +24104,11 @@ function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90
   const events = [];
   for(let i=0;i<myGoals;i++){
     const minute = uniqueMinute()+minuteOffset;
-    events.push({minute, side:'me', scorer:pickScorer(scorerPoolExcluding(myPlayers, myRedMinute, mySentOff, minute))});
+    events.push({minute, side:'me', scorer:pickScorer(scorerPoolExcluding(myPlayers, myRedMinute, mySentOff, minute), oppPlayers, {minute, paceBonus:myPaceBonus})});
   }
   for(let i=0;i<oppGoals;i++){
     const minute = uniqueMinute()+minuteOffset;
-    events.push({minute, side:'opp', scorer:pickScorer(scorerPoolExcluding(oppPlayers, oppRedMinute, oppSentOff, minute))});
+    events.push({minute, side:'opp', scorer:pickScorer(scorerPoolExcluding(oppPlayers, oppRedMinute, oppSentOff, minute), myPlayers, {minute, paceBonus:oppPaceBonus})});
   }
   events.sort((a,b)=>a.minute-b.minute);
   return events;
@@ -24125,9 +24161,8 @@ function penaltyKickProb(shooter, keeper, teamDiff){
   const shooterSkill = penaltyKickerSkill(shooter);
   // a goalkeeper's DEF stat is their "Paraden" (saves) stat (see STAT_DE_GK) - the real save-relevant
   // number, not their overall rating
-  // a keeper with real shot-stopping PlayStyles (Deflector/1v1 Close Down/Far Reach) reads penalties
-  // better than their Paraden stat alone suggests
-  const keeperAbility = (keeper ? (keeper.defn!=null ? keeper.defn : (keeper.ov||75)) : 75) + (keeper ? playerTraitScore(keeper, GK_SAVE_WEIGHT)*4 : 0);
+  // a keeper with the Deflector PlayStyle reads penalties better than their Paraden stat alone suggests
+  const keeperAbility = (keeper ? (keeper.defn!=null ? keeper.defn : (keeper.ov||75)) : 75) + (keeper ? hookValue(keeper,'gkSave')*4 : 0);
   const p = 0.76 + (shooterSkill-88)/260 - (keeperAbility-80)/260 + teamDiff/500;
   return clamp(p, 0.35, 0.94);
 }
@@ -24192,7 +24227,10 @@ const TACTIC_PRESSING = {
   low:    {label:'Tiefes Pressing',  attackMod:-1,   cardMult:0.6, desc:'Weniger Risiko und Karten, aber weniger Balleroberungen.'},
 };
 const DEFAULT_TACTICS = {mentality:'balanced', pressing:'normal'};
-function pickCardRecipient(players){
+// pressAggressiveness: the team's own pre-physical-adjustment cardMult (1.6 under Hohes Pressing, 1.0
+// normal, 0.6 tief) - only used by Ruhepol's pressDiscipline hook, which specifically rewards staying
+// calm precisely when the team's OWN tactic is what's inflating the foul rate.
+function pickCardRecipient(players, pressAggressiveness=1){
   if(!players || !players.length) return {n:'Unbekannt'};
   const weighted = [];
   players.forEach(p=>{
@@ -24202,11 +24240,11 @@ function pickCardRecipient(players){
     // (an average Physicality stat), not a rewrite of the position weighting above
     const phy = p.phy!=null ? p.phy : (p.ov||75);
     const phyW = clamp(1 + (75-phy)/100, 0.6, 1.5);
-    // duel-hungry PlayStyles (Slide Tackle, Bruiser, Enforcer, Relentless) fly into more challenges and
-    // pick up more cards for it; ones built around reading the game instead (Intercept, Anticipate,
-    // Block) commit fewer needless fouls in the first place - both nudge this specific player's own
-    // foul rate, not just a flat team-wide number.
-    const traitFoulMult = clamp(1 + playerTraitScore(p, AGGRESSION_WEIGHT)*0.4 - playerTraitScore(p, DISCIPLINE_WEIGHT)*0.3, 0.5, 2.2);
+    // Grätsche/Durchsetzungskraft raise THIS player's own foul rate; Abfangen/Block lower it; Ruhepol
+    // lowers it further specifically under an aggressive own pressing tactic - three separate hooks,
+    // not one shared bucket.
+    const pressExtra = hookValue(p,'pressDiscipline') * Math.max(0, pressAggressiveness-1) * 0.5;
+    const traitFoulMult = clamp(1 + hookValue(p,'foulSelf')*0.4 - hookValue(p,'discipline')*0.3 - pressExtra, 0.5, 2.2);
     const reps = Math.max(1, Math.round(w*phyW*traitFoulMult*2));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
@@ -24217,6 +24255,7 @@ function pickCardRecipient(players){
 // Left null by any caller that doesn't have both sides handy, which keeps the flat 8% baseline exactly
 // as before.
 function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDefenseAvg=null, oppPlayers=[]){
+  const pressAggressiveness = cardMult; // capture the tactic-driven value before the physical reweighting below - Ruhepol's pressDiscipline hook needs the ORIGINAL tactic signal
   // a physically weaker team as a whole fouls a bit more often - same 75-baseline nudge as
   // pickCardRecipient above, just applied to the team's overall card rate instead of who takes them
   const avgPhy = players.length ? players.reduce((s,p)=>s+(p.phy!=null?p.phy:(p.ov||75)),0)/players.length : 75;
@@ -24232,7 +24271,7 @@ function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDef
   for(let i=0;i<numYellows;i++){
     if(redMinute!=null) break; // already sent off - no further cards possible
     const minute = minutes[i];
-    const player = pickCardRecipient(players);
+    const player = pickCardRecipient(players, pressAggressiveness);
     const count = (yellowCounts.get(player.n)||0)+1;
     yellowCounts.set(player.n, count);
     if(count>=2){
@@ -24243,8 +24282,11 @@ function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDef
       cards.push({minute, type:'yellow', player});
     }
   }
-  if(redMinute==null && Math.random() < 0.012*cardMult){ // ~1.2% chance of a straight red card per team per match at normal pressing
-    sentOffPlayer = pickCardRecipient(players);
+  // Unerbittlich (redCardReduce): a genuinely disciplined side is less likely to see a straight red
+  // specifically - it doesn't touch the yellow-card rate above at all, a completely separate lever
+  const straightRedChance = 0.012*cardMult * clamp(1-teamBestHookValue(players,'redCardReduce')*0.3, 0.5, 1);
+  if(redMinute==null && Math.random() < straightRedChance){ // ~1.2% baseline chance of a straight red card per team per match at normal pressing
+    sentOffPlayer = pickCardRecipient(players, pressAggressiveness);
     // if this player already picked up a yellow above, the straight red must come after it -
     // otherwise the same "red shown before yellow" bug could happen via this independent roll
     const existingMinute = cards.filter(c=>c.player.n===sentOffPlayer.n).reduce((max,c)=>Math.max(max,c.minute),0);
@@ -24256,17 +24298,21 @@ function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDef
   let penalty = null;
   // ~8% baseline chance of a penalty per team per match, nudged by how much this team's Dribbling
   // outclasses the opponent's Defending - stays close to the old flat 8% for a typical matchup, only
-  // drifts for a real mismatch, and is capped so it never gets wildly more/less common
-  const penaltyChance = (attackDriAvg!=null && oppDefenseAvg!=null)
+  // drifts for a real mismatch, and is capped so it never gets wildly more/less common. Antizipation
+  // on the DEFENDING side (oppPlayers, relative to this penalty roll) further lowers it - reading the
+  // game well enough to not concede the penalty in the first place, a separate lever from the
+  // Dead-Ball/save mechanics below which only affect an ALREADY-AWARDED penalty's outcome.
+  const penaltyChanceBase = (attackDriAvg!=null && oppDefenseAvg!=null)
     ? clamp(0.08 * (1 + (attackDriAvg-oppDefenseAvg)/300), 0.04, 0.14)
     : 0.08;
+  const penaltyChance = penaltyChanceBase * clamp(1-teamBestHookValue(oppPlayers,'antiPenalty')*0.3, 0.6, 1);
   if(Math.random() < penaltyChance){
     // a Dead Ball specialist on the taking team converts more often; an opposing keeper with real
-    // shot-stopping PlayStyles (Deflector/1v1 Close Down/Far Reach) saves more - each tier (normal/
-    // elite) nudges the ~78% real-world baseline by 4 points, capped so it stays a nudge, not a coinflip
-    const deadBallTier = teamBestTraitTier(players, DEADBALL_TRAITS);
+    // shot-stopping PlayStyles (Deflector) saves more - each tier (normal/elite) nudges the ~78%
+    // real-world baseline, capped so it stays a nudge, not a coinflip
+    const deadBallTier = teamBestTraitTier(players, ['Ruhender Ball']);
     const oppGK = (oppPlayers||[]).find(p=>posGroup2(mainPos(p.pos))==='GK');
-    const gkStopTier = oppGK ? playerTraitScore(oppGK, GK_SAVE_WEIGHT) : 0;
+    const gkStopTier = oppGK ? hookValue(oppGK,'gkSave') : 0;
     const pkChance = clamp(0.78 + deadBallTier*0.04 - gkStopTier*0.04, 0.62, 0.90);
     penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<pkChance};
   }
@@ -24430,43 +24476,117 @@ function resolveCardTraits(card){
 // specialist actually converts more penalties, a Slide Tackle/Bruiser type actually racks up more
 // cards, and a clinical finisher actually gets picked as the scorer more often among their own
 // teammates, instead of every PlayStyle only ever moving one aggregate number.
-// tier: 0 = doesn't have it, 1 = has the normal version, 2 = has the elite ("+") version.
+// tier: 0 = doesn't have it, 1 = has the normal version, 2 = has the elite ("+") version. Looks the
+// elite label up via PLAYSTYLE_ELITE_OF rather than assuming baseLabel+'+' - that assumption breaks
+// for e.g. "Angeschn. Schuss" whose real elite label is "Angeschnittener Schuss+", a different spelling.
 function playerTraitTier(p, baseLabel){
   const traits = resolveCardTraits(p);
-  if(traits.includes(baseLabel+'+')) return 2;
+  const eliteLabel = PLAYSTYLE_ELITE_OF[baseLabel];
+  if(eliteLabel && traits.includes(eliteLabel)) return 2;
   if(traits.includes(baseLabel)) return 1;
   return 0;
-}
-// sums 0.3 (normal) / 0.6 (elite) across every label the player actually has, each scaled by its own
-// weight in weightMap ({label: weight}) - every PlayStyle in a group pulls its own weight instead of
-// counting identically to its neighbours (a Grätsche tackle risks more cards than a Kante shoulder
-// charge; a curling Angeschn. Schuss finish is a bigger scoring signal than an Akrobat. bicycle kick).
-// Every weight here is positive - no PlayStyle ever makes anything worse for the player who has it.
-function playerTraitScore(p, weightMap){
-  let score = 0;
-  Object.keys(weightMap).forEach(lbl=>{
-    const tier=playerTraitTier(p, lbl);
-    if(tier) score += (tier===2?0.6:0.3) * weightMap[lbl];
-  });
-  return score;
 }
 function teamBestTraitTier(players, baseLabels){
   let best = 0;
   (players||[]).forEach(p=>{ baseLabels.forEach(lbl=>{ best = Math.max(best, playerTraitTier(p, lbl)); }); });
   return best;
 }
-// finishing signal for scorer selection: every value below 1.0 to keep the effect a bonus, never a
-// penalty - a player with none of these simply gets 0 extra, not a deduction.
-const FINISH_WEIGHT = {'Angeschn. Schuss':1.0, 'Powerschuss':0.9, 'Präziser Kopfball':0.8, 'Flacher Vollspannschuss':0.75, 'Akrobat.':0.65, 'Lupfer':0.55};
-const DEADBALL_TRAITS = ['Ruhender Ball'];
-// each raises this player's own card/foul rate by a different amount - a reckless sliding tackle
-// (Grätsche) draws more cards than simply being an physical wall in a duel (Kante)
-const AGGRESSION_WEIGHT = {'Grätsche':1.0, 'Durchsetzungskraft':0.85, 'Kante':0.7, 'Unerbittlich':0.5};
-// each LOWERS this player's own card/foul rate by a different amount (reading the game instead of
-// diving in) - always a reduction in a bad outcome, i.e. still a net positive for the player
-const DISCIPLINE_WEIGHT = {'Antizipation':1.0, 'Abfangen':0.8, 'Block':0.55};
-// each raises the goalkeeper's own save/stop chance by a different amount
-const GK_SAVE_WEIGHT = {'Deflector':1.0, 'Herauskommen':0.75, 'Große Reichweite':0.6};
+// === PLAYSTYLE_EFFECT: every single PlayStyle drives its OWN distinct match mechanic, not a shared
+// bucket with a bigger/smaller number - see the "hook" implementations in pickScorer, pickCardRecipient
+// and planCardsAndPenalties/penaltyKickerSkill/penaltyKickProb below for what each hook actually does:
+//   scorerSelf        - boosts THIS player's own chance of being picked as the scorer (11 different
+//                        finishing types, each its own weight - a curling Finesse Shot counts for more
+//                        than a speculative Lupfer)
+//   scorerLate (Gamechanger)      - the same, but ONLY once the match is past minute 75 (super-sub)
+//   scorerPace (Raserei/Schneller Schritt) - the same, but scaled by this team's actual pace advantage
+//                        over the opponent's defense (the same number already feeding computeLambda's
+//                        counter-attack nudge), not a flat bonus
+//   assistAll (Einfallsreich/Tiki-Taka) - boosts EVERY teammate's scorer chance a little (constant
+//                        combination play), instead of the provider's own
+//   assistBest (Entsch. Pass/Schnittstellenpass) - boosts only the single most likely finisher on the
+//                        team (the killer through-ball to the main man)
+//   assistFwd (Harter Pass)       - boosts only actual forwards (crosses into the box)
+//   assistPace (Weiter Pass)      - boosts only the team's fastest player (the diagonal switch)
+//   deadBall (Ruhender Ball)      - unchanged special-case: better penalty taker, moves up the
+//                        shootout order (see penaltyKickerSkill)
+//   foulSelf (Grätsche/Durchsetzungskraft) - raises THIS player's own card/foul rate
+//   discipline (Abfangen/Block)   - lowers THIS player's own card/foul rate (reading the game)
+//   redCardReduce (Unerbittlich)  - lowers the whole TEAM's chance of a straight red card specifically
+//                        (disciplined even when a match gets stretched/tired), not yellows
+//   antiPenalty (Antizipation)    - lowers the chance this defending team concedes a penalty at all
+//   pressDiscipline (Ruhepol)     - extra card-rate reduction specifically scaled to how aggressive
+//                        this team's OWN pressing tactic is (calm head under a high press)
+//   shutdownOppFwd (Kante)        - dampens the OPPOSING team's forwards' scorer chance specifically
+//   shutdownOppWide (Abdrängen)   - dampens the OPPOSING team's wide players' scorer chance specifically
+//   gkSave (Deflector)            - raises the goalkeeper's own penalty-save chance
+//   gkAnti1v1 (Herauskommen)      - dampens the OPPOSING forwards' scorer chance (closes down breakaways)
+//   gkAntiLongshot (Große Reichweite) - dampens specifically OPPOSING Powerschuss holders
+//   gkAntiAerial (Flankenfang)    - dampens specifically OPPOSING header (Kopfball) holders
+//   counterOutlet (Weiter Abwurf/Langer Einwurf) - boosts THIS team's own forwards (fast outlet ball)
+// Every weight is positive and every hook only ever helps its owner's side - no PlayStyle makes
+// anything worse for the player or team that has it.
+const PLAYSTYLE_EFFECT = {
+  'Angeschn. Schuss':       {hook:'scorerSelf', w:1.0},
+  'Powerschuss':            {hook:'scorerSelf', w:0.9},
+  'Präziser Kopfball':      {hook:'scorerSelf', w:0.8},
+  'Kopfballmacht':          {hook:'scorerSelf', w:0.7},
+  'Flacher Vollspannschuss':{hook:'scorerSelf', w:0.75},
+  'Akrobat.':               {hook:'scorerSelf', w:0.65},
+  'Technik':                {hook:'scorerSelf', w:0.55},
+  'First Touch':            {hook:'scorerSelf', w:0.5},
+  'Tricks':                 {hook:'scorerSelf', w:0.6},
+  'Beinarbeit':             {hook:'scorerSelf', w:0.5},
+  'Lupfer':                 {hook:'scorerSelf', w:0.55},
+  'Gamechanger':            {hook:'scorerLate', w:1.0},
+  'Raserei':                {hook:'scorerPace', w:1.0},
+  'Schneller Schritt':      {hook:'scorerPace', w:0.7},
+  'Einfallsreich':          {hook:'assistAll', w:0.4},
+  'Tiki-Taka':              {hook:'assistAll', w:0.3},
+  'Entsch. Pass':           {hook:'assistBest', w:1.0},
+  'Schnittstellenpass':     {hook:'assistBest', w:0.75},
+  'Harter Pass':            {hook:'assistFwd', w:1.0},
+  'Weiter Pass':            {hook:'assistPace', w:1.0},
+  'Ruhender Ball':          {hook:'deadBall'},
+  'Grätsche':               {hook:'foulSelf', w:1.0},
+  'Durchsetzungskraft':     {hook:'foulSelf', w:0.85},
+  'Abfangen':               {hook:'discipline', w:0.8},
+  'Block':                  {hook:'discipline', w:0.55},
+  'Unerbittlich':           {hook:'redCardReduce', w:1.0},
+  'Antizipation':           {hook:'antiPenalty', w:1.0},
+  'Ruhepol':                {hook:'pressDiscipline', w:1.0},
+  'Kante':                  {hook:'shutdownOppFwd', w:1.0},
+  'Abdrängen':              {hook:'shutdownOppWide', w:1.0},
+  'Deflector':              {hook:'gkSave', w:1.0},
+  'Herauskommen':           {hook:'gkAnti1v1', w:1.0},
+  'Große Reichweite':       {hook:'gkAntiLongshot', w:1.0},
+  'Flankenfang':            {hook:'gkAntiAerial', w:1.0},
+  'Weiter Abwurf':          {hook:'counterOutlet', w:0.6},
+  'Langer Einwurf':         {hook:'counterOutlet', w:0.8},
+};
+// summed (tier 0.3/0.6) * weight across every label whose hook matches - the general-purpose reader
+// every mechanic above pulls from, keyed by hook name rather than a hand-picked label list.
+function hookValue(p, hook){
+  let score = 0;
+  Object.keys(PLAYSTYLE_EFFECT).forEach(lbl=>{
+    const def = PLAYSTYLE_EFFECT[lbl];
+    if(def.hook!==hook) return;
+    const tier = playerTraitTier(p, lbl);
+    if(tier) score += (tier===2?0.6:0.3) * (def.w||1);
+  });
+  return score;
+}
+function teamHookValue(players, hook){
+  let sum = 0;
+  (players||[]).forEach(p=>{ sum += hookValue(p, hook); });
+  return sum;
+}
+// for team-wide "temperament" hooks (redCardReduce, antiPenalty) where the single most disciplined
+// player should matter, not an unrealistic sum across all 11 teammates each having a small trait
+function teamBestHookValue(players, hook){
+  let best = 0;
+  (players||[]).forEach(p=>{ best = Math.max(best, hookValue(p, hook)); });
+  return best;
+}
 
 // PLAYER_IMPACT_WEIGHTS: how much each stat nudges a player's effective attack/defense rating away
 // from their plain Overall - a DELTA around OV, not a replacement for it. A player whose individual
@@ -24776,17 +24896,17 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   const myExp = computeLambda(myProfileForLambda.attack, oppProfileForLambda.defense, myPaceBonus);
   const oppExp = computeLambda(oppProfileForLambda.attack, myProfileForLambda.defense, oppPaceBonus);
   let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
-  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
+  const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer, myPaceBonus, oppPaceBonus);
 
   // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count
   if(myIncidents.penalty && myIncidents.penalty.scored){
     const myPkPool = scorerPoolExcluding(myPlayers, myIncidents.redMinute, myIncidents.sentOffPlayer, myIncidents.penalty.minute);
-    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myPkPool), isPenalty:true});
+    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myPkPool, oppPlayers, {minute:myIncidents.penalty.minute, paceBonus:myPaceBonus}), isPenalty:true});
     myGoals++;
   }
   if(oppIncidents.penalty && oppIncidents.penalty.scored){
     const oppPkPool = scorerPoolExcluding(oppPlayers, oppIncidents.redMinute, oppIncidents.sentOffPlayer, oppIncidents.penalty.minute);
-    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppPkPool), isPenalty:true});
+    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppPkPool, myPlayers, {minute:oppIncidents.penalty.minute, paceBonus:oppPaceBonus}), isPenalty:true});
     oppGoals++;
   }
   events90.sort((a,b)=>a.minute-b.minute);
@@ -24808,7 +24928,7 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
     const myExpET = clamp(myExp*(30/90), 0.05, 2);
     const oppExpET = clamp(oppExp*(30/90), 0.05, 2);
     const myETGoals = simGoals(myExpET), oppETGoals = simGoals(oppExpET);
-    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
+    eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer, myPaceBonus, oppPaceBonus);
     myGoals += myETGoals; oppGoals += oppETGoals;
     if(myGoals===oppGoals){
       wentToPK = true;
