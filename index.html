@@ -15438,6 +15438,9 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
   const statEls = Array.from(el.querySelectorAll('.stats .stat'));
   const statBars = statEls.map(s=>s.querySelector('.bar i'));
   const statTargetWidths = statBars.map(b=>b?b.style.width:'0%'); // capture statBar()'s real width before zeroing it
+  // PlayStyle+ icons (left card edge) reveal one at a time, after the substats and before name/photo -
+  // its own small beat between "how good" (stats) and "who this actually is" (name/photo).
+  const psIcons = Array.from(el.querySelectorAll('.playstyle-plus-icon'));
   const posLabelEl = el.querySelector('.pos-label');
   const flagEl = el.querySelector('.nc-flag, .nc-flag-mono');
   const leagueEl = el.querySelector('.nc-league, .nc-league-mono');
@@ -15456,6 +15459,7 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
   if(avatarEl){ avatarEl.style.opacity='0'; avatarEl.style.transition='opacity 1.5s ease'; }
   statEls.forEach((s,i)=>{ s.style.opacity='0'; s.style.transition='opacity 1.05s ease'; if(statBars[i]) statBars[i].style.width='0%'; });
   identityEls.forEach(elm=>{ elm.classList.add('fut-identity-pop'); elm.style.opacity='0'; elm.style.transform='scale(.4)'; });
+  psIcons.forEach(icon=>{ icon.style.opacity='0'; icon.style.transform='scale(.3)'; icon.style.transition='opacity .45s ease, transform .45s ease'; });
 
   const timers = [];
   let done = false;
@@ -15467,6 +15471,9 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
   function revealIdentityAll(){
     identityEls.forEach(elm=>{ elm.style.opacity='1'; elm.style.transform='scale(1)'; });
   }
+  function revealPlaystylesAll(){
+    psIcons.forEach(icon=>{ icon.style.opacity='1'; icon.style.transform='scale(1)'; });
+  }
   function finishAll(){
     if(done) return;
     done = true;
@@ -15474,8 +15481,22 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
     revealIdentityAll();
     if(ovEl) ovEl.textContent = card.isManager ? boostText : finalOv;
     statEls.forEach((s,i)=>{ s.style.opacity='1'; if(statBars[i]){ statBars[i].style.transition=''; statBars[i].style.width=statTargetWidths[i]; } });
+    revealPlaystylesAll();
     revealNamePhoto();
     onSequenceDone();
+  }
+  // one PlayStyle+ icon at a time, each with its own little pop and chime - between the substats and
+  // the name/photo reveal. Skipped near-instantly if the card has none (finishAll already covers that).
+  function schedulePlaystyles(){
+    if(!psIcons.length){ timers.push(setTimeout(()=>{ revealNamePhoto(); done=true; onSequenceDone(); }, 300)); return; }
+    psIcons.forEach((icon,i)=>{
+      timers.push(setTimeout(()=>{
+        icon.style.opacity='1';
+        icon.style.transform='scale(1)';
+        playSfx('notification');
+      }, i*450));
+    });
+    timers.push(setTimeout(()=>{ revealNamePhoto(); done=true; onSequenceDone(); }, psIcons.length*450+600));
   }
   // timings are ~3x the original pace - a 100+ pull is meant to take its time. OVR count-up gets the
   // most weight (the headline moment), substats move a bit quicker so they don't overstay it.
@@ -15486,7 +15507,7 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
         if(statBars[i]){ statBars[i].style.transition='width .85s ease'; statBars[i].style.width=statTargetWidths[i]; }
       }, i*380));
     });
-    timers.push(setTimeout(()=>{ revealNamePhoto(); done=true; onSequenceDone(); }, statEls.length*380+800));
+    timers.push(setTimeout(schedulePlaystyles, statEls.length*380+800));
   }
   function tweenOv(){
     // a manager's boost counts up twice as slowly as a player's OVR - it's the ONLY thing he has to
@@ -24026,7 +24047,7 @@ function pickScorer(players){
     // finishing-flavoured PlayStyles (Finesse/Power/Chip/Low Driven Shot, Acrobatic, Precision Header)
     // make a player disproportionately likely to be THE one who scores among their own teammates -
     // same "doesn't change how many goals, only who gets them" scope as the SHO blend above.
-    const finishMult = 1 + playerTraitScore(p, FINISHING_TRAITS)*0.35;
+    const finishMult = 1 + playerTraitScore(p, FINISH_WEIGHT)*0.35;
     const w = posW * ratingFactor * finishMult;
     const reps = Math.max(1, Math.round(w*3));
     for(let i=0;i<reps;i++) weighted.push(p);
@@ -24106,7 +24127,7 @@ function penaltyKickProb(shooter, keeper, teamDiff){
   // number, not their overall rating
   // a keeper with real shot-stopping PlayStyles (Deflector/1v1 Close Down/Far Reach) reads penalties
   // better than their Paraden stat alone suggests
-  const keeperAbility = (keeper ? (keeper.defn!=null ? keeper.defn : (keeper.ov||75)) : 75) + (keeper ? playerTraitScore(keeper, GK_SHOTSTOP_TRAITS)*4 : 0);
+  const keeperAbility = (keeper ? (keeper.defn!=null ? keeper.defn : (keeper.ov||75)) : 75) + (keeper ? playerTraitScore(keeper, GK_SAVE_WEIGHT)*4 : 0);
   const p = 0.76 + (shooterSkill-88)/260 - (keeperAbility-80)/260 + teamDiff/500;
   return clamp(p, 0.35, 0.94);
 }
@@ -24185,7 +24206,7 @@ function pickCardRecipient(players){
     // pick up more cards for it; ones built around reading the game instead (Intercept, Anticipate,
     // Block) commit fewer needless fouls in the first place - both nudge this specific player's own
     // foul rate, not just a flat team-wide number.
-    const traitFoulMult = clamp(1 + playerTraitScore(p, AGGRESSIVE_DEFENSE_TRAITS)*0.4 - playerTraitScore(p, CLEAN_DEFENSE_TRAITS)*0.3, 0.5, 2.2);
+    const traitFoulMult = clamp(1 + playerTraitScore(p, AGGRESSION_WEIGHT)*0.4 - playerTraitScore(p, DISCIPLINE_WEIGHT)*0.3, 0.5, 2.2);
     const reps = Math.max(1, Math.round(w*phyW*traitFoulMult*2));
     for(let i=0;i<reps;i++) weighted.push(p);
   });
@@ -24245,7 +24266,7 @@ function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDef
     // elite) nudges the ~78% real-world baseline by 4 points, capped so it stays a nudge, not a coinflip
     const deadBallTier = teamBestTraitTier(players, DEADBALL_TRAITS);
     const oppGK = (oppPlayers||[]).find(p=>posGroup2(mainPos(p.pos))==='GK');
-    const gkStopTier = oppGK ? playerTraitScore(oppGK, GK_SHOTSTOP_TRAITS) : 0;
+    const gkStopTier = oppGK ? playerTraitScore(oppGK, GK_SAVE_WEIGHT) : 0;
     const pkChance = clamp(0.78 + deadBallTier*0.04 - gkStopTier*0.04, 0.62, 0.90);
     penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<pkChance};
   }
@@ -24416,11 +24437,17 @@ function playerTraitTier(p, baseLabel){
   if(traits.includes(baseLabel)) return 1;
   return 0;
 }
-// sums 0.3 (normal) / 0.6 (elite) across every label in the list this player actually has - used to
-// bias per-player weights (e.g. scorer selection) rather than a single team-wide number
-function playerTraitScore(p, baseLabels){
+// sums 0.3 (normal) / 0.6 (elite) across every label the player actually has, each scaled by its own
+// weight in weightMap ({label: weight}) - every PlayStyle in a group pulls its own weight instead of
+// counting identically to its neighbours (a Grätsche tackle risks more cards than a Kante shoulder
+// charge; a curling Angeschn. Schuss finish is a bigger scoring signal than an Akrobat. bicycle kick).
+// Every weight here is positive - no PlayStyle ever makes anything worse for the player who has it.
+function playerTraitScore(p, weightMap){
   let score = 0;
-  baseLabels.forEach(lbl=>{ const tier=playerTraitTier(p, lbl); score += tier===2?0.6:tier===1?0.3:0; });
+  Object.keys(weightMap).forEach(lbl=>{
+    const tier=playerTraitTier(p, lbl);
+    if(tier) score += (tier===2?0.6:0.3) * weightMap[lbl];
+  });
   return score;
 }
 function teamBestTraitTier(players, baseLabels){
@@ -24428,11 +24455,18 @@ function teamBestTraitTier(players, baseLabels){
   (players||[]).forEach(p=>{ baseLabels.forEach(lbl=>{ best = Math.max(best, playerTraitTier(p, lbl)); }); });
   return best;
 }
-const FINISHING_TRAITS = ['Angeschn. Schuss','Powerschuss','Lupfer','Flacher Vollspannschuss','Akrobat.','Präziser Kopfball'];
+// finishing signal for scorer selection: every value below 1.0 to keep the effect a bonus, never a
+// penalty - a player with none of these simply gets 0 extra, not a deduction.
+const FINISH_WEIGHT = {'Angeschn. Schuss':1.0, 'Powerschuss':0.9, 'Präziser Kopfball':0.8, 'Flacher Vollspannschuss':0.75, 'Akrobat.':0.65, 'Lupfer':0.55};
 const DEADBALL_TRAITS = ['Ruhender Ball'];
-const AGGRESSIVE_DEFENSE_TRAITS = ['Grätsche','Kante','Durchsetzungskraft','Unerbittlich'];
-const CLEAN_DEFENSE_TRAITS = ['Abfangen','Antizipation','Block'];
-const GK_SHOTSTOP_TRAITS = ['Deflector','Herauskommen','Große Reichweite'];
+// each raises this player's own card/foul rate by a different amount - a reckless sliding tackle
+// (Grätsche) draws more cards than simply being an physical wall in a duel (Kante)
+const AGGRESSION_WEIGHT = {'Grätsche':1.0, 'Durchsetzungskraft':0.85, 'Kante':0.7, 'Unerbittlich':0.5};
+// each LOWERS this player's own card/foul rate by a different amount (reading the game instead of
+// diving in) - always a reduction in a bad outcome, i.e. still a net positive for the player
+const DISCIPLINE_WEIGHT = {'Antizipation':1.0, 'Abfangen':0.8, 'Block':0.55};
+// each raises the goalkeeper's own save/stop chance by a different amount
+const GK_SAVE_WEIGHT = {'Deflector':1.0, 'Herauskommen':0.75, 'Große Reichweite':0.6};
 
 // PLAYER_IMPACT_WEIGHTS: how much each stat nudges a player's effective attack/defense rating away
 // from their plain Overall - a DELTA around OV, not a replacement for it. A player whose individual
