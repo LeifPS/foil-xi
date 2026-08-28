@@ -1187,6 +1187,9 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
   100%{background-position:-100% 0%;}
 }
 .pcard .nat-club-icons{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:3px;height:16px;}
+.pcard .playstyle-plus-row{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:4px;flex-wrap:wrap;}
+.pcard .playstyle-plus-icon{width:16px;height:16px;object-fit:contain;border-radius:50%;background:radial-gradient(circle,#3a2d0a,#1a1408);box-shadow:0 0 0 1px var(--gold,#e8c468),0 0 4px -1px var(--gold,#e8c468);padding:1.5px;}
+.pcard.mini .playstyle-plus-icon,.pcard.xs .playstyle-plus-icon{width:11px;height:11px;}
 .pcard .nc-flag{width:20px;height:14px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.15);}
 .pcard .nc-flag-mono{width:20px;height:14px;border-radius:2px;background:rgba(255,255,255,.12);color:var(--muted);
   font-family:'JetBrains Mono';font-size:6.5px;font-weight:700;display:flex;align-items:center;justify-content:center;}
@@ -12613,6 +12616,25 @@ async function toggleCardFavorite(uid){
 // takes the already-leveled card object itself (has .n/.xp/.level from applyCardLevel/leveledOwnedCard/
 // ownedCard) rather than re-looking it up via the local collection - works identically whether it's
 // your own card or one seen while viewing another club's published squad.
+// Playstyles (see PLAYSTYLE_INFO): every one this card has, elite ("+") ones first and visually
+// called out - the elite ones already show right on the card face too (see cardEl's
+// playstylePlusHTML), this is the one place the full list (including the normal-tier ones) is visible.
+function playstyleListHTML(card){
+  if(!card.traits || !card.traits.length) return '';
+  const sorted = card.traits.slice().sort((a,b)=>{
+    const ea = PLAYSTYLE_INFO[a] ? PLAYSTYLE_INFO[a].elite : false;
+    const eb = PLAYSTYLE_INFO[b] ? PLAYSTYLE_INFO[b].elite : false;
+    return (eb?1:0)-(ea?1:0);
+  });
+  return `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Playstyles</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      ${sorted.map(t=>{
+        const info = PLAYSTYLE_INFO[t];
+        const icon = info ? `<img src="${info.icon}" alt="" style="width:18px;height:18px;object-fit:contain;">` : '';
+        return `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:100px;background:var(--panel2);border:1px solid ${info&&info.elite?'var(--gold)':'var(--line)'};font-size:12px;">${icon}<span>${t}</span></div>`;
+      }).join('')}
+    </div>`;
+}
 function openCardXpModal(card){
   if(!card) return;
   const {level, xp, prevThreshold, nextThreshold} = cardLevelProgress(card.xp||0);
@@ -12622,6 +12644,7 @@ function openCardXpModal(card){
     <p class="hint" style="margin-top:0;margin-bottom:14px;">${level>0 ? `Level ${level} (${CARD_LEVEL_LABEL[level]}) — +${level} OVR und +${level} auf alle Unterstats.` : 'Noch kein Level erreicht — spiele Matches mit dieser Karte im Kader, um XP zu sammeln.'}</p>
     <div class="mono" style="font-size:11px;color:var(--muted);margin-bottom:6px;">${xp} XP${nextThreshold!=null ? ` — noch ${nextThreshold-xp} XP bis ${CARD_LEVEL_LABEL[level+1]}` : ' — Maximal-Level erreicht'}</div>
     <div class="chem-bar" style="margin-bottom:16px;"><i style="width:${pct}%;"></i></div>
+    ${playstyleListHTML(card)}
     <button class="action-btn" id="card-xp-close" style="width:100%;">Schließen</button>`);
   document.getElementById('card-xp-close').addEventListener('click', closeModal);
 }
@@ -13462,12 +13485,18 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const favoriteBadge = (opts.onToggleFavorite && !card.isManager)
     ? `<div class="favorite-badge${card.favorited?' is-fav':''}" title="${card.favorited?'Favorit entfernen':'Als Favorit markieren (nicht in SBCs/Handel/Verkauf nutzbar)'}">${favoriteStarSvg}</div>`
     : '';
+  // Elite playstyles ("+", the rarer/stronger tier - see PLAYSTYLE_INFO) show right on the card face;
+  // normal-tier ones only show in the detail view (openCardDetailModal) - keeps the compact card from
+  // getting cluttered given some players carry 5-7 of them.
+  const elitePlaystyles = (!card.isManager && card.traits) ? card.traits.filter(t=>PLAYSTYLE_INFO[t] && PLAYSTYLE_INFO[t].elite) : [];
+  const playstylePlusHTML = elitePlaystyles.length ? `<div class="playstyle-plus-row">${elitePlaystyles.map(t=>`<img class="playstyle-plus-icon" src="${PLAYSTYLE_INFO[t].icon}" alt="" title="${t}" loading="lazy">`).join('')}</div>` : '';
   const bodyInner = card.isManager
     ? `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
        <div class="mgr-boost">Team-Rating ${card.boostType==='percent'?`${boostText}`:`${boostText} Punkte`}</div>`
     : `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
+       ${playstylePlusHTML}
        <div class="stats">
          ${statBar(statLabels.PAC,card.pac)}${statBar(statLabels.DRI,card.dri)}
          ${statBar(statLabels.SHO,card.sho)}${statBar(statLabels.DEF,card.defn)}
@@ -13499,6 +13528,15 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   if(levelBadge && card.uid){
     div.querySelectorAll('.level-badge').forEach(lvlEl=>{
       lvlEl.addEventListener('click', (e)=>{ e.stopPropagation(); openCardXpModal(card); });
+    });
+  }
+  // Level-0 cards have no level-badge to click - the elite-playstyle row (only present when there's
+  // something to actually show) doubles as the click target for those, so a fresh pull still has a way
+  // to see its full playstyle list without needing to level up first.
+  if(elitePlaystyles.length && card.uid){
+    div.querySelectorAll('.playstyle-plus-row').forEach(row=>{
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', (e)=>{ e.stopPropagation(); openCardXpModal(card); });
     });
   }
   if(favoriteBadge){
@@ -19236,7 +19274,7 @@ function boostBotXI(xi, slots, forceManager){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas};
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:card.traits};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
@@ -19648,7 +19686,7 @@ function squadRatingFromSaveData(data){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slot.label);
     if(info) ov += info.bonus;
-    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas});
+    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:card.traits});
   });
   const chemmed = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   const filled = chemmed.length;
@@ -23871,7 +23909,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:card.traits});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -24167,6 +24205,80 @@ function scorerPoolExcluding(players, redMinute, sentOffPlayer, atMinute){
   return filtered.length ? filtered : players;
 }
 
+const PLAYSTYLE_INFO = {
+  'Abdrängen': {icon:'https://drop-assets.ea.com/images/7lHjpOBSghE6Ywt1jgVv1C/21f9914d00f073d79d4b46cac71b9087/Jockey.png', kind:'defense', elite:false},
+  'Abdrängen+': {icon:'https://drop-assets.ea.com/images/6v06K0kg314Jd2SeVlVWFI/c0ac7c9179e3e7ebf9b26fb9d25897fb/Jockey_.png', kind:'defense', elite:true},
+  'Abfangen': {icon:'https://drop-assets.ea.com/images/5ysv7Iw8jDHl7sp1JXqIa7/d34004fed8c95bde083dcf8257391a70/Intercept.png', kind:'defense', elite:false},
+  'Abfangen+': {icon:'https://drop-assets.ea.com/images/7ewPPmqkwIRvGmV5WVFwa7/65b03a2146e76a0562b86341d2a72ee8/Intercept_.png', kind:'defense', elite:true},
+  'Akrobat.': {icon:'https://drop-assets.ea.com/images/2sRRBHcIe0zrDwYaRI2xG3/d02b8c8855de853470897009e030eb5d/Acrobatic.png', kind:'attack', elite:false},
+  'Akrobat.+': {icon:'https://drop-assets.ea.com/images/5Zb5jkAdaqaJSPFvb7W3zl/cf788143996a34edc03b1d1dc6a45169/Acrobatic_.png', kind:'attack', elite:true},
+  'Angeschn. Schuss': {icon:'https://drop-assets.ea.com/images/468u1R1p2k1fA6WBHi0OEn/fb9d49ed2a8fb500cd5a184937b96b34/Finesse_Shot.png', kind:'attack', elite:false},
+  'Angeschnittener Schuss+': {icon:'https://drop-assets.ea.com/images/4KwpQLGCfHPMd9oq5Xl42z/2101ac72c690fd36205fb9c6dbac6bd1/Finesse_Shot_.png', kind:'attack', elite:true},
+  'Antizipation': {icon:'https://drop-assets.ea.com/images/4xPnUcL7thizFB7qmhlwUR/1ade7a0f77d5e875c2db869964540a35/Anticipate.png', kind:'defense', elite:false},
+  'Antizipation+': {icon:'https://drop-assets.ea.com/images/4Tw0rjhFcLnurLg5JR2Woo/f0df6f8cdd017e6001109c86eecea980/Anticipate_.png', kind:'defense', elite:true},
+  'Beinarbeit': {icon:'https://drop-assets.ea.com/images/1s2muXoHUmP1T0vGYKXSl1/6d265b13804069371f16a58788703a33/Footwork.png', kind:'attack', elite:false},
+  'Beinarbeit+': {icon:'https://drop-assets.ea.com/images/5UCymkZPZUIQSWrVV9P6ko/b5a16094015fb502405698d40cb0cfce/Footwork_.png', kind:'attack', elite:true},
+  'Block': {icon:'https://drop-assets.ea.com/images/2Rlftzr8lqUdI29suCQVWe/43c6c36e8bd5fa26b88478d4354611a2/Block.png', kind:'defense', elite:false},
+  'Block+': {icon:'https://drop-assets.ea.com/images/55a6j8nZt1EKQeN9kaqiEs/a2d73085eee67e822161e082e82a8ee3/Block_.png', kind:'defense', elite:true},
+  'Deflector': {icon:'https://drop-assets.ea.com/images/6nb9RYWNVuvUaLZDskFao7/0ad930b0874e7c9454b31de942c0d3f1/Deflector.png', kind:'defense', elite:false},
+  'Deflector+': {icon:'https://drop-assets.ea.com/images/5IvxJa33W11EFxBbwHZmFL/e359704e2f786f11087031b55563647f/Deflector_.png', kind:'defense', elite:true},
+  'Durchsetzungskraft': {icon:'https://drop-assets.ea.com/images/2sNQz8b9dgV0hW8vl7oOvV/d7a503dbd4c73b232055b3ca06aa88eb/Enforcer.png', kind:'defense', elite:false},
+  'Durchsetzungskraft+': {icon:'https://drop-assets.ea.com/images/57s159kdUl4cgq97ETlO2s/78feee8fc6fdf4478e98aac7598690ea/Enforcer_.png', kind:'defense', elite:true},
+  'Einfallsreich': {icon:'https://drop-assets.ea.com/images/4fpo31RdL5T0vrzNqcSc4x/f82209bfd51270dcc447d4313b3e61f1/Inventive.png', kind:'attack', elite:false},
+  'Einfallsreich+': {icon:'https://drop-assets.ea.com/images/Qx6cJsPc8kg3lW5RIg03U/74548115e8b21760437ee6012b8d2709/Inventive_.png', kind:'attack', elite:true},
+  'Entsch. Pass': {icon:'https://drop-assets.ea.com/images/2K5BYfVYRnrdjt8F3hwI04/62f147b6a436c107bfa3d042c1d5728d/Incisive_Pass.png', kind:'attack', elite:false},
+  'Entsch. Pass+': {icon:'https://drop-assets.ea.com/images/3AFfBi6PkSPh9YdlmsS9iY/944496273003729dbef5a91426506cf4/Incisive_Pass_.png', kind:'attack', elite:true},
+  'First Touch': {icon:'https://drop-assets.ea.com/images/3f727XsoDVLbT49oMk0HBu/2787568be8ccb2d5daa2d18fabacad97/First_Touch.png', kind:'attack', elite:false},
+  'First Touch+': {icon:'https://drop-assets.ea.com/images/25f6Natq9IszUKRAVJb3s8/10a1084994c7ad20fd41280fc0ff18b3/First_Touch_.png', kind:'attack', elite:true},
+  'Flacher Vollspannschuss': {icon:'https://drop-assets.ea.com/images/1NfyWsEpQ7s9bhWWt92lbn/5b5dbeb0e55c2e9241cdc26c70ee2d2c/Low_Driven_Shot.png', kind:'attack', elite:false},
+  'Flacher Vollspannschuss+': {icon:'https://drop-assets.ea.com/images/7lY8ZhvwacbwMVTeuXYmM6/0e9f0e9411ad83a18712cbc1549a8317/Low_Driven_Shot_.png', kind:'attack', elite:true},
+  'Flankenfang': {icon:'https://drop-assets.ea.com/images/4Uvgm6UNiSz3say1zZqKDC/51837f53072d5e01063699f6d2b7401a/Cross_Claimer.png', kind:'defense', elite:false},
+  'Flankenfang+': {icon:'https://drop-assets.ea.com/images/5aYaAtUsJBRaGEHAuv9OxW/bb12d221a86b53e4e13e2afe57457114/Cross_Claimer_.png', kind:'defense', elite:true},
+  'Gamechanger': {icon:'https://drop-assets.ea.com/images/2v8I0GQrtREaEJzJcyStKe/e46d719e4e5ed88ac5a1f671c7448f4a/Gamechanger.png', kind:'attack', elite:false},
+  'Gamechanger+': {icon:'https://drop-assets.ea.com/images/4weDkEpJXhmum7QkyBkRFC/42c3b090cd6842f23c00f9057edaef3c/Gamechanger_.png', kind:'attack', elite:true},
+  'Große Reichweite': {icon:'https://drop-assets.ea.com/images/7zbtymM2pCbANuM7wKFYZU/698e8ece65867df97e61189ac6666463/Far_Reach.png', kind:'defense', elite:false},
+  'Große Reichweite+': {icon:'https://drop-assets.ea.com/images/67QsfAz3PilmHuQ0wwXWQM/a25c6a13b33dee6a5ef74c0e66092a24/Far_Reach_.png', kind:'defense', elite:true},
+  'Grätsche': {icon:'https://drop-assets.ea.com/images/7mI1lrxE0pv9iJfQFki9OA/8c1ecac325f923e049be72231c8c968a/Slide_Tackle.png', kind:'defense', elite:false},
+  'Grätsche+': {icon:'https://drop-assets.ea.com/images/oMoLHfawtU6s08cupTpup/4c19ef50d267273c4495deb32a06c9eb/Slide_Tackle_.png', kind:'defense', elite:true},
+  'Harter Pass': {icon:'https://drop-assets.ea.com/images/FfTP29PWrRWZjEaiCCVoa/a1b345e4ae7023ed78b1efd68d28f392/Whipped_Pass.png', kind:'attack', elite:false},
+  'Harter Pass+': {icon:'https://drop-assets.ea.com/images/5m8PmfQfBiA1HRsIPRGgJ4/fd22942ce1c5fa608227ea0573a9e339/Whipped_Pass_.png', kind:'attack', elite:true},
+  'Herauskommen': {icon:'https://drop-assets.ea.com/images/4wwnzFkg1zLTAc4QSsXiWO/5fa897cf739a93bddf3556e2323f9b8b/1v1_Close_Down.png', kind:'defense', elite:false},
+  'Herauskommen+': {icon:'https://drop-assets.ea.com/images/2Dob5ZWyGDwaPtaOdJQDqT/a2ec208993396b49fcbd9fd959a72fc2/1v1_Close_Down_.png', kind:'defense', elite:true},
+  'Kante': {icon:'https://drop-assets.ea.com/images/7euMJ2jVypFrFPQesWuGGm/14019168b12faac1584a2920d5c2d5d9/Bruiser.png', kind:'defense', elite:false},
+  'Kante+': {icon:'https://drop-assets.ea.com/images/6bmh6DEgcusgxP72p2dudl/700d6fffd8b2e792e6cd7fd02fb88314/Bruiser_.png', kind:'defense', elite:true},
+  'Kopfballmacht': {icon:'https://drop-assets.ea.com/images/3rsDbUXd3MZX39YTsk6lKe/404db89f2237eeb7466668a730c52a4b/Aerial_Fortress.png', kind:'attack', elite:false},
+  'Langer Einwurf': {icon:'https://drop-assets.ea.com/images/51OlohNQvoEwW0aLhknAHh/58fa7d903d10f6d8cfa2622f62ba6b6f/Long_Throw.png', kind:'defense', elite:false},
+  'Langer Einwurf+': {icon:'https://drop-assets.ea.com/images/45xLAhID9UwXLUcWGmWYBV/de9248ba0fd101f7bf048d1fc0b0cb0c/Long_Throw_.png', kind:'defense', elite:true},
+  'Lupfer': {icon:'https://drop-assets.ea.com/images/6Gl08kt7odn1fJNX74CS2P/984feac3cd8d99902f5cb5131d5fd26a/Chip_Shot.png', kind:'attack', elite:false},
+  'Lupfer+': {icon:'https://drop-assets.ea.com/images/4dubNf6b2DxdV1MvuUmd14/d4bbc70640a199b15745946057572ff1/Chip_Shot_.png', kind:'attack', elite:true},
+  'Powerschuss': {icon:'https://drop-assets.ea.com/images/3ohVoKWSsvT44qgjabWqfV/e536ef26ad854c3c4cbf63ed7954b9cd/Power_Shot.png', kind:'attack', elite:false},
+  'Powerschuss+': {icon:'https://drop-assets.ea.com/images/3SLCWnaVMQFNLdRmNpUyyP/545111e2c601b507f79588f950b2848f/Power_Shot_.png', kind:'attack', elite:true},
+  'Präziser Kopfball': {icon:'https://drop-assets.ea.com/images/3ync8fbblS4zLzF3p1VXmT/7752a5103c2ebd8be5cf1819379c66f4/Precision_Header.png', kind:'attack', elite:false},
+  'Präziser Kopfball+': {icon:'https://drop-assets.ea.com/images/1JxoSvhU54BcmD9DE5rVqT/34b15f2ac73c9c02db1552d306fbccbe/Precision_Header_.png', kind:'attack', elite:true},
+  'Raserei': {icon:'https://drop-assets.ea.com/images/1aGsvwKyIFlRG1eoJSS0Ot/a4d3d661ff962795a632fe86439d2146/Rapid.png', kind:'attack', elite:false},
+  'Raserei+': {icon:'https://drop-assets.ea.com/images/3bouBLJaUvpDtluboKK8gC/6fc716d67e1a7e9da59e2a2022018c11/Rapid_.png', kind:'attack', elite:true},
+  'Ruhender Ball': {icon:'https://drop-assets.ea.com/images/1razu2wcM3XA82VvB7NyUm/eec6b07080e49d6bf2d7a7951a22375f/Dead_Ball.png', kind:'attack', elite:false},
+  'Ruhender Ball+': {icon:'https://drop-assets.ea.com/images/3gnWRIayfhmIFIhhYCwsR6/bb49458fbb7f0d06890bde757190e1bc/Dead_Ball_.png', kind:'attack', elite:true},
+  'Ruhepol': {icon:'https://drop-assets.ea.com/images/5rUHwyLJRnvGV53Ba4Pj6M/9a3238695ae8103667ba02af391ac209/Press_Proven.png', kind:'defense', elite:false},
+  'Ruhepol+': {icon:'https://drop-assets.ea.com/images/Z2otVfOlVmGuQSxqZYSjz/717d956dfebae4193e8d746e8f3d300a/Press_Proven_.png', kind:'defense', elite:true},
+  'Schneller Schritt': {icon:'https://drop-assets.ea.com/images/1xG25Zp3wvkLA5YewKiZah/f27f5fabd1e899fc0bbb817d2db233b1/Quick_Step.png', kind:'attack', elite:false},
+  'Schneller Schritt+': {icon:'https://drop-assets.ea.com/images/44zHnq7IqO4ItY3NPzXNEC/d7fc408baa76e8ba053cd69e0a1a51c4/Quick_Step_.png', kind:'attack', elite:true},
+  'Schnittstellenpass': {icon:'https://drop-assets.ea.com/images/1mXBWIBgJSpYoIa1C4r5FX/7220e78a4049530f4e9fa642b1656fa4/Pinged_Pass.png', kind:'attack', elite:false},
+  'Schnittstellenpass+': {icon:'https://drop-assets.ea.com/images/oo97JUOYDmoWUVpz38rYE/405e5f5068bbb56c43fcf3e0f79e3f02/Pinged_Pass_.png', kind:'attack', elite:true},
+  'Technik': {icon:'https://drop-assets.ea.com/images/5Esx7NK4YBU44O4bo07rvb/69ca9417da7fd07905f6c6956ad93f6d/Technical.png', kind:'attack', elite:false},
+  'Technik+': {icon:'https://drop-assets.ea.com/images/6cWRgF7ajOw0RTRFA7DwBk/8286927d45e7f2cfbf1020799d054468/Technical_.png', kind:'attack', elite:true},
+  'Tiki-Taka': {icon:'https://drop-assets.ea.com/images/2tvHC5JQ2sXrN8wUTJWLEA/94b0f6a78d1a9e1348a33c9772f23afd/Tiki_Taka.png', kind:'attack', elite:false},
+  'Tiki-Taka+': {icon:'https://drop-assets.ea.com/images/41inaqjOz5PemcT2DAIIbO/ea5bce0dbf959316d4f7fea60824ef9b/Tiki_Taka_.png', kind:'attack', elite:true},
+  'Tricks': {icon:'https://drop-assets.ea.com/images/47Ygd5ri33RgjIYGiTAJpj/f0723e6f2f89a98fb6e8200c3659c6a9/Trickster.png', kind:'attack', elite:false},
+  'Tricks+': {icon:'https://drop-assets.ea.com/images/1exGiL699HqMQSIVKZ4gUV/734cdbdedc7971032ee3ac62c07a6542/Trickster_.png', kind:'attack', elite:true},
+  'Unerbittlich': {icon:'https://drop-assets.ea.com/images/2vVuRxgvPNaAuFGqZZ9nDY/3e2505addd5a6b353becdeaf7173d187/Relentless.png', kind:'defense', elite:false},
+  'Unerbittlich+': {icon:'https://drop-assets.ea.com/images/3hFTQQe2XXOx9eQjAFTAPF/48efd1569027da6e1c5e65259211febb/Relentless_.png', kind:'defense', elite:true},
+  'Weiter Abwurf': {icon:'https://drop-assets.ea.com/images/3CjCz29sjIt1xMZTRDi4vQ/8ecb201b0ae7d6d536d03c847a768ffa/Far_Throw.png', kind:'defense', elite:false},
+  'Weiter Abwurf+': {icon:'https://drop-assets.ea.com/images/5xSZE4qmelzar0d226znu7/efbb86f049c31270ad23147fbebe08f5/Far_Throw_.png', kind:'defense', elite:true},
+  'Weiter Pass': {icon:'https://drop-assets.ea.com/images/7jwRDD4zkOsqRpc821t73d/16d46d57a5dfc7dd5dd5f8de0fd26a99/Long_Ball_Pass.png', kind:'attack', elite:false},
+  'Weiter Pass+': {icon:'https://drop-assets.ea.com/images/59ogaJFyi7JRTBfMF1MBHf/e7fe84a1da6b070a6a41460257b9ec59/Long_Ball_Pass_.png', kind:'attack', elite:true},
+};
+
 // PLAYER_IMPACT_WEIGHTS: how much each stat nudges a player's effective attack/defense rating away
 // from their plain Overall - a DELTA around OV, not a replacement for it. A player whose individual
 // stats sit right on their Overall (the normal case) gets delta≈0 and plays exactly as before this
@@ -24182,6 +24294,20 @@ const PLAYER_IMPACT_WEIGHTS = {
 // computeTeamProfile's team-level aggregate keeps real decimal precision instead of compounding
 // rounding error across 11 players - relevant now that the Kader-Editor shows Angriff/Abwehr with a
 // decimal place of their own.
+// Real playstyles (see PLAYSTYLE_INFO, sourced straight from the EA ratings data) nudge attack/defense
+// a little further, on top of the stat-based delta above - a normal playstyle worth +0.3, its rarer
+// elite ("+") version worth +0.6, only counted toward the matching kind (an attacking playstyle never
+// helps defense and vice versa). Capped separately at ±1.5 so a player stacked with 6-7 playstyles
+// still can't out-swing the ±4 stat-based cap above by much.
+function playerPlaystyleBonus(p, kind){
+  if(!p.traits || !p.traits.length) return 0;
+  let bonus = 0;
+  p.traits.forEach(label=>{
+    const info = PLAYSTYLE_INFO[label];
+    if(info && info.kind===kind) bonus += info.elite ? 0.6 : 0.3;
+  });
+  return clamp(bonus, -1.5, 1.5);
+}
 function playerImpactRating(p, kind){
   const ov = p.ov || 75;
   const g = posGroup2(p.pos);
@@ -24192,6 +24318,7 @@ function playerImpactRating(p, kind){
     delta += (val-ov)*w;
   });
   delta = clamp(delta, -4, 4);
+  delta += playerPlaystyleBonus(p, kind);
   return ov+delta;
 }
 function computeTeamProfile(players, fallbackOv){
