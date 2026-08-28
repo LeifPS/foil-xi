@@ -9053,10 +9053,13 @@ const PACKS = [
           rare: all.filter(c=>c.ov>=95 && c.ov<100),
         };
       }
-      // per-slot budgets; every named legend individually clears ~0.5%+ chance per 5-card pack
+      // per-slot budgets, tuned so a 5-card pack opening hits these per-pack odds (not per-card):
+      // >=1 card at 100+ ≈37.6%, >=1 at 105+ ≈13.3%, >=1 at 108+ ≈9.3% - each derived from
+      // 1-(1-p)^5 solved for the combined per-card probability of that tier's named legends,
+      // then split across the tier's own legends in their previous relative proportions.
       const P = {
-        ferguson:0.0012, pele:0.003, maradona:0.008, zidane:0.008,
-        cruyff:0.009, hamm:0.0105, beckenbauer:0.012, ronaldoNazario:0.02, prinz:0.025, best:0.03,
+        ferguson:0.0012, pele:0.0031, maradona:0.0081, zidane:0.0081,
+        cruyff:0.0041, hamm:0.0047, beckenbauer:0.0085, ronaldoNazario:0.0142, prinz:0.0178, best:0.0213,
         rare:0.06, good:0.18,
       };
       return Array.from({length:5}, ()=>{
