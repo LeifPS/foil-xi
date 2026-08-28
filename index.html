@@ -24289,10 +24289,41 @@ const PLAYSTYLE_INFO = {
 // easy to miss a pool, or one added later), every reader resolves traits through here: use the card's
 // own traits if it has them, otherwise fall through to its base card's (found in BY_ID by baseId) -
 // so any card with a real baseId automatically gets that base player's PlayStyles.
+//
+// Base label -> its "+" counterpart, derived by matching the icon filename stem (e.g. Finesse_Shot vs
+// Finesse_Shot_) rather than the label text, since normal/elite German labels aren't always textually
+// related (e.g. "Angeschn. Schuss" vs "Angeschnittener Schuss+"). A handful of PlayStyles have no
+// elite tier at all (e.g. Kopfballmacht) and simply have no entry here.
+const PLAYSTYLE_ELITE_OF = (()=>{
+  const byStem = {};
+  Object.keys(PLAYSTYLE_INFO).forEach(label=>{
+    const info = PLAYSTYLE_INFO[label];
+    const file = info.icon.split('/').pop().replace(/\.png$/,'');
+    const stem = file.endsWith('_') ? file.slice(0,-1) : file;
+    byStem[stem] = byStem[stem] || {};
+    byStem[stem][info.elite ? 'elite' : 'normal'] = label;
+  });
+  const map = {};
+  Object.values(byStem).forEach(pair=>{ if(pair.normal && pair.elite) map[pair.normal] = pair.elite; });
+  return map;
+})();
+// 100+ cards get their 2nd PlayStyle upgraded to "+", 105+ cards get their first 3 upgraded (3 PS+
+// total) - reflects the card's own fixed base rating (ov minus any XP-level boost from
+// applyCardLevel, never the leveled-up display value) so leveling a card up never grants it more
+// elite PlayStyles than its printed rating actually earned.
 function resolveCardTraits(card){
-  if(card.traits && card.traits.length) return card.traits;
-  const base = card.baseId ? BY_ID.get(card.baseId) : null;
-  return (base && base.traits) || [];
+  let traits = (card.traits && card.traits.length) ? card.traits : null;
+  if(!traits){
+    const base = card.baseId ? BY_ID.get(card.baseId) : null;
+    traits = (base && base.traits) || [];
+  }
+  if(!traits.length) return traits;
+  const baseOv = (card.ov||0) - (card.level||0);
+  if(baseOv < 100) return traits;
+  return traits.map((label,i)=>{
+    const shouldUpgrade = baseOv>=105 ? i<3 : i===1;
+    return shouldUpgrade ? (PLAYSTYLE_ELITE_OF[label] || label) : label;
+  });
 }
 
 // PLAYER_IMPACT_WEIGHTS: how much each stat nudges a player's effective attack/defense rating away
