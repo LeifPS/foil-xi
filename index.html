@@ -13492,7 +13492,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // at 4 slots total (card space), with Array.prototype.sort's stability keeping elite ones in front
   // and never dropping them for a normal-tier one (some players carry 5-7 traits total).
   const cardPlaystyles = (!card.isManager && card.traits) ? card.traits.filter(t=>PLAYSTYLE_INFO[t]) : [];
-  const displayedPlaystyles = [...cardPlaystyles].sort((a,b)=>(PLAYSTYLE_INFO[b].elite?1:0)-(PLAYSTYLE_INFO[a].elite?1:0)).slice(0,4);
+  const displayedPlaystyles = [...cardPlaystyles].sort((a,b)=>(PLAYSTYLE_INFO[b].elite?1:0)-(PLAYSTYLE_INFO[a].elite?1:0)).slice(0,3);
   const playstylePlusHTML = displayedPlaystyles.length ? `<div class="playstyle-plus-row">${displayedPlaystyles.map(t=>`<img class="playstyle-plus-icon${PLAYSTYLE_INFO[t].elite?' is-elite':''}" src="${PLAYSTYLE_INFO[t].icon}" alt="" title="${t}" loading="lazy">`).join('')}</div>` : '';
   const bodyInner = card.isManager
     ? `<div class="name${nameClass}">${card.n}</div>
