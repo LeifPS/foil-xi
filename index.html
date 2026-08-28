@@ -15474,6 +15474,7 @@ async function renderAdminPanel(view){
         <button class="action-btn secondary" id="admin-open-any-pack" style="width:auto;">Beliebiges Pack kostenlos \u00f6ffnen</button>
         <button class="action-btn secondary" id="admin-add-card" style="width:auto;">Karte direkt hinzuf\u00fcgen</button>
         <button class="action-btn secondary" id="admin-add-all-cards" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Alle Karten hinzuf\u00fcgen (mir)</button>
+        <button class="action-btn secondary" id="admin-unlock-legendpack" style="width:auto;">Fu\u00dfballg\u00f6tter Pack sofort freischalten (mir)</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
         <input id="admin-custom-coins" type="number" placeholder="Beliebige Anzahl..." style="width:180px;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 12px;border-radius:9px;">
@@ -15558,6 +15559,12 @@ async function renderAdminPanel(view){
   });
   document.getElementById('admin-open-any-pack').addEventListener('click', openAdminPackPicker);
   document.getElementById('admin-add-card').addEventListener('click', openAdminAddCardModal);
+  document.getElementById('admin-unlock-legendpack').addEventListener('click', async ()=>{
+    if(profile.ogPackUnlocked){ toast('War schon freigeschaltet.'); return; }
+    profile.ogPackUnlocked = true;
+    await sSet('profile', profile);
+    toast('Fußballgötter Pack freigeschaltet — ohne die O Rei Herausforderung abzuschließen.');
+  });
   document.getElementById('admin-add-all-cards').addEventListener('click', openAdminGiveAllCardsModal);
   document.getElementById('admin-team-sim').addEventListener('click', openAdminTeamSimBuilder);
   const doLoad = ()=>loadAdminUserPanel(document.getElementById('admin-user-search').value.trim());
