@@ -12417,7 +12417,22 @@ async function switchClub(){
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
   showEntryGate();
 }
+// Hard kill-switch for planned maintenance (e.g. the real-player-database migration): flipped to true
+// right before risky work starts, blocks literally every entry path (resumed session, ?club= URL,
+// fresh entry gate) before any of them even run, and flipped back once the work is verified safe.
+const MAINTENANCE_MODE = true;
+function showMaintenanceScreen(){
+  hideBootLoader();
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:380px;text-align:center;">
+        <h2 style="margin-bottom:8px;">🛠️ Wartungsarbeiten</h2>
+        <p class="hint" style="margin-top:0;">FOIL ELEVEN wird gerade aktualisiert (neue Spieler-Datenbank). Bitte schau in Kürze wieder vorbei - deine Daten sind sicher und bleiben unangetastet.</p>
+      </div>
+    </div>`;
+}
 async function boot(){
+  if(MAINTENANCE_MODE){ showMaintenanceScreen(); return; }
   await fbReady;
   // If the browser already holds a valid Firebase-persisted session (see restoredAuthUser in
   // initFirebase), resume it straight away - overrides any ?club= in the URL, since a kept-signed-in
