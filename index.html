@@ -8829,6 +8829,7 @@ const RATINGS27_ROSTER = [
   {baseId:247827, n:'M. Olise', pos:'RM, RW', nat:'France', lg:'Bundesliga', club:'FC Bayern München', foot:'Left', img:'https://ratings-images-prod.pulse.ea.com/FC25/full/player-portraits/p247827.png?padding=0.7', ov:90, pac:83, sho:82, pas:89, dri:91, defn:47, phy:69},
   {baseId:231747, n:'K. Mbappé', pos:'ST, LW, LM', nat:'France', lg:'La Liga', club:'Real Madrid', foot:'Right', img:'https://ratings-images-prod.pulse.ea.com/FC25/full/player-portraits/p231747.png?padding=0.7', ov:91, pac:96, sho:91, pas:80, dri:92, defn:29, phy:76},
   {baseId:239085, n:'E. Haaland', pos:'ST', nat:'Norway', lg:'Premier League', club:'Manchester City', foot:'Left', img:'https://ratings-images-prod.pulse.ea.com/FC25/full/player-portraits/p239085.png?padding=0.7', ov:91, pac:87, sho:92, pas:71, dri:80, defn:47, phy:89},
+  {baseId:227203, n:'A. Putellas', pos:'CM, CAM, CDM', nat:'Spain', lg:'Liga F', club:'FC Barcelona', foot:'Left', img:'https://ratings-images-prod.pulse.ea.com/FC25/full/player-portraits/p227203.png?padding=0.7', ov:91, pac:82, sho:89, pas:90, dri:91, defn:72, phy:80},
 ];
 const RATINGS27_ID_BASE = 9794000, RATINGS27_RELOAD_ID_BASE = 9795000;
 // Real action photos for specific "27 Ratings"/"Ratings Reload" cards, keyed by baseId - same override
@@ -8863,6 +8864,7 @@ const RATINGS27_IMG_OVERRIDE = {
   203376: 'https://cdn3.futbin.com/content/fifa26/img/players/p84089456.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=53959f214e55d8a56333c729b5c49658', // V. van Dijk
   212622: 'https://cdn3.futbin.com/content/fifa25/img/players/p100875918.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=77004c88bfafef3b7ed46d0b3dda7b8a', // J. Kimmich
   235212: 'https://cdn3.futbin.com/content/fifa26/img/players/p50566860.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=df3de4049035af1e43e9caa7e419cb97', // A. Hakimi
+  227203: 'https://cdn3.futbin.com/content/fifa26/img/players/p134444931.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=29b058e635ffe5ab86aa76f4a8026fe5', // A. Putellas
 };
 // The RATINGS27_IMG_OVERRIDE real action photos are reserved for the rare 100+ "Ratings Reload" pull
 // below, not the base 88-91 "27 Ratings" cards - those stay on the plain sofifa image (p.img) so the
@@ -8957,13 +8959,13 @@ const PACKS = [
     desc:'6 Spieler, Rating 82-90 (inkl. Chance auf Sonderkarten). W\u00e4hle 3 davon zum Behalten.',
     draw(){ const pool=poolByRange(82,90,true); return Array.from({length:6},()=>pick(pool)); }},
   {id:'ratings27',name:'27 Ratings',cost:25000,tier:'ultimate',count:9,
-    desc:'9 Spieler aus einem starken Rating-85-94-Pool aus reinen Basis-Karten (keine Varianten), in den alle 27 frisch aufgewerteten FC27-Rating-Refresh-Karten der aktuell besten Profis eingemischt sind. Ca. 25% Chance pro Pack auf eine seltene „Ratings Reload“-Karte (+15 OVR obendrauf, Substats von den neuen Werten hochskaliert) — davon ca. 4% auf eine 105+ Reload-Karte, der Rest auf 103-104.',
+    desc:'9 Spieler aus einem starken Rating-85-94-Pool aus reinen Basis-Karten (keine Varianten), in den alle 28 frisch aufgewerteten FC27-Rating-Refresh-Karten der aktuell besten Profis eingemischt sind. Ca. 25,6% Chance pro Pack auf eine seltene „Ratings Reload“-Karte (+15 OVR obendrauf, Substats von den neuen Werten hochskaliert) — davon ca. 4,3% auf eine 105+ Reload-Karte, der Rest auf 103-104.',
     draw(){
       const pool = poolByRange(85,94,false).concat(RATINGS27_CARDS);
       const cards = Array.from({length:9},()=>pick(pool));
       const r = Math.random();
-      if(r<0.04) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_HIGH); // ~4% -> 105+
-      else if(r<0.25) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_LOW); // ~21% -> 103-104, 25% combined for any Reload
+      if(r<0.043) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_HIGH); // 4.3% -> 105+
+      else if(r<0.256) cards[Math.floor(Math.random()*cards.length)] = pick(RATINGS27_RELOAD_LOW); // 21.3% -> 103-104, 25.6% combined for any Reload
       return cards;
     }},
   {id:'mystery',name:'Mystery Elite Pack',cost:30000,tier:'ultimate',count:3,
