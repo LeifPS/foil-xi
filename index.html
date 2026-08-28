@@ -12933,7 +12933,7 @@ async function init(){
   wm26VarianteSpecials(); wm26KapitaenSpecials();
   profile = await sGet('profile');
   if(!profile){
-    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false};
+    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false, pendingLigaPacks:[]};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -12972,6 +12972,7 @@ async function init(){
     if(profile.careerWins===undefined) profile.careerWins = profile.wins||0;
     if(profile.graphicsPreset===undefined) profile.graphicsPreset = 'full';
     if(profile.showDecimalEffOv===undefined) profile.showDecimalEffOv = false;
+    if(!profile.pendingLigaPacks) profile.pendingLigaPacks = [];
   }
   applyGraphicsPreset();
   if(ensureWeekPassQuestsFresh()) await sSet('profile', profile);
@@ -20337,7 +20338,7 @@ async function ligaWeekendRecapActive(){
 // membership. (Newcomers no longer wait for this - joinLigaNow() slots them into the bottom league
 // immediately, see below.) Guarded by leagueMeta/rollover_{weekStart} so
 // it only ever actually runs once per week no matter which client's Ligen-tab visit triggers it -
-// there's no server/cron here, so "whoever opens the tab first on/after Samstag 12:00" has to do it.
+// there's no server/cron here, so "whoever opens the tab first on/after Samstag 00:00" has to do it.
 // Fixed to a specific time (not just "any time Samstag") so relegation always reveals at the same
 // moment for everyone, instead of whenever the first visitor of the day happened to open the tab.
 // Runs Samstag (not Sonntag) per the tab's own description: "Montag-Freitag Ligaphase, Samstag
@@ -20348,7 +20349,7 @@ async function resolveWeeklyRolloverIfNeeded(){
   const weekStart = mostRecentMondayBerlin();
   if(weekStart<LIGA_SEASON_EPOCH) return null; // season hasn't even started its first week yet
   const now = berlinNow();
-  if(now.getDay()!==6 || now.getHours()<12) return null; // only Samstag ab 12:00 Uhr Berlin time
+  if(now.getDay()!==6) return null; // only Samstag ab 00:00 Uhr Berlin time
   const flagRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
   // Atomic claim: a plain read-then-later-write flag left a window where two clients hitting Samstag
   // 12:00 at the same moment could BOTH pass the "not done yet" check and both run the whole payout
@@ -20446,16 +20447,19 @@ async function resolveWeeklyRolloverIfNeeded(){
         const card = currentLigaChampionCard();
         collectionAdds.push({uid:genId(), cardId:card.id});
       }
-      // Place-based pack rewards (Liga A top 3, Liga B top 2) - drawn now and added directly, same as
-      // the champion card above, since these are OTHER accounts' saves docs with no interactive
-      // pack-opening screen to show them through.
+      // Place-based pack rewards (Liga A top 3, Liga B top 2): queued instead of drawn+added right here.
+      // Drawing every winner's packs in one big sweep, all at once, from whichever random visitor's
+      // browser happens to trigger the rollover, used to mean several packs' worth of cards could land
+      // in someone's collection simultaneously with zero ceremony (and all through one client doing
+      // everyone else's writes). Now each pack is just queued onto the recipient's own
+      // pendingLigaPacks - they open them one at a time, through the normal pack-opening screen, in
+      // their own session, whenever they next visit "Ligen".
+      const pendingAdds = [];
       r.packs.forEach(p=>{
-        const pack = PACKS.find(x=>x.id===p.id);
-        if(!pack) return;
-        for(let n=0;n<p.count;n++){
-          pack.draw().forEach(c=>{ if(!c.isManager) collectionAdds.push({uid:genId(), cardId:c.id}); });
-        }
+        if(!PACKS.find(x=>x.id===p.id)) return; // unknown pack id - skip rather than queue something unopenable
+        for(let n=0;n<p.count;n++) pendingAdds.push(p.id);
       });
+      if(pendingAdds.length) updates['profile.pendingLigaPacks'] = fb.arrayUnion(...pendingAdds);
       if(collectionAdds.length) updates.collection = fb.arrayUnion(...collectionAdds);
       // Badge (Liga A top 3 only): valid through the coming Ligaphase week - weekStart here is the
       // week that just finished, so +14 days covers "starts next Monday, lasts through that whole week".
@@ -20473,7 +20477,7 @@ async function resolveWeeklyRolloverIfNeeded(){
     // Build next week's fixtures (schedule only, no results yet - matches start pending, see
     // buildLeagueWeekPayload) right now, at this one guaranteed fixed moment, instead of waiting for
     // whoever's tab happens to open the Ligen view first - the pairings need to already exist for
-    // EVERY league from Samstag 12:00 on, not just for leagues someone happened to visit. Goes through
+    // EVERY league from Samstag 00:00 on, not just for leagues someone happened to visit. Goes through
     // getOrCreateLeagueWeek (not a raw buildLeagueWeekPayload+setDoc) so it stays safe even if two
     // rollover calls somehow overlap: first writer wins, nobody's schedule gets silently re-rolled.
     await Promise.all(Object.entries(nextMembers).filter(([,m])=>m.length).map(([letter,members])=>
@@ -20539,7 +20543,7 @@ async function renderAllLigenOverview(box){
   const docs = membershipSnap.docs.slice().sort((a,b)=>a.id.localeCompare(b.id));
   if(!docs.length){ box.innerHTML = `<p class="hint">Noch keine Ligen eingeteilt.</p>`; return; }
   const weekStartBefore = mostRecentMondayBerlin();
-  // Not just "is it the weekend" - the commissioner pass itself doesn't run until Samstag 12:00, so
+  // Not just "is it the weekend" - the commissioner pass itself doesn't run until Samstag 00:00, so
   // the split view (and building a "next week" preview off post-rollover membership) only makes sense
   // once that pass has actually completed - see ligaWeekendRecapActive/ligaRolloverDoneFor.
   const isWeekendRecap = await ligaWeekendRecapActive();
@@ -20579,14 +20583,39 @@ async function renderAllLigenOverview(box){
   }
   box.innerHTML = html;
 }
+// Liga-reward packs are queued (profile.pendingLigaPacks, see resolveWeeklyRolloverIfNeeded) instead of
+// drawn+added the moment the weekly rollover runs, so the player opens each one themselves, one at a
+// time, through the normal pack-opening screen - no pile of cards silently appearing all at once.
+function renderLigaPendingPacks(box){
+  const pending = profile.pendingLigaPacks || [];
+  if(!pending.length){ box.innerHTML = ''; return; }
+  box.innerHTML = `
+    <div class="vs-panel" style="margin-bottom:14px;border-color:var(--gold);">
+      <h3 style="font-size:14px;margin-bottom:6px;color:var(--gold);">🎁 Liga-Belohnung abholen</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">${pending.length} Pack${pending.length>1?'s':''} von deinen letzten Liga-Platzierungen warten noch darauf, geöffnet zu werden.</p>
+      <button class="action-btn" id="liga-open-pending-pack" style="width:auto;padding:9px 18px;">Nächstes Pack öffnen (1/${pending.length})</button>
+    </div>`;
+  document.getElementById('liga-open-pending-pack').addEventListener('click', async (e)=>{
+    e.target.disabled = true;
+    const packId = profile.pendingLigaPacks[0];
+    const pack = PACKS.find(p=>p.id===packId);
+    profile.pendingLigaPacks = profile.pendingLigaPacks.slice(1);
+    await sSet('profile', profile);
+    if(pack) showPackOpening(pack, pack.draw(), {});
+    else toast('Unbekanntes Pack übersprungen.');
+    renderLigaPendingPacks(box);
+  });
+}
 function renderLigenPanel(view){
   ligaFixturesShowAll = false;
   view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Ruhetag. Auf- und Abstieg jede Woche.</p></div>
+    <div id="liga-pending-packs"></div>
     <div id="ligen-subnav" style="display:flex;gap:2px;padding:0;background:none;border:none;margin-bottom:14px;">
       <button class="nav-btn ${ligenSubTab==='mine'?'active':''}" id="ligen-subtab-mine" style="padding:9px 14px;">Meine Liga</button>
       <button class="nav-btn ${ligenSubTab==='all'?'active':''}" id="ligen-subtab-all" style="padding:9px 14px;">Alle Ligen</button>
     </div>
     <div id="liga-content"><p class="hint">Lädt…</p></div>`;
+  renderLigaPendingPacks(document.getElementById('liga-pending-packs'));
   document.getElementById('ligen-subtab-mine').addEventListener('click', ()=>{ ligenSubTab='mine'; renderLigenPanel(view); });
   document.getElementById('ligen-subtab-all').addEventListener('click', ()=>{ ligenSubTab='all'; renderLigenPanel(view); });
   const box = document.getElementById('liga-content');
@@ -20605,7 +20634,7 @@ function renderLigenPanel(view){
       if(filled<11){
         box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Stelle zuerst einen vollständigen Kader (11 Spieler) auf, dann kannst du am Wochenende einsteigen.</p>`;
       } else if(!(await ligaWeekendRecapActive())){
-        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Der Beitritt ist erst ab Samstag 12:00 Uhr (nach der Relegation) möglich (dann bist du sofort in der Tabelle, ohne weiter zu warten).</p>`;
+        box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt. Der Beitritt ist erst ab Samstag 00:00 Uhr (nach der Relegation) möglich (dann bist du sofort in der Tabelle, ohne weiter zu warten).</p>`;
       } else {
         box.innerHTML = `<p class="hint">Du bist noch keiner Liga zugeteilt.</p>
           <button class="action-btn" id="liga-join-btn" style="width:auto;padding:9px 18px;">In die Liga einsteigen</button>`;
