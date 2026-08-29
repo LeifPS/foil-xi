@@ -19623,9 +19623,10 @@ function mostRecentMondayBerlin(){
 // Week 1 of the league system - the Monday right after the one-time seeding (Sun 2026-08-23). Fixed
 // forever: every later week is counted as "N weeks after this one", never recomputed relative to now.
 const LIGA_SEASON_EPOCH = new Date(2026,7,24,0,0,0,0).getTime();
-// Ligen rules revision - later match reveal times, a genuine two-legged live Relegation (Samstag
-// 12:00 Hinspiel / 15:00 Rückspiel instead of one instant computed pass), and the next league's table
-// held back until Sonntag. Applies to every week from this Monday on; the week already in progress
+// Ligen rules revision - later match reveal times, automatic 1st-place promotion and 7th/8th-place
+// relegation, a live 2-round promotion bracket for the 2nd promotion spot (3rd vs 4th, winner vs 2nd,
+// each Hin-/Rückspiel, Samstag 12/13/15/16 Uhr - see resolveWeeklyRolloverV2IfNeeded), and the next
+// league's table held back until Sonntag. Applies to every week from this Monday on; the week already in progress
 // when this shipped (LIGA_SEASON_EPOCH itself) keeps the old rules all the way through its own
 // Samstag - never retroactive, so nothing about an already-running week changes under it.
 const LIGA_RULES_V2_WEEK_START = new Date(2026,7,31,0,0,0,0).getTime();
@@ -20519,9 +20520,9 @@ function ligaRelegationTie(teamA, teamB){
 // league vs 2nd-to-last of the upper league, see ligaRelegationTie above - still used unchanged for
 // older weeks): 3rd vs 4th play a Halbfinale (Hin-/Rückspiel), the winner then plays 2nd place in a
 // Finale (also Hin-/Rückspiel) for the actual promotion spot. That's 4 live legs, not 2, so Samstag
-// now has four fixed moments instead of two: 12:00/15:00 for the Halbfinale, 18:00/21:00 for the
+// now has four fixed moments instead of two: 12:00/13:00 for the Halbfinale, 15:00/16:00 for the
 // Finale. Direct promotion/relegation and next week's membership+fixtures only become final once the
-// Finale-Rückspiel (21:00) has actually been played - see ligaPromoFinalize.
+// Finale-Rückspiel (16:00) has actually been played - see ligaPromoFinalize.
 function ligaTwoLegLeg1(teamA, teamB){
   return buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:true});
 }
@@ -20767,21 +20768,21 @@ async function resolveWeeklyRolloverV2IfNeeded(weekStart){
   if(!semiLeg1Snap.exists() || semiLeg1Snap.data().status!=='done'){
     return await ligaPromoSemiLeg1(weekStart, semiLeg1Ref);
   }
-  if(now.getHours()<15) return null; // Halbfinale-Hinspiel done, Rückspiel isn't due yet
+  if(now.getHours()<13) return null; // Halbfinale-Hinspiel done, Rückspiel isn't due yet
   let semiLeg2Snap;
   try{ semiLeg2Snap = await fb.getDoc(semiLeg2Ref); }
   catch(e){ console.warn('promo semi leg2 read failed', e); return null; }
   if(!semiLeg2Snap.exists() || semiLeg2Snap.data().status!=='done'){
     return await ligaPromoSemiLeg2(weekStart, semiLeg1Snap.data(), semiLeg2Ref);
   }
-  if(now.getHours()<18) return null; // Halbfinale done, Finale-Hinspiel isn't due yet
+  if(now.getHours()<15) return null; // Halbfinale done, Finale-Hinspiel isn't due yet
   let finalLeg1Snap;
   try{ finalLeg1Snap = await fb.getDoc(finalLeg1Ref); }
   catch(e){ console.warn('promo final leg1 read failed', e); return null; }
   if(!finalLeg1Snap.exists() || finalLeg1Snap.data().status!=='done'){
     return await ligaPromoFinalLeg1(weekStart, semiLeg1Snap.data(), semiLeg2Snap.data(), finalLeg1Ref);
   }
-  if(now.getHours()<21) return null; // Finale-Hinspiel done, Rückspiel isn't due yet
+  if(now.getHours()<16) return null; // Finale-Hinspiel done, Rückspiel isn't due yet
   let rolloverSnap;
   try{ rolloverSnap = await fb.getDoc(rolloverRef); }
   catch(e){ console.warn('rollover v2 flag read failed', e); return null; }
@@ -20825,7 +20826,7 @@ async function ligaPromoSemiLeg1(weekStart, ref){
   catch(e){ console.warn('promo semi leg1 write failed', e); return null; }
   return {stage:'semiLeg1', tables, legs};
 }
-// Stage 2 (Samstag ab 15:00): plays each Halbfinale pairing's Rückspiel with a FRESH squad fetch,
+// Stage 2 (Samstag ab 13:00): plays each Halbfinale pairing's Rückspiel with a FRESH squad fetch,
 // resolves the aggregate/decider, and stores the semi-final winner per league (who then faces that
 // league's own 2nd place in the Finale, stages 3/4 below).
 async function ligaPromoSemiLeg2(weekStart, leg1Data, ref){
@@ -20844,7 +20845,7 @@ async function ligaPromoSemiLeg2(weekStart, leg1Data, ref){
   catch(e){ console.warn('promo semi leg2 write failed', e); return null; }
   return {stage:'semiLeg2', winners};
 }
-// Stage 3 (Samstag ab 18:00): pairs each league's Halbfinale winner against that league's own 2nd
+// Stage 3 (Samstag ab 15:00): pairs each league's Halbfinale winner against that league's own 2nd
 // place for the Finale (deciding who actually gets the league's 2nd promotion spot), plays the Hinspiel.
 async function ligaPromoFinalLeg1(weekStart, semiLeg1Data, semiLeg2Data, ref){
   if(!(await ligaV2ClaimStage(ref))) return null;
@@ -20861,7 +20862,7 @@ async function ligaPromoFinalLeg1(weekStart, semiLeg1Data, semiLeg2Data, ref){
   catch(e){ console.warn('promo final leg1 write failed', e); return null; }
   return {stage:'finalLeg1', legs};
 }
-// Stage 4 (Samstag ab 21:00): plays the Finale-Rückspiel, resolves the aggregate/decider - that
+// Stage 4 (Samstag ab 16:00): plays the Finale-Rückspiel, resolves the aggregate/decider - that
 // winner gets the league's 2nd promotion spot - then finalizes everything: rewards (from the tables
 // frozen back in stage 1, BEFORE any movement - a player promoted from Liga B 2nd place to Liga A
 // still gets Liga B's 2nd-place reward, never Liga A's, no matter which league they land in), 1st
