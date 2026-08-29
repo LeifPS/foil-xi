@@ -1687,18 +1687,28 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .nt-kroesus{background:linear-gradient(90deg,#fff4b3,#c9a020,#6fd67a,#fff4b3);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
 .nt-aufsteiger{background:linear-gradient(90deg,#bde3ff,#4da8ff,#bde3ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite;}
 .nt-pokalkoenig{background:linear-gradient(90deg,#ff9de2,#ffd76a,#9dffb0,#9de2ff,#d79dff,#ff9de2);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite;}
-.ach-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
-.ach-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
-.ach-icon{font-size:22px;flex-shrink:0;}
-.ach-title{font-weight:700;font-size:14px;}
-.ach-desc{font-size:11.5px;color:var(--muted);margin-top:1px;}
-.ach-bar{height:8px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;margin:8px 0 6px;}
+.ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
+.ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.ach-icon{font-size:24px;flex-shrink:0;width:40px;height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
+.ach-title{font-weight:700;font-size:14.5px;font-family:'Anton';letter-spacing:.01em;}
+.ach-desc{font-size:11.5px;color:var(--muted);margin-top:2px;}
+.ach-summary{font-size:11px;color:var(--muted);margin:0 0 8px;}
+.ach-bar{height:7px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:12px;}
 .ach-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--turf),var(--turf-bright));transition:width .3s;}
-.ach-tiers{display:flex;gap:6px;margin-bottom:4px;}
-.ach-tier-pip{flex:1;text-align:center;font-size:9.5px;font-family:'JetBrains Mono';font-weight:700;padding:4px 2px;border-radius:6px;background:var(--panel);border:1px solid var(--line);color:var(--muted);}
-.ach-tier-pip.done{background:rgba(61,196,130,.15);border-color:var(--turf-bright);color:var(--turf-bright);}
-.ach-tier-pip.claimable{background:rgba(230,195,67,.15);border-color:var(--gold);color:var(--gold);}
-.ach-tier-pip.next{border-color:var(--muted);}
+.ach-tier-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;background:var(--panel);border:1px solid var(--line);margin-bottom:6px;}
+.ach-tier-row:last-child{margin-bottom:0;}
+.ach-tier-row.ach-tier-done{border-color:rgba(61,196,130,.4);background:rgba(61,196,130,.06);}
+.ach-tier-row.ach-tier-claimable{border-color:var(--gold);background:rgba(230,195,67,.08);}
+.ach-tier-row.ach-tier-locked{opacity:.55;}
+.ach-tier-label{flex-shrink:0;width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono';font-weight:700;font-size:11px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);}
+.ach-tier-done .ach-tier-label{background:rgba(61,196,130,.18);border-color:var(--turf-bright);color:var(--turf-bright);}
+.ach-tier-claimable .ach-tier-label{background:rgba(230,195,67,.18);border-color:var(--gold);color:var(--gold);}
+.ach-tier-body{flex:1;min-width:0;}
+.ach-tier-cond{font-size:12.5px;font-weight:600;}
+.ach-tier-reward{font-size:11px;color:var(--gold);margin-top:1px;}
+.ach-tier-action{flex-shrink:0;}
+.ach-tier-check{color:var(--turf-bright);font-size:16px;font-weight:700;}
+.ach-tier-lock{color:var(--muted);font-size:13px;}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';font-weight:700;text-align:center;}
@@ -13190,17 +13200,19 @@ async function init(){
   if(ballondorMigrated) await sSet('profile', profile);
   // Liga-Abzeichen -> Erfolge: profile.ligaBadge (time-limited, Liga-A-Platzierung) is retired the
   // moment the Erfolge/Nametag system ships - whoever currently holds one gets it "sofort abgehakt":
-  // the matching achievement line (ligaFirst/ligaSecond/ligaThird) is marked fully complete (all 5
-  // tiers already claimed, so no reward-claim prompt for tiers they never actually grinded through)
-  // and the permanent nametag is granted right away, exactly once per account.
+  // the matching (single-tier) achievement line (ligaFirst/ligaSecond/ligaThird) is marked fully
+  // complete and the permanent nametag is granted right away, exactly once per account. Reads the
+  // achievement's OWN last-tier index (ach.tiers.length) rather than a hardcoded 5, so this stays
+  // correct regardless of how many tiers that line actually has.
   if(profile.ligaBadge && !profile.ligaBadgeMigrated){
     ensureAchievementState();
     const achId = profile.ligaBadge.tier==='gold' ? 'ligaFirst' : profile.ligaBadge.tier==='silver' ? 'ligaSecond' : profile.ligaBadge.tier==='bronze' ? 'ligaThird' : null;
     if(achId){
       const ach = ACHIEVEMENTS.find(a=>a.id===achId);
-      profile.achievementStats[ach.stat] = Math.max(profile.achievementStats[ach.stat]||0, ach.tiers[4]);
-      profile.achievementClaimed[achId] = 5;
-      const nametagId = ach.rewards[4].nametag;
+      const lastTier = ach.tiers.length;
+      profile.achievementStats[ach.stat] = Math.max(profile.achievementStats[ach.stat]||0, ach.tiers[lastTier-1]);
+      profile.achievementClaimed[achId] = lastTier;
+      const nametagId = ach.rewards[lastTier-1].nametag;
       if(nametagId && !profile.unlockedNametags.includes(nametagId)) profile.unlockedNametags.push(nametagId);
       if(!profile.nametag) profile.nametag = nametagId;
     }
@@ -21615,8 +21627,12 @@ function ensureAchievementState(){
 // nametag:'id'} - tier V of every single line ALWAYS includes a nametag, per design (completing an
 // achievement all the way grants at least one permanent nametag, sometimes coins/packs on top, and for
 // a couple of the hardest lines a genuinely rare single-card reward).
+// cond(n): phrases the raw threshold `n` into the actual German condition text shown per tier (e.g.
+// "10 Siege", "50.000 Coins verdient") - kept as a function per achievement rather than a flat string
+// since a couple of stats need real number formatting (formatCoins) instead of a bare integer.
 const ACHIEVEMENTS = [
   {id:'wins', name:'Siege', desc:'Gewinne Matches (online oder gegen Freunde).', icon:'🏆', stat:'wins',
+    cond:n=>`${n} Siege`,
     tiers:[10,30,75,150,300],
     rewards:[
       {coins:2000},
@@ -21626,6 +21642,7 @@ const ACHIEVEMENTS = [
       {coins:60000, packs:['kronjuwelen'], card:'ligaMeister', nametag:'unaufhaltsam'},
     ]},
   {id:'goals', name:'Torjäger', desc:'Erziele Tore in Matches.', icon:'⚽', stat:'goals',
+    cond:n=>`${n} Tore`,
     tiers:[25,75,200,450,900],
     rewards:[
       {coins:2000},
@@ -21635,6 +21652,7 @@ const ACHIEVEMENTS = [
       {coins:70000, packs:['zeitgeist'], nametag:'knipser'},
     ]},
   {id:'packsOpened', name:'Pack-Öffner', desc:'Öffne Packs im Kartenladen.', icon:'📦', stat:'packsOpened',
+    cond:n=>`${n} Packs geöffnet`,
     tiers:[10,30,75,150,300],
     rewards:[
       {coins:2000},
@@ -21644,6 +21662,7 @@ const ACHIEVEMENTS = [
       {coins:45000, packs:['poeten'], nametag:'sammler'},
     ]},
   {id:'cardsAcquired', name:'Kartensammler', desc:'Erhalte neue Karten (Packs, Handel, Belohnungen).', icon:'🗂️', stat:'cardsAcquired',
+    cond:n=>`${n} Karten erhalten`,
     tiers:[50,150,400,800,1500],
     rewards:[
       {coins:2000},
@@ -21653,6 +21672,7 @@ const ACHIEVEMENTS = [
       {coins:55000, packs:['kronjuwelen'], nametag:'kurator'},
     ]},
   {id:'sbcsCompleted', name:'SBC-Meister', desc:'Schließe Herausforderungen (SBCs) ab.', icon:'🛠️', stat:'sbcsCompleted',
+    cond:n=>`${n} SBCs abgeschlossen`,
     tiers:[3,10,25,50,100],
     rewards:[
       {coins:2000},
@@ -21662,6 +21682,7 @@ const ACHIEVEMENTS = [
       {coins:75000, packs:['deutschelegenden'], nametag:'baumeister'},
     ]},
   {id:'tradesCompleted', name:'Händler', desc:'Schließe Handelsgeschäfte im Marktplatz ab.', icon:'🤝', stat:'tradesCompleted',
+    cond:n=>`${n} Handelsgeschäfte`,
     tiers:[5,15,40,80,150],
     rewards:[
       {coins:2000},
@@ -21671,6 +21692,7 @@ const ACHIEVEMENTS = [
       {coins:60000, packs:['zeitgeist'], nametag:'makler'},
     ]},
   {id:'coinsEarned', name:'Münzsammler', desc:'Verdiene Coins (aus jeder Quelle).', icon:'💰', stat:'coinsEarned',
+    cond:n=>`${formatCoins(n)} Coins verdient`,
     tiers:[50000,200000,750000,2000000,5000000],
     rewards:[
       {coins:2000},
@@ -21679,34 +21701,30 @@ const ACHIEVEMENTS = [
       {coins:60000, packs:['ratings27']},
       {coins:150000, packs:['kronjuwelen'], nametag:'kroesus'},
     ]},
+  // Liga-Meister/-Vizemeister/-Dritter sind bewusst EINSTUFIG - anders als jede andere Erfolgs-Linie
+  // hier gibt es kein sinnvolles "immer wieder eine Stufe schwerer" (mehrfach 1./2./3. in Liga A zu
+  // werden ist schon selten genug), also einmal schaffen = direkt die volle Belohnung + das
+  // permanente Nametag, kein künstlicher 5-Stufen-Grind.
   {id:'ligaFirst', name:'Liga-Meister', desc:'Beende eine Liga-A-Woche auf Platz 1.', icon:'🥇', stat:'ligaFirst',
-    tiers:[1,3,6,10,15],
+    cond:()=>'Liga A auf Platz 1 beenden',
+    tiers:[1],
     rewards:[
-      {coins:3000},
-      {coins:10000},
-      {coins:25000, packs:['ratings27']},
-      {coins:60000, packs:['kronjuwelen']},
-      {coins:120000, packs:['kronjuwelen'], card:'ligaMeister', nametag:'gold'},
+      {coins:30000, packs:['kronjuwelen'], card:'ligaMeister', nametag:'gold'},
     ]},
   {id:'ligaSecond', name:'Liga-Vizemeister', desc:'Beende eine Liga-A-Woche auf Platz 2.', icon:'🥈', stat:'ligaSecond',
-    tiers:[1,3,6,10,15],
+    cond:()=>'Liga A auf Platz 2 beenden',
+    tiers:[1],
     rewards:[
-      {coins:2500},
-      {coins:8000},
-      {coins:18000, packs:['ratings27']},
-      {coins:40000},
-      {coins:80000, packs:['zeitgeist'], nametag:'silber'},
+      {coins:18000, packs:['zeitgeist'], nametag:'silber'},
     ]},
   {id:'ligaThird', name:'Liga Dritter', desc:'Beende eine Liga-A-Woche auf Platz 3.', icon:'🥉', stat:'ligaThird',
-    tiers:[1,3,6,10,15],
+    cond:()=>'Liga A auf Platz 3 beenden',
+    tiers:[1],
     rewards:[
-      {coins:2000},
-      {coins:6000},
-      {coins:14000},
-      {coins:30000},
-      {coins:60000, packs:['poeten'], nametag:'bronze'},
+      {coins:10000, packs:['poeten'], nametag:'bronze'},
     ]},
   {id:'promotions', name:'Aufsteiger', desc:'Steige in eine höhere Liga auf.', icon:'📈', stat:'promotions',
+    cond:n=>`${n}x aufgestiegen`,
     tiers:[1,3,6,12,20],
     rewards:[
       {coins:3000},
@@ -21716,6 +21734,7 @@ const ACHIEVEMENTS = [
       {coins:90000, packs:['zeitgeist'], nametag:'aufsteiger'},
     ]},
   {id:'wepWins', name:'Wochenendpokal-Sieger', desc:'Gewinne den Wochenendpokal.', icon:'🏆', stat:'wepWins',
+    cond:n=>`${n}x Wochenendpokal gewonnen`,
     tiers:[1,2,3,5,8],
     rewards:[
       {coins:5000},
@@ -21731,19 +21750,21 @@ const ACHIEVEMENT_TIER_LABEL = ['I','II','III','IV','V'];
 // gradient+animation. gold/silber/bronze are the direct successors to the old time-limited
 // profile.ligaBadge (see the migration in init()) - same visual idea (Liga-A-Platzierung), now earned
 // through the Liga-Meister/-Vizemeister/-Dritter achievement lines above and permanent once unlocked.
+// accent: a single flat color per nametag (not the full gradient) - used as the Erfolge-card's
+// left-border accent so each card hints at its own tier-V nametag color at a glance.
 const NAMETAGS = {
-  gold: {label:'Gold', symbol:'◆', cls:'nt-gold'},
-  silber: {label:'Silber', symbol:'⬥', cls:'nt-silber'},
-  bronze: {label:'Bronze', symbol:'⬟', cls:'nt-bronze'},
-  unaufhaltsam: {label:'Unaufhaltsam', symbol:'▲', cls:'nt-unaufhaltsam'},
-  knipser: {label:'Knipser', symbol:'●', cls:'nt-knipser'},
-  sammler: {label:'Sammler', symbol:'✦', cls:'nt-sammler'},
-  kurator: {label:'Kurator', symbol:'❖', cls:'nt-kurator'},
-  baumeister: {label:'Baumeister', symbol:'⬢', cls:'nt-baumeister'},
-  makler: {label:'Makler', symbol:'✚', cls:'nt-makler'},
-  kroesus: {label:'Krösus', symbol:'✪', cls:'nt-kroesus'},
-  aufsteiger: {label:'Aufsteiger', symbol:'△', cls:'nt-aufsteiger'},
-  pokalkoenig: {label:'Pokalkönig', symbol:'★', cls:'nt-pokalkoenig'},
+  gold: {label:'Gold', symbol:'◆', cls:'nt-gold', accent:'#e6c343'},
+  silber: {label:'Silber', symbol:'⬥', cls:'nt-silber', accent:'#c7cdd6'},
+  bronze: {label:'Bronze', symbol:'⬟', cls:'nt-bronze', accent:'#c9814f'},
+  unaufhaltsam: {label:'Unaufhaltsam', symbol:'▲', cls:'nt-unaufhaltsam', accent:'#e2564f'},
+  knipser: {label:'Knipser', symbol:'●', cls:'nt-knipser', accent:'#3dc482'},
+  sammler: {label:'Sammler', symbol:'✦', cls:'nt-sammler', accent:'#8a4ae2'},
+  kurator: {label:'Kurator', symbol:'❖', cls:'nt-kurator', accent:'#1fb6c9'},
+  baumeister: {label:'Baumeister', symbol:'⬢', cls:'nt-baumeister', accent:'#c98a3e'},
+  makler: {label:'Makler', symbol:'✚', cls:'nt-makler', accent:'#3a7ae2'},
+  kroesus: {label:'Krösus', symbol:'✪', cls:'nt-kroesus', accent:'#e6c343'},
+  aufsteiger: {label:'Aufsteiger', symbol:'△', cls:'nt-aufsteiger', accent:'#4da8ff'},
+  pokalkoenig: {label:'Pokalkönig', symbol:'★', cls:'nt-pokalkoenig', accent:'#ff9de2'},
 };
 function achievementStatValue(ach){ ensureAchievementState(); return profile.achievementStats[ach.stat]||0; }
 // 0 = not even tier I reached yet, 1-5 = highest tier the raw counter currently qualifies for.
@@ -21886,35 +21907,46 @@ async function renderAchievementsPanel(view){
       </div>
       <p class="hint" style="margin:10px 0 0;">In „Mein Verein" auswählen, welches gerade aktiv ist.</p>
     </div>` : '';
-  view.innerHTML = `<div class="view-head"><h2>🏆 Erfolge</h2><p>Zähle ab heute, egal was du im Spiel machst - jede Stufe bringt eine Belohnung, Stufe V immer mindestens ein permanentes Nametag.</p></div>
+  view.innerHTML = `<div class="view-head"><h2>🏆 Erfolge</h2><p>Zähle ab heute, egal was du im Spiel machst - jede Stufe bringt eine Belohnung, die letzte Stufe einer Linie immer mindestens ein permanentes Nametag.</p></div>
     ${nametagRow}
     <div id="ach-list"></div>`;
   const list = document.getElementById('ach-list');
   list.innerHTML = ACHIEVEMENTS.map(ach=>{
+    const lastTier = ach.tiers.length;
     const value = achievementStatValue(ach);
     const unlocked = achievementUnlockedTier(ach);
     const claimed = achievementClaimedTier(ach);
-    const nextTier = Math.min(unlocked+1, 5);
+    const nextTier = Math.min(unlocked+1, lastTier);
     const nextThreshold = ach.tiers[nextTier-1];
     const prevThreshold = nextTier>1 ? ach.tiers[nextTier-2] : 0;
-    const pct = unlocked>=5 ? 100 : Math.round(((value-prevThreshold)/(nextThreshold-prevThreshold))*100);
-    const pips = ACHIEVEMENT_TIER_LABEL.map((label,i)=>{
+    const pct = unlocked>=lastTier ? 100 : Math.max(0, Math.min(100, Math.round(((value-prevThreshold)/(nextThreshold-prevThreshold))*100)));
+    const accent = NAMETAGS[ach.rewards[lastTier-1].nametag].accent;
+    const summary = unlocked>=lastTier
+      ? `Alle Stufen abgeschlossen · aktueller Stand: ${ach.cond(value)}`
+      : `Aktuell: ${ach.cond(value)} · als Nächstes: ${ach.cond(nextThreshold)}`;
+    // Every tier gets its own row - condition AND reward always visible, not just the next claimable
+    // one, so it's clear up front what the whole line is worth before grinding toward it.
+    const tierRows = ach.tiers.map((threshold,i)=>{
       const tier = i+1;
-      const cls = tier<=claimed ? 'done' : tier<=unlocked ? 'claimable' : tier===nextTier ? 'next' : '';
-      return `<div class="ach-tier-pip ${cls}">${label}</div>`;
+      const status = tier<=claimed ? 'done' : tier<=unlocked ? 'claimable' : 'locked';
+      const r = ach.rewards[i];
+      const rewardParts = [`+${formatCoins(r.coins||0)} Coins`];
+      (r.packs||[]).forEach(pid=>{ const p = PACKS.find(x=>x.id===pid); if(p) rewardParts.push(p.name); });
+      if(r.card) rewardParts.push('Einzelkarte');
+      if(r.nametag) rewardParts.push(`Nametag „${NAMETAGS[r.nametag].label}"`);
+      const action = status==='done' ? `<span class="ach-tier-check">✓</span>`
+        : status==='claimable' ? `<button class="action-btn" data-claim="${ach.id}" data-tier="${tier}" style="width:auto;padding:6px 14px;font-size:11.5px;">Abholen</button>`
+        : `<span class="ach-tier-lock">🔒</span>`;
+      return `<div class="ach-tier-row ach-tier-${status}">
+        ${lastTier>1 ? `<div class="ach-tier-label">${ACHIEVEMENT_TIER_LABEL[i]}</div>` : ''}
+        <div class="ach-tier-body">
+          <div class="ach-tier-cond">${ach.cond(threshold)}</div>
+          <div class="ach-tier-reward">${rewardParts.join(' · ')}</div>
+        </div>
+        <div class="ach-tier-action">${action}</div>
+      </div>`;
     }).join('');
-    const claimableTier = claimed<unlocked ? claimed+1 : null;
-    const progressText = unlocked>=5 ? `Stufe V erreicht (${formatCoins(value)})` : `${formatCoins(value)} / ${formatCoins(nextThreshold)} für Stufe ${ACHIEVEMENT_TIER_LABEL[nextTier-1]}`;
-    let rewardPreview = '';
-    if(claimableTier){
-      const r = ach.rewards[claimableTier-1];
-      const parts = [`+${formatCoins(r.coins||0)} Coins`];
-      (r.packs||[]).forEach(pid=>{ const p = PACKS.find(x=>x.id===pid); if(p) parts.push(p.name); });
-      if(r.nametag) parts.push(`Nametag "${NAMETAGS[r.nametag].label}"`);
-      if(r.card) parts.push('Einzelkarte');
-      rewardPreview = `<p class="hint" style="margin:6px 0 0;color:var(--gold);">${parts.join(' · ')}</p>`;
-    }
-    return `<div class="ach-card">
+    return `<div class="ach-card" style="--accent:${accent};">
       <div class="ach-head">
         <div class="ach-icon">${ach.icon}</div>
         <div style="flex:1;min-width:0;">
@@ -21922,11 +21954,8 @@ async function renderAchievementsPanel(view){
           <div class="ach-desc">${ach.desc}</div>
         </div>
       </div>
-      <div class="ach-bar"><i style="width:${pct}%;"></i></div>
-      <p class="hint" style="margin:0;">${progressText}</p>
-      <div class="ach-tiers" style="margin-top:10px;">${pips}</div>
-      ${rewardPreview}
-      ${claimableTier ? `<button class="action-btn" data-claim="${ach.id}" data-tier="${claimableTier}" style="width:100%;margin-top:10px;">Stufe ${ACHIEVEMENT_TIER_LABEL[claimableTier-1]} abholen${unlocked>claimableTier?` (${unlocked-claimed} ausstehend)`:''}</button>` : ''}
+      ${lastTier>1 ? `<div class="ach-bar"><i style="width:${pct}%;"></i></div><p class="ach-summary">${summary}</p>` : `<p class="ach-summary">${unlocked>=1?'Abgeschlossen.':'Noch offen.'}</p>`}
+      ${tierRows}
     </div>`;
   }).join('');
   list.querySelectorAll('[data-claim]').forEach(btn=>{
