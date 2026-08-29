@@ -13266,6 +13266,24 @@ async function init(){
     profile.ligaBadgeMigrated = true;
     await sSet('profile', profile);
   }
+  // Erfolge: alles, was das Spiel schon VOR den Erfolgen selbst mitgezählt hat, zählt rückwirkend
+  // einmalig mit rein, statt bei 0 anzufangen - profile.wins (Siege), profile.completedSBCs (SBC-
+  // Meister, Summe aller Abschlüsse über alle SBC-IDs) und profile.scorerStats (Torjäger, Summe aller
+  // eigenen Tore aus getrackten echten Matches). Kartensammler braucht keinen Backfill - das ist ein
+  // LIVE-Zähler auf der aktuellen Sammlung (siehe achievementStatValue), der sich von selbst "rückwirkend"
+  // korrekt zeigt. Math.max statt Überschreiben, falls der Erfolgs-Zähler durch eigenes Spielen
+  // zwischenzeitlich schon höher liegt als der alte alte Stand. Genau einmal pro Account, dann nie wieder.
+  if(!profile.achievementsBackfilled){
+    ensureAchievementState();
+    const winsBackfill = profile.wins||0;
+    if(winsBackfill>0) profile.achievementStats.wins = Math.max(profile.achievementStats.wins||0, winsBackfill);
+    const sbcBackfill = Object.values(profile.completedSBCs||{}).reduce((a,b)=>a+b,0);
+    if(sbcBackfill>0) profile.achievementStats.sbcsCompleted = Math.max(profile.achievementStats.sbcsCompleted||0, sbcBackfill);
+    const goalsBackfill = Object.values(profile.scorerStats||{}).reduce((a,b)=>a+b,0);
+    if(goalsBackfill>0) profile.achievementStats.goals = Math.max(profile.achievementStats.goals||0, goalsBackfill);
+    profile.achievementsBackfilled = true;
+    await sSet('profile', profile);
+  }
   squadPresets = await sGet('squadPresets');
   if(!squadPresets) squadPresets = [];
   currentTab = restoredLastTab();
@@ -14380,7 +14398,9 @@ function showPackOpening(pack, drawn, opts={}){
   // grant immediately, before any animation/modal exists - closing the pack-opening modal early
   // (or anything else interrupting the reveal) must never cost the player the pack they paid for
   const addedPromise = addCardsToCollection(drawn, opts);
-  applyAchievementDeltas({packsOpened:1, cardsAcquired:drawn.length});
+  // Kartensammler no longer counts here - it's a live unique-card count off the collection itself
+  // (see achievementStatValue), which addCardsToCollection above already just updated.
+  applyAchievementDeltas({packsOpened:1});
   sSet('profile', profile);
   const ultraRareManager = c => c.isManager && (c.variant==='wm_mgr' || c.variant==='uclw_mgr');
   const ordered = drawn.slice().sort((a,b)=>{
@@ -21729,9 +21749,9 @@ const ACHIEVEMENTS = [
       {coins:20000, packs:['ratings27']},
       {coins:45000, packs:['poeten'], nametag:'sammler'},
     ]},
-  {id:'cardsAcquired', name:'Kartensammler', desc:'Erhalte neue Karten (Packs, Handel, Belohnungen).', icon:'🗂️', stat:'cardsAcquired',
-    cond:n=>`${n} Karten erhalten`,
-    tiers:[50,150,400,800,1500],
+  {id:'cardsAcquired', name:'Kartensammler', desc:'Besitze einzigartige Karten (verschiedene Spieler/Varianten) gleichzeitig in deinem Verein.', icon:'🗂️', stat:'cardsAcquired',
+    cond:n=>`${n} einzigartige Karten im Besitz`,
+    tiers:[30,75,150,300,500],
     rewards:[
       {coins:2000},
       {coins:5000},
@@ -21834,7 +21854,17 @@ const NAMETAGS = {
   aufsteiger: {label:'Aufsteiger', symbol:'△', cls:'nt-aufsteiger', accent:'#4da8ff'},
   pokalkoenig: {label:'Pokalkönig', symbol:'★', cls:'nt-pokalkoenig', accent:'#ff9de2'},
 };
-function achievementStatValue(ach){ ensureAchievementState(); return profile.achievementStats[ach.stat]||0; }
+// Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
+// card types currently in the collection - captures every source (packs, Handel, Belohnungen, Admin-
+// Zuweisungen, ...) automatically instead of only whatever narrow hook happened to bump a counter, and
+// it's naturally already "backfilled" for every existing account the very first time it's checked,
+// with zero migration needed (see the achievements-and-nametags feature's original packs-only counter,
+// replaced by this).
+function achievementStatValue(ach){
+  ensureAchievementState();
+  if(ach.id==='cardsAcquired') return new Set(collection.map(c=>c.cardId)).size;
+  return profile.achievementStats[ach.stat]||0;
+}
 // 0 = not even tier I reached yet, 1-5 = highest tier the raw counter currently qualifies for.
 function achievementUnlockedTier(ach){
   const v = achievementStatValue(ach);
