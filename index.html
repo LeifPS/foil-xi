@@ -13736,7 +13736,7 @@ async function renderLigaQuickPreview(){
     const rows = upcoming.map(m=>{
       if(!m.pending && ligaMatchIsRevealed(m, weekStart)) return ligaMatchRowHTML(m, week.teams, clubId);
       const dayStart = weekStart + (m.day-1)*24*60*60*1000;
-      const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
+      const t = new Date(dayStart + ligaMatchRevealOffsetMs(m, weekStart));
       const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
       return ligaMatchRowHTML(m, week.teams, clubId, {fixtureOnly:true, revealTime, letter:membership.letter});
     }).join('');
@@ -19623,6 +19623,12 @@ function mostRecentMondayBerlin(){
 // Week 1 of the league system - the Monday right after the one-time seeding (Sun 2026-08-23). Fixed
 // forever: every later week is counted as "N weeks after this one", never recomputed relative to now.
 const LIGA_SEASON_EPOCH = new Date(2026,7,24,0,0,0,0).getTime();
+// Ligen rules revision - later match reveal times, a genuine two-legged live Relegation (Samstag
+// 12:00 Hinspiel / 15:00 Rückspiel instead of one instant computed pass), and the next league's table
+// held back until Sonntag. Applies to every week from this Monday on; the week already in progress
+// when this shipped (LIGA_SEASON_EPOCH itself) keeps the old rules all the way through its own
+// Samstag - never retroactive, so nothing about an already-running week changes under it.
+const LIGA_RULES_V2_WEEK_START = new Date(2026,7,31,0,0,0,0).getTime();
 // This week's Monday 00:00 (Berlin) - or null if the season hasn't started yet (still before the
 // epoch above), which is only possible for the brief window between the one-time seeding and the
 // following Monday.
@@ -20148,18 +20154,23 @@ function ligaVisibleDayCount(weekStart){
   return Math.max(0, Math.min(5, elapsedDays+1));
 }
 // Within a single day, its rounds don't all reveal at once at midnight - they're spread out in fixed
-// 5-hour steps: Montag-Donnerstag start at 05:00 (a normal 3-round day reveals 05:00/10:00/15:00),
-// Freitag starts later at 10:00 (its usual 2 rounds reveal 10:00/15:00). Matches written before this
-// per-round reveal existed have no roundInDay/roundsInDay stored and simply fall back to "revealed
-// as soon as the day starts" (offset 0), so old already-created weeks keep working unchanged.
-function ligaMatchRevealOffsetMs(m){
+// steps. Two schedules exist, chosen by which week a match belongs to (see LIGA_RULES_V2_WEEK_START):
+// weeks before it keep the original Montag-Donnerstag 05:00/10:00/15:00 + Freitag 10:00/15:00 forever
+// (never renumbered retroactively - a week already in progress must not have its remaining reveal
+// times shift under it), weeks from it on use Montag-Donnerstag 12:00/15:00/18:00 + Freitag 15:00/18:00.
+// Matches written before per-round reveal existed have no roundInDay/roundsInDay stored and simply
+// fall back to "revealed as soon as the day starts" (offset 0), so old already-created weeks keep
+// working unchanged either way.
+function ligaMatchRevealOffsetMs(m, weekStart){
   if(m.roundInDay==null || !m.roundsInDay) return 0;
-  const baseHour = m.day===5 ? 10 : 5;
-  return (baseHour + m.roundInDay*5) * 60*60*1000;
+  const v2 = weekStart!=null && weekStart>=LIGA_RULES_V2_WEEK_START;
+  const step = v2 ? 3 : 5;
+  const baseHour = v2 ? (m.day===5 ? 15 : 12) : (m.day===5 ? 10 : 5);
+  return (baseHour + m.roundInDay*step) * 60*60*1000;
 }
 function ligaMatchIsRevealed(m, weekStart){
   const dayStart = weekStart + (m.day-1)*24*60*60*1000;
-  return berlinNow().getTime() >= dayStart + ligaMatchRevealOffsetMs(m);
+  return berlinNow().getTime() >= dayStart + ligaMatchRevealOffsetMs(m, weekStart);
 }
 // Deterministic (not truly random) tiebreak: same two teams with identical pts/gd/gf always resolve
 // to the same order every time this is computed, seeded by both userIds plus the league-week so it
@@ -20501,6 +20512,30 @@ function ligaRelegationTie(teamA, teamB){
   }
   return {winner, aggA, aggB, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, leg2:{aGoals:leg2.oppGoals, bGoals:leg2.myGoals}, decider: decider ? {aGoals:decider.myGoals, bGoals:decider.oppGoals, wentToPK:decider.wentToPK} : null};
 }
+// From LIGA_RULES_V2_WEEK_START on, the two relegation legs are no longer computed back-to-back in one
+// instant pass (ligaRelegationTie above, still used unchanged for older weeks) - they're two genuinely
+// separate moments, Samstag 12:00 (Hinspiel) and 15:00 (Rückspiel), each simulated with both sides'
+// CURRENT squad fetched fresh right at that moment (see resolveWeeklyRolloverV2IfNeeded's two phases).
+function ligaRelegationLeg1(teamA, teamB){
+  return buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:true});
+}
+function ligaRelegationLeg2(teamA, teamB){
+  return buildDecisiveMatch(teamB.rating, teamA.rating, teamB.players, teamA.players, null, null, {allowDraw:true});
+}
+// leg1/leg2 are already in the {aGoals,bGoals} shape (teamA's perspective) that ligaRelegationTie
+// itself returns, not the raw buildDecisiveMatch result - same aggregate/decider logic as
+// ligaRelegationTie, just fed two already-played legs instead of playing both right here.
+function ligaRelegationAggregateFromLegs(teamA, teamB, leg1, leg2){
+  const aggA = leg1.aGoals + leg2.aGoals, aggB = leg1.bGoals + leg2.bGoals;
+  let winner, decider = null;
+  if(aggA>aggB) winner = 'A';
+  else if(aggB>aggA) winner = 'B';
+  else {
+    decider = buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:false});
+    winner = decider.winnerSide==='me' ? 'A' : 'B';
+  }
+  return {winner, aggA, aggB, leg1, leg2, decider: decider ? {aGoals:decider.myGoals, bGoals:decider.oppGoals, wentToPK:decider.wentToPK} : null};
+}
 // Whether the commissioner pass has actually completed for a given (just-finished) week - used to
 // decide whether to show the Sonntag split view (old week recap + new week preview) instead of just
 // checking "is it Sunday", since the pass itself doesn't run until 12:00 Sonntag (see
@@ -20542,6 +20577,11 @@ async function resolveWeeklyRolloverIfNeeded(){
   if(!fb) return null;
   const weekStart = mostRecentMondayBerlin();
   if(weekStart<LIGA_SEASON_EPOCH) return null; // season hasn't even started its first week yet
+  // Everything below this point is the ORIGINAL, unmodified instant-rollover pass - still used as-is
+  // for any week that started before LIGA_RULES_V2_WEEK_START, so a week already in progress when the
+  // new rules shipped keeps working exactly as it always did, right through its own Samstag. Every
+  // later week goes through resolveWeeklyRolloverV2IfNeeded's two-phase version instead.
+  if(weekStart>=LIGA_RULES_V2_WEEK_START) return resolveWeeklyRolloverV2IfNeeded(weekStart);
   const now = berlinNow();
   if(now.getDay()!==6) return null; // only Samstag ab 00:00 Uhr Berlin time
   const flagRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
@@ -20679,6 +20719,170 @@ async function resolveWeeklyRolloverIfNeeded(){
     ));
     await fb.setDoc(flagRef, {status:'done', at:Date.now()});
   }catch(e){ console.warn('rollover write failed', e); return null; }
+  return {tables, relegationResults, rewards};
+}
+// ===== Ligen rules revision (LIGA_RULES_V2_WEEK_START on): the Samstag commissioner pass splits into
+// two fixed moments instead of running everything the instant anyone opens the tab on Samstag -
+// leagueMeta/relegationLegs_{weekStart} guards phase 1 (Hinspiel, ab 12:00) the same way
+// leagueMeta/rollover_{weekStart} already guarded the whole old pass, and now also guards phase 2
+// (Rückspiel + finalize, ab 15:00). Direct (non-playoff) promotion/relegation and next week's
+// membership+fixtures don't exist yet until phase 2 actually runs - so a league boundary with no
+// playoff pair still only becomes final at 15:00, same moment as everywhere else, for one predictable
+// "the whole league moves at once" story instead of some boundaries settling at 12:00 and others at 15:00.
+async function resolveWeeklyRolloverV2IfNeeded(weekStart){
+  const now = berlinNow();
+  if(now.getDay()!==6) return null; // only Samstag
+  if(now.getHours()<12) return null; // nothing due before Hinspiel kickoff
+  const legsRef = fb.doc(fb.db,'leagueMeta','relegationLegs_'+weekStart);
+  const rolloverRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
+  let legsSnap;
+  try{ legsSnap = await fb.getDoc(legsRef); }
+  catch(e){ console.warn('relegation legs read failed', e); return null; }
+  if(!legsSnap.exists() || legsSnap.data().status!=='done'){
+    return await ligaRelegationPhase1(weekStart, legsRef);
+  }
+  if(now.getHours()<15) return null; // Hinspiel already stored, Rückspiel isn't due yet
+  let rolloverSnap;
+  try{ rolloverSnap = await fb.getDoc(rolloverRef); }
+  catch(e){ console.warn('rollover v2 flag read failed', e); return null; }
+  if(rolloverSnap.exists() && rolloverSnap.data().status==='done') return null;
+  return await ligaRelegationPhase2(weekStart, legsSnap.data(), rolloverRef);
+}
+const LIGA_V2_CLAIM_TIMEOUT_MS = 3*60*1000;
+// Phase 1 (Samstag ab 12:00): freezes the just-finished week's final tables, works out which pairs
+// face a relegation playoff, and plays each pair's Hinspiel right now with both sides' current squad -
+// same atomic claim-transaction pattern as the old single-pass rollover, just against its own flag doc.
+async function ligaRelegationPhase1(weekStart, legsRef){
+  let claimed = false;
+  try{
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const snap = await tx.get(legsRef);
+      const data = snap.exists() ? snap.data() : null;
+      if(data && data.status==='done') return;
+      if(data && data.status==='in-progress' && (Date.now()-data.claimedAt)<LIGA_V2_CLAIM_TIMEOUT_MS) return;
+      tx.set(legsRef, {status:'in-progress', claimedAt:Date.now()});
+      claimed = true;
+    });
+  }catch(e){ console.warn('relegation leg1 claim failed', e); return null; }
+  if(!claimed) return null;
+  let membershipSnap;
+  try{ membershipSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
+  catch(e){ console.warn('leg1: membership read failed', e); return null; }
+  const lettersInUse = membershipSnap.docs.map(d=>d.id).sort();
+  if(!lettersInUse.length) return null;
+  const weeks = {};
+  for(const letter of lettersInUse){
+    const members = membershipSnap.docs.find(d=>d.id===letter).data().members;
+    weeks[letter] = await getOrCreateLeagueWeek(letter, members, weekStart);
+  }
+  for(const letter of lettersInUse){ weeks[letter] = await resolveLigaMatchIfNeeded(letter, weekStart, weeks[letter], {force:true}); }
+  const tables = {};
+  lettersInUse.forEach(letter=>{ tables[letter] = ligaComputeStandings(weeks[letter].teams, weeks[letter].matches, 5, weekStart); });
+  const relegationTiesPending = [];
+  lettersInUse.forEach(letter=>{
+    const table = tables[letter];
+    if(!table.length) return;
+    const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
+    if(!lettersInUse.includes(upperLetter)) return;
+    const upperTable = tables[upperLetter];
+    if(table.length>=5 && upperTable.length>=2){
+      relegationTiesPending.push({letter, upperLetter, challengerRow:table[1], defenderRow:upperTable[upperTable.length-2]});
+    }
+  });
+  const legs = [];
+  for(const t of relegationTiesPending){
+    const chData = await resolveSaveDataForUser(t.challengerRow.userId);
+    const defData = await resolveSaveDataForUser(t.defenderRow.userId);
+    const chStats = (chData && chData.profile) ? squadRatingFromSaveData(chData) : {rating:40, players:[]};
+    const defStats = (defData && defData.profile) ? squadRatingFromSaveData(defData) : {rating:40, players:[]};
+    const lowerChallenger = {userId:t.challengerRow.userId, name:t.challengerRow.name, ...chStats};
+    const upperDefender = {userId:t.defenderRow.userId, name:t.defenderRow.name, ...defStats};
+    const leg1 = ligaRelegationLeg1(lowerChallenger, upperDefender);
+    legs.push({letter:t.letter, upperLetter:t.upperLetter, challengerUserId:lowerChallenger.userId, challengerName:lowerChallenger.name, defenderUserId:upperDefender.userId, defenderName:upperDefender.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+  }
+  try{ await fb.setDoc(legsRef, {status:'done', at:Date.now(), tables, legs}); }
+  catch(e){ console.warn('relegation leg1 write failed', e); return null; }
+  return {phase:'leg1', tables, legs};
+}
+// Phase 2 (Samstag ab 15:00): plays each pending pair's Rückspiel with a FRESH squad fetch (never the
+// Hinspiel's snapshot - "aktuelles Kader zum Anpfiff" applies to each leg independently), resolves the
+// aggregate/decider, then does exactly what the old single-pass rollover did from "nextLeagueOf" on:
+// rewards, next week's membership, next week's fixtures, mark done.
+async function ligaRelegationPhase2(weekStart, legsData, rolloverRef){
+  let claimed = false;
+  try{
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const snap = await tx.get(rolloverRef);
+      const data = snap.exists() ? snap.data() : null;
+      if(data && data.status==='done') return;
+      if(data && data.status==='in-progress' && (Date.now()-data.claimedAt)<LIGA_V2_CLAIM_TIMEOUT_MS) return;
+      tx.set(rolloverRef, {status:'in-progress', claimedAt:Date.now()});
+      claimed = true;
+    });
+  }catch(e){ console.warn('rollover v2 claim failed', e); return null; }
+  if(!claimed) return null;
+  const {tables, legs} = legsData;
+  const lettersInUse = Object.keys(tables);
+  const nextLeagueOf = {};
+  const rewards = [];
+  lettersInUse.forEach(letter=>{
+    const table = tables[letter];
+    if(!table.length) return;
+    table.forEach(row=>{ nextLeagueOf[row.userId] = letter; });
+    table.forEach((row, idx)=>{
+      const place = idx+1;
+      const r = ligaRewardForPlace(letter, place);
+      rewards.push({userId:row.userId, letter, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
+    });
+    const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
+    if(!lettersInUse.includes(upperLetter)) return;
+    const upperTable = tables[upperLetter];
+    if(upperTable.length>1) nextLeagueOf[upperTable[upperTable.length-1].userId] = letter;
+    nextLeagueOf[table[0].userId] = upperLetter;
+  });
+  const relegationResults = [];
+  for(const leg of legs){
+    const chData = await resolveSaveDataForUser(leg.challengerUserId);
+    const defData = await resolveSaveDataForUser(leg.defenderUserId);
+    const chStats = (chData && chData.profile) ? squadRatingFromSaveData(chData) : {rating:40, players:[]};
+    const defStats = (defData && defData.profile) ? squadRatingFromSaveData(defData) : {rating:40, players:[]};
+    const lowerChallenger = {userId:leg.challengerUserId, name:leg.challengerName, ...chStats};
+    const upperDefender = {userId:leg.defenderUserId, name:leg.defenderName, ...defStats};
+    const leg2Raw = ligaRelegationLeg2(lowerChallenger, upperDefender);
+    const tie = ligaRelegationAggregateFromLegs(lowerChallenger, upperDefender, leg.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const winnerId = tie.winner==='A' ? lowerChallenger.userId : upperDefender.userId;
+    const loserId = tie.winner==='A' ? upperDefender.userId : lowerChallenger.userId;
+    nextLeagueOf[winnerId] = leg.upperLetter;
+    nextLeagueOf[loserId] = leg.letter;
+    relegationResults.push({upperLetter:leg.upperLetter, lowerLetter:leg.letter, challenger:lowerChallenger.name, defender:upperDefender.name, ...tie, winnerId});
+  }
+  const nextMembers = {};
+  lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
+  Object.entries(nextLeagueOf).forEach(([userId,letter])=>{ nextMembers[letter].push(userId); });
+  for(const r of rewards){
+    try{
+      const updates = {'profile.coins': fb.increment(r.coins)};
+      const pendingAdds = [];
+      r.packs.forEach(p=>{
+        if(!PACKS.find(x=>x.id===p.id)) return;
+        for(let n=0;n<p.count;n++) pendingAdds.push(p.id);
+      });
+      if(pendingAdds.length) updates['profile.pendingLigaPacks'] = fb.arrayUnion(...pendingAdds);
+      if(r.badge) updates['profile.ligaBadge'] = {tier:r.badge, letter:r.letter, awardedAt:Date.now(), expiresAt: weekStart + 14*24*60*60*1000};
+      await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), updates);
+    }catch(e){ console.warn('liga reward payout failed for', r.userId, e); }
+  }
+  const nextWeekStart = weekStart + 7*24*60*60*1000;
+  try{
+    await Promise.all(Object.entries(nextMembers).filter(([,m])=>m.length).map(([letter,members])=>
+      fb.setDoc(fb.doc(fb.db,'leagueMembership',letter), {letter, members})
+    ));
+    await fb.setDoc(fb.doc(fb.db,'leagueHistory', weekStart+''), {weekStart, tables, relegationResults, rewards});
+    await Promise.all(Object.entries(nextMembers).filter(([,m])=>m.length).map(([letter,members])=>
+      getOrCreateLeagueWeek(letter, members, nextWeekStart)
+    ));
+    await fb.setDoc(rolloverRef, {status:'done', at:Date.now()});
+  }catch(e){ console.warn('rollover v2 write failed', e); return null; }
   return {tables, relegationResults, rewards};
 }
 // Admin-only immediate safety valve (see the design brief: an account that gets leaderboard-banned
@@ -20877,7 +21081,7 @@ function renderLigenPanel(view){
           html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
           const dayStart = LIGA_SEASON_EPOCH + (d-1)*24*60*60*1000;
           html += dayMatches.map(m=>{
-            const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
+            const t = new Date(dayStart + ligaMatchRevealOffsetMs(m, LIGA_SEASON_EPOCH));
             const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
             return ligaMatchRowHTML(m, previewWeek.teams, clubId, {fixtureOnly:true, revealTime, letter:membership.letter});
           }).join('');
@@ -20951,6 +21155,18 @@ function renderLigenPanel(view){
     // (handled above as oldSectionHtml) - the table/fixtures rendered below are the NEW week's, which
     // starts the FOLLOWING Monday, hence +7 days.
     const targetWeekStart = isWeekendRecap ? weekStartBefore + 7*24*60*60*1000 : weekStart;
+    // The next league's own table/fixtures (targetWeekStart, which hasn't started yet) only show once
+    // it's actually Sonntag, for any week from LIGA_RULES_V2_WEEK_START on - Samstag (even after its
+    // own relegation/rollover has fully finished at 15:00) shows only the just-finished week's recap
+    // above (oldSectionHtml), never a peek at the still-to-come one. Weeks before that cutover keep the
+    // original "shown the moment the pass finishes" behaviour, same as everything else this week.
+    const nextWeekIsV2 = targetWeekStart>=LIGA_RULES_V2_WEEK_START;
+    const showNextPreview = isWeekendRecap && (!nextWeekIsV2 || berlinNow().getDay()===0);
+    if(isWeekendRecap && !showNextPreview){
+      box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Die Tabelle der neuen Liga wird ab Sonntag 00:00 Uhr angezeigt.</p>`;
+      wireLigaRewardsBtn(box, membership.letter);
+      return;
+    }
     LIGA_LAST_ERROR = null;
     // Only the Sonntag (upcoming, still-0:0) week is safe to self-heal a team-count mismatch on - the
     // Montag-Samstag week may already have played matches, which a resync would silently wipe.
@@ -20985,7 +21201,7 @@ function renderLigenPanel(view){
           html += `<p class="hint" style="margin:0 0 8px;">🔔 Dein nächstes Spiel ist bereit zum Anschauen!</p>`;
         } else {
           const dayStart = targetWeekStart + (myNext.day-1)*24*60*60*1000;
-          const t = new Date(dayStart + ligaMatchRevealOffsetMs(myNext));
+          const t = new Date(dayStart + ligaMatchRevealOffsetMs(myNext, targetWeekStart));
           const timeStr = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
           html += `<p class="hint" style="margin:0 0 8px;">Nächstes Spiel: ${LIGA_DAY_LABEL[myNext.day]} ab ${timeStr} Uhr.</p>`;
         }
@@ -21009,7 +21225,7 @@ function renderLigenPanel(view){
           if(m.day!==d) return false;
           if(ligaFixturesShowAll) return true;
           if(m.pending) return true;
-          const revealTime = dayStart + ligaMatchRevealOffsetMs(m);
+          const revealTime = dayStart + ligaMatchRevealOffsetMs(m, targetWeekStart);
           if(revealTime>now) return true;
           if(now-revealTime<=LIGA_FIXTURE_RECENT_WINDOW_MS) return true;
           hiddenCount++;
@@ -21019,7 +21235,7 @@ function renderLigenPanel(view){
         out += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${LIGA_DAY_LABEL[d]}</div>`;
         out += dayMatches.map(m=>{
           if(!m.pending && ligaMatchIsRevealed(m, targetWeekStart)) return ligaMatchRowHTML(m, week.teams, clubId);
-          const t = new Date(dayStart + ligaMatchRevealOffsetMs(m));
+          const t = new Date(dayStart + ligaMatchRevealOffsetMs(m, targetWeekStart));
           const revealTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
           return ligaMatchRowHTML(m, week.teams, clubId, {fixtureOnly:true, revealTime, letter:membership.letter});
         }).join('');
