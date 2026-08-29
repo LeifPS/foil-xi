@@ -1637,6 +1637,21 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .wp3-draw{background:linear-gradient(90deg,#6b7280,#9aa1ab);}
 .wp3-loss{background:var(--danger);}
 .winprob-pct-row .wp3-draw-label{color:#9aa1ab;}
+/* Card-info modal (showCardInfoModal, "Mein Verein" tap-to-inspect): every section (Spielerdaten,
+   Playstyles, Einzelwerte) gets the same subtle raised card-panel treatment instead of a bare list of
+   .leader-rows, so the modal reads as distinct, scannable "sections" the way a real FUT card back does. */
+.card-info-section{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
+.card-info-section-title{font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.card-info-bio-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;}
+.card-info-bio-tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 8px;text-align:center;}
+.card-info-bio-tile .v{font-family:'JetBrains Mono';font-size:14.5px;font-weight:700;color:var(--chalk);white-space:nowrap;}
+.card-info-bio-tile .l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:3px;}
+.card-info-substat-group-title{font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px;font-weight:700;}
+.card-info-substat-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11.5px;}
+.card-info-substat-row .lbl{flex:1;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.card-info-substat-bar{flex-basis:44px;flex-shrink:0;height:4px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;}
+.card-info-substat-bar i{display:block;height:100%;border-radius:4px;}
+.card-info-substat-val{min-width:20px;flex-shrink:0;text-align:right;font-family:'JetBrains Mono';font-weight:700;}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';font-weight:700;text-align:center;}
@@ -12696,14 +12711,16 @@ function playstyleListHTML(card){
     const eb = PLAYSTYLE_INFO[b] ? PLAYSTYLE_INFO[b].elite : false;
     return (eb?1:0)-(ea?1:0);
   });
-  return `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Playstyles</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  return `<div class="card-info-section">
+    <div class="card-info-section-title">⚡ Playstyles</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
       ${sorted.map(t=>{
         const info = PLAYSTYLE_INFO[t];
         const icon = info ? `<img src="${info.icon}" alt="" style="width:18px;height:18px;object-fit:contain;">` : '';
-        return `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:100px;background:var(--panel2);border:1px solid ${info&&info.elite?'var(--gold)':'var(--line)'};font-size:12px;">${icon}<span>${t}</span></div>`;
+        return `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:100px;background:var(--panel);border:1px solid ${info&&info.elite?'var(--gold)':'var(--line)'};font-size:12px;">${icon}<span>${t}</span></div>`;
       }).join('')}
-    </div>`;
+    </div>
+  </div>`;
 }
 function openCardXpModal(card){
   if(!card) return;
@@ -16942,9 +16959,11 @@ const SUBSTAT_GROUPS = [
 ];
 const GK_SUBSTAT_GROUP = {label:'Torwart', keys:[['gkDiving','Parade'],['gkHandling','Abwehr'],['gkKicking','Abschlag'],['gkReflexes','Reflexe'],['gkPositioning','Stellungsspiel (TW)']]};
 // Boosted/variant cards only get their headline 6 stats recomputed to match their advertised OV bump
-// (see recalcAllVariantSubstats) - the detailed dict below still holds the base player's raw numbers,
-// so the exact same flat gain gets applied here too before showing it, otherwise a boosted card's
-// detail page would look weaker than its own card face.
+// (see recalcAllVariantSubstats: card[k] = Math.max(1, base[k]+gain), NO upper cap - a boosted card's
+// TEM/DRI/etc. routinely lands above 100, same as real special cards) - the detailed dict below still
+// holds the base player's raw numbers, so the exact same flat-gain formula, uncapped the same way,
+// gets applied here too before showing it. Clamping this to 99 (the old behaviour) would make a
+// boosted card's individual sub-attributes look WEAKER than its own headline stats for the same stat.
 function detailedSubstatsFor(card){
   let raw = card.substats, gain = 0;
   const base = card.baseId ? (BY_ID.get(card.baseId) || findBaseCard(card.baseId)) : null;
@@ -16952,40 +16971,53 @@ function detailedSubstatsFor(card){
   if(raw && base && base.ov!=null) gain = card.ov - base.ov;
   if(!raw) return null;
   const out = {};
-  Object.keys(raw).forEach(k=>{ if(typeof raw[k]==='number') out[k] = clamp(raw[k]+gain, 1, 99); });
+  Object.keys(raw).forEach(k=>{ if(typeof raw[k]==='number') out[k] = Math.max(1, raw[k]+gain); });
   return out;
 }
+// The bar fill is capped visually at 100% width (a boosted card's real value can run well past 100 -
+// see detailedSubstatsFor - but the bar track itself can't get any fuller than "full"), while the
+// number shown next to it is always the real, uncapped value.
 function substatRowHTML(label, val){
-  const color = val>=80 ? 'var(--turf-bright)' : val>=60 ? 'var(--chalk)' : 'var(--muted)';
-  return `<div class="leader-row" style="margin-bottom:4px;font-size:12px;"><span style="flex:1;">${label}</span><span class="mono" style="min-width:26px;text-align:right;color:${color};">${val}</span></div>`;
+  const color = val>=100 ? 'var(--gold)' : val>=80 ? 'var(--turf-bright)' : val>=60 ? '#e8c468' : val>=40 ? 'var(--chalk)' : 'var(--muted)';
+  return `<div class="card-info-substat-row">
+    <span class="lbl">${label}</span>
+    <span class="card-info-substat-bar"><i style="width:${Math.min(100,val)}%;background:${color};"></i></span>
+    <span class="card-info-substat-val" style="color:${color};">${val}</span>
+  </div>`;
 }
 function detailedStatsHTML(card){
   const stats = detailedSubstatsFor(card);
   if(!stats) return '';
   const groups = card.gk ? [...SUBSTAT_GROUPS, GK_SUBSTAT_GROUP] : SUBSTAT_GROUPS;
-  return `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Einzelwerte (EA FC Datenbank)</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
-      ${groups.map(g=>`<div style="margin-bottom:10px;"><div style="font-size:10.5px;color:var(--gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">${g.label}</div>${g.keys.map(([k,lbl])=>stats[k]!=null?substatRowHTML(lbl,stats[k]):'').join('')}</div>`).join('')}
-    </div>`;
+  return `<div class="card-info-section">
+    <div class="card-info-section-title">📊 Einzelwerte (EA FC Datenbank)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px;">
+      ${groups.map(g=>`<div style="margin-bottom:12px;"><div class="card-info-substat-group-title">${g.label}</div>${g.keys.map(([k,lbl])=>stats[k]!=null?substatRowHTML(lbl,stats[k]):'').join('')}</div>`).join('')}
+    </div>
+  </div>`;
 }
 // Bio row: real-world age (from birthdate), height/weight, strong/weak foot, skill moves - everything
 // else in the real database beyond stats and PlayStyles. Same "only for real-database cards" scope.
 function bioHTML(card){
   if(card.isManager || !(card.birthdate || card.height || card.weight || card.skillMoves || card.weakFoot)) return '';
   const stars = n => '★'.repeat(n) + '☆'.repeat(5-n);
-  const rows = [];
+  const tiles = [];
   if(card.birthdate){
     const age = Math.floor((Date.now()-new Date(card.birthdate).getTime())/(365.25*24*3600*1000));
-    rows.push(['Alter', `${age} (${new Date(card.birthdate).toLocaleDateString('de-DE')})`]);
+    tiles.push(['Alter', `${age}`, new Date(card.birthdate).toLocaleDateString('de-DE')]);
   }
-  if(card.height) rows.push(['Größe', `${card.height} cm`]);
-  if(card.weight) rows.push(['Gewicht', `${card.weight} kg`]);
-  if(card.foot) rows.push(['Starker Fuß', card.foot==='Left'?'Links':'Rechts']);
-  if(card.weakFoot) rows.push(['Schwacher Fuß', stars(card.weakFoot)]);
-  if(card.skillMoves) rows.push(['Skill Moves', stars(card.skillMoves)]);
-  if(!rows.length) return '';
-  return `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Spielerdaten</div>
-    ${rows.map(([l,v])=>`<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${l}</span><span class="mono">${v}</span></div>`).join('')}`;
+  if(card.height) tiles.push(['Größe', `${card.height}`, 'cm']);
+  if(card.weight) tiles.push(['Gewicht', `${card.weight}`, 'kg']);
+  if(card.foot) tiles.push(['Starker Fuß', card.foot==='Left'?'Links':'Rechts', '']);
+  if(card.weakFoot) tiles.push(['Schwacher Fuß', stars(card.weakFoot), '']);
+  if(card.skillMoves) tiles.push(['Skill Moves', stars(card.skillMoves), '']);
+  if(!tiles.length) return '';
+  return `<div class="card-info-section">
+    <div class="card-info-section-title">📋 Spielerdaten</div>
+    <div class="card-info-bio-grid">
+      ${tiles.map(([l,v,sub])=>`<div class="card-info-bio-tile"><div class="v">${v}${sub?` <span style="font-size:9.5px;color:var(--muted);font-weight:400;">${sub}</span>`:''}</div><div class="l">${l}</div></div>`).join('')}
+    </div>
+  </div>`;
 }
 // tap-to-inspect from "Mein Verein": full card visual plus, for every position it can play, the
 // bonus tier and the rating it would actually have in the CURRENT squad right now (chemistry,
@@ -17013,9 +17045,11 @@ function showCardInfoModal(card, uid){
     <h2 style="margin-bottom:2px;">${card.n}</h2>
     <p class="hint" style="margin:0 0 14px;">${card.variant && card.variant!=='base' ? card.variantLabel+' · ' : ''}${card.ov} OVR · ${natDE(card.nat)||card.nat||''}${card.club?' · '+card.club:''}${card.lg?' · '+card.lg:''}</p>
     <div style="display:flex;justify-content:center;margin-bottom:16px;">${cardEl(card).outerHTML}</div>
-    <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Rating je Position in deinem Verein</div>
-    ${rowsHtml}
-    <p class="hint" style="margin:10px 0 0;">Inklusive Trainer-Boost, Chemie und Positionsbonus — so, als würde die Karte gerade dort aufgestellt.</p>
+    <div class="card-info-section">
+      <div class="card-info-section-title">🎯 Rating je Position in deinem Verein</div>
+      ${rowsHtml}
+      <p class="hint" style="margin:10px 0 0;">Inklusive Trainer-Boost, Chemie und Positionsbonus — so, als würde die Karte gerade dort aufgestellt.</p>
+    </div>
     ${bioHTML(card)}
     ${playstyleListHTML(card)}
     ${detailedStatsHTML(card)}
