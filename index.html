@@ -13848,10 +13848,25 @@ const TAB_ICON = {
   play: '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/>',
   ligen: '<path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"/><path d="M8 5H5a3 3 0 0 0 3 5"/><path d="M16 5h3a3 3 0 0 1-3 5"/><path d="M12 12v4"/><path d="M9 20h6"/><path d="M10 16h4l1 4H9l1-4Z"/>',
   week: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
-  achievements: '<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4a3 3 0 0 0 3 6M17 5h3a3 3 0 0 1-3 6"/>',
+  // A medal-on-ribbon, deliberately NOT another trophy cup - "ligen" (Liga/Wochenendpokal) already
+  // owns the cup shape, and Erfolge needs to read as visually distinct from it at a glance in the nav.
+  achievements: '<circle cx="12" cy="8.5" r="5"/><path d="M12 6 12.9 7.8 15 8.1 13.5 9.6 13.9 11.6 12 10.6 10.1 11.6 10.5 9.6 9 8.1 11.1 7.8 12 6Z" fill="currentColor" stroke="none"/><path d="M9 13 6.5 21 12 18l5.5 3L15 13"/>',
   trade_locked: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   admin: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V19a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 17.35a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.65 13 1.7 1.7 0 0 0 3.09 12H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.65 7a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 2.65 1.7 1.7 0 0 0 10.09 1H10a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 2.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 7a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51.96Z"/>',
 };
+// One fitting accent color per tab for the mobile icon nav (see renderNav/hexToRgba) - previously every
+// active icon shared the exact same green, which is also how "Turniere" (Ligen, a trophy cup) and
+// "Erfolge" (also a trophy cup, before its own icon above) ended up looking near-identical at a
+// glance even beyond just the icon shape.
+const TAB_COLOR = {
+  store: '#e8c468', club: '#3ddc84', squad: '#4da8ff', sbc: '#ff9d4d', trade: '#b98bff',
+  play: '#e2564f', ligen: '#f0a83c', week: '#5fe1c9', achievements: '#ff6fae', admin: '#ff5f5f',
+};
+function hexToRgba(hex, alpha){
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 const ADMIN_USERS = new Set(['leifps','test']);
 function isAdmin(){ return clubId && ADMIN_USERS.has(clubId); }
 // How many of the viewer's OWN Liga matches are revealed-and-decided but not yet watched/skipped by
@@ -13988,9 +14003,11 @@ function renderNav(){
   const iconSvg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
   navMobile.innerHTML = TABS.map(([id,label])=>{
     const icon = (id==='trade' && !tradeUnlocked()) ? TAB_ICON.trade_locked : TAB_ICON[id];
-    return `<button class="nav-btn-m ${id===currentTab?'active':''}" data-tab="${id}" title="${label}" aria-label="${label}">${iconSvg(icon)}</button>`;
+    const active = id===currentTab;
+    const style = active && TAB_COLOR[id] ? `color:${TAB_COLOR[id]};background:${hexToRgba(TAB_COLOR[id],0.14)};` : '';
+    return `<button class="nav-btn-m ${active?'active':''}" data-tab="${id}" title="${label}" aria-label="${label}" style="${style}">${iconSvg(icon)}</button>`;
   }).join('')
-    + (isAdmin() ? `<button class="nav-btn-m ${currentTab==='admin'?'active':''}" data-tab="admin" title="Admin" aria-label="Admin" style="${currentTab==='admin'?'color:#ff5f5f;':''}">${iconSvg(TAB_ICON.admin)}</button>` : '');
+    + (isAdmin() ? `<button class="nav-btn-m ${currentTab==='admin'?'active':''}" data-tab="admin" title="Admin" aria-label="Admin" style="${currentTab==='admin'?`color:${TAB_COLOR.admin};background:${hexToRgba(TAB_COLOR.admin,0.14)};`:''}">${iconSvg(TAB_ICON.admin)}</button>` : '');
   navMobile.querySelectorAll('.nav-btn-m').forEach(b=>b.addEventListener('click', ()=>{
     currentTab=b.dataset.tab; persistLastTab(currentTab); renderNav(); renderView(currentTab); renderMatchMiniWidget();
   }));
