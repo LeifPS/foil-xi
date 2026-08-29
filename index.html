@@ -242,15 +242,24 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
    class kills every bit of that in one place instead of needing an override per theme/keyframe. The
    static gradients/colors (what makes a Diamant look different from a base card at a glance) stay -
    only the CONSTANT MOTION is removed, so cards remain visually distinguishable, just still. */
-body.perf-lite .pcard, body.perf-lite .pcard *{ animation:none !important; }
-body.perf-lite .pcard::before{ display:none !important; }
-body.perf-lite .pcard .gem-facets,
-body.perf-lite .pcard .refresh-fx,
-body.perf-lite .pcard .legikone-fx,
-body.perf-lite .pcard .wm26k-fx,
-body.perf-lite .pcard .iconpromo-fx{ display:none !important; }
-body.perf-lite .wm26-trophy-cutscene *{ animation:none !important; }
-body.perf-lite .wm26-trophy-confetti{ display:none !important; }
+/* Grafik-Einstellungen: 4 unabhängige Schalter statt eines einzigen An/Aus (siehe applyGraphicsPreset)
+   - jeder für sich einzeln umschaltbar, PLUS eine Stufen-Leiter (Voll/Mittel/Reduziert/Aus), die einfach
+   die passende Kombination dieser 4 Schalter setzt:
+     gfx-no-cardshine: die Karten-Grunddauer-Animation selbst (glow/shine/shift/breathe/autoShine) -
+       der eigentliche Perf-Hauptkosten-Faktor bei vielen gleichzeitigen Karten in einem Grid.
+     gfx-no-fxlayers: die zusätzlichen Overlay-Effekt-Ebenen mancher Themes (Gem-Facetten,
+       Refresh-Sweep, Legikone-FX, WM26-Kapitän-FX, Icon-Promo-FX).
+     gfx-no-confetti: das WM-Pokal-Cutscene-Konfetti (nur bei diesem einen seltenen Moment relevant).
+     gfx-no-badgeanim: Liga-Buchstaben-Abzeichen-Puls + Nametag-Farbverlauf-Animation (siehe .nametag). */
+body.gfx-no-cardshine .pcard, body.gfx-no-cardshine .pcard *{ animation:none !important; }
+body.gfx-no-cardshine .pcard::before{ display:none !important; }
+body.gfx-no-fxlayers .pcard .gem-facets,
+body.gfx-no-fxlayers .pcard .refresh-fx,
+body.gfx-no-fxlayers .pcard .legikone-fx,
+body.gfx-no-fxlayers .pcard .wm26k-fx,
+body.gfx-no-fxlayers .pcard .iconpromo-fx{ display:none !important; }
+body.gfx-no-confetti .wm26-trophy-cutscene *{ animation:none !important; }
+body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
 .pcard.theme-gb{--acc:#ffb84d;} .pcard.theme-wall{--acc:#8fb4d1;} .pcard.theme-tots{--acc:#f5d76e;}
 .pcard.theme-flash{--acc:#ff7a59;} .pcard.theme-sd{--acc:#ff5fa8;} .pcard.theme-icon{--acc:#c78bf5;}
@@ -1099,7 +1108,7 @@ body.perf-lite .wm26-trophy-confetti{ display:none !important; }
   50%{filter:drop-shadow(0 1px 3px rgba(0,0,0,.4)) drop-shadow(0 0 7px var(--liga-glow, currentColor));}
 }
 @keyframes ligaBadgeShimmer{0%,100%{background-position:0% 0%;}50%{background-position:100% 100%;}}
-body.perf-lite .liga-badge{ animation:none !important; }
+body.gfx-no-badgeanim .liga-badge{ animation:none !important; }
 .liga-name-gold{background:linear-gradient(90deg,#ffd76a,#fff3c4,#ffb347,#ffd76a);background-size:260% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;animation:ligaNameGoldShift 4s linear infinite;font-weight:700;}
 .liga-name-silver{background:linear-gradient(90deg,#d7dade,#ffffff,#9297a0,#d7dade);background-size:260% 100%;
@@ -1109,7 +1118,12 @@ body.perf-lite .liga-badge{ animation:none !important; }
 @keyframes ligaNameGoldShift{0%{background-position:0% 0%;}100%{background-position:260% 0%;}}
 @keyframes ligaNameSilverShift{0%{background-position:0% 0%;}100%{background-position:260% 0%;}}
 @keyframes ligaNameBronzeShift{0%{background-position:0% 0%;}100%{background-position:260% 0%;}}
-body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite .liga-name-bronze{ animation:none !important; }
+body.gfx-no-badgeanim .liga-name-gold, body.gfx-no-badgeanim .liga-name-silver, body.gfx-no-badgeanim .liga-name-bronze{ animation:none !important; }
+/* .nametag (see NAMETAGS/nametagHTML) didn't exist yet when perf-lite was first written - it's the
+   CURRENT gradient-name treatment (the .liga-name-* rules above are dead code from the retired
+   ligaBadge system, kept only so nothing else references them unexpectedly) - wire the same toggle to
+   it so "Abzeichen/Nametag-Animationen aus" actually does something today. */
+body.gfx-no-badgeanim .nametag{ animation:none !important; }
 
 /* One crest-card layout for EVERY match state (see ligaMatchRowHTML) - crest + short code on each
    side, styled after a real sports app's match-preview card instead of a plain text row. Only the
@@ -13089,14 +13103,34 @@ async function boot(){
   showEntryGate();
 }
 
-// Performance preset ("full" vs "lite"): toggles a single body-level class that every card theme's
-// CSS (glow/shine/sparkle/sweep/gem-facet/particle animations - see .perf-lite rules near .pcard) is
-// written to respect, rather than duplicating an on/off check into dozens of individual keyframe
-// rules. Card grids can render a lot of .pcard elements at once (Kartenladen, Mein Verein, ...), each
-// normally running 3-6 separate animations, which is the actual source of lag on weaker devices/
-// browsers - this is a blunt but effective single switch for that, not a fine-grained quality ladder.
+// Grafik-Einstellungen: 4 independent toggles (see the gfx-no-* CSS rules near .pcard) instead of the
+// old single perf-lite on/off - cardshine is still the one that matters most for lag (card grids like
+// Kartenladen/Mein Verein can render a lot of .pcard elements at once, each normally running 3-6
+// separate animations), the other 3 are cheap but still real per-preference switches (special overlay
+// FX layers, the one-off WM-Pokal confetti, and Liga-Abzeichen/Nametag animations). graphicsPreset is
+// just a convenience "set all 4 at once" shortcut - profile.gfx is the actual persisted state, so a
+// user who picks a preset and then flips one checkbox keeps that individual override.
+const GFX_PRESETS = {
+  full:   {cardshine:true,  fxlayers:true,  confetti:true,  badgeanim:true},
+  medium: {cardshine:true,  fxlayers:false, confetti:true,  badgeanim:true},
+  lite:   {cardshine:false, fxlayers:false, confetti:true,  badgeanim:true},
+  off:    {cardshine:false, fxlayers:false, confetti:false, badgeanim:false},
+};
+const GFX_PRESET_LABEL = {full:'Voll', medium:'Mittel', lite:'Reduziert', off:'Aus'};
+// Lazy migration: older accounts only ever had profile.graphicsPreset ('full'/'lite') - derive the new
+// granular profile.gfx from it the first time this is needed, in memory, without forcing an extra
+// Firestore write just for a display preference default.
+function ensureGfxToggles(){
+  if(!profile.gfx) profile.gfx = {...GFX_PRESETS[profile.graphicsPreset==='lite' ? 'lite' : 'full']};
+}
 function applyGraphicsPreset(){
-  document.body.classList.toggle('perf-lite', profile && profile.graphicsPreset==='lite');
+  if(!profile) return;
+  ensureGfxToggles();
+  const g = profile.gfx;
+  document.body.classList.toggle('gfx-no-cardshine', !g.cardshine);
+  document.body.classList.toggle('gfx-no-fxlayers', !g.fxlayers);
+  document.body.classList.toggle('gfx-no-confetti', !g.confetti);
+  document.body.classList.toggle('gfx-no-badgeanim', !g.badgeanim);
 }
 async function init(){
   // WM-Variante/WM-Kapitän cards are otherwise only registered into BY_ID lazily, on first actual use
@@ -16598,12 +16632,21 @@ function renderClub(view){
       <div class="settings-row">
         <div>
           <div class="settings-label">Grafik-Qualit\u00e4t</div>
-          <div class="hint" style="margin-top:2px;">Bei Rucklern auf \u00e4lteren Ger\u00e4ten: schaltet alle Karten-Animationen (Glanz, Funken, Textur) ab.</div>
+          <div class="hint" style="margin-top:2px;">Voreinstellung f\u00fcr die 4 Effekt-Schalter unten - Mittel/Reduziert/Aus schalten bei Rucklern auf schw\u00e4cheren Ger\u00e4ten schrittweise mehr ab.</div>
         </div>
         <select id="graphics-preset-select">
           <option value="full">Voll (Standard)</option>
-          <option value="lite">Reduziert (f\u00fcr schw\u00e4chere Ger\u00e4te)</option>
+          <option value="medium">Mittel</option>
+          <option value="lite">Reduziert</option>
+          <option value="off">Aus</option>
         </select>
+      </div>
+      <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+        <div class="settings-label">Einzelne Effekte</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-cardshine"> Karten-Glanzanimation (Glow/Shine/Sparkle)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-fxlayers"> Karten-Sondereffekte (Gem-Facetten, Refresh-Sweep, Legikone, WM26-Kapit\u00e4n, Icon-Promo)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-confetti"> Konfetti bei WM-Pokal-Cutscene</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-badgeanim"> Liga-Abzeichen-/Nametag-Animation</label>
       </div>
       <div class="settings-row">
         <div>
@@ -16711,13 +16754,26 @@ function renderClub(view){
     await sSet('profile', profile);
     toast(profile.packOpenMode==='click' ? 'Packs öffnen jetzt per Klick.' : 'Packs öffnen jetzt per Wischen.');
   });
+  ensureGfxToggles();
   const graphicsPresetSelect = document.getElementById('graphics-preset-select');
-  graphicsPresetSelect.value = profile.graphicsPreset==='lite' ? 'lite' : 'full';
+  graphicsPresetSelect.value = GFX_PRESETS[profile.graphicsPreset] ? profile.graphicsPreset : 'full';
+  const gfxToggleIds = {cardshine:'gfx-toggle-cardshine', fxlayers:'gfx-toggle-fxlayers', confetti:'gfx-toggle-confetti', badgeanim:'gfx-toggle-badgeanim'};
+  const syncGfxCheckboxes = ()=>{ Object.entries(gfxToggleIds).forEach(([key,id])=>{ document.getElementById(id).checked = !!profile.gfx[key]; }); };
+  syncGfxCheckboxes();
   graphicsPresetSelect.addEventListener('change', async e=>{
     profile.graphicsPreset = e.target.value;
+    profile.gfx = {...GFX_PRESETS[profile.graphicsPreset]};
     await sSet('profile', profile);
     applyGraphicsPreset();
-    toast(profile.graphicsPreset==='lite' ? 'Grafik reduziert — Karten-Animationen sind jetzt aus.' : 'Grafik auf Voll gestellt.');
+    syncGfxCheckboxes();
+    toast(`Grafik-Voreinstellung "${GFX_PRESET_LABEL[profile.graphicsPreset]}" angewendet.`);
+  });
+  Object.entries(gfxToggleIds).forEach(([key,id])=>{
+    document.getElementById(id).addEventListener('change', async e=>{
+      profile.gfx[key] = e.target.checked;
+      await sSet('profile', profile);
+      applyGraphicsPreset();
+    });
   });
   const decimalEffOvSelect = document.getElementById('decimal-effov-select');
   decimalEffOvSelect.value = profile.showDecimalEffOv ? 'on' : 'off';
