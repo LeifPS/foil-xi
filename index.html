@@ -21744,7 +21744,7 @@ const ACHIEVEMENTS = [
       {coins:5000},
       {coins:12000, packs:['ratings27']},
       {coins:25000, packs:['ratings27']},
-      {coins:60000, packs:['kronjuwelen'], card:'ligaMeister', nametag:'unaufhaltsam'},
+      {coins:60000, packs:['kronjuwelen'], card:'siegeTrophy', nametag:'unaufhaltsam'},
     ]},
   {id:'goals', name:'Torjäger', desc:'Erziele Tore in Matches.', icon:'⚽', stat:'goals',
     cond:n=>`${n} Tore`,
@@ -21890,11 +21890,32 @@ function achievementUnlockedTier(ach){
   return tier;
 }
 function achievementClaimedTier(ach){ ensureAchievementState(); return profile.achievementClaimed[ach.id]||0; }
-// The rare single-card tier-V rewards reuse existing, already-battle-tested special-card machinery
-// instead of inventing a new one: 'ligaMeister' is the SAME weekly-rotating boosted card that used to
-// be granted directly for a Liga A 1st place (see ligaChampionCardForIndex) before that moved to being
-// an achievement instead - bringing it back here for the "Siege"/"Liga-Meister" tier-V payouts.
-// 'wepTrophy' is a single fixed equivalent for the (much rarer) Wochenendpokal-Sieger achievement.
+// The rare single-card tier-V rewards are each their own FIXED player, not a shared/rotating card -
+// "Siege" and "Liga-Meister" used to both hand out the exact same weekly-rotating ligaChampionCard,
+// which meant grinding either one for its "unique" reward wasn't actually unique at all. Each of the
+// 3 lines below now has its own dedicated boosted-to-99 card.
+const SIEGE_TROPHY_CARD_ID = 9799001;
+function siegeTrophyCard(){
+  if(BY_ID.has(SIEGE_TROPHY_CARD_ID)) return BY_ID.get(SIEGE_TROPHY_CARD_ID);
+  const base = findBaseCard(239053); // Federico Valverde
+  if(!base) return null;
+  const card = boostBaseToOv(base, 99, SIEGE_TROPHY_CARD_ID, 'siege_trophy', 'Unaufhaltsam', 'ligachamp');
+  card.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p100902349.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=8b350cd7dee61b00b95c422b2f31a885';
+  card.untradable = true;
+  BY_ID.set(card.id, card);
+  return card;
+}
+const LIGA_MEISTER_TROPHY_CARD_ID = 9799002;
+function ligaMeisterTrophyCard(){
+  if(BY_ID.has(LIGA_MEISTER_TROPHY_CARD_ID)) return BY_ID.get(LIGA_MEISTER_TROPHY_CARD_ID);
+  const base = findBaseCard(270531); // Ousmane Diomande
+  if(!base) return null;
+  const card = boostBaseToOv(base, 99, LIGA_MEISTER_TROPHY_CARD_ID, 'liga_champion', 'Liga-Meister', 'ligachamp');
+  card.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p134295740.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=920a4ec5bdeb5842a6d738dfd1ffe7a5';
+  card.untradable = true;
+  BY_ID.set(card.id, card);
+  return card;
+}
 const WEP_TROPHY_CARD_ID = 9799000;
 function wepTrophyCard(){
   if(BY_ID.has(WEP_TROPHY_CARD_ID)) return BY_ID.get(WEP_TROPHY_CARD_ID);
@@ -21906,7 +21927,8 @@ function wepTrophyCard(){
   return card;
 }
 function achievementSpecialCard(key){
-  if(key==='ligaMeister') return currentLigaChampionCard();
+  if(key==='siegeTrophy') return siegeTrophyCard();
+  if(key==='ligaMeister') return ligaMeisterTrophyCard();
   if(key==='wepTrophy') return wepTrophyCard();
   return null;
 }
