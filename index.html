@@ -20970,6 +20970,422 @@ async function ligaSwapBannedAccount(bannedUserId){
   }catch(e){ return {ok:false, reason:'write-failed'}; }
   return {ok:true, replacedWith:replacement.userId, movedOut:bannedUserId, letter:hostDoc.id};
 }
+// ===== Wochenendpokal: a Champions-League-style Sunday event, running every week alongside (not
+// instead of) the existing Ligen system - reuses the real squad/rating machinery (ligaFreshTeam), the
+// same two-leg tie infrastructure (ligaTwoLegLeg1/Leg2/Aggregate) and the same claim-per-stage
+// Firestore pattern as the Liga promotion bracket (ligaV2ClaimStage), just on its own separate set of
+// 'leagueMeta' docs so it never touches a single existing Liga document or function. Not gated by
+// LIGA_RULES_V2_WEEK_START at all - it's a brand new, additive competition, not a change to how the
+// existing Ligen system itself behaves, so it runs every Sonntag starting this very week.
+const WEP_BASE_SPEC = [{letter:'A', count:4}, {letter:'B', count:2}, {letter:'C', count:1}];
+const WEP_TIMES = {swiss1:10, swiss2:11, swiss3:12, semi1:15, semi2:16, final1:17, final2:18};
+const WEP_PRIZE_TABLE = {
+  1: {packs:['kronjuwelen','zeitgeist','poeten'], coins:50000},
+  2: {packs:['deutschelegenden'], coins:20000},
+  3: {packs:[], coins:10000}, // shared by both Halbfinale-Verlierer - no separate 3rd-place match
+};
+// Builds this week's 8-team field from the just-finished Liga tables (leagueHistory/{weekStart}) plus
+// the reigning champion (leagueMeta/wochenendpokalChamp, null for the very first edition): Liga A's
+// top 4, Liga B's top 2, Liga C's top 1, always exactly one slot reserved for the champion. If the
+// champion would ALSO have qualified via their own league placement, that duplicate slot is skipped
+// and the SAME league's cutoff extends by one instead (so the total always comes out to 8 - see the
+// brief's own Liga-A example, generalised to whichever league the champion actually sits in). With no
+// champion at all yet, that same extra slot defaults into Liga A instead. A league that doesn't exist
+// yet or has fewer members than its normal cut simply shrinks, and whatever it's short by is added
+// onto Liga A as well, so the tournament can always try to field 8 even while the league system is
+// still small.
+function wepComputeParticipants(tables, champion){
+  const counts = {};
+  let shortfall = 0;
+  WEP_BASE_SPEC.forEach(spec=>{
+    const have = tables[spec.letter] ? tables[spec.letter].length : 0;
+    const want = Math.min(spec.count, have);
+    counts[spec.letter] = want;
+    shortfall += spec.count - want;
+  });
+  if(shortfall>0 && tables['A']) counts['A'] = Math.min(tables['A'].length, counts['A']+shortfall);
+  let picks = [];
+  ['A','B','C'].forEach(letter=>{
+    const n = counts[letter]||0;
+    for(let i=0;i<n;i++){ if(tables[letter] && tables[letter][i]) picks.push({letter, place:i+1, userId:tables[letter][i].userId, name:tables[letter][i].name}); }
+  });
+  if(champion){
+    const dupIdx = picks.findIndex(p=>p.userId===champion.userId);
+    if(dupIdx!==-1){
+      const dupLetter = picks[dupIdx].letter;
+      picks.splice(dupIdx,1);
+      const nextPlace = counts[dupLetter];
+      if(tables[dupLetter] && tables[dupLetter][nextPlace]){
+        picks.push({letter:dupLetter, place:nextPlace+1, userId:tables[dupLetter][nextPlace].userId, name:tables[dupLetter][nextPlace].name});
+        counts[dupLetter] = nextPlace+1;
+      }
+    }
+    picks.push({letter:null, place:null, userId:champion.userId, name:champion.name, isChampion:true});
+  } else if(tables['A']){
+    const extraPlace = counts['A']||0;
+    if(tables['A'][extraPlace]){
+      picks.push({letter:'A', place:extraPlace+1, userId:tables['A'][extraPlace].userId, name:tables['A'][extraPlace].name});
+      counts['A'] = extraPlace+1;
+    }
+  }
+  return picks.slice(0,8);
+}
+// Swiss-phase standings (points/GD/GF/deterministic tiebreak, same shape/spirit as ligaComputeStandings
+// but over a flat list of single matches rather than a fixed round-robin schedule).
+function wepComputeStandings(participants, matches, seed){
+  const table = participants.map(p=>({userId:p.userId, name:p.name, pts:0, gf:0, ga:0}));
+  const byId = new Map(table.map(t=>[t.userId,t]));
+  matches.forEach(m=>{
+    const a = byId.get(m.aUserId), b = byId.get(m.bUserId);
+    if(!a||!b) return;
+    a.gf+=m.aGoals; a.ga+=m.bGoals; b.gf+=m.bGoals; b.ga+=m.aGoals;
+    if(m.aGoals===m.bGoals){ a.pts+=1; b.pts+=1; }
+    else if(m.aGoals>m.bGoals) a.pts+=3; else b.pts+=3;
+  });
+  table.forEach(t=>{ t.gd=t.gf-t.ga; t.tieHash=ligaTieBreakHash(t.userId, seed||0); });
+  table.sort((x,y)=> y.pts-x.pts || y.gd-x.gd || y.gf-x.gf || y.tieHash-x.tieHash);
+  return table;
+}
+function wepPairKey(a,b){ return [a,b].sort().join('|'); }
+// Runde 1: seeded top-half vs bottom-half (seed order = qualification order: Liga A best to worst,
+// then B, then C, then the champion's own slot) - the classic "don't let the two very best meet on
+// day 1" Swiss/Chess opening pairing, matching the brief's "die erste Runde kann anhand der
+// Platzierung gesetzt werden".
+function wepRound1Pairs(participants){
+  const half = participants.length/2;
+  const pairs = [];
+  for(let i=0;i<half;i++) pairs.push([participants[i], participants[i+half]]);
+  return pairs;
+}
+// Runden 2-3: pair by current standing, closest-ranked opponent not yet played - a simple greedy
+// nearest-neighbour Swiss pairing, robust enough for a field this small (8 teams, 3 rounds each).
+function wepSwissPairs(standings, playedPairKeys){
+  const remaining = standings.slice();
+  const pairs = [];
+  while(remaining.length){
+    const a = remaining.shift();
+    let idx = remaining.findIndex(b=>!playedPairKeys.has(wepPairKey(a.userId,b.userId)));
+    if(idx===-1) idx = 0; // every remaining opponent already played (shouldn't happen over just 3 rounds) - pair anyway rather than leave anyone out
+    const b = remaining.splice(idx,1)[0];
+    pairs.push([a,b]);
+  }
+  return pairs;
+}
+// One Swiss-phase match: a single leg, draws allowed (it's a league-style phase, not a knockout tie).
+function wepPlayMatch(teamA, teamB){
+  const md = buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:true});
+  return {aUserId:teamA.userId, aName:teamA.name, bUserId:teamB.userId, bName:teamB.name, aGoals:md.myGoals, bGoals:md.oppGoals};
+}
+// Dispatcher: reads how far this week's 7-stage Sonntag schedule has gotten and runs whichever stage
+// is next due - same "separate doc per stage, hour-gated" pattern as resolveWeeklyRolloverV2IfNeeded.
+async function resolveWochenendpokalIfNeeded(){
+  await fbReady;
+  if(!fb) return null;
+  const now = berlinNow();
+  if(now.getDay()!==0) return null; // only Sonntag
+  const weekStart = mostRecentMondayBerlin(); // Sonntag still belongs to the week that started the preceding Monday
+  if(weekStart<LIGA_SEASON_EPOCH) return null;
+  const swiss1Ref = fb.doc(fb.db,'leagueMeta','wepSwiss1_'+weekStart);
+  const swiss2Ref = fb.doc(fb.db,'leagueMeta','wepSwiss2_'+weekStart);
+  const swiss3Ref = fb.doc(fb.db,'leagueMeta','wepSwiss3_'+weekStart);
+  const semi1Ref = fb.doc(fb.db,'leagueMeta','wepSemi1_'+weekStart);
+  const semi2Ref = fb.doc(fb.db,'leagueMeta','wepSemi2_'+weekStart);
+  const final1Ref = fb.doc(fb.db,'leagueMeta','wepFinal1_'+weekStart);
+  const final2Ref = fb.doc(fb.db,'leagueMeta','wepFinal2_'+weekStart);
+  if(now.getHours()<WEP_TIMES.swiss1) return null;
+  let s1; try{ s1 = await fb.getDoc(swiss1Ref); }catch(e){ console.warn('wep swiss1 read failed', e); return null; }
+  if(!s1.exists() || s1.data().status!=='done') return await wepRunSwiss1(weekStart, swiss1Ref);
+  if(now.getHours()<WEP_TIMES.swiss2) return null;
+  let s2; try{ s2 = await fb.getDoc(swiss2Ref); }catch(e){ console.warn('wep swiss2 read failed', e); return null; }
+  if(!s2.exists() || s2.data().status!=='done') return await wepRunSwiss2(s1.data(), swiss2Ref, weekStart);
+  if(now.getHours()<WEP_TIMES.swiss3) return null;
+  let s3; try{ s3 = await fb.getDoc(swiss3Ref); }catch(e){ console.warn('wep swiss3 read failed', e); return null; }
+  if(!s3.exists() || s3.data().status!=='done') return await wepRunSwiss3(s1.data(), s2.data(), swiss3Ref, weekStart);
+  if(now.getHours()<WEP_TIMES.semi1) return null;
+  let se1; try{ se1 = await fb.getDoc(semi1Ref); }catch(e){ console.warn('wep semi1 read failed', e); return null; }
+  if(!se1.exists() || se1.data().status!=='done') return await wepRunSemi1(s1.data(), s2.data(), s3.data(), semi1Ref, weekStart);
+  if(now.getHours()<WEP_TIMES.semi2) return null;
+  let se2; try{ se2 = await fb.getDoc(semi2Ref); }catch(e){ console.warn('wep semi2 read failed', e); return null; }
+  if(!se2.exists() || se2.data().status!=='done') return await wepRunSemi2(se1.data(), semi2Ref);
+  if(now.getHours()<WEP_TIMES.final1) return null;
+  let f1; try{ f1 = await fb.getDoc(final1Ref); }catch(e){ console.warn('wep final1 read failed', e); return null; }
+  if(!f1.exists() || f1.data().status!=='done') return await wepRunFinal1(se2.data(), final1Ref);
+  if(now.getHours()<WEP_TIMES.final2) return null;
+  let f2; try{ f2 = await fb.getDoc(final2Ref); }catch(e){ console.warn('wep final2 read failed', e); return null; }
+  if(f2.exists() && f2.data().status==='done') return null;
+  return await wepRunFinal2(f1.data(), final2Ref, weekStart);
+}
+// Stage 1 (Sonntag ab 10:00): computes this week's 8-team field (Liga-Tabellen + Titelverteidiger),
+// seeds Runde 1 (obere vs. untere Hälfte), spielt sie mit dem aktuellen Kader jeder Seite.
+async function wepRunSwiss1(weekStart, ref){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  let champSnap;
+  try{ champSnap = await fb.getDoc(fb.doc(fb.db,'leagueMeta','wochenendpokalChamp')); }
+  catch(e){ console.warn('wep champ read failed', e); return null; }
+  const champion = champSnap.exists() ? champSnap.data() : null;
+  let histSnap;
+  try{ histSnap = await fb.getDoc(fb.doc(fb.db,'leagueHistory', weekStart+'')); }
+  catch(e){ console.warn('wep history read failed', e); return null; }
+  const tables = histSnap.exists() ? (histSnap.data().tables||{}) : {};
+  const participants = wepComputeParticipants(tables, champion);
+  if(participants.length<8) return null; // not enough real leagues/members yet to field a full 8 - skip this week rather than run a broken bracket
+  const teams = {};
+  for(const p of participants){ teams[p.userId] = await ligaFreshTeam(p.userId, p.name); }
+  const pairs = wepRound1Pairs(participants);
+  const matches = pairs.map(([a,b])=>wepPlayMatch(teams[a.userId], teams[b.userId]));
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), participants, matches}); }
+  catch(e){ console.warn('wep swiss1 write failed', e); return null; }
+  return {stage:'swiss1', participants, matches};
+}
+// Stage 2 (ab 11:00): Tabelle nach Runde 1, paart und spielt Runde 2 (ähnliche Bilanz, keine Wiederholung).
+async function wepRunSwiss2(s1Data, ref, weekStart){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  const standings = wepComputeStandings(s1Data.participants, s1Data.matches, weekStart);
+  const played = new Set(s1Data.matches.map(m=>wepPairKey(m.aUserId,m.bUserId)));
+  const pairs = wepSwissPairs(standings, played);
+  const teams = {};
+  for(const row of standings){ teams[row.userId] = await ligaFreshTeam(row.userId, row.name); }
+  const matches = pairs.map(([a,b])=>wepPlayMatch(teams[a.userId], teams[b.userId]));
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), matches}); }
+  catch(e){ console.warn('wep swiss2 write failed', e); return null; }
+  return {stage:'swiss2', matches};
+}
+// Stage 3 (ab 12:00): Tabelle nach Runde 1+2, paart und spielt die letzte Schweizer Runde.
+async function wepRunSwiss3(s1Data, s2Data, ref, weekStart){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  const allMatches = s1Data.matches.concat(s2Data.matches);
+  const standings = wepComputeStandings(s1Data.participants, allMatches, weekStart);
+  const played = new Set(allMatches.map(m=>wepPairKey(m.aUserId,m.bUserId)));
+  const pairs = wepSwissPairs(standings, played);
+  const teams = {};
+  for(const row of standings){ teams[row.userId] = await ligaFreshTeam(row.userId, row.name); }
+  const matches = pairs.map(([a,b])=>wepPlayMatch(teams[a.userId], teams[b.userId]));
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), matches}); }
+  catch(e){ console.warn('wep swiss3 write failed', e); return null; }
+  return {stage:'swiss3', matches};
+}
+// Stage 4 (ab 15:00): die finale Schweizer Tabelle entscheidet die Top 4 (1 vs 4, 2 vs 3), spielt das
+// Halbfinale-Hinspiel.
+async function wepRunSemi1(s1Data, s2Data, s3Data, ref, weekStart){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  const allMatches = s1Data.matches.concat(s2Data.matches, s3Data.matches);
+  const standings = wepComputeStandings(s1Data.participants, allMatches, weekStart);
+  const top4 = standings.slice(0,4);
+  const pairsSpec = [[top4[0],top4[3]], [top4[1],top4[2]]];
+  const semis = [];
+  for(const [a,b] of pairsSpec){
+    const teamA = await ligaFreshTeam(a.userId, a.name);
+    const teamB = await ligaFreshTeam(b.userId, b.name);
+    const leg1 = ligaTwoLegLeg1(teamA, teamB);
+    semis.push({aUserId:teamA.userId, aName:teamA.name, bUserId:teamB.userId, bName:teamB.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+  }
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), finalStandings:standings, semis}); }
+  catch(e){ console.warn('wep semi1 write failed', e); return null; }
+  return {stage:'semi1', semis};
+}
+// Stage 5 (ab 16:00): Halbfinale-Rückspiel, Aggregat/Entscheidung - die 2 Finalisten stehen fest.
+async function wepRunSemi2(semi1Data, ref){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  const semis = [];
+  for(const s of semi1Data.semis){
+    const teamA = await ligaFreshTeam(s.aUserId, s.aName);
+    const teamB = await ligaFreshTeam(s.bUserId, s.bName);
+    const leg2Raw = ligaTwoLegLeg2(teamA, teamB);
+    const tie = ligaTwoLegAggregate(teamA, teamB, s.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const winnerId = tie.winner==='A' ? teamA.userId : teamB.userId;
+    const winnerName = tie.winner==='A' ? teamA.name : teamB.name;
+    semis.push({...s, ...tie, winnerId, winnerName});
+  }
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), semis}); }
+  catch(e){ console.warn('wep semi2 write failed', e); return null; }
+  return {stage:'semi2', semis};
+}
+// Stage 6 (ab 17:00): Finale-Hinspiel zwischen den beiden Halbfinal-Siegern.
+async function wepRunFinal1(semi2Data, ref){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  const [s0, s1b] = semi2Data.semis;
+  const teamA = await ligaFreshTeam(s0.winnerId, s0.winnerName);
+  const teamB = await ligaFreshTeam(s1b.winnerId, s1b.winnerName);
+  const leg1 = ligaTwoLegLeg1(teamA, teamB);
+  const final = {aUserId:teamA.userId, aName:teamA.name, bUserId:teamB.userId, bName:teamB.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}};
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), final}); }
+  catch(e){ console.warn('wep final1 write failed', e); return null; }
+  return {stage:'final1', final};
+}
+// Stage 7 (ab 18:00): Finale-Rückspiel, bestimmt den Wochenendpokal-Sieger, verteilt die Preise (1./2.
+// aus dem Finale, 3. Platz teilen sich beide Halbfinal-Verlierer - kein eigenes kleines Finale dafür),
+// und setzt den Sieger als neuen Titelverteidiger für den nächsten Wochenendpokal.
+async function wepRunFinal2(final1Data, ref, weekStart){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  const {final} = final1Data;
+  const teamA = await ligaFreshTeam(final.aUserId, final.aName);
+  const teamB = await ligaFreshTeam(final.bUserId, final.bName);
+  const leg2Raw = ligaTwoLegLeg2(teamA, teamB);
+  const tie = ligaTwoLegAggregate(teamA, teamB, final.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+  const winnerId = tie.winner==='A' ? teamA.userId : teamB.userId;
+  const winnerName = tie.winner==='A' ? teamA.name : teamB.name;
+  const runnerUpId = tie.winner==='A' ? teamB.userId : teamA.userId;
+  const runnerUpName = tie.winner==='A' ? teamB.name : teamA.name;
+  let thirdPlaces = [];
+  try{
+    const semi2Snap = await fb.getDoc(fb.doc(fb.db,'leagueMeta','wepSemi2_'+weekStart));
+    if(semi2Snap.exists()){
+      thirdPlaces = semi2Snap.data().semis.map(s=> s.winnerId===s.aUserId ? {userId:s.bUserId,name:s.bName} : {userId:s.aUserId,name:s.aName});
+    }
+  }catch(e){ console.warn('wep semi2 reread for 3rd place failed', e); }
+  const placements = [
+    {place:1, userId:winnerId, name:winnerName},
+    {place:2, userId:runnerUpId, name:runnerUpName},
+    ...thirdPlaces.map(t=>({place:3, userId:t.userId, name:t.name})),
+  ];
+  for(const p of placements){
+    const prize = WEP_PRIZE_TABLE[p.place];
+    if(!prize) continue;
+    const rewards = [];
+    prize.packs.forEach(packId=>rewards.push({kind:'pack', packId}));
+    if(prize.coins) rewards.push({kind:'coins', amount:prize.coins});
+    try{ await fb.updateDoc(fb.doc(fb.db,'saves', p.userId), {'profile.pendingWochenendpokalRewards': fb.arrayUnion(...rewards)}); }
+    catch(e){ console.warn('wep prize queue failed for', p.userId, e); }
+  }
+  try{
+    await fb.setDoc(ref, {status:'done', at:Date.now(), final:{...final, ...tie, winnerId, winnerName}, placements});
+    await fb.setDoc(fb.doc(fb.db,'leagueMeta','wochenendpokalChamp'), {userId:winnerId, name:winnerName, wonAt:Date.now(), weekStart});
+  }catch(e){ console.warn('wep final2 write failed', e); return null; }
+  return {stage:'final2', winnerId, winnerName};
+}
+// Wochenendpokal-Preise (Packs + Coins) werden genauso in eine Warteschlange gestellt wie Liga-Preise
+// (siehe renderLigaPendingPacks), aber in ihrem eigenen Bereich im Wochenendpokal-Tab gezeigt - jedes
+// einzeln abgeholt, für einen richtigen "Pokal abholen"-Moment statt stiller Sofort-Gutschrift.
+function renderWochenendpokalPendingRewards(box){
+  const pending = profile.pendingWochenendpokalRewards || [];
+  if(!pending.length){ box.innerHTML = ''; return; }
+  const next = pending[0];
+  const label = next.kind==='pack' ? (PACKS.find(p=>p.id===next.packId)||{name:'Unbekanntes Pack'}).name : `${formatCoins(next.amount)} Coins`;
+  box.innerHTML = `
+    <div class="vs-panel" style="margin-bottom:14px;border-color:var(--gold);">
+      <h3 style="font-size:14px;margin-bottom:6px;color:var(--gold);">🏆 Wochenendpokal-Preise abholen</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">${pending.length} Preis${pending.length>1?'e':''} warten noch darauf, abgeholt zu werden.</p>
+      <button class="action-btn" id="wep-claim-reward" style="width:auto;padding:9px 18px;">${label} abholen (1/${pending.length})</button>
+    </div>`;
+  document.getElementById('wep-claim-reward').addEventListener('click', async (e)=>{
+    e.target.disabled = true;
+    profile.pendingWochenendpokalRewards = profile.pendingWochenendpokalRewards.slice(1);
+    if(next.kind==='coins') profile.coins = (profile.coins||0) + next.amount;
+    await sSet('profile', profile);
+    if(next.kind==='pack'){
+      const pack = PACKS.find(p=>p.id===next.packId);
+      if(pack) showPackOpening(pack, pack.draw(), {});
+      else toast('Unbekanntes Pack übersprungen.');
+    } else {
+      toast(`+${formatCoins(next.amount)} Coins!`);
+    }
+    renderWochenendpokalPendingRewards(box);
+  });
+}
+function wepSingleMatchRowHTML(m){
+  return `<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${m.aName}</span><span class="mono" style="min-width:50px;text-align:center;">${m.aGoals} : ${m.bGoals}</span><span style="flex:1;text-align:right;">${m.bName}</span></div>`;
+}
+function wepTwoLegRowHTML(tie, aName, bName){
+  const deciderText = tie.decider ? `, Entscheidung ${tie.decider.aGoals}:${tie.decider.bGoals}${tie.decider.wentToPK?' n.E.':''}` : '';
+  return `<div class="leader-row" style="margin-bottom:8px;flex-wrap:wrap;">
+    <span style="flex:1;min-width:160px;"><b>${aName}</b> vs <b>${bName}</b></span>
+    <span class="hint" style="margin:0;">Hin ${tie.leg1.aGoals}:${tie.leg1.bGoals}, Rück ${tie.leg2.aGoals}:${tie.leg2.bGoals}${deciderText} — Aggregat ${tie.aggA}:${tie.aggB}</span>
+  </div>`;
+}
+function wepStandingsTableHTML(standings, highlightTop4){
+  return standings.map((t,i)=>`<div class="leader-row" style="margin-bottom:3px;${highlightTop4 && i<4?'font-weight:700;':''}">
+      <span class="mono" style="width:22px;">${i+1}.</span>
+      <span style="flex:1;">${t.name}</span>
+      <span class="mono" style="width:44px;text-align:right;">${t.pts} P</span>
+      <span class="hint" style="width:64px;text-align:right;margin:0;">${t.gf}:${t.ga}</span>
+    </div>`).join('');
+}
+// The Wochenendpokal's own tab within "Ligen" - triggers this week's next-due stage (if any), then
+// shows however far the tournament has gotten: participants, each Schweizer round, the standings,
+// Halbfinale, Finale, the reigning Titelverteidiger, and the viewer's own prize-claim box.
+async function renderWochenendpokalPanel(box){
+  box.innerHTML = `<p class="hint">Lädt…</p>`;
+  await fbReady;
+  if(!fb){ box.innerHTML = `<p class="hint">Nicht verfügbar.</p>`; return; }
+  await resolveWochenendpokalIfNeeded();
+  const weekStart = mostRecentMondayBerlin();
+  const pendingHost = document.createElement('div');
+  renderWochenendpokalPendingRewards(pendingHost);
+  if(weekStart<LIGA_SEASON_EPOCH){
+    box.innerHTML = `<p class="hint">Der Wochenendpokal startet, sobald die erste Liga-Woche abgeschlossen ist.</p>`;
+    box.prepend(pendingHost);
+    return;
+  }
+  let champSnap, s1snap, s2snap, s3snap, se1snap, se2snap, f1snap, f2snap;
+  try{
+    [champSnap, s1snap, s2snap, s3snap, se1snap, se2snap, f1snap, f2snap] = await Promise.all([
+      fb.getDoc(fb.doc(fb.db,'leagueMeta','wochenendpokalChamp')),
+      fb.getDoc(fb.doc(fb.db,'leagueMeta','wepSwiss1_'+weekStart)),
+      fb.getDoc(fb.doc(fb.db,'leagueMeta','wepSwiss2_'+weekStart)),
+      fb.getDoc(fb.doc(fb.db,'leagueMeta','wepSwiss3_'+weekStart)),
+      fb.getDoc(fb.doc(fb.db,'leagueMeta','wepSemi1_'+weekStart)),
+      fb.getDoc(fb.doc(fb.db,'leagueMeta','wepSemi2_'+weekStart)),
+      fb.getDoc(fb.doc(fb.db,'leagueMeta','wepFinal1_'+weekStart)),
+      fb.getDoc(fb.doc(fb.db,'leagueMeta','wepFinal2_'+weekStart)),
+    ]);
+  }catch(e){ box.innerHTML = `<p class="hint">Wochenendpokal konnte nicht geladen werden (${(e&&(e.code||e.message))||e}).</p>`; return; }
+  const champion = champSnap.exists() ? champSnap.data() : null;
+  let html = `<p class="hint" style="margin:0 0 14px;">Jeden Sonntag: 8 Teams, Schweizer System über 3 Runden, dann Halbfinale und Finale im Hin-/Rückspiel-Modus.</p>`;
+  html += `<div class="vs-panel" style="margin-bottom:14px;">
+    <h3 style="font-size:14px;margin-bottom:4px;color:var(--gold);">👑 Titelverteidiger</h3>
+    <p class="hint" style="margin:0;">${champion ? champion.name : 'Noch kein Titelverteidiger — der erste Wochenendpokal steht noch aus.'}</p>
+  </div>`;
+  if(!s1snap.exists()){
+    let histSnap;
+    try{ histSnap = await fb.getDoc(fb.doc(fb.db,'leagueHistory', weekStart+'')); }catch(e){ histSnap = null; }
+    if(histSnap && histSnap.exists()){
+      const participants = wepComputeParticipants(histSnap.data().tables||{}, champion);
+      html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Voraussichtliche Teilnehmer (Sonntag ab 10:00)</div>`;
+      html += participants.map(p=>`<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${p.name}</span><span class="hint" style="margin:0;">${p.isChampion?'Titelverteidiger':'Liga '+p.letter+' Platz '+p.place}</span></div>`).join('');
+    } else {
+      html += `<p class="hint">Die Teilnehmerliste steht fest, sobald die laufende Liga-Woche am Samstag abgeschlossen ist.</p>`;
+    }
+    box.innerHTML = html;
+    box.prepend(pendingHost);
+    return;
+  }
+  const s1 = s1snap.data();
+  html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Teilnehmer</div>`;
+  html += s1.participants.map(p=>`<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${p.name}</span><span class="hint" style="margin:0;">${p.isChampion?'Titelverteidiger':'Liga '+p.letter+' Platz '+p.place}</span></div>`).join('');
+  const roundMatches = [s1.matches];
+  if(s2snap.exists()) roundMatches.push(s2snap.data().matches);
+  if(s3snap.exists()) roundMatches.push(s3snap.data().matches);
+  roundMatches.forEach((matches, idx)=>{
+    html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Schweizer Runde ${idx+1}</div>`;
+    html += matches.map(wepSingleMatchRowHTML).join('');
+  });
+  const allSwissMatches = [].concat(...roundMatches);
+  const standings = wepComputeStandings(s1.participants, allSwissMatches, weekStart);
+  html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${s3snap.exists() ? 'Tabelle nach der Schweizer Phase (Top 4 → Halbfinale)' : 'Tabelle nach Runde '+roundMatches.length}</div>`;
+  html += wepStandingsTableHTML(standings, s3snap.exists());
+  if(se1snap.exists()){
+    const se1 = se1snap.data();
+    html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Halbfinale</div>`;
+    if(se2snap.exists()){
+      html += se2snap.data().semis.map(s=>wepTwoLegRowHTML(s, s.aName, s.bName)).join('');
+    } else {
+      html += se1.semis.map(s=>`<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;"><b>${s.aName}</b> vs <b>${s.bName}</b></span><span class="hint" style="margin:0;">Hinspiel ${s.leg1.aGoals}:${s.leg1.bGoals}</span></div>`).join('');
+    }
+  }
+  if(f1snap.exists()){
+    const f1 = f1snap.data();
+    html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Finale</div>`;
+    if(f2snap.exists() && f2snap.data().status==='done'){
+      const f2 = f2snap.data();
+      html += wepTwoLegRowHTML(f2.final, f1.final.aName, f1.final.bName);
+      html += `<p class="hint" style="margin-top:8px;color:var(--gold);">🏆 Wochenendpokal-Sieger: <b>${f2.final.winnerName}</b>!</p>`;
+    } else {
+      html += `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;"><b>${f1.final.aName}</b> vs <b>${f1.final.bName}</b></span><span class="hint" style="margin:0;">Hinspiel ${f1.final.leg1.aGoals}:${f1.final.leg1.bGoals}</span></div>`;
+    }
+  }
+  box.innerHTML = html;
+  box.prepend(pendingHost);
+}
 let ligenSubTab = 'mine';
 // The Montag-Freitag fixture list defaults to only upcoming matches plus anything revealed in the last
 // 6 hours - not the whole week at once - so the list stays focused on "what's relevant right now"
@@ -21055,18 +21471,21 @@ function renderLigaPendingPacks(box){
 }
 function renderLigenPanel(view){
   ligaFixturesShowAll = false;
-  view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Ruhetag. Auf- und Abstieg jede Woche.</p></div>
+  view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Wochenendpokal. Auf- und Abstieg jede Woche.</p></div>
     <div id="liga-pending-packs"></div>
     <div id="ligen-subnav" style="display:flex;gap:2px;padding:0;background:none;border:none;margin-bottom:14px;">
       <button class="nav-btn ${ligenSubTab==='mine'?'active':''}" id="ligen-subtab-mine" style="padding:9px 14px;">Meine Liga</button>
       <button class="nav-btn ${ligenSubTab==='all'?'active':''}" id="ligen-subtab-all" style="padding:9px 14px;">Alle Ligen</button>
+      <button class="nav-btn ${ligenSubTab==='wep'?'active':''}" id="ligen-subtab-wep" style="padding:9px 14px;">🏆 Wochenendpokal</button>
     </div>
     <div id="liga-content"><p class="hint">Lädt…</p></div>`;
   renderLigaPendingPacks(document.getElementById('liga-pending-packs'));
   document.getElementById('ligen-subtab-mine').addEventListener('click', ()=>{ ligenSubTab='mine'; renderLigenPanel(view); });
   document.getElementById('ligen-subtab-all').addEventListener('click', ()=>{ ligenSubTab='all'; renderLigenPanel(view); });
+  document.getElementById('ligen-subtab-wep').addEventListener('click', ()=>{ ligenSubTab='wep'; renderLigenPanel(view); });
   const box = document.getElementById('liga-content');
   if(ligenSubTab==='all'){ renderAllLigenOverview(box); return; }
+  if(ligenSubTab==='wep'){ renderWochenendpokalPanel(box); return; }
   (async ()=>{
     const weekStartBefore = mostRecentMondayBerlin();
     // Sat/Sun: whoever opens this tab first runs the weekly commissioner pass (promotions, relegation
