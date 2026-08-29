@@ -1700,7 +1700,7 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .nt-baumeister{background:linear-gradient(90deg,#e2c48a,#8a6a2e,#e2c48a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite;}
 .nt-makler{background:linear-gradient(90deg,#9dc7ff,#3a7ae2,#9dc7ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite;}
 .nt-kroesus{background:linear-gradient(90deg,#fff4b3,#c9a020,#6fd67a,#fff4b3);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
-.nt-aufsteiger{background:linear-gradient(90deg,#bde3ff,#4da8ff,#bde3ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite;}
+.nt-ruepel{background:linear-gradient(90deg,#ff9d9d,#d94f4f,#2b2b2b,#ff9d9d);background-size:320% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
 .nt-pokalkoenig{background:linear-gradient(90deg,#ff9de2,#ffd76a,#9dffb0,#9de2ff,#d79dff,#ff9de2);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite;}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
 .ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
@@ -11871,10 +11871,14 @@ async function buyMarketListing(listing){
     // payment lands correctly even if the seller is doing something else concurrently (e.g. another
     // sale, opening a pack) that would otherwise risk clobbering/losing this credit
     if(fb.updateDoc && fb.increment){
-      await fb.updateDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {'profile.coins': fb.increment(listing.price)});
+      // Händler-Erfolg zählt Coins aus dem Transfermarkt/Handel statt der Anzahl Handelsgeschäfte -
+      // gleicher fb.increment-Schreibvorgang wie die Coin-Zahlung selbst, in EINEM Round-Trip.
+      await fb.updateDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {'profile.coins': fb.increment(listing.price), 'profile.achievementStats.marketCoinsEarned': fb.increment(listing.price)});
     } else {
       let sellerProfile = sellerData.profile || {coins:0};
       sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
+      if(!sellerProfile.achievementStats) sellerProfile.achievementStats = {};
+      sellerProfile.achievementStats.marketCoinsEarned = (sellerProfile.achievementStats.marketCoinsEarned||0) + listing.price;
       await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile}, {merge:true});
     }
     await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {collection:sellerCollection, managerCollection:sellerManagerCollection, packCollection:sellerPackCollection}, {merge:true});
@@ -12273,7 +12277,12 @@ async function finalizeTradeAccept(t, payment){
       senderProfile.coins = (senderProfile.coins||0) + senderCoinDelta;
       await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile}, {merge:true});
     }
-    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {collection:senderCollection, managerCollection:senderManagerCollection, packCollection:senderPackCollection, 'profile.achievementStats.tradesCompleted': fb.increment(1)}, {merge:true});
+    // Händler-Erfolg zählt Coins statt Handels-Anzahl - nur wenn der Absender hier tatsächlich netto
+    // Coins bekommen hat (sein Handelsangebot also effektiv "gekauft" wurde), nicht wenn er selbst
+    // draufgezahlt hat.
+    const senderTradeUpdate = {collection:senderCollection, managerCollection:senderManagerCollection, packCollection:senderPackCollection};
+    if(senderCoinDelta>0) senderTradeUpdate['profile.achievementStats.marketCoinsEarned'] = fb.increment(senderCoinDelta);
+    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), senderTradeUpdate, {merge:true});
     // trade doc is already gone - claimed (read-and-deleted) atomically at the very top of this function
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
@@ -12289,7 +12298,10 @@ async function finalizeTradeAccept(t, payment){
     if(t.want && t.want.kind==='coins' && (t.offerCoins||0)===0 && (t.offerCards||[]).length===1 && !(t.offerManagers||[]).length){
       recordSale(t.offerCards[0].cardId, payment.coins);
     }
-    applyAchievementDeltas({tradesCompleted:1});
+    // my own net coin gain from this trade (mirror of senderCoinDelta from the other side) - only
+    // counts towards Händler when positive, i.e. I effectively sold into this Handelsangebot.
+    const myTradeCoinGain = (t.offerCoins||0) - (payment.coins||0);
+    if(myTradeCoinGain>0) applyAchievementDeltas({marketCoinsEarned: myTradeCoinGain});
     await sSet('profile', profile);
 
     toast('Handel abgeschlossen!');
@@ -21021,13 +21033,12 @@ async function resolveWeeklyRolloverIfNeeded(){
     // Liga-Abzeichen kommen seit dem Erfolge-System nicht mehr direkt aus einer Liga-Platzierung (siehe
     // profile.ligaBadge weiter oben, jetzt nur noch für die Einmal-Migration in init() gelesen) -
     // stattdessen zählt jede Top-3-Platzierung in Liga A auf die entsprechende Erfolgs-Linie
-    // (ligaFirst/ligaSecond/ligaThird), deren Stufe V das permanente Nametag vergibt. Aufstieg in eine
-    // höhere Liga zählt unabhängig davon immer auf "promotions", egal aus welcher Liga.
+    // (ligaFirst/ligaSecond/ligaThird), deren Stufe V das permanente Nametag vergibt. Der Liga-Aufstieg
+    // selbst zählt auf keine Erfolgs-Linie mehr - "Aufsteiger" wurde durch "Kartensünder" ersetzt.
     const achDeltas = {};
     if(letter==='A' && r.place===1) achDeltas.ligaFirst = 1;
     else if(letter==='A' && r.place===2) achDeltas.ligaSecond = 1;
     else if(letter==='A' && r.place===3) achDeltas.ligaThird = 1;
-    if(LIGA_LETTERS.indexOf(nextLeagueOf[r.userId])<LIGA_LETTERS.indexOf(letter)) achDeltas.promotions = 1;
     Object.assign(updates, achievementDeltaPayload(achDeltas));
     await ligaQueueRewards(r.userId, 'profile.pendingLigaPacks', pendingAdds, updates);
   }
@@ -21241,7 +21252,6 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
     if(r.letter==='A' && r.place===1) achDeltas.ligaFirst = 1;
     else if(r.letter==='A' && r.place===2) achDeltas.ligaSecond = 1;
     else if(r.letter==='A' && r.place===3) achDeltas.ligaThird = 1;
-    if(LIGA_LETTERS.indexOf(nextLeagueOf[r.userId])<LIGA_LETTERS.indexOf(r.letter)) achDeltas.promotions = 1;
     Object.assign(updates, achievementDeltaPayload(achDeltas));
     await ligaQueueRewards(r.userId, 'profile.pendingLigaPacks', pendingAdds, updates);
   }
@@ -21739,7 +21749,7 @@ function ensureAchievementState(){
 const ACHIEVEMENTS = [
   {id:'wins', name:'Siege', desc:'Gewinne Matches (online oder gegen Freunde).', icon:'🏆', stat:'wins',
     cond:n=>`${n} Siege`,
-    tiers:[10,30,75,150,300],
+    tiers:[10,50,200,500,1000],
     rewards:[
       {coins:2000},
       {coins:5000},
@@ -21749,7 +21759,7 @@ const ACHIEVEMENTS = [
     ]},
   {id:'goals', name:'Torjäger', desc:'Erziele Tore in Matches.', icon:'⚽', stat:'goals',
     cond:n=>`${n} Tore`,
-    tiers:[25,75,200,450,900],
+    tiers:[25,100,500,1500,3000],
     rewards:[
       {coins:2000},
       {coins:5000},
@@ -21769,7 +21779,7 @@ const ACHIEVEMENTS = [
     ]},
   {id:'cardsAcquired', name:'Kartensammler', desc:'Besitze einzigartige Karten (verschiedene Spieler/Varianten) gleichzeitig in deinem Verein.', icon:'🗂️', stat:'cardsAcquired',
     cond:n=>`${n} einzigartige Karten im Besitz`,
-    tiers:[30,75,150,300,500],
+    tiers:[50,200,750,2000,5000],
     rewards:[
       {coins:2000},
       {coins:5000},
@@ -21779,7 +21789,7 @@ const ACHIEVEMENTS = [
     ]},
   {id:'sbcsCompleted', name:'SBC-Meister', desc:'Schließe Herausforderungen (SBCs) ab.', icon:'🛠️', stat:'sbcsCompleted',
     cond:n=>`${n} SBCs abgeschlossen`,
-    tiers:[3,10,25,50,100],
+    tiers:[3,10,25,75,200],
     rewards:[
       {coins:2000},
       {coins:6000},
@@ -21787,9 +21797,12 @@ const ACHIEVEMENTS = [
       {coins:35000, packs:['ratings27']},
       {coins:75000, packs:['deutschelegenden'], nametag:'baumeister'},
     ]},
-  {id:'tradesCompleted', name:'Händler', desc:'Schließe Handelsgeschäfte im Marktplatz ab.', icon:'🤝', stat:'tradesCompleted',
-    cond:n=>`${n} Handelsgeschäfte`,
-    tiers:[5,15,40,80,150],
+  // Zählt nicht mehr die Anzahl abgeschlossener Handel, sondern die tatsächlich verdienten Coins -
+  // sowohl aus Transfermarkt-Verkäufen (siehe buyMarketListing) als auch aus angenommenen
+  // Handelsangeboten, bei denen man netto Coins erhalten hat (siehe finalizeTradeAccept).
+  {id:'tradesCompleted', name:'Händler', desc:'Verdiene Coins über den Transfermarkt und angenommene Handelsangebote.', icon:'🤝', stat:'marketCoinsEarned',
+    cond:n=>`${formatCoins(n)} Coins durch Verkäufe verdient`,
+    tiers:[1000,5000,25000,100000,250000],
     rewards:[
       {coins:2000},
       {coins:5000},
@@ -21829,15 +21842,19 @@ const ACHIEVEMENTS = [
     rewards:[
       {coins:10000, packs:['poeten'], nametag:'bronze'},
     ]},
-  {id:'promotions', name:'Aufsteiger', desc:'Steige in eine höhere Liga auf.', icon:'📈', stat:'promotions',
-    cond:n=>`${n}x aufgestiegen`,
-    tiers:[1,3,6,12,20],
+  // Komplett andere Bedingung als vorher (war: Liga-Aufstiege) - zählt jetzt Gelbe/Rote Karten in
+  // den eigenen Matches. Ein Stufen-Schwellwert ist hier ein {y,r}-Objekt statt einer einzelnen Zahl,
+  // da ab Stufe III zusätzlich eine Mindestanzahl Roter Karten gefordert ist - siehe die
+  // Sonderbehandlung für ach.id==='cardDiscipline' in achievementStatValue/achievementUnlockedTier/tierMet.
+  {id:'cardDiscipline', name:'Kartensünder', desc:'Sammle Gelbe und Rote Karten in deinen eigenen Matches.', icon:'🟨', stat:'cardDiscipline',
+    cond:t=>t.r>0 ? `${t.y} Gelbe & ${t.r} Rote Karten` : `${t.y} Gelbe Karten`,
+    tiers:[{y:2,r:0},{y:10,r:0},{y:30,r:1},{y:100,r:10},{y:1000,r:50}],
     rewards:[
       {coins:3000},
       {coins:8000},
       {coins:20000},
       {coins:45000, packs:['ratings27']},
-      {coins:90000, packs:['zeitgeist'], nametag:'aufsteiger'},
+      {coins:90000, packs:['zeitgeist'], nametag:'ruepel'},
     ]},
   {id:'wepWins', name:'Wochenendpokal-Sieger', desc:'Gewinne den Wochenendpokal.', icon:'🏆', stat:'wepWins',
     cond:n=>`${n}x Wochenendpokal gewonnen`,
@@ -21869,7 +21886,7 @@ const NAMETAGS = {
   baumeister: {label:'Baumeister', symbol:'⬢', cls:'nt-baumeister', accent:'#c98a3e'},
   makler: {label:'Makler', symbol:'✚', cls:'nt-makler', accent:'#3a7ae2'},
   kroesus: {label:'Krösus', symbol:'✪', cls:'nt-kroesus', accent:'#e6c343'},
-  aufsteiger: {label:'Aufsteiger', symbol:'△', cls:'nt-aufsteiger', accent:'#4da8ff'},
+  ruepel: {label:'Rüpel', symbol:'▮', cls:'nt-ruepel', accent:'#d94f4f'},
   pokalkoenig: {label:'Pokalkönig', symbol:'★', cls:'nt-pokalkoenig', accent:'#ff9de2'},
 };
 // Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
@@ -21881,13 +21898,25 @@ const NAMETAGS = {
 function achievementStatValue(ach){
   ensureAchievementState();
   if(ach.id==='cardsAcquired') return new Set(collection.map(c=>c.cardId)).size;
+  // Kartensünder braucht zwei getrennte Zähler (Gelb/Rot) statt einem einzelnen Schwellwert - siehe
+  // die {y,r}-Stufen in ACHIEVEMENTS und tierMet direkt unten.
+  if(ach.id==='cardDiscipline') return {y: profile.achievementStats.yellowCards||0, r: profile.achievementStats.redCards||0};
   return profile.achievementStats[ach.stat]||0;
 }
+// A tier threshold is either a plain number (every normal achievement) or a {y,r} pair
+// (Kartensünder, which additionally requires a minimum Rote-Karten count from tier III on).
+function tierMet(v, t){
+  if(t && typeof t==='object') return (v && v.y||0)>=t.y && (v && v.r||0)>=(t.r||0);
+  return v>=t;
+}
+// Same {y,r}-vs-number duality, but reduced to one comparable number for the progress bar - the
+// yellow-card count alone is a fine approximation since it only ever grows alongside the red count.
+function tierProgressNum(x){ return (x && typeof x==='object') ? x.y : x; }
 // 0 = not even tier I reached yet, 1-5 = highest tier the raw counter currently qualifies for.
 function achievementUnlockedTier(ach){
   const v = achievementStatValue(ach);
   let tier = 0;
-  ach.tiers.forEach((t,i)=>{ if(v>=t) tier = i+1; });
+  ach.tiers.forEach((t,i)=>{ if(tierMet(v,t)) tier = i+1; });
   return tier;
 }
 function achievementClaimedTier(ach){ ensureAchievementState(); return profile.achievementClaimed[ach.id]||0; }
@@ -22057,7 +22086,8 @@ async function renderAchievementsPanel(view){
     const nextTier = Math.min(unlocked+1, lastTier);
     const nextThreshold = ach.tiers[nextTier-1];
     const prevThreshold = nextTier>1 ? ach.tiers[nextTier-2] : 0;
-    const pct = unlocked>=lastTier ? 100 : Math.max(0, Math.min(100, Math.round(((value-prevThreshold)/(nextThreshold-prevThreshold))*100)));
+    const pctValue = tierProgressNum(value), pctNext = tierProgressNum(nextThreshold), pctPrev = tierProgressNum(prevThreshold);
+    const pct = unlocked>=lastTier ? 100 : Math.max(0, Math.min(100, Math.round(((pctValue-pctPrev)/(pctNext-pctPrev))*100)));
     const accent = NAMETAGS[ach.rewards[lastTier-1].nametag].accent;
     const summary = unlocked>=lastTier
       ? `Alle Stufen abgeschlossen · aktueller Stand: ${ach.cond(value)}`
@@ -26884,6 +26914,14 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null, oppNametag=null)
   return {myGoals: myTally, oppGoals: oppTally, myScorers, myAssists};
 }
 const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
+// Tallies "my" side's card incidents from a match's incidents array for the Kartensünder-Erfolg -
+// a straight red2 (second yellow) already had its causing yellow pushed as its own 'yellow' entry
+// by planCardsAndPenalties, so counting 'yellow' and 'red'/'red2' separately here matches real
+// football box-score conventions (1 yellow + 1 red shown for a second-booking dismissal).
+function myCardCountsFrom(incidents){
+  const mine = (incidents||[]).filter(i=>i.side==='me');
+  return { yellow: mine.filter(i=>i.type==='yellow').length, red: mine.filter(i=>i.type==='red'||i.type==='red2').length };
+}
 // Split into two phases so the outcome can be COMMITTED (all saved-state writes: coins, wins/losses,
 // history, streaks, ...) the instant it's known - before the match animation plays - while the UI/
 // sound REVEAL still happens only after the animation, unchanged from before. Without this split, a
@@ -26893,7 +26931,7 @@ const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
 // attempt. See runLocalMatch's onOutcomeDecided and the 3 callers that use it (win streak, tournament,
 // O Rei) - all their state-mutating logic moved out of onComplete (post-animation) and into
 // onOutcomeDecided (pre-animation) for exactly this reason.
-async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers, friendly=false, oppUserId=null){
+async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentToPK, oppName, myScorers, friendly=false, oppUserId=null, myYellowCards=0, myRedCards=0){
   const result = winnerSide==='me' ? 'WIN' : 'LOSS';
   if(friendly) return {result, winnerSide, friendly:true};
   const reward = result==='WIN' ? 900 : 250;
@@ -26938,7 +26976,7 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
   // write everything in ONE network round-trip so an early tab-close can't lose part of it
   if(fb && clubId && fb.updateDoc && fb.increment){
     try{
-      const achDeltas = {wins: result==='WIN'?1:0, goals: myGoals};
+      const achDeltas = {wins: result==='WIN'?1:0, goals: myGoals, yellowCards: myYellowCards, redCards: myRedCards};
       const payload = { 'profile.coins': fb.increment(finalReward), 'profile.dailyRewardTracker': newTracker, ...achievementDeltaPayload(achDeltas) };
       payload[result==='WIN' ? 'profile.wins' : 'profile.losses'] = fb.increment(1);
       if(result==='WIN') payload['profile.careerWins'] = fb.increment(1);
@@ -26956,7 +26994,7 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
     }catch(e){
       console.warn('atomic match-result update failed, falling back', e);
       if(result==='WIN'){ profile.wins++; profile.careerWins = (profile.careerWins||0)+1; } else profile.losses++;
-      applyAchievementDeltas({wins: result==='WIN'?1:0, goals: myGoals});
+      applyAchievementDeltas({wins: result==='WIN'?1:0, goals: myGoals, yellowCards: myYellowCards, redCards: myRedCards});
       profile.coins += finalReward;
       profile.dailyRewardTracker = newTracker;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
@@ -26966,7 +27004,7 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
     }
   } else {
     if(result==='WIN'){ profile.wins++; profile.careerWins = (profile.careerWins||0)+1; } else profile.losses++;
-    applyAchievementDeltas({wins: result==='WIN'?1:0, goals: myGoals});
+    applyAchievementDeltas({wins: result==='WIN'?1:0, goals: myGoals, yellowCards: myYellowCards, redCards: myRedCards});
     profile.coins += finalReward;
     profile.dailyRewardTracker = newTracker;
     if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
@@ -27097,7 +27135,8 @@ async function runLocalMatch(myRating, opp, opts={}){
     const myScorers = []; const myAssists = [];
     md.events90.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
     if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
-    const committed = await commitMatchResult(md.myGoals, md.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, myScorers, opts.friendly);
+    const myCards = myCardCountsFrom(md.incidents);
+    const committed = await commitMatchResult(md.myGoals, md.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, myScorers, opts.friendly, null, myCards.yellow, myCards.red);
     if(opts.onOutcomeDecided) await opts.onOutcomeDecided(committed);
     const final = await playFullMatch(md, myName, oppName, null, opp.nametag||null);
     revealMatchResultUI(committed, md.wentToET, md.wentToPK);
@@ -27466,7 +27505,8 @@ async function enterSyncedMatch(matchDoc){
   } else {
     winnerSide = myGoalsFinal>oppGoalsFinal ? 'me' : 'opp';
   }
-  const committedOnline = await commitMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers, false, oppSide.userId);
+  const myCardsOnline = myCardCountsFrom(incidents);
+  const committedOnline = await commitMatchResult(myGoalsFinal, oppGoalsFinal, winnerSide, matchDoc.wentToET, matchDoc.wentToPK, oppSide.name, final.myScorers, false, oppSide.userId, myCardsOnline.yellow, myCardsOnline.red);
   revealMatchResultUI(committedOnline, matchDoc.wentToET, matchDoc.wentToPK);
   // Icon Swap event: any real head-to-head match (this function) counts, win or not - 1 token per
   // goal scored against the real opponent, capped at 5, only while the event window is still open
