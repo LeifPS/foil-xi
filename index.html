@@ -1688,6 +1688,7 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
    glance at the speed/palette alone hints at which tier of achievement it came from. */
 .nametag{display:inline;font-weight:700;}
 .nametag-symbol{margin-right:2px;}
+.nametag-sep{margin-right:4px;opacity:.55;font-weight:400;}
 @keyframes nametagShift{0%{background-position:0% 50%;}100%{background-position:300% 50%;}}
 .nt-gold{background:linear-gradient(90deg,#ffe28a,#c9971f,#ffe28a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
 .nt-silber{background:linear-gradient(90deg,#f1f3f5,#9297a0,#f1f3f5);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
@@ -21971,7 +21972,7 @@ async function claimAchievementTier(achId, tier){
   toast(msg);
   (reward.packs||[]).forEach(packId=>{
     const pack = PACKS.find(p=>p.id===packId);
-    if(pack) showPackOpening(pack, pack.draw(), {});
+    if(pack) showPackOpening(pack, pack.draw(), {untradable:true});
   });
 }
 // Wraps a display name in its equipped nametag's symbol+color+animation, HTML-escaped - or just the
@@ -21983,7 +21984,7 @@ function nametagHTML(name, nametagId){
   const esc = (name==null?'':String(name)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const nt = nametagId && NAMETAGS[nametagId];
   if(!nt) return esc;
-  return `<span class="nametag ${nt.cls}"><span class="nametag-symbol">${nt.symbol}</span>${esc}</span>`;
+  return `<span class="nametag ${nt.cls}"><span class="nametag-symbol">${nt.symbol}</span><span class="nametag-sep">|</span>${esc}</span>`;
 }
 // Same treatment for the short Liga-Kürzel (ligaTeamAbbr) - color+animation only, no symbol (a symbol
 // crammed in front of 3 characters would just look cramped, not identifying).
