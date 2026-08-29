@@ -21494,6 +21494,26 @@ function renderLigaPendingPacks(box){
     renderLigaPendingPacks(box);
   });
 }
+// Liga-Belohnungen, Abzeichen und Wochenendpokal-Preise werden oft von einem GANZ ANDEREN Account
+// ausgezahlt (wer auch immer zuerst am Wochenende den "Ligen"-Tab öffnet, löst die Auszahlung an ALLE
+// Teilnehmer aus, siehe resolveWeeklyRolloverIfNeeded/-V2). Das eigene `profile` im Speicher wird aber
+// nur einmal beim Login geladen (siehe init()) und danach nie automatisch neu synchronisiert - ohne
+// diesen gezielten Refresh bleibt ein frisch vergebenes Abzeichen oder ein wartendes Pack für die
+// eigene, bereits offene Session unsichtbar, bis man sich neu einloggt. Holt deshalb genau die Felder,
+// die von fremden Sessions geschrieben werden könnten, frisch von Firestore, jedes Mal wenn der
+// Ligen-Tab geöffnet wird - bevor irgendetwas gerendert wird, das von ihnen abhängt.
+async function refreshLigaProfileFields(){
+  if(!fb || !clubId) return;
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'saves', clubId));
+    if(!snap.exists()) return;
+    const p = snap.data().profile || {};
+    if('ligaBadge' in p) profile.ligaBadge = p.ligaBadge;
+    if('pendingLigaPacks' in p) profile.pendingLigaPacks = p.pendingLigaPacks;
+    if('pendingWochenendpokalRewards' in p) profile.pendingWochenendpokalRewards = p.pendingWochenendpokalRewards;
+    if('coins' in p) profile.coins = p.coins;
+  }catch(e){ console.warn('refresh liga profile fields failed', e); }
+}
 function renderLigenPanel(view){
   ligaFixturesShowAll = false;
   view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Wochenendpokal. Auf- und Abstieg jede Woche.</p></div>
@@ -21504,14 +21524,15 @@ function renderLigenPanel(view){
       <button class="nav-btn ${ligenSubTab==='wep'?'active':''}" id="ligen-subtab-wep" style="padding:9px 14px;">🏆 Wochenendpokal</button>
     </div>
     <div id="liga-content"><p class="hint">Lädt…</p></div>`;
-  renderLigaPendingPacks(document.getElementById('liga-pending-packs'));
   document.getElementById('ligen-subtab-mine').addEventListener('click', ()=>{ ligenSubTab='mine'; renderLigenPanel(view); });
   document.getElementById('ligen-subtab-all').addEventListener('click', ()=>{ ligenSubTab='all'; renderLigenPanel(view); });
   document.getElementById('ligen-subtab-wep').addEventListener('click', ()=>{ ligenSubTab='wep'; renderLigenPanel(view); });
   const box = document.getElementById('liga-content');
-  if(ligenSubTab==='all'){ renderAllLigenOverview(box); return; }
-  if(ligenSubTab==='wep'){ renderWochenendpokalPanel(box); return; }
   (async ()=>{
+    await refreshLigaProfileFields();
+    renderLigaPendingPacks(document.getElementById('liga-pending-packs'));
+    if(ligenSubTab==='all'){ renderAllLigenOverview(box); return; }
+    if(ligenSubTab==='wep'){ renderWochenendpokalPanel(box); return; }
     const weekStartBefore = mostRecentMondayBerlin();
     // Sat/Sun: whoever opens this tab first runs the weekly commissioner pass (promotions, relegation
     // playoffs, payouts, newcomer slotting) - a no-op for everyone after the first, guarded by
