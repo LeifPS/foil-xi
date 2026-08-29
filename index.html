@@ -20639,12 +20639,12 @@ async function playLigaLiveMatch(letter, weekStart, mid){
   const oppTeam = viewerIsA ? b : a;
   const oppAbbr = ligaTeamAbbr(oppTeam.name, oppTeam.abbr);
   inMatch = true;
-  openModal(`<h2 style="margin-bottom:4px;">Liga ${letter} · ${LIGA_DAY_LABEL[m.day]}</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${myName} vs ${oppName}</p><button type="button" id="liga-skip-match-btn" class="action-btn secondary" style="width:auto;padding:9px 16px;margin-bottom:10px;">Zum Ergebnis springen ⏭</button>`);
+  openModal(`<h2 style="margin-bottom:4px;">Liga ${letter} · ${LIGA_DAY_LABEL[m.day]}</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${nametagHTML(myName, profile.nametag)} vs ${nametagHTML(oppName, oppTeam.nametag)}</p><button type="button" id="liga-skip-match-btn" class="action-btn secondary" style="width:auto;padding:9px 16px;margin-bottom:10px;">Zum Ergebnis springen ⏭</button>`);
   const box = document.querySelector('#modal-root .modal-box');
   ensureMatchAreaHost(box);
   const skipBtn = document.getElementById('liga-skip-match-btn');
   if(skipBtn) skipBtn.addEventListener('click', ()=>{ liveMatchSkipAll = true; skipBtn.disabled = true; skipBtn.textContent = 'Wird übersprungen …'; });
-  try{ await playFullMatch(md, myName, oppName, oppAbbr); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
+  try{ await playFullMatch(md, myName, oppName, oppAbbr, oppTeam.nametag||null); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
   finally{ inMatch = false; }
   try{
     if(fb.runTransaction){
@@ -21933,7 +21933,7 @@ async function renderAchievementsPanel(view){
       const rewardParts = [`+${formatCoins(r.coins||0)} Coins`];
       (r.packs||[]).forEach(pid=>{ const p = PACKS.find(x=>x.id===pid); if(p) rewardParts.push(p.name); });
       if(r.card) rewardParts.push('Einzelkarte');
-      if(r.nametag) rewardParts.push(`Nametag „${NAMETAGS[r.nametag].label}"`);
+      if(r.nametag) rewardParts.push(`Nametag ${nametagHTML(NAMETAGS[r.nametag].label, r.nametag)}`);
       const action = status==='done' ? `<span class="ach-tier-check">✓</span>`
         : status==='claimable' ? `<button class="action-btn" data-claim="${ach.id}" data-tier="${tier}" style="width:auto;padding:6px 14px;font-size:11.5px;">Abholen</button>`
         : `<span class="ach-tier-lock">🔒</span>`;
@@ -24932,13 +24932,13 @@ function challengeLeaderboardSquad(squadData){
 }
 async function runLeaderboardChallenge(squadData, friendly){
   const {rating} = squadRating();
-  const opp = {owner: squadData.owner||'Unbenannter Verein', rating: squadData.rating, players: resolveSquadDataPlayers(squadData).filter(Boolean), isBot:false};
+  const opp = {owner: squadData.owner||'Unbenannter Verein', rating: squadData.rating, players: resolveSquadDataPlayers(squadData).filter(Boolean), isBot:false, nametag: squadData.nametag||null};
   const area = document.getElementById('match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
+      ${teamBlobHTML(rating, profile.crest, nametagAbbrHTML(ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), profile.nametag))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)}${friendly?' (Freundschaftsspiel)':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${nametagAbbrHTML(ligaTeamAbbr(opp.owner, opp.abbr), opp.nametag)}${friendly?' (Freundschaftsspiel)':''}`)}
     </div>
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly});
@@ -26184,10 +26184,10 @@ function formatWinProbGroup(fractions){
 // drawPct: pass whenever the match can actually end in a draw (Liga, or any other allowDraw match) to
 // render a three-way win/draw/loss bar instead of the plain two-way one - omit for everything that
 // always needs a winner (extra time/penalties follow instead of a real tie).
-function winProbRowHTML(pct, myName, oppName, oppAbbr, drawPct){
+function winProbRowHTML(pct, myName, oppName, oppAbbr, drawPct, oppNametag){
   const meLabel = ligaTeamAbbr(myName||profile.displayName||'Du', profile && profile.clubAbbr);
   const oppLabel = oppAbbr || (oppName ? ligaTeamAbbr(oppName) : 'GEG');
-  const labelsHTML = `<div class="winprob-labels"><span title="${myName||''}">${meLabel}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span title="${oppName||''}">${oppLabel}</span></div>`;
+  const labelsHTML = `<div class="winprob-labels"><span title="${myName||''}">${nametagAbbrHTML(meLabel, profile&&profile.nametag)}</span><span class="mono" style="letter-spacing:.04em;">SIEG-CHANCE</span><span title="${oppName||''}">${nametagAbbrHTML(oppLabel, oppNametag)}</span></div>`;
   if(drawPct!=null){
     const lossPct = Math.max(0, 1-pct-drawPct);
     const [wTxt, dTxt, lTxt] = formatWinProbGroup([pct, drawPct, lossPct]);
@@ -26464,11 +26464,11 @@ function pkRowHTML(round, kick, teamName, side){
       <span class="gteam">${teamName}</span>
     </div>`;
 }
-function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null, oppAbbr=null, allowDraw=false){
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null, oppAbbr=null, allowDraw=false, oppNametag=null){
   // allowDraw: only ever true for the 90-minute leg of a match where a tie is a real possible final
   // result (Liga fixtures) - the win-prob bar/monteCarloWinProb call below then show/return all three
   // real shares (win/draw/loss) instead of folding the draw share into a single win-vs-loss number.
-  const wpHTML = mc => (allowDraw ? winProbRowHTML(mc.win, myName, oppName, oppAbbr, mc.draw) : winProbRowHTML(mc, myName, oppName, oppAbbr));
+  const wpHTML = mc => (allowDraw ? winProbRowHTML(mc.win, myName, oppName, oppAbbr, mc.draw, oppNametag) : winProbRowHTML(mc, myName, oppName, oppAbbr, null, oppNametag));
   const wpUpdate = mc => { if(allowDraw) updateWinProbEl(mc.win, mc.draw); else updateWinProbEl(mc); };
   const miniMeLabel = ligaTeamAbbr(myName, profile && profile.clubAbbr);
   const miniOppLabel = oppAbbr || ligaTeamAbbr(oppName);
@@ -26492,9 +26492,9 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         <div class="live-scoreboard">
           <div class="live-minute-pill" id="live-minute">${minuteStart}'</div>
           <div class="live-scoreboard-teams">
-            <div class="live-scoreboard-name me" title="${myName}">${ligaTeamAbbr(myName, profile && profile.clubAbbr)}</div>
+            <div class="live-scoreboard-name me" title="${myName}">${nametagAbbrHTML(ligaTeamAbbr(myName, profile && profile.clubAbbr), profile && profile.nametag)}</div>
             <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
-            <div class="live-scoreboard-name opp" title="${oppName}">${oppAbbr || ligaTeamAbbr(oppName)}</div>
+            <div class="live-scoreboard-name opp" title="${oppName}">${nametagAbbrHTML(oppAbbr || ligaTeamAbbr(oppName), oppNametag)}</div>
           </div>
           ${wpHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp, allowDraw)))}
         </div>
@@ -26521,21 +26521,23 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
             playRefGoal(e.side);
             if(logEl){
               const row = document.createElement('div');
-              row.innerHTML = goalRowHTML(m, e.scorer, (e.side==='me'?myName:oppName)+(e.isPenalty?' (Elfmeter)':''), e.side);
+              const goalTeamName = e.side==='me' ? nametagHTML(myName, profile&&profile.nametag) : nametagHTML(oppName, oppNametag);
+              row.innerHTML = goalRowHTML(m, e.scorer, goalTeamName+(e.isPenalty?' (Elfmeter)':''), e.side);
               logEl.prepend(row.firstElementChild);
             }
-            queueGoalCardFlash(e.scorer, e.side, e.side==='me'?myName:oppName, e.isPenalty);
+            queueGoalCardFlash(e.scorer, e.side, e.side==='me'?nametagHTML(myName, profile&&profile.nametag):nametagHTML(oppName, oppNametag), e.isPenalty);
           });
           incidents.filter(inc=>inc.minute===m).forEach(inc=>{
             if(inc.type==='yellow') playSfx('notification');
             if(logEl){
               const row = document.createElement('div');
               row.className = 'goal-row';
-              row.innerHTML = `<span class="gm">${m}'</span><span class="gname">${INCIDENT_ICON[inc.type]} ${inc.player ? inc.player.n+' \u2014 '+INCIDENT_LABEL[inc.type] : INCIDENT_LABEL[inc.type]}</span><span class="gteam">${inc.side==='me'?myName:oppName}</span>`;
+              const incTeamName = inc.side==='me' ? nametagHTML(myName, profile&&profile.nametag) : nametagHTML(oppName, oppNametag);
+              row.innerHTML = `<span class="gm">${m}'</span><span class="gname">${INCIDENT_ICON[inc.type]} ${inc.player ? inc.player.n+' \u2014 '+INCIDENT_LABEL[inc.type] : INCIDENT_LABEL[inc.type]}</span><span class="gteam">${incTeamName}</span>`;
               logEl.prepend(row);
             }
             if(inc.player && (inc.type==='yellow' || inc.type==='red' || inc.type==='red2')){
-              queueCardFlash(inc.player, inc.side, inc.side==='me'?myName:oppName, inc.type);
+              queueCardFlash(inc.player, inc.side, inc.side==='me'?nametagHTML(myName, profile&&profile.nametag):nametagHTML(oppName, oppNametag), inc.type);
             }
           });
         }
@@ -26564,7 +26566,7 @@ function pkDotsHTML(prefix){
   for(let i=0;i<5;i++) html += `<div class="pk-dot pending" id="${prefix}-dot-${i}"></div>`;
   return html;
 }
-function animateShootout(shootout, myName, oppName, oppAbbr=null){
+function animateShootout(shootout, myName, oppName, oppAbbr=null, oppNametag=null){
   return new Promise(resolve=>{
     const live = document.getElementById('live-match');
     if(live){
@@ -26574,12 +26576,12 @@ function animateShootout(shootout, myName, oppName, oppAbbr=null){
         <div class="mono" style="text-align:center;margin:14px 0 6px;color:var(--muted);letter-spacing:.06em;">ELFMETERSCHIESSEN</div>
         <div class="pk-teams-row">
           <div class="pk-team-block">
-            <div class="pk-team-name">${myName}</div>
+            <div class="pk-team-name">${nametagHTML(myName, profile&&profile.nametag)}</div>
             <div class="pk-dots" id="pk-dots-me">${pkDotsHTML('me')}</div>
           </div>
           <div class="pk-center"><div class="score" id="pk-score" style="font-size:32px;margin:0;">0 \u2013 0</div></div>
           <div class="pk-team-block">
-            <div class="pk-team-name">${oppName}</div>
+            <div class="pk-team-name">${nametagHTML(oppName, oppNametag)}</div>
             <div class="pk-dots" id="pk-dots-opp">${pkDotsHTML('opp')}</div>
           </div>
         </div>
@@ -26587,7 +26589,7 @@ function animateShootout(shootout, myName, oppName, oppAbbr=null){
           <div class="pk-spotlight-ball">\u26bd</div>
           <div class="pk-spotlight-text" id="pk-spotlight-text">Elfmeterschie\u00dfen beginnt \u2026</div>
         </div>
-        ${winProbRowHTML(smoothWinProb(pkWinProbability(0,0,0,0,shootout.myProb,shootout.oppProb)), myName, oppName, oppAbbr)}
+        ${winProbRowHTML(smoothWinProb(pkWinProbability(0,0,0,0,shootout.myProb,shootout.oppProb)), myName, oppName, oppAbbr, null, oppNametag)}
         <div class="match-log" id="pk-log"></div>`;
       live.appendChild(sec);
     }
@@ -26606,7 +26608,7 @@ function animateShootout(shootout, myName, oppName, oppAbbr=null){
     const nextKick = ()=>{
       if(seqI>=sequence.length){ resolve(); return; }
       const {side, idx, kick} = sequence[seqI];
-      const teamName = side==='me' ? myName : oppName;
+      const teamName = side==='me' ? nametagHTML(myName, profile&&profile.nametag) : nametagHTML(oppName, oppNametag);
       const spotlight = document.getElementById('pk-spotlight');
       const spotlightText = document.getElementById('pk-spotlight-text');
       const decisive = idx<5
@@ -26652,14 +26654,14 @@ function animateShootout(shootout, myName, oppName, oppAbbr=null){
     nextKick();
   });
 }
-async function playFullMatch(md, myName, oppName, oppAbbr=null){
+async function playFullMatch(md, myName, oppName, oppAbbr=null, oppNametag=null){
   resetWinProbSmoothing();
   liveMatchSkipAll = false;
   const totalHorizon = md.wentToET ? 120 : 90;
   const myScorers = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
   const incidents = md.incidents || [];
-  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, md.allowDraw);
+  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, md.allowDraw, oppNametag);
   if(md.wentToET){
     toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
     md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
@@ -26667,11 +26669,11 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null){
     const startedAtET = md.startedAt + md.durationMs;
     const waitET = startedAtET - Date.now();
     if(waitET>0 && !liveMatchSkipAll) await new Promise(r=>setTimeout(r, waitET));
-    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr));
+    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, undefined, oppNametag));
   }
   if(md.wentToPK){
     toast('Auch nach Verl\u00e4ngerung unentschieden \u2014 Elfmeterschie\u00dfen entscheidet!');
-    await animateShootout(md.shootout, myName, oppName, oppAbbr);
+    await animateShootout(md.shootout, myName, oppName, oppAbbr, oppNametag);
   }
   clearMatchMiniState();
   return {myGoals: myTally, oppGoals: oppTally, myScorers};
@@ -26885,7 +26887,7 @@ async function runLocalMatch(myRating, opp, opts={}){
     if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
     const committed = await commitMatchResult(md.myGoals, md.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, myScorers, opts.friendly);
     if(opts.onOutcomeDecided) await opts.onOutcomeDecided(committed);
-    const final = await playFullMatch(md, myName, oppName);
+    const final = await playFullMatch(md, myName, oppName, null, opp.nametag||null);
     revealMatchResultUI(committed, md.wentToET, md.wentToPK);
     const matchRatings = computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide);
     await awardCardXP(matchRatings);
