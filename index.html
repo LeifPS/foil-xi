@@ -22008,7 +22008,13 @@ async function claimAchievementTier(achId, tier){
   const reward = ach.rewards[tier-1];
   profile.achievementClaimed[achId] = tier;
   if(reward.coins) profile.coins = (profile.coins||0) + reward.coins;
-  if(reward.nametag && !profile.unlockedNametags.includes(reward.nametag)) profile.unlockedNametags.push(reward.nametag);
+  // Auto-equip only the very first nametag a player ever unlocks (mirrors the ligaBadge-migration
+  // behavior in init()) - otherwise a first-time claim would sit invisible until they happen to find
+  // "Mein Verein" and equip it themselves. Anyone who already has one equipped keeps their own choice.
+  if(reward.nametag && !profile.unlockedNametags.includes(reward.nametag)){
+    profile.unlockedNametags.push(reward.nametag);
+    if(!profile.nametag) profile.nametag = reward.nametag;
+  }
   let grantedCard = null;
   if(reward.card){
     grantedCard = achievementSpecialCard(reward.card);
@@ -22017,7 +22023,7 @@ async function claimAchievementTier(achId, tier){
   await sSet('profile', profile);
   if(grantedCard) await sSet('collection', collection);
   let msg = `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${formatCoins(reward.coins||0)} Coins`;
-  if(reward.nametag) msg += ` · neues Nametag "${NAMETAGS[reward.nametag].label}"`;
+  if(reward.nametag) msg += ` · neues Nametag "${NAMETAGS[reward.nametag] ? NAMETAGS[reward.nametag].label : reward.nametag}"`;
   if(grantedCard) msg += ` · ${grantedCard.n}`;
   toast(msg);
   (reward.packs||[]).forEach(packId=>{
@@ -22091,7 +22097,7 @@ async function renderAchievementsPanel(view){
     <div class="ach-card">
       <div class="ach-title" style="margin-bottom:8px;">Deine Nametags</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;">
-        ${profile.unlockedNametags.map(id=>`<div style="padding:6px 12px;border-radius:100px;background:var(--panel);border:1px solid ${profile.nametag===id?'var(--turf-bright)':'var(--line)'};font-size:13px;">${nametagHTML(NAMETAGS[id].label, id)}</div>`).join('')}
+        ${profile.unlockedNametags.filter(id=>NAMETAGS[id]).map(id=>`<div style="padding:6px 12px;border-radius:100px;background:var(--panel);border:1px solid ${profile.nametag===id?'var(--turf-bright)':'var(--line)'};font-size:13px;">${nametagHTML(NAMETAGS[id].label, id)}</div>`).join('')}
       </div>
       <p class="hint" style="margin:10px 0 0;">In „Mein Verein" auswählen, welches gerade aktiv ist.</p>
     </div>` : '';
@@ -22109,7 +22115,8 @@ async function renderAchievementsPanel(view){
     const prevThreshold = nextTier>1 ? ach.tiers[nextTier-2] : 0;
     const pctValue = tierProgressNum(value), pctNext = tierProgressNum(nextThreshold), pctPrev = tierProgressNum(prevThreshold);
     const pct = unlocked>=lastTier ? 100 : Math.max(0, Math.min(100, Math.round(((pctValue-pctPrev)/(pctNext-pctPrev))*100)));
-    const accent = NAMETAGS[ach.rewards[lastTier-1].nametag].accent;
+    const lastTierNametag = NAMETAGS[ach.rewards[lastTier-1].nametag];
+    const accent = lastTierNametag ? lastTierNametag.accent : '#4da8ff';
     const summary = unlocked>=lastTier
       ? `Alle Stufen abgeschlossen · aktueller Stand: ${ach.cond(value)}`
       : `Aktuell: ${ach.cond(value)} · als Nächstes: ${ach.cond(nextThreshold)}`;
@@ -22122,7 +22129,7 @@ async function renderAchievementsPanel(view){
       const rewardParts = [`+${formatCoins(r.coins||0)} Coins`];
       (r.packs||[]).forEach(pid=>{ const p = PACKS.find(x=>x.id===pid); if(p) rewardParts.push(p.name); });
       if(r.card) rewardParts.push('Einzelkarte');
-      if(r.nametag) rewardParts.push(`Nametag ${nametagHTML(NAMETAGS[r.nametag].label, r.nametag)}`);
+      if(r.nametag && NAMETAGS[r.nametag]) rewardParts.push(`Nametag ${nametagHTML(NAMETAGS[r.nametag].label, r.nametag)}`);
       const action = status==='done' ? `<span class="ach-tier-check">✓</span>`
         : status==='claimable' ? `<button class="action-btn" data-claim="${ach.id}" data-tier="${tier}" style="width:auto;padding:6px 14px;font-size:11.5px;">Abholen</button>`
         : `<span class="ach-tier-lock">🔒</span>`;
@@ -22323,7 +22330,7 @@ function renderLigenPanel(view){
         ${ligaBadgeHTML(membership.letter, 48)}
         <div style="flex:1;min-width:0;"><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}</div>
         <div class="hint" style="margin:2px 0 0;">${myZones.isTop?'Höchste Liga - keine Aufstiegsmöglichkeit':(myZones.isBottom?'Unterste Liga - kein direkter Abstieg':'Auf-/Abstieg mit den Nachbarligen jede Woche')}</div>
-        ${profile.nametag ? `<div class="liga-my-badge" style="margin-top:6px;">🏅 Dein Nametag: ${nametagHTML(NAMETAGS[profile.nametag].label, profile.nametag)}</div>` : ''}</div>
+        ${(profile.nametag && NAMETAGS[profile.nametag]) ? `<div class="liga-my-badge" style="margin-top:6px;">🏅 Dein Nametag: ${nametagHTML(NAMETAGS[profile.nametag].label, profile.nametag)}</div>` : ''}</div>
         <button class="action-btn secondary liga-rewards-btn" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0;">🏆 Preise</button>
       </div>`;
     if(weekStart==null){
