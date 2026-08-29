@@ -1652,6 +1652,21 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
 .card-info-substat-bar{flex-basis:44px;flex-shrink:0;height:4px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;}
 .card-info-substat-bar i{display:block;height:100%;border-radius:4px;}
 .card-info-substat-val{min-width:20px;flex-shrink:0;text-align:right;font-family:'JetBrains Mono';font-weight:700;}
+/* A 100+ sub-stat used to just turn var(--gold) - a flat yellow that reads almost identically to the
+   60-79 tier's own yellow (#e8c468), so a genuinely elite stat didn't visually stand out from a
+   mediocre one at a glance. Pastel-rainbow animated gradient instead - same "shifting gradient text"
+   language every other premium treatment in the game already uses (theme-dia, Liga-Gold-Namen, ...),
+   just in soft pastel tones so it reads as "special" without clashing with the surrounding UI. */
+.card-info-substat-val.stat-over100{
+  background:linear-gradient(90deg,#ffb3ba,#ffdfba,#fffcba,#baffc9,#bae1ff,#d7baff,#ffb3ba);
+  background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:statOver100Shift 3.6s linear infinite;
+}
+.card-info-substat-bar i.stat-over100{
+  background:linear-gradient(90deg,#ffb3ba,#ffdfba,#fffcba,#baffc9,#bae1ff,#d7baff,#ffb3ba)!important;
+  background-size:300% 100%;animation:statOver100Shift 3.6s linear infinite;
+}
+@keyframes statOver100Shift{0%{background-position:0% 50%;}100%{background-position:300% 50%;}}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';font-weight:700;text-align:center;}
@@ -16978,11 +16993,12 @@ function detailedSubstatsFor(card){
 // see detailedSubstatsFor - but the bar track itself can't get any fuller than "full"), while the
 // number shown next to it is always the real, uncapped value.
 function substatRowHTML(label, val){
-  const color = val>=100 ? 'var(--gold)' : val>=80 ? 'var(--turf-bright)' : val>=60 ? '#e8c468' : val>=40 ? 'var(--chalk)' : 'var(--muted)';
+  const over100 = val>=100;
+  const color = val>=80 ? 'var(--turf-bright)' : val>=60 ? '#e8c468' : val>=40 ? 'var(--chalk)' : 'var(--muted)';
   return `<div class="card-info-substat-row">
     <span class="lbl">${label}</span>
-    <span class="card-info-substat-bar"><i style="width:${Math.min(100,val)}%;background:${color};"></i></span>
-    <span class="card-info-substat-val" style="color:${color};">${val}</span>
+    <span class="card-info-substat-bar"><i class="${over100?'stat-over100':''}" style="width:${Math.min(100,val)}%;${over100?'':`background:${color};`}"></i></span>
+    <span class="card-info-substat-val ${over100?'stat-over100':''}" style="${over100?'':`color:${color};`}">${val}</span>
   </div>`;
 }
 function detailedStatsHTML(card){
