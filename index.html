@@ -16099,6 +16099,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
       <button class="action-btn secondary" id="admin-give-pack-unopened" style="width:auto;">Pack (unge\u00f6ffnet) schicken</button>
       <button class="action-btn secondary" id="admin-make-ut" style="width:auto;">Karte nachtr\u00e4glich UT machen</button>
+      <button class="action-btn secondary" id="admin-set-liga-badge" style="width:auto;">Liga-Abzeichen setzen</button>
       <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
       <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
       <button class="action-btn secondary" id="admin-toggle-lb-ban" style="width:auto;color:${leaderboardBanned?'var(--turf-bright)':'var(--danger)'};">${leaderboardBanned?'Leaderboard-Sperre aufheben':'Tempor\u00e4r vom Leaderboard sperren'}</button>
@@ -16127,6 +16128,7 @@ async function loadAdminUserPanel(targetId){
   document.getElementById('admin-give-pack').addEventListener('click', ()=>openAdminSendPackModal(targetId, data));
   document.getElementById('admin-give-pack-unopened').addEventListener('click', ()=>openAdminSendUnopenedPackModal(targetId, data));
   document.getElementById('admin-make-ut').addEventListener('click', ()=>openAdminMakeUntradableModal(targetId, data));
+  document.getElementById('admin-set-liga-badge').addEventListener('click', ()=>openAdminSetLigaBadgeModal(targetId, p));
   document.getElementById('admin-send-warning').addEventListener('click', ()=>{
     askTextModal('Verwarnungstext', 'z. B. Bitte fair spielen...', async (msg)=>{
       if(!msg) return;
@@ -16312,6 +16314,50 @@ function openAdminMakeUntradableModal(targetId, data){
   };
   input.addEventListener('input', renderList);
   renderList();
+}
+// Manual override for profile.ligaBadge (see LIGA_REWARD_TABLE/ligaRewardForPlace) - added after
+// reports of badges not matching a player's actual Liga-A-Platzierung (root cause: the payout used
+// to key off the raw tiebreak-resolved sort index instead of the SAME displayRank shown on the table,
+// so a tied "Platz 1." could silently get paid as 2nd - fixed at the source in both reward loops, but
+// this still gives an admin a direct way to correct or grant a badge by hand without waiting for next
+// week's rollover, and to fix any account whose badge was already wrong before that fix shipped.
+function openAdminSetLigaBadgeModal(targetId, p){
+  const current = p.ligaBadge;
+  const stillValid = current && current.expiresAt>Date.now();
+  openModal(`
+    <h2 style="margin-bottom:4px;">Liga-Abzeichen für ${targetId}</h2>
+    <p class="hint" style="margin:0 0 12px;">${stillValid ? `Aktuell: <b style="color:var(--gold);">${LIGA_BADGE_LABEL[current.tier]}</b> (Liga ${current.letter}, gültig bis ${new Date(current.expiresAt).toLocaleString('de-DE')})` : 'Aktuell kein gültiges Abzeichen.'}</p>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <label class="hint" style="flex:1;">Liga<input id="admin-badge-letter" value="${(current&&current.letter)||'A'}" maxlength="2" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 10px;border-radius:8px;margin-top:4px;text-transform:uppercase;"></label>
+      <label class="hint" style="flex:1;">Gültig für (Tage)<input id="admin-badge-days" type="number" value="14" min="1" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 10px;border-radius:8px;margin-top:4px;"></label>
+    </div>
+    <div class="picker-list" id="admin-badge-tiers"></div>
+    <button class="action-btn secondary" id="admin-badge-clear" style="width:100%;margin-top:10px;border-color:var(--danger);color:var(--danger);">Abzeichen entfernen</button>`);
+  const list = document.getElementById('admin-badge-tiers');
+  ['gold','silver','bronze'].forEach(tier=>{
+    const btn = document.createElement('button');
+    btn.className = 'action-btn secondary';
+    btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
+    btn.textContent = `🏅 ${LIGA_BADGE_LABEL[tier]} setzen`;
+    btn.addEventListener('click', async ()=>{
+      const letter = (document.getElementById('admin-badge-letter').value||'A').trim().toUpperCase().slice(0,2) || 'A';
+      const days = parseInt(document.getElementById('admin-badge-days').value, 10);
+      const validDays = Number.isFinite(days) && days>0 ? days : 14;
+      const newProfile = {...p, ligaBadge: {tier, letter, awardedAt:Date.now(), expiresAt: Date.now() + validDays*24*60*60*1000}};
+      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+      toast(`${LIGA_BADGE_LABEL[tier]}-Abzeichen (Liga ${letter}, ${validDays} Tage) für ${targetId} gesetzt.`);
+      closeModal();
+      loadAdminUserPanel(targetId);
+    });
+    list.appendChild(btn);
+  });
+  document.getElementById('admin-badge-clear').addEventListener('click', async ()=>{
+    const newProfile = {...p, ligaBadge: null};
+    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+    toast(`Liga-Abzeichen für ${targetId} entfernt.`);
+    closeModal();
+    loadAdminUserPanel(targetId);
+  });
 }
 function openAdminSendPackModal(targetId, data){
   openModal(`
@@ -20675,10 +20721,16 @@ async function resolveWeeklyRolloverIfNeeded(){
     // Every placement earns something now, not just the top two - places 1/2/3 each have their own
     // tuned reward (see LIGA_REWARD_TABLE), everyone from 4th down shares the bracket's flat amount.
     // 1st place in Liga A no longer additionally grants the Liga-Meister card - just its normal
-    // coins/badge/packs reward like every other placement.
-    table.forEach((row, idx)=>{
-      const place = idx+1;
-      const r = ligaRewardForPlace(letter, place);
+    // coins/badge/packs reward like every other placement. Uses row.displayRank, NOT the raw sorted
+    // index - a tied pair (identical pts/gd/gf) shares one displayed "1." on the table the player
+    // actually sees all week (ligaComputeStandings' competition ranking), so paying by the strict
+    // tiebreak-resolved index instead used to silently hand one of them Silver while they'd been
+    // watching themselves sit at "Platz 1." the whole time - exactly the "Abzeichen falsch vergeben"
+    // reports. Promotion/relegation/next-league movement below still uses the strict tiebreak order
+    // (it has to - only one of them can actually take the single promotion spot), only the reward
+    // tier changes here.
+    table.forEach(row=>{
+      const r = ligaRewardForPlace(letter, row.displayRank);
       rewards.push({userId:row.userId, letter, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
     });
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
@@ -20906,9 +20958,10 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
     const table = tables[letter];
     if(!table.length) return;
     table.forEach(row=>{ nextLeagueOf[row.userId] = letter; }); // default: stay put
-    table.forEach((row, idx)=>{
-      const place = idx+1;
-      const r = ligaRewardForPlace(letter, place);
+    // row.displayRank, not the raw sorted index - see the identical comment in resolveWeeklyRolloverIfNeeded's
+    // reward loop above for why (a tied pair must be paid by the place they're actually SHOWN at).
+    table.forEach(row=>{
+      const r = ligaRewardForPlace(letter, row.displayRank);
       rewards.push({userId:row.userId, letter, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
     });
   });
