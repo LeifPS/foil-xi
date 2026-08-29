@@ -1690,18 +1690,39 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .nametag-symbol{margin-right:2px;}
 .nametag-sep{margin-right:4px;opacity:.55;font-weight:400;}
 @keyframes nametagShift{0%{background-position:0% 50%;}100%{background-position:300% 50%;}}
+/* each nametag layers a SECOND animation (comma-separated with nametagShift) on top of the shared
+   color-sweep, so every tier reads visually distinct at a glance instead of "same effect, different
+   color". All of them are filter/opacity/background-position only - deliberately no transform, since
+   .nametag is `display:inline` and inline transforms behave inconsistently across engines when the
+   text wraps. --glow feeds the glow-based keyframes their own flat accent color (NAMETAGS[id].accent)
+   since color:transparent (needed for background-clip:text) means currentColor would be invisible.
+   gfx-no-badgeanim's `.nametag{animation:none!important}` (see that class's own rule) kills BOTH
+   layered animations at once - no extra per-effect override needed there. */
+@keyframes nametagGlow{0%,100%{filter:drop-shadow(0 0 2px var(--glow));}50%{filter:drop-shadow(0 0 6px var(--glow)) brightness(1.15);}}
+@keyframes nametagFlash{0%,90%,100%{filter:brightness(1);}95%{filter:brightness(1.55) drop-shadow(0 0 4px var(--glow));}}
+@keyframes nametagGlitter{0%,100%{filter:brightness(1) saturate(1);}50%{filter:brightness(1.35) saturate(1.35);}}
+@keyframes nametagFlicker{0%,100%{opacity:1;}91%{opacity:1;}93%{opacity:.5;}95%{opacity:1;}97%{opacity:.65;}99%{opacity:1;}}
 .nt-gold{background:linear-gradient(90deg,#ffe28a,#c9971f,#ffe28a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
 .nt-silber{background:linear-gradient(90deg,#f1f3f5,#9297a0,#f1f3f5);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
 .nt-bronze{background:linear-gradient(90deg,#e2a874,#7a4a24,#e2a874);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
-.nt-unaufhaltsam{background:linear-gradient(90deg,#ff9d6c,#e2564f,#ff9d6c);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite;}
-.nt-knipser{background:linear-gradient(90deg,#b6ff9d,#3dc482,#b6ff9d);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite;}
-.nt-sammler{background:linear-gradient(90deg,#d9b6ff,#8a4ae2,#d9b6ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite;}
-.nt-kurator{background:linear-gradient(90deg,#9df4ff,#1fb6c9,#9df4ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite;}
-.nt-baumeister{background:linear-gradient(90deg,#e2c48a,#8a6a2e,#e2c48a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite;}
-.nt-makler{background:linear-gradient(90deg,#9dc7ff,#3a7ae2,#9dc7ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite;}
-.nt-kroesus{background:linear-gradient(90deg,#fff4b3,#c9a020,#6fd67a,#fff4b3);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
-.nt-ruepel{background:linear-gradient(90deg,#ff9d9d,#d94f4f,#2b2b2b,#ff9d9d);background-size:320% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
-.nt-pokalkoenig{background:linear-gradient(90deg,#ff9de2,#ffd76a,#9dffb0,#9de2ff,#d79dff,#ff9de2);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite;}
+/* Unaufhaltsam (Siege) - relentless, ständig glühend */
+.nt-unaufhaltsam{--glow:#ff6a4d;background:linear-gradient(90deg,#ff9d6c,#e2564f,#ff9d6c);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite, nametagGlow 1.8s ease-in-out infinite;}
+/* Knipser (Torjäger) - der klinische Abschluss, ein kurzer heller "Blitz" statt Dauerglühen */
+.nt-knipser{--glow:#5cffb0;background:linear-gradient(90deg,#b6ff9d,#3dc482,#b6ff9d);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite, nametagFlash 2.4s ease-in-out infinite;}
+/* Sammler (Pack-Öffner) - leichtes Funkeln, wie frisch gezogene Karten */
+.nt-sammler{background:linear-gradient(90deg,#d9b6ff,#8a4ae2,#d9b6ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite, nametagGlitter 2.6s ease-in-out infinite;}
+/* Kurator (Kartensammler) - bewusst nur der ruhige, langsame Verlauf - kuratiert statt auffällig */
+.nt-kurator{background:linear-gradient(90deg,#9df4ff,#1fb6c9,#9df4ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4.2s linear infinite;}
+/* Baumeister (SBC-Meister) - stetiges, warmes Schmiedefeuer-Glühen */
+.nt-baumeister{--glow:#e2a24a;background:linear-gradient(90deg,#e2c48a,#8a6a2e,#e2c48a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagGlow 2.6s ease-in-out infinite;}
+/* Makler (Händler) - kurzer Lichtreflex wie auf einer Münze/Glasscheibe */
+.nt-makler{--glow:#7ab0ff;background:linear-gradient(90deg,#9dc7ff,#3a7ae2,#9dc7ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite, nametagFlash 2.8s ease-in-out infinite;}
+/* Krösus (Münzsammler) - Münzen-Glitzern, etwas lebhafter als Sammler */
+.nt-kroesus{background:linear-gradient(90deg,#fff4b3,#c9a020,#6fd67a,#fff4b3);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite, nametagGlitter 2.1s ease-in-out infinite;}
+/* Rüpel (Kartensünder) - flackert wie eine Karten-Verwarnung */
+.nt-ruepel{background:linear-gradient(90deg,#ff9d9d,#d94f4f,#2b2b2b,#ff9d9d);background-size:320% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite, nametagFlicker 3.4s ease-in-out infinite;}
+/* Pokalkönig (Wochenendpokal) - das seltenste Nametag: Regenbogen-Verlauf UND ein Glühen obendrauf */
+.nt-pokalkoenig{--glow:#ffd76a;background:linear-gradient(90deg,#ff9de2,#ffd76a,#9dffb0,#9de2ff,#d79dff,#ff9de2);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite, nametagGlow 2s ease-in-out infinite;}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
 .ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .ach-icon{font-size:24px;flex-shrink:0;width:40px;height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
