@@ -20550,6 +20550,34 @@ async function ligaFreshTeam(userId, name){
   const stats = (data && data.profile) ? squadRatingFromSaveData(data) : {rating:40, players:[]};
   return {userId, name, ...stats};
 }
+// Queues reward items (pack ids, {kind,...} objects, ...) onto one player's `saves` doc array field,
+// plus any other flat field updates (coins increment, badge, ...) in the same atomic write. Deliberately
+// NOT fb.arrayUnion: Firestore's arrayUnion treats structurally-identical values as duplicates and drops
+// them - both against what's already stored AND within the same call - so a player who still had an
+// unclaimed pack (or an identical coins/pack reward) sitting unclaimed from a previous payout, or who
+// simply won two of the exact same pack in one go, would silently receive fewer rewards than earned.
+// This reads the current array inside a transaction and appends every new item regardless of duplicates.
+async function ligaQueueRewards(userId, arrayFieldPath, items, extraUpdates){
+  const flat = extraUpdates || {};
+  if(!items || !items.length){
+    if(Object.keys(flat).length){
+      try{ await fb.updateDoc(fb.doc(fb.db,'saves', userId), flat); }
+      catch(e){ console.warn('reward payout (no queued items) failed for', userId, e); }
+    }
+    return;
+  }
+  try{
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const ref = fb.doc(fb.db,'saves', userId);
+      const snap = await tx.get(ref);
+      if(!snap.exists()) throw new Error('no-save-doc');
+      const parts = arrayFieldPath.split('.');
+      let cur = snap.data();
+      for(const p of parts){ cur = cur ? cur[p] : undefined; }
+      tx.update(ref, {...flat, [arrayFieldPath]: (cur||[]).concat(items)});
+    });
+  }catch(e){ console.warn('reward payout failed for', userId, e); }
+}
 // Whether the commissioner pass has actually completed for a given (just-finished) week - used to
 // decide whether to show the Sonntag split view (old week recap + new week preview) instead of just
 // checking "is it Sunday", since the pass itself doesn't run until 12:00 Sonntag (see
@@ -20686,34 +20714,33 @@ async function resolveWeeklyRolloverIfNeeded(){
   lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
   Object.entries(nextLeagueOf).forEach(([userId,letter])=>{ nextMembers[letter].push(userId); });
   // Payouts: direct per-account Firestore updates (these are OTHER accounts' saves docs, not the
-  // viewer's own) - same increment/arrayUnion pattern used for hosted-tournament coin/card prizes.
+  // viewer's own) - same increment pattern used for hosted-tournament coin/card prizes. Pending pack
+  // queuing goes through ligaQueueRewards, not fb.arrayUnion directly - see that function's comment for
+  // why (arrayUnion silently drops a reward that's an exact duplicate of one already queued).
   for(const r of rewards){
-    try{
-      const updates = {'profile.coins': fb.increment(r.coins)};
-      const collectionAdds = [];
-      if(r.championCard){
-        const card = currentLigaChampionCard();
-        collectionAdds.push({uid:genId(), cardId:card.id});
-      }
-      // Place-based pack rewards (Liga A top 3, Liga B top 2): queued instead of drawn+added right here.
-      // Drawing every winner's packs in one big sweep, all at once, from whichever random visitor's
-      // browser happens to trigger the rollover, used to mean several packs' worth of cards could land
-      // in someone's collection simultaneously with zero ceremony (and all through one client doing
-      // everyone else's writes). Now each pack is just queued onto the recipient's own
-      // pendingLigaPacks - they open them one at a time, through the normal pack-opening screen, in
-      // their own session, whenever they next visit "Ligen".
-      const pendingAdds = [];
-      r.packs.forEach(p=>{
-        if(!PACKS.find(x=>x.id===p.id)) return; // unknown pack id - skip rather than queue something unopenable
-        for(let n=0;n<p.count;n++) pendingAdds.push(p.id);
-      });
-      if(pendingAdds.length) updates['profile.pendingLigaPacks'] = fb.arrayUnion(...pendingAdds);
-      if(collectionAdds.length) updates.collection = fb.arrayUnion(...collectionAdds);
-      // Badge (Liga A top 3 only): valid through the coming Ligaphase week - weekStart here is the
-      // week that just finished, so +14 days covers "starts next Monday, lasts through that whole week".
-      if(r.badge) updates['profile.ligaBadge'] = {tier:r.badge, letter:r.letter, awardedAt:Date.now(), expiresAt: weekStart + 14*24*60*60*1000};
-      await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), updates);
-    }catch(e){ console.warn('liga reward payout failed for', r.userId, e); }
+    const updates = {'profile.coins': fb.increment(r.coins)};
+    const collectionAdds = [];
+    if(r.championCard){
+      const card = currentLigaChampionCard();
+      collectionAdds.push({uid:genId(), cardId:card.id});
+    }
+    // Place-based pack rewards (Liga A top 3, Liga B top 2): queued instead of drawn+added right here.
+    // Drawing every winner's packs in one big sweep, all at once, from whichever random visitor's
+    // browser happens to trigger the rollover, used to mean several packs' worth of cards could land
+    // in someone's collection simultaneously with zero ceremony (and all through one client doing
+    // everyone else's writes). Now each pack is just queued onto the recipient's own
+    // pendingLigaPacks - they open them one at a time, through the normal pack-opening screen, in
+    // their own session, whenever they next visit "Ligen".
+    const pendingAdds = [];
+    r.packs.forEach(p=>{
+      if(!PACKS.find(x=>x.id===p.id)) return; // unknown pack id - skip rather than queue something unopenable
+      for(let n=0;n<p.count;n++) pendingAdds.push(p.id);
+    });
+    if(collectionAdds.length) updates.collection = fb.arrayUnion(...collectionAdds); // each entry has its own genId(), never a duplicate - arrayUnion is safe here
+    // Badge (Liga A top 3 only): valid through the coming Ligaphase week - weekStart here is the
+    // week that just finished, so +14 days covers "starts next Monday, lasts through that whole week".
+    if(r.badge) updates['profile.ligaBadge'] = {tier:r.badge, letter:r.letter, awardedAt:Date.now(), expiresAt: weekStart + 14*24*60*60*1000};
+    await ligaQueueRewards(r.userId, 'profile.pendingLigaPacks', pendingAdds, updates);
   }
   // Persist next week's membership + a history snapshot (for the weekend "Endstand" + relegation view).
   const nextWeekStart = weekStart + 7*24*60*60*1000;
@@ -20911,17 +20938,14 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
   lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
   Object.entries(nextLeagueOf).forEach(([userId,letter])=>{ nextMembers[letter].push(userId); });
   for(const r of rewards){
-    try{
-      const updates = {'profile.coins': fb.increment(r.coins)};
-      const pendingAdds = [];
-      r.packs.forEach(p=>{
-        if(!PACKS.find(x=>x.id===p.id)) return;
-        for(let n=0;n<p.count;n++) pendingAdds.push(p.id);
-      });
-      if(pendingAdds.length) updates['profile.pendingLigaPacks'] = fb.arrayUnion(...pendingAdds);
-      if(r.badge) updates['profile.ligaBadge'] = {tier:r.badge, letter:r.letter, awardedAt:Date.now(), expiresAt: weekStart + 14*24*60*60*1000};
-      await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), updates);
-    }catch(e){ console.warn('liga reward payout failed for', r.userId, e); }
+    const updates = {'profile.coins': fb.increment(r.coins)};
+    const pendingAdds = [];
+    r.packs.forEach(p=>{
+      if(!PACKS.find(x=>x.id===p.id)) return;
+      for(let n=0;n<p.count;n++) pendingAdds.push(p.id);
+    });
+    if(r.badge) updates['profile.ligaBadge'] = {tier:r.badge, letter:r.letter, awardedAt:Date.now(), expiresAt: weekStart + 14*24*60*60*1000};
+    await ligaQueueRewards(r.userId, 'profile.pendingLigaPacks', pendingAdds, updates);
   }
   const nextWeekStart = weekStart + 7*24*60*60*1000;
   try{
@@ -21246,8 +21270,7 @@ async function wepRunFinal2(final1Data, ref, weekStart){
     const rewards = [];
     prize.packs.forEach(packId=>rewards.push({kind:'pack', packId}));
     if(prize.coins) rewards.push({kind:'coins', amount:prize.coins});
-    try{ await fb.updateDoc(fb.doc(fb.db,'saves', p.userId), {'profile.pendingWochenendpokalRewards': fb.arrayUnion(...rewards)}); }
-    catch(e){ console.warn('wep prize queue failed for', p.userId, e); }
+    await ligaQueueRewards(p.userId, 'profile.pendingWochenendpokalRewards', rewards, {});
   }
   try{
     await fb.setDoc(ref, {status:'done', at:Date.now(), final:{...final, ...tie, winnerId, winnerName}, placements});
