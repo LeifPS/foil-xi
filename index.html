@@ -9493,7 +9493,19 @@ const SBC_GK_CARD = SBC_GK_BASE ? boostBaseToOv(SBC_GK_BASE, 103, 9790003, 'sbce
 [SBC_STRIKER_CARD, SBC_DEFENDER_CARD, SBC_GK_CARD].forEach(c=>{ if(c) c.untradable = true; });
 if(SBC_STRIKER_CARD) SBC_STRIKER_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p201558035.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=dff0413c573e2a81028e64773f9564ea'; // O. Dembélé
 if(SBC_DEFENDER_CARD) SBC_DEFENDER_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p50566860.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=d6245047e232c41df48c9f21075b3862'; // A. Hakimi
-if(SBC_GK_CARD) SBC_GK_CARD.img = 'https://cdn3.futbin.com/content/fifa25/img/players/p67339485.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=550b460f4c75b83e7cff3e2073083fdd'; // G. Donnarumma
+// Keyed by baseId, same pattern as MYSTERY_RARE_IMG_OVERRIDE above - Donnarumma is reserved for the
+// Mystery Elite roster (see SBC_EXCLUSIVE_USED_IDS), so this SBC's own GK exclusive actually falls
+// through to the NEXT-highest-rated real keeper not already spoken for. That used to be Donnarumma
+// himself before he overtook Alisson in the real DB and got claimed by Mystery Elite instead - a flat
+// hardcoded photo here kept showing Donnarumma's face on a card that had quietly started resolving to
+// Alisson once that happened, with nothing to catch the mismatch. Any base not listed here just keeps
+// its own real photo (boostBaseToOv already copies it), so a future ratings shift can't cause this
+// exact bug again even for a third player neither of these two.
+const SBC_GK_IMG_OVERRIDE = {
+  212831: 'https://cdn3.futbin.com/content/fifa25/img/players/p50544479.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=9f49dabb53bc97d2c2f05bb989ec6d87', // Alisson
+  230621: 'https://cdn3.futbin.com/content/fifa25/img/players/p67339485.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=550b460f4c75b83e7cff3e2073083fdd', // G. Donnarumma
+};
+if(SBC_GK_CARD && SBC_GK_IMG_OVERRIDE[SBC_GK_CARD.baseId]) SBC_GK_CARD.img = SBC_GK_IMG_OVERRIDE[SBC_GK_CARD.baseId];
 [SBC_STRIKER_CARD, SBC_DEFENDER_CARD, SBC_GK_CARD].forEach(c=>{ if(c) BY_ID.set(c.id, c); });
 // WM-Sonderaufgaben limited event (see WM_QUEST_DEADLINE): capstone reward for finishing all 5 quests -
 // built from Mbappé's real base card (id 231747, 91 OV) boosted to exactly 100, reusing the sbcx foil look.
