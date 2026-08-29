@@ -21986,12 +21986,12 @@ function nametagHTML(name, nametagId){
   if(!nt) return esc;
   return `<span class="nametag ${nt.cls}"><span class="nametag-symbol" style="color:${nt.accent};">${nt.symbol}</span><span class="nametag-sep" style="color:${nt.accent};">|</span>${esc}</span>`;
 }
-// Same treatment for the short Liga-Kürzel (ligaTeamAbbr) - color+animation only, no symbol (a symbol
-// crammed in front of 3 characters would just look cramped, not identifying).
+// Same treatment for the short Liga-Kürzel (ligaTeamAbbr) - same symbol+separator+color+animation as
+// nametagHTML, so the Kürzel is affected by the nametag exactly like the full name is.
 function nametagAbbrHTML(abbr, nametagId){
   const nt = nametagId && NAMETAGS[nametagId];
   if(!nt) return abbr;
-  return `<span class="nametag ${nt.cls}">${abbr}</span>`;
+  return `<span class="nametag ${nt.cls}"><span class="nametag-symbol" style="color:${nt.accent};">${nt.symbol}</span><span class="nametag-sep" style="color:${nt.accent};">|</span>${abbr}</span>`;
 }
 // "Mein Verein" -> Nametag ändern: pick any already-unlocked nametag to equip, or none at all.
 function openNametagPicker(){
