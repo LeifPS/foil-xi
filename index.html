@@ -1667,6 +1667,38 @@ body.perf-lite .liga-name-gold, body.perf-lite .liga-name-silver, body.perf-lite
   background-size:300% 100%;animation:statOver100Shift 3.6s linear infinite;
 }
 @keyframes statOver100Shift{0%{background-position:0% 50%;}100%{background-position:300% 50%;}}
+/* ===== Erfolge (Achievements) + Nametags ===== One symbol+animated-gradient-text class per nametag
+   (see NAMETAGS) - deliberately plain Unicode glyphs, not emoji, since an emoji glyph is fixed-color
+   and completely ignores background-clip:text (see the TAB_ICON comment for the same constraint on
+   nav icons). Every nametag shares the same shift animation, just its own gradient/duration, so a
+   glance at the speed/palette alone hints at which tier of achievement it came from. */
+.nametag{display:inline;font-weight:700;}
+.nametag-symbol{margin-right:2px;}
+@keyframes nametagShift{0%{background-position:0% 50%;}100%{background-position:300% 50%;}}
+.nt-gold{background:linear-gradient(90deg,#ffe28a,#c9971f,#ffe28a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
+.nt-silber{background:linear-gradient(90deg,#f1f3f5,#9297a0,#f1f3f5);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
+.nt-bronze{background:linear-gradient(90deg,#e2a874,#7a4a24,#e2a874);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
+.nt-unaufhaltsam{background:linear-gradient(90deg,#ff9d6c,#e2564f,#ff9d6c);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite;}
+.nt-knipser{background:linear-gradient(90deg,#b6ff9d,#3dc482,#b6ff9d);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite;}
+.nt-sammler{background:linear-gradient(90deg,#d9b6ff,#8a4ae2,#d9b6ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite;}
+.nt-kurator{background:linear-gradient(90deg,#9df4ff,#1fb6c9,#9df4ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite;}
+.nt-baumeister{background:linear-gradient(90deg,#e2c48a,#8a6a2e,#e2c48a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite;}
+.nt-makler{background:linear-gradient(90deg,#9dc7ff,#3a7ae2,#9dc7ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.2s linear infinite;}
+.nt-kroesus{background:linear-gradient(90deg,#fff4b3,#c9a020,#6fd67a,#fff4b3);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite;}
+.nt-aufsteiger{background:linear-gradient(90deg,#bde3ff,#4da8ff,#bde3ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3s linear infinite;}
+.nt-pokalkoenig{background:linear-gradient(90deg,#ff9de2,#ffd76a,#9dffb0,#9de2ff,#d79dff,#ff9de2);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite;}
+.ach-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
+.ach-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.ach-icon{font-size:22px;flex-shrink:0;}
+.ach-title{font-weight:700;font-size:14px;}
+.ach-desc{font-size:11.5px;color:var(--muted);margin-top:1px;}
+.ach-bar{height:8px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;margin:8px 0 6px;}
+.ach-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--turf),var(--turf-bright));transition:width .3s;}
+.ach-tiers{display:flex;gap:6px;margin-bottom:4px;}
+.ach-tier-pip{flex:1;text-align:center;font-size:9.5px;font-family:'JetBrains Mono';font-weight:700;padding:4px 2px;border-radius:6px;background:var(--panel);border:1px solid var(--line);color:var(--muted);}
+.ach-tier-pip.done{background:rgba(61,196,130,.15);border-color:var(--turf-bright);color:var(--turf-bright);}
+.ach-tier-pip.claimable{background:rgba(230,195,67,.15);border-color:var(--gold);color:var(--gold);}
+.ach-tier-pip.next{border-color:var(--muted);}
 .leader-list{display:flex;flex-direction:column;gap:8px;}
 .leader-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);padding:10px 14px;border-radius:10px;font-size:13px;}
 .leader-row .rk{color:var(--muted);width:22px;font-family:'JetBrains Mono';font-weight:700;text-align:center;}
@@ -10918,6 +10950,7 @@ async function submitSBC(){
   }
   profile.completedSBCs = profile.completedSBCs || {};
   profile.completedSBCs[activeSBC.id] = (profile.completedSBCs[activeSBC.id]||0) + 1;
+  applyAchievementDeltas({sbcsCompleted:1});
   await sSet('collection', collection);
   await sSet('profile', profile);
   currentTab = 'sbc';
@@ -12203,7 +12236,7 @@ async function finalizeTradeAccept(t, payment){
       senderProfile.coins = (senderProfile.coins||0) + senderCoinDelta;
       await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile}, {merge:true});
     }
-    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {collection:senderCollection, managerCollection:senderManagerCollection, packCollection:senderPackCollection}, {merge:true});
+    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {collection:senderCollection, managerCollection:senderManagerCollection, packCollection:senderPackCollection, 'profile.achievementStats.tradesCompleted': fb.increment(1)}, {merge:true});
     // trade doc is already gone - claimed (read-and-deleted) atomically at the very top of this function
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
@@ -12219,6 +12252,8 @@ async function finalizeTradeAccept(t, payment){
     if(t.want && t.want.kind==='coins' && (t.offerCoins||0)===0 && (t.offerCards||[]).length===1 && !(t.offerManagers||[]).length){
       recordSale(t.offerCards[0].cardId, payment.coins);
     }
+    applyAchievementDeltas({tradesCompleted:1});
+    await sSet('profile', profile);
 
     toast('Handel abgeschlossen!');
     invalidateReadCache('external-locks:'+profile.userId);
@@ -12561,6 +12596,10 @@ async function atomicCoinChange(delta, extraSets={}, opts={}){
   // account ends up with e.g. -3.000 Coins despite every purchase flow checking funds first.
   profile.coins += delta;
   Object.entries(extraSets).forEach(([k,v])=>{ profile[k] = v; });
+  // "Münzsammler" Erfolg - same "any positive delta counts, regardless of source" rule as the Wochen
+  // Pass quest just above, since this is the one truly central chokepoint every coin gain already
+  // passes through.
+  if(delta>0) applyAchievementDeltas({coinsEarned:delta});
   if(!opts.silentDisplay) updateCoinDisplay();
   await fbReady;
   if(fb && clubId && fb.updateDoc && fb.increment){
@@ -12568,6 +12607,7 @@ async function atomicCoinChange(delta, extraSets={}, opts={}){
       const payload = { 'profile.coins': fb.increment(delta) };
       Object.entries(extraSets).forEach(([k,v])=>{ payload[`profile.${k}`] = v; });
       if(questsChanged) payload['profile.weekPassQuests'] = profile.weekPassQuests;
+      if(delta>0) Object.assign(payload, achievementDeltaPayload({coinsEarned:delta}));
       await fb.updateDoc(fb.doc(fb.db,'saves',clubId), payload);
       return;
     }catch(e){ console.warn('atomic coin update failed, falling back to full profile write', e); }
@@ -13148,6 +13188,26 @@ async function init(){
   if(!profile.ballondorClaimed && collection.some(c=>c.cardId===BALLONDOR_CARD.id)){ profile.ballondorClaimed = true; ballondorMigrated = true; }
   if(!profile.ballondorRodriClaimed && RODRI_BALLONDOR_CARD && collection.some(c=>c.cardId===RODRI_BALLONDOR_CARD.id)){ profile.ballondorRodriClaimed = true; ballondorMigrated = true; }
   if(ballondorMigrated) await sSet('profile', profile);
+  // Liga-Abzeichen -> Erfolge: profile.ligaBadge (time-limited, Liga-A-Platzierung) is retired the
+  // moment the Erfolge/Nametag system ships - whoever currently holds one gets it "sofort abgehakt":
+  // the matching achievement line (ligaFirst/ligaSecond/ligaThird) is marked fully complete (all 5
+  // tiers already claimed, so no reward-claim prompt for tiers they never actually grinded through)
+  // and the permanent nametag is granted right away, exactly once per account.
+  if(profile.ligaBadge && !profile.ligaBadgeMigrated){
+    ensureAchievementState();
+    const achId = profile.ligaBadge.tier==='gold' ? 'ligaFirst' : profile.ligaBadge.tier==='silver' ? 'ligaSecond' : profile.ligaBadge.tier==='bronze' ? 'ligaThird' : null;
+    if(achId){
+      const ach = ACHIEVEMENTS.find(a=>a.id===achId);
+      profile.achievementStats[ach.stat] = Math.max(profile.achievementStats[ach.stat]||0, ach.tiers[4]);
+      profile.achievementClaimed[achId] = 5;
+      const nametagId = ach.rewards[4].nametag;
+      if(nametagId && !profile.unlockedNametags.includes(nametagId)) profile.unlockedNametags.push(nametagId);
+      if(!profile.nametag) profile.nametag = nametagId;
+    }
+    profile.ligaBadge = null;
+    profile.ligaBadgeMigrated = true;
+    await sSet('profile', profile);
+  }
   squadPresets = await sGet('squadPresets');
   if(!squadPresets) squadPresets = [];
   currentTab = restoredLastTab();
@@ -13699,7 +13759,7 @@ document.addEventListener('visibilitychange', ()=>{
 });
 
 // ===== nav & routing =====
-const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass']];
+const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass'],['achievements','Erfolge']];
 // Icon-only equivalents for #nav-mobile (see its CSS comment) - plain inline SVGs, not emoji, so the
 // active/inactive color actually applies (emoji glyphs are fixed-color and ignore `color`). One path
 // per tab, same stroke style throughout for a consistent set.
@@ -13712,6 +13772,7 @@ const TAB_ICON = {
   play: '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/>',
   ligen: '<path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"/><path d="M8 5H5a3 3 0 0 0 3 5"/><path d="M16 5h3a3 3 0 0 1-3 5"/><path d="M12 12v4"/><path d="M9 20h6"/><path d="M10 16h4l1 4H9l1-4Z"/>',
   week: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  achievements: '<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4a3 3 0 0 0 3 6M17 5h3a3 3 0 0 1-3 6"/>',
   trade_locked: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   admin: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V19a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 17.35a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.65 13 1.7 1.7 0 0 0 3.09 12H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.65 7a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 2.65 1.7 1.7 0 0 0 10.09 1H10a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 2.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 7a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51.96Z"/>',
 };
@@ -13873,6 +13934,7 @@ function renderView(tab){
   if(tab==='play') return renderPlay(view);
   if(tab==='ligen') return renderLigenPanel(view);
   if(tab==='week') return renderWeekPass(view);
+  if(tab==='achievements') return renderAchievementsPanel(view);
   if(tab==='admin') return isAdmin() ? renderAdminPanel(view) : renderPlay(view);
 }
 
@@ -14260,6 +14322,8 @@ function showPackOpening(pack, drawn, opts={}){
   // grant immediately, before any animation/modal exists - closing the pack-opening modal early
   // (or anything else interrupting the reveal) must never cost the player the pack they paid for
   const addedPromise = addCardsToCollection(drawn, opts);
+  applyAchievementDeltas({packsOpened:1, cardsAcquired:drawn.length});
+  sSet('profile', profile);
   const ultraRareManager = c => c.isManager && (c.variant==='wm_mgr' || c.variant==='uclw_mgr');
   const ordered = drawn.slice().sort((a,b)=>{
     const aKey = a.ov + (ultraRareManager(a) ? 1000 : 0);
@@ -16131,7 +16195,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
       <button class="action-btn secondary" id="admin-give-pack-unopened" style="width:auto;">Pack (unge\u00f6ffnet) schicken</button>
       <button class="action-btn secondary" id="admin-make-ut" style="width:auto;">Karte nachtr\u00e4glich UT machen</button>
-      <button class="action-btn secondary" id="admin-set-liga-badge" style="width:auto;">Liga-Abzeichen setzen</button>
+      <button class="action-btn secondary" id="admin-set-liga-badge" style="width:auto;">Nametag setzen</button>
       <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
       <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
       <button class="action-btn secondary" id="admin-toggle-lb-ban" style="width:auto;color:${leaderboardBanned?'var(--turf-bright)':'var(--danger)'};">${leaderboardBanned?'Leaderboard-Sperre aufheben':'Tempor\u00e4r vom Leaderboard sperren'}</button>
@@ -16347,46 +16411,39 @@ function openAdminMakeUntradableModal(targetId, data){
   input.addEventListener('input', renderList);
   renderList();
 }
-// Manual override for profile.ligaBadge (see LIGA_REWARD_TABLE/ligaRewardForPlace) - added after
-// reports of badges not matching a player's actual Liga-A-Platzierung (root cause: the payout used
-// to key off the raw tiebreak-resolved sort index instead of the SAME displayRank shown on the table,
-// so a tied "Platz 1." could silently get paid as 2nd - fixed at the source in both reward loops, but
-// this still gives an admin a direct way to correct or grant a badge by hand without waiting for next
-// week's rollover, and to fix any account whose badge was already wrong before that fix shipped.
+// Manual override for a player's Nametag - originally built for the old profile.ligaBadge (Liga-A-
+// Platzierung, time-limited); ligaBadge itself is retired now that Nametags come from the permanent
+// Erfolge system instead (see NAMETAGS/ACHIEVEMENTS, and the one-time migration in init()), but the
+// same admin need remains: correct or grant one by hand without waiting for the next weekly rollover.
+// Directly sets profile.nametag (equipped) and adds it to profile.unlockedNametags if missing -
+// doesn't touch the underlying achievement counters, so this is purely a display-layer override.
 function openAdminSetLigaBadgeModal(targetId, p){
-  const current = p.ligaBadge;
-  const stillValid = current && current.expiresAt>Date.now();
+  const unlocked = p.unlockedNametags||[];
   openModal(`
-    <h2 style="margin-bottom:4px;">Liga-Abzeichen für ${targetId}</h2>
-    <p class="hint" style="margin:0 0 12px;">${stillValid ? `Aktuell: <b style="color:var(--gold);">${LIGA_BADGE_LABEL[current.tier]}</b> (Liga ${current.letter}, gültig bis ${new Date(current.expiresAt).toLocaleString('de-DE')})` : 'Aktuell kein gültiges Abzeichen.'}</p>
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <label class="hint" style="flex:1;">Liga<input id="admin-badge-letter" value="${(current&&current.letter)||'A'}" maxlength="2" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 10px;border-radius:8px;margin-top:4px;text-transform:uppercase;"></label>
-      <label class="hint" style="flex:1;">Gültig für (Tage)<input id="admin-badge-days" type="number" value="14" min="1" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:8px 10px;border-radius:8px;margin-top:4px;"></label>
-    </div>
+    <h2 style="margin-bottom:4px;">Nametag für ${targetId}</h2>
+    <p class="hint" style="margin:0 0 12px;">${p.nametag ? `Aktuell ausgewählt: <b>${NAMETAGS[p.nametag] ? NAMETAGS[p.nametag].label : p.nametag}</b>` : 'Aktuell kein Nametag ausgewählt.'} Freigeschaltet: ${unlocked.length ? unlocked.map(id=>NAMETAGS[id]?NAMETAGS[id].label:id).join(', ') : 'keins'}.</p>
     <div class="picker-list" id="admin-badge-tiers"></div>
-    <button class="action-btn secondary" id="admin-badge-clear" style="width:100%;margin-top:10px;border-color:var(--danger);color:var(--danger);">Abzeichen entfernen</button>`);
+    <button class="action-btn secondary" id="admin-badge-clear" style="width:100%;margin-top:10px;border-color:var(--danger);color:var(--danger);">Nametag entfernen (deaktivieren)</button>`);
   const list = document.getElementById('admin-badge-tiers');
-  ['gold','silver','bronze'].forEach(tier=>{
+  Object.entries(NAMETAGS).forEach(([id,nt])=>{
     const btn = document.createElement('button');
     btn.className = 'action-btn secondary';
     btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
-    btn.textContent = `🏅 ${LIGA_BADGE_LABEL[tier]} setzen`;
+    btn.innerHTML = `${nt.symbol} ${nt.label} setzen`;
     btn.addEventListener('click', async ()=>{
-      const letter = (document.getElementById('admin-badge-letter').value||'A').trim().toUpperCase().slice(0,2) || 'A';
-      const days = parseInt(document.getElementById('admin-badge-days').value, 10);
-      const validDays = Number.isFinite(days) && days>0 ? days : 14;
-      const newProfile = {...p, ligaBadge: {tier, letter, awardedAt:Date.now(), expiresAt: Date.now() + validDays*24*60*60*1000}};
+      const newUnlocked = unlocked.includes(id) ? unlocked : [...unlocked, id];
+      const newProfile = {...p, nametag:id, unlockedNametags:newUnlocked};
       await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
-      toast(`${LIGA_BADGE_LABEL[tier]}-Abzeichen (Liga ${letter}, ${validDays} Tage) für ${targetId} gesetzt.`);
+      toast(`Nametag "${nt.label}" für ${targetId} gesetzt.`);
       closeModal();
       loadAdminUserPanel(targetId);
     });
     list.appendChild(btn);
   });
   document.getElementById('admin-badge-clear').addEventListener('click', async ()=>{
-    const newProfile = {...p, ligaBadge: null};
+    const newProfile = {...p, nametag:null};
     await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
-    toast(`Liga-Abzeichen für ${targetId} entfernt.`);
+    toast(`Nametag für ${targetId} deaktiviert (bleibt freigeschaltet).`);
     closeModal();
     loadAdminUserPanel(targetId);
   });
@@ -16510,6 +16567,8 @@ function renderClub(view){
           <button class="action-btn secondary" id="rename-club" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button></p>
         <p class="hint" style="margin:4px 0 0;">K\u00fcrzel in Liga-Fixtures: <b style="color:var(--chalk);">${ligaTeamAbbr(profile.displayName||profile.userId, profile.clubAbbr)}</b>
           <button class="action-btn secondary" id="rename-club-abbr" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">\u00c4ndern</button></p>
+        ${(profile.unlockedNametags||[]).length ? `<p class="hint" style="margin:4px 0 0;">Nametag: <b>${profile.nametag ? nametagHTML(profile.displayName||profile.userId, profile.nametag) : '<span style="color:var(--chalk);">Keins ausgew\u00e4hlt</span>'}</b>
+          <button class="action-btn secondary" id="choose-nametag" style="width:auto;padding:4px 10px;font-size:11px;margin-left:8px;">Ausw\u00e4hlen</button></p>` : ''}
       </div>
     </div>
     <details class="settings-box" id="club-settings">
@@ -16631,6 +16690,8 @@ function renderClub(view){
       renderClub(document.getElementById('view'));
     }, 3);
   });
+  const chooseNametagBtn = document.getElementById('choose-nametag');
+  if(chooseNametagBtn) chooseNametagBtn.addEventListener('click', openNametagPicker);
   const packOpenModeSelect = document.getElementById('pack-open-mode-select');
   packOpenModeSelect.value = profile.packOpenMode==='click' ? 'click' : 'slice';
   packOpenModeSelect.addEventListener('change', async e=>{
@@ -17691,10 +17752,9 @@ function publishSquad(){
     // preciseRating (unrounded) rides alongside the rounded rating so the leaderboard can break
     // same-OVR ties and show a decimal - orderBy() in loadLeaderboard still uses the rounded
     // `rating` field so squads published before this field existed don't vanish from the query.
-    // ligaBadge rides along so the Kader-Rangliste can show it without a live per-account lookup -
-    // only carried over while still actually valid; an expired one is simply dropped, not published.
-    const ligaBadge = profile.ligaBadge && profile.ligaBadge.expiresAt>Date.now() ? profile.ligaBadge : null;
-    const payload = {owner:profile.displayName, userId:profile.userId, crest: profile.crest, rating, preciseRating, formation:squad.formation, players, managerId: mgr?mgr.id:null, ligaBadge, updatedAt:Date.now()};
+    // nametag rides along so the Kader-Rangliste can show it without a live per-account lookup - same
+    // pattern the old profile.ligaBadge used before the Erfolge/Nametag system replaced it.
+    const payload = {owner:profile.displayName, userId:profile.userId, crest: profile.crest, rating, preciseRating, formation:squad.formation, players, managerId: mgr?mgr.id:null, nametag: profile.nametag||null, updatedAt:Date.now()};
     await fbReady;
     if(fb){
       try{ await fb.setDoc(fb.doc(fb.db,'squads',profile.userId), payload); invalidateReadCache('squad-leaderboard'); toast('Kader online ver\u00f6ffentlicht!'); return; }
@@ -19830,7 +19890,7 @@ function ligaRewardPlaceCardHTML(placeLabel, r, accent){
     const pack = PACKS.find(x=>x.id===p.id);
     return pack ? `<div class="liga-reward-extra">🎁 ${pack.name}${p.count>1?' ×'+p.count:''}</div>` : '';
   }).join('');
-  const badgeHTML = r.badge ? `<div class="liga-reward-extra">🏅 ${LIGA_BADGE_LABEL[r.badge]}-Abzeichen <span class="hint" style="font-size:9.5px;">(1 Woche)</span></div>` : '';
+  const badgeHTML = r.badge ? `<div class="liga-reward-extra">🏅 zählt für den Erfolg „Liga-${r.badge==='gold'?'Meister':r.badge==='silver'?'Vizemeister':'Dritter'}" <span class="hint" style="font-size:9.5px;">(Stufe V = permanentes Nametag)</span></div>` : '';
   return `<div class="liga-reward-card" style="--accent:${accent};">
     <div class="liga-reward-place">${placeLabel}</div>
     <div class="liga-reward-coins">${formatCoins(r.coins)}<span class="liga-reward-coins-unit">Coins</span></div>
@@ -20121,10 +20181,10 @@ async function resolveSaveDataForUser(userId){
 // that write has round-tripped back from Firestore.
 async function ligaRefreshTeamDisplay(teams){
   return Promise.all(teams.map(async t=>{
-    if(t.userId===clubId) return {...t, name: profile.displayName||t.userId, crest: profile.crest||null, abbr: profile.clubAbbr||null};
+    if(t.userId===clubId) return {...t, name: profile.displayName||t.userId, crest: profile.crest||null, abbr: profile.clubAbbr||null, nametag: profile.nametag||null};
     const data = await resolveSaveDataForUser(t.userId);
     if(!data || !data.profile) return t;
-    return {...t, name: data.profile.displayName||t.userId, crest: data.profile.crest||null, abbr: data.profile.clubAbbr||null};
+    return {...t, name: data.profile.displayName||t.userId, crest: data.profile.crest||null, abbr: data.profile.clubAbbr||null, nametag: data.profile.nametag||null};
   }));
 }
 // Builds one league's entire week's SCHEDULE (who plays whom, which day/round) up front, but no longer
@@ -20137,8 +20197,8 @@ async function buildLeagueWeekPayload(letter, members, weekStart){
   const teams = [];
   for(const userId of members){
     const data = await resolveSaveDataForUser(userId);
-    if(!data || !data.profile){ teams.push({userId, name:userId, crest:null, abbr:null}); continue; }
-    teams.push({userId, name:data.profile.displayName||userId, crest:data.profile.crest||null, abbr:data.profile.clubAbbr||null});
+    if(!data || !data.profile){ teams.push({userId, name:userId, crest:null, abbr:null, nametag:null}); continue; }
+    teams.push({userId, name:data.profile.displayName||userId, crest:data.profile.crest||null, abbr:data.profile.clubAbbr||null, nametag:data.profile.nametag||null});
   }
   const rounds = generateDoubleRoundRobinRounds(teams.length);
   const perDay = distributeRoundsAcrossDays(rounds.length);
@@ -20295,7 +20355,7 @@ function ligaTieBreakHash(userId, seed){
 // history table has nothing left to spoil and should always show the real, complete table - see
 // resolveWeeklyRolloverIfNeeded's own call, which omits it).
 function ligaComputeStandings(teams, matches, uptoDay, seed, revealWeekStart, viewerUserId){
-  const table = teams.map((t,i)=>({idx:i, userId:t.userId, name:t.name, pts:0, w:0, d:0, l:0, gf:0, ga:0}));
+  const table = teams.map((t,i)=>({idx:i, userId:t.userId, name:t.name, nametag:t.nametag||null, pts:0, w:0, d:0, l:0, gf:0, ga:0}));
   matches.filter(m=>{
     if(m.day>uptoDay || m.pending) return false;
     if(revealWeekStart!=null && !ligaMatchIsRevealed(m, revealWeekStart)) return false;
@@ -20371,7 +20431,7 @@ function ligaStandingsTableHTML(table, zones){
       const mine = t.userId===clubId;
       return `<div style="display:grid;grid-template-columns:28px 1fr 30px 30px 30px 50px 40px 40px;gap:0;padding:7px 8px;border-top:1px solid var(--line);align-items:center;font-size:11.5px;${ZONE_STYLE[zn]}${mine?'box-shadow:inset 0 0 0 1px rgba(95,225,201,.5);':''}">
       <div style="text-align:center;color:var(--muted);">${t.displayRank!=null?t.displayRank:i+1}</div>
-      <div style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${mine?'font-weight:700;color:var(--turf-bright);':''}">${t.name}${mine?' <span style="font-size:10px;">(du)</span>':''}</div>
+      <div style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${mine?'font-weight:700;color:var(--turf-bright);':''}">${nametagHTML(t.name, t.nametag)}${mine?' <span style="font-size:10px;">(du)</span>':''}</div>
       <div style="text-align:center;">${t.w}</div><div style="text-align:center;">${t.d}</div><div style="text-align:center;">${t.l}</div>
       <div style="text-align:center;" class="mono">${t.gf}:${t.ga}</div>
       <div style="text-align:center;">${t.gd>=0?'+':''}${t.gd}</div>
@@ -20520,7 +20580,7 @@ function ligaMatchRowHTML(m, teams, viewerUserId, opts={}){
   const teamBlock = (t, goals, won, goalsFirst)=>{
     const teamUnit = `<div class="liga-fixture-team-unit">
       ${renderCrestSVG(t.crest || fallbackCrestFor(t.name), 40)}
-      <div class="liga-fixture-abbr${won?' liga-fixture-winner':''}">${won?'🏆 ':''}${ligaTeamAbbr(t.name, t.abbr)}</div>
+      <div class="liga-fixture-abbr${won?' liga-fixture-winner':''}">${won?'🏆 ':''}${nametagAbbrHTML(ligaTeamAbbr(t.name, t.abbr), t.nametag)}</div>
     </div>`;
     if(!decided) return `<div class="liga-fixture-side">${teamUnit}</div>`;
     const num = `<div class="liga-fixture-goals${won?' liga-fixture-winner':''}">${goals}</div>`;
@@ -20644,7 +20704,8 @@ function ligaTwoLegAggregate(teamA, teamB, leg1, leg2){
 async function ligaFreshTeam(userId, name){
   const data = await resolveSaveDataForUser(userId);
   const stats = (data && data.profile) ? squadRatingFromSaveData(data) : {rating:40, players:[]};
-  return {userId, name, ...stats};
+  const nametag = (data && data.profile) ? data.profile.nametag||null : null;
+  return {userId, name, nametag, ...stats};
 }
 // Queues reward items (pack ids, {kind,...} objects, ...) onto one player's `saves` doc array field,
 // plus any other flat field updates (coins increment, badge, ...) in the same atomic write. Deliberately
@@ -20781,7 +20842,7 @@ async function resolveWeeklyRolloverIfNeeded(){
     // tier changes here.
     table.forEach(row=>{
       const r = ligaRewardForPlace(letter, row.displayRank);
-      rewards.push({userId:row.userId, letter, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
+      rewards.push({userId:row.userId, letter, place:row.displayRank, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
     });
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
     if(!lettersInUse.includes(upperLetter)) continue; // no league above this one (letter is 'A')
@@ -20839,9 +20900,17 @@ async function resolveWeeklyRolloverIfNeeded(){
       for(let n=0;n<p.count;n++) pendingAdds.push(p.id);
     });
     if(collectionAdds.length) updates.collection = fb.arrayUnion(...collectionAdds); // each entry has its own genId(), never a duplicate - arrayUnion is safe here
-    // Badge (Liga A top 3 only): valid through the coming Ligaphase week - weekStart here is the
-    // week that just finished, so +14 days covers "starts next Monday, lasts through that whole week".
-    if(r.badge) updates['profile.ligaBadge'] = {tier:r.badge, letter:r.letter, awardedAt:Date.now(), expiresAt: weekStart + 14*24*60*60*1000};
+    // Liga-Abzeichen kommen seit dem Erfolge-System nicht mehr direkt aus einer Liga-Platzierung (siehe
+    // profile.ligaBadge weiter oben, jetzt nur noch für die Einmal-Migration in init() gelesen) -
+    // stattdessen zählt jede Top-3-Platzierung in Liga A auf die entsprechende Erfolgs-Linie
+    // (ligaFirst/ligaSecond/ligaThird), deren Stufe V das permanente Nametag vergibt. Aufstieg in eine
+    // höhere Liga zählt unabhängig davon immer auf "promotions", egal aus welcher Liga.
+    const achDeltas = {};
+    if(letter==='A' && r.place===1) achDeltas.ligaFirst = 1;
+    else if(letter==='A' && r.place===2) achDeltas.ligaSecond = 1;
+    else if(letter==='A' && r.place===3) achDeltas.ligaThird = 1;
+    if(LIGA_LETTERS.indexOf(nextLeagueOf[r.userId])<LIGA_LETTERS.indexOf(letter)) achDeltas.promotions = 1;
+    Object.assign(updates, achievementDeltaPayload(achDeltas));
     await ligaQueueRewards(r.userId, 'profile.pendingLigaPacks', pendingAdds, updates);
   }
   // Persist next week's membership + a history snapshot (for the weekend "Endstand" + relegation view).
@@ -21012,7 +21081,7 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
     // reward loop above for why (a tied pair must be paid by the place they're actually SHOWN at).
     table.forEach(row=>{
       const r = ligaRewardForPlace(letter, row.displayRank);
-      rewards.push({userId:row.userId, letter, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
+      rewards.push({userId:row.userId, letter, place:row.displayRank, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
     });
   });
   const relegationResults = []; // kept under the old field name for the recap view's lookup - see its semiWinner!=null branch
@@ -21047,7 +21116,15 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
       if(!PACKS.find(x=>x.id===p.id)) return;
       for(let n=0;n<p.count;n++) pendingAdds.push(p.id);
     });
-    if(r.badge) updates['profile.ligaBadge'] = {tier:r.badge, letter:r.letter, awardedAt:Date.now(), expiresAt: weekStart + 14*24*60*60*1000};
+    // Liga-Abzeichen -> Erfolge (ligaFirst/ligaSecond/ligaThird, permanentes Nametag ab Stufe V) statt
+    // des alten, direkt vergebenen profile.ligaBadge - siehe die identische Umstellung/Begründung im
+    // alten Rollover-Pfad oben.
+    const achDeltas = {};
+    if(r.letter==='A' && r.place===1) achDeltas.ligaFirst = 1;
+    else if(r.letter==='A' && r.place===2) achDeltas.ligaSecond = 1;
+    else if(r.letter==='A' && r.place===3) achDeltas.ligaThird = 1;
+    if(LIGA_LETTERS.indexOf(nextLeagueOf[r.userId])<LIGA_LETTERS.indexOf(r.letter)) achDeltas.promotions = 1;
+    Object.assign(updates, achievementDeltaPayload(achDeltas));
     await ligaQueueRewards(r.userId, 'profile.pendingLigaPacks', pendingAdds, updates);
   }
   const nextWeekStart = weekStart + 7*24*60*60*1000;
@@ -21136,7 +21213,7 @@ function wepComputeParticipants(tables, champion){
   let picks = [];
   ['A','B','C'].forEach(letter=>{
     const n = counts[letter]||0;
-    for(let i=0;i<n;i++){ if(tables[letter] && tables[letter][i]) picks.push({letter, place:i+1, userId:tables[letter][i].userId, name:tables[letter][i].name}); }
+    for(let i=0;i<n;i++){ if(tables[letter] && tables[letter][i]) picks.push({letter, place:i+1, userId:tables[letter][i].userId, name:tables[letter][i].name, nametag:tables[letter][i].nametag||null}); }
   });
   if(champion){
     const dupIdx = picks.findIndex(p=>p.userId===champion.userId);
@@ -21145,15 +21222,15 @@ function wepComputeParticipants(tables, champion){
       picks.splice(dupIdx,1);
       const nextPlace = counts[dupLetter];
       if(tables[dupLetter] && tables[dupLetter][nextPlace]){
-        picks.push({letter:dupLetter, place:nextPlace+1, userId:tables[dupLetter][nextPlace].userId, name:tables[dupLetter][nextPlace].name});
+        picks.push({letter:dupLetter, place:nextPlace+1, userId:tables[dupLetter][nextPlace].userId, name:tables[dupLetter][nextPlace].name, nametag:tables[dupLetter][nextPlace].nametag||null});
         counts[dupLetter] = nextPlace+1;
       }
     }
-    picks.push({letter:null, place:null, userId:champion.userId, name:champion.name, isChampion:true});
+    picks.push({letter:null, place:null, userId:champion.userId, name:champion.name, nametag:champion.nametag||null, isChampion:true});
   } else if(tables['A']){
     const extraPlace = counts['A']||0;
     if(tables['A'][extraPlace]){
-      picks.push({letter:'A', place:extraPlace+1, userId:tables['A'][extraPlace].userId, name:tables['A'][extraPlace].name});
+      picks.push({letter:'A', place:extraPlace+1, userId:tables['A'][extraPlace].userId, name:tables['A'][extraPlace].name, nametag:tables['A'][extraPlace].nametag||null});
       counts['A'] = extraPlace+1;
     }
   }
@@ -21162,7 +21239,7 @@ function wepComputeParticipants(tables, champion){
 // Swiss-phase standings (points/GD/GF/deterministic tiebreak, same shape/spirit as ligaComputeStandings
 // but over a flat list of single matches rather than a fixed round-robin schedule).
 function wepComputeStandings(participants, matches, seed){
-  const table = participants.map(p=>({userId:p.userId, name:p.name, pts:0, gf:0, ga:0}));
+  const table = participants.map(p=>({userId:p.userId, name:p.name, nametag:p.nametag||null, pts:0, gf:0, ga:0}));
   const byId = new Map(table.map(t=>[t.userId,t]));
   matches.forEach(m=>{
     const a = byId.get(m.aUserId), b = byId.get(m.bUserId);
@@ -21203,7 +21280,7 @@ function wepSwissPairs(standings, playedPairKeys){
 // One Swiss-phase match: a single leg, draws allowed (it's a league-style phase, not a knockout tie).
 function wepPlayMatch(teamA, teamB){
   const md = buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:true});
-  return {aUserId:teamA.userId, aName:teamA.name, bUserId:teamB.userId, bName:teamB.name, aGoals:md.myGoals, bGoals:md.oppGoals};
+  return {aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null, aGoals:md.myGoals, bGoals:md.oppGoals};
 }
 // Dispatcher: reads how far this week's 7-stage Sonntag schedule has gotten and runs whichever stage
 // is next due - same "separate doc per stage, hour-gated" pattern as resolveWeeklyRolloverV2IfNeeded.
@@ -21306,7 +21383,7 @@ async function wepRunSemi1(s1Data, s2Data, s3Data, ref, weekStart){
     const teamA = await ligaFreshTeam(a.userId, a.name);
     const teamB = await ligaFreshTeam(b.userId, b.name);
     const leg1 = ligaTwoLegLeg1(teamA, teamB);
-    semis.push({aUserId:teamA.userId, aName:teamA.name, bUserId:teamB.userId, bName:teamB.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+    semis.push({aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
   }
   try{ await fb.setDoc(ref, {status:'done', at:Date.now(), finalStandings:standings, semis}); }
   catch(e){ console.warn('wep semi1 write failed', e); return null; }
@@ -21336,7 +21413,7 @@ async function wepRunFinal1(semi2Data, ref){
   const teamA = await ligaFreshTeam(s0.winnerId, s0.winnerName);
   const teamB = await ligaFreshTeam(s1b.winnerId, s1b.winnerName);
   const leg1 = ligaTwoLegLeg1(teamA, teamB);
-  const final = {aUserId:teamA.userId, aName:teamA.name, bUserId:teamB.userId, bName:teamB.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}};
+  const final = {aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}};
   try{ await fb.setDoc(ref, {status:'done', at:Date.now(), final}); }
   catch(e){ console.warn('wep final1 write failed', e); return null; }
   return {stage:'final1', final};
@@ -21353,6 +21430,7 @@ async function wepRunFinal2(final1Data, ref, weekStart){
   const tie = ligaTwoLegAggregate(teamA, teamB, final.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
   const winnerId = tie.winner==='A' ? teamA.userId : teamB.userId;
   const winnerName = tie.winner==='A' ? teamA.name : teamB.name;
+  const winnerNametag = tie.winner==='A' ? teamA.nametag : teamB.nametag;
   const runnerUpId = tie.winner==='A' ? teamB.userId : teamA.userId;
   const runnerUpName = tie.winner==='A' ? teamB.name : teamA.name;
   let thirdPlaces = [];
@@ -21373,11 +21451,12 @@ async function wepRunFinal2(final1Data, ref, weekStart){
     const rewards = [];
     prize.packs.forEach(packId=>rewards.push({kind:'pack', packId}));
     if(prize.coins) rewards.push({kind:'coins', amount:prize.coins});
-    await ligaQueueRewards(p.userId, 'profile.pendingWochenendpokalRewards', rewards, {});
+    const achDeltas = p.place===1 ? {wepWins:1} : {};
+    await ligaQueueRewards(p.userId, 'profile.pendingWochenendpokalRewards', rewards, achievementDeltaPayload(achDeltas));
   }
   try{
     await fb.setDoc(ref, {status:'done', at:Date.now(), final:{...final, ...tie, winnerId, winnerName}, placements});
-    await fb.setDoc(fb.doc(fb.db,'leagueMeta','wochenendpokalChamp'), {userId:winnerId, name:winnerName, wonAt:Date.now(), weekStart});
+    await fb.setDoc(fb.doc(fb.db,'leagueMeta','wochenendpokalChamp'), {userId:winnerId, name:winnerName, nametag:winnerNametag||null, wonAt:Date.now(), weekStart});
   }catch(e){ console.warn('wep final2 write failed', e); return null; }
   return {stage:'final2', winnerId, winnerName};
 }
@@ -21411,12 +21490,12 @@ function renderWochenendpokalPendingRewards(box){
   });
 }
 function wepSingleMatchRowHTML(m){
-  return `<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${m.aName}</span><span class="mono" style="min-width:50px;text-align:center;">${m.aGoals} : ${m.bGoals}</span><span style="flex:1;text-align:right;">${m.bName}</span></div>`;
+  return `<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${nametagHTML(m.aName, m.aNametag)}</span><span class="mono" style="min-width:50px;text-align:center;">${m.aGoals} : ${m.bGoals}</span><span style="flex:1;text-align:right;">${nametagHTML(m.bName, m.bNametag)}</span></div>`;
 }
-function wepTwoLegRowHTML(tie, aName, bName){
+function wepTwoLegRowHTML(tie, aName, bName, aNametag, bNametag){
   const deciderText = tie.decider ? `, Entscheidung ${tie.decider.aGoals}:${tie.decider.bGoals}${tie.decider.wentToPK?' n.E.':''}` : '';
   return `<div class="leader-row" style="margin-bottom:8px;flex-wrap:wrap;">
-    <span style="flex:1;min-width:160px;"><b>${aName}</b> vs <b>${bName}</b></span>
+    <span style="flex:1;min-width:160px;"><b>${nametagHTML(aName, aNametag)}</b> vs <b>${nametagHTML(bName, bNametag)}</b></span>
     <span class="hint" style="margin:0;">Hin ${tie.leg1.aGoals}:${tie.leg1.bGoals}, Rück ${tie.leg2.aGoals}:${tie.leg2.bGoals}${deciderText} — Aggregat ${tie.aggA}:${tie.aggB}</span>
   </div>`;
 }
@@ -21461,7 +21540,7 @@ async function renderWochenendpokalPanel(box){
   let html = `<p class="hint" style="margin:0 0 14px;">Jeden Sonntag: 8 Teams, Schweizer System über 3 Runden, dann Halbfinale und Finale im Hin-/Rückspiel-Modus.</p>`;
   html += `<div class="vs-panel" style="margin-bottom:14px;">
     <h3 style="font-size:14px;margin-bottom:4px;color:var(--gold);">👑 Titelverteidiger</h3>
-    <p class="hint" style="margin:0;">${champion ? champion.name : 'Noch kein Titelverteidiger — der erste Wochenendpokal steht noch aus.'}</p>
+    <p class="hint" style="margin:0;">${champion ? nametagHTML(champion.name, champion.nametag) : 'Noch kein Titelverteidiger — der erste Wochenendpokal steht noch aus.'}</p>
   </div>`;
   if(!s1snap.exists()){
     let histSnap;
@@ -21469,7 +21548,7 @@ async function renderWochenendpokalPanel(box){
     if(histSnap && histSnap.exists()){
       const participants = wepComputeParticipants(histSnap.data().tables||{}, champion);
       html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Voraussichtliche Teilnehmer (Sonntag ab 10:00)</div>`;
-      html += participants.map(p=>`<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${p.name}</span><span class="hint" style="margin:0;">${p.isChampion?'Titelverteidiger':'Liga '+p.letter+' Platz '+p.place}</span></div>`).join('');
+      html += participants.map(p=>`<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${nametagHTML(p.name, p.nametag)}</span><span class="hint" style="margin:0;">${p.isChampion?'Titelverteidiger':'Liga '+p.letter+' Platz '+p.place}</span></div>`).join('');
     } else {
       html += `<p class="hint">Die Teilnehmerliste steht fest, sobald die laufende Liga-Woche am Samstag abgeschlossen ist.</p>`;
     }
@@ -21479,7 +21558,7 @@ async function renderWochenendpokalPanel(box){
   }
   const s1 = s1snap.data();
   html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Teilnehmer</div>`;
-  html += s1.participants.map(p=>`<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${p.name}</span><span class="hint" style="margin:0;">${p.isChampion?'Titelverteidiger':'Liga '+p.letter+' Platz '+p.place}</span></div>`).join('');
+  html += s1.participants.map(p=>`<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${nametagHTML(p.name, p.nametag)}</span><span class="hint" style="margin:0;">${p.isChampion?'Titelverteidiger':'Liga '+p.letter+' Platz '+p.place}</span></div>`).join('');
   const roundMatches = [s1.matches];
   if(s2snap.exists()) roundMatches.push(s2snap.data().matches);
   if(s3snap.exists()) roundMatches.push(s3snap.data().matches);
@@ -21495,9 +21574,9 @@ async function renderWochenendpokalPanel(box){
     const se1 = se1snap.data();
     html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Halbfinale</div>`;
     if(se2snap.exists()){
-      html += se2snap.data().semis.map(s=>wepTwoLegRowHTML(s, s.aName, s.bName)).join('');
+      html += se2snap.data().semis.map(s=>wepTwoLegRowHTML(s, s.aName, s.bName, s.aNametag, s.bNametag)).join('');
     } else {
-      html += se1.semis.map(s=>`<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;"><b>${s.aName}</b> vs <b>${s.bName}</b></span><span class="hint" style="margin:0;">Hinspiel ${s.leg1.aGoals}:${s.leg1.bGoals}</span></div>`).join('');
+      html += se1.semis.map(s=>`<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;"><b>${nametagHTML(s.aName, s.aNametag)}</b> vs <b>${nametagHTML(s.bName, s.bNametag)}</b></span><span class="hint" style="margin:0;">Hinspiel ${s.leg1.aGoals}:${s.leg1.bGoals}</span></div>`).join('');
     }
   }
   if(f1snap.exists()){
@@ -21505,14 +21584,358 @@ async function renderWochenendpokalPanel(box){
     html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Finale</div>`;
     if(f2snap.exists() && f2snap.data().status==='done'){
       const f2 = f2snap.data();
-      html += wepTwoLegRowHTML(f2.final, f1.final.aName, f1.final.bName);
-      html += `<p class="hint" style="margin-top:8px;color:var(--gold);">🏆 Wochenendpokal-Sieger: <b>${f2.final.winnerName}</b>!</p>`;
+      html += wepTwoLegRowHTML(f2.final, f1.final.aName, f1.final.bName, f1.final.aNametag, f1.final.bNametag);
+      html += `<p class="hint" style="margin-top:8px;color:var(--gold);">🏆 Wochenendpokal-Sieger: <b>${nametagHTML(f2.final.winnerName, f2.final.winnerId===f1.final.aUserId?f1.final.aNametag:f1.final.bNametag)}</b>!</p>`;
     } else {
-      html += `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;"><b>${f1.final.aName}</b> vs <b>${f1.final.bName}</b></span><span class="hint" style="margin:0;">Hinspiel ${f1.final.leg1.aGoals}:${f1.final.leg1.bGoals}</span></div>`;
+      html += `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;"><b>${nametagHTML(f1.final.aName, f1.final.aNametag)}</b> vs <b>${nametagHTML(f1.final.bName, f1.final.bNametag)}</b></span><span class="hint" style="margin:0;">Hinspiel ${f1.final.leg1.aGoals}:${f1.final.leg1.bGoals}</span></div>`;
     }
   }
   box.innerHTML = html;
   box.prepend(pendingHost);
+}
+// ===== Erfolge (Achievements) + Nametags =====
+// A brand new, permanent progression system, fully separate from Liga/Wochenendpokal rewards. Every
+// counter in profile.achievementStats starts at 0 for every account from the day this shipped and only
+// ever counts NEW actions from here on - never a snapshot of pre-existing lifetime totals (so a player
+// with 500 lifetime wins before this shipped starts their "Siege"-Erfolg at 0, same as a brand new
+// account). Each ACHIEVEMENTS line has exactly 5 tiers (I-V); there is no separately-stored "current
+// tier" - progress is always computed LIVE off the raw counter (see achievementUnlockedTier), and only
+// profile.achievementClaimed remembers which tiers' rewards have actually been picked up. This
+// deliberately avoids the exact bug class the Liga/Wochenendpokal reward queues had (see
+// ligaQueueRewards's own comment) - nothing is ever pre-queued into an array a duplicate-detecting
+// write could silently drop; a tier's reward is always re-derivable from the account's own stored
+// counter + claimed-tier number, forever, and re-opening the tab can never lose one.
+function ensureAchievementState(){
+  if(!profile.achievementStats) profile.achievementStats = {};
+  if(!profile.achievementClaimed) profile.achievementClaimed = {};
+  if(!profile.unlockedNametags) profile.unlockedNametags = [];
+}
+// tiers: the 5 raw counter thresholds (I-V, easiest to hardest) read straight off profile.achievementStats[stat].
+// rewards: one entry per tier, {coins, packs:[packId,...], card:'key' (rare, see achievementSpecialCard),
+// nametag:'id'} - tier V of every single line ALWAYS includes a nametag, per design (completing an
+// achievement all the way grants at least one permanent nametag, sometimes coins/packs on top, and for
+// a couple of the hardest lines a genuinely rare single-card reward).
+const ACHIEVEMENTS = [
+  {id:'wins', name:'Siege', desc:'Gewinne Matches (online oder gegen Freunde).', icon:'🏆', stat:'wins',
+    tiers:[10,30,75,150,300],
+    rewards:[
+      {coins:2000},
+      {coins:5000},
+      {coins:12000, packs:['ratings27']},
+      {coins:25000, packs:['ratings27']},
+      {coins:60000, packs:['kronjuwelen'], card:'ligaMeister', nametag:'unaufhaltsam'},
+    ]},
+  {id:'goals', name:'Torjäger', desc:'Erziele Tore in Matches.', icon:'⚽', stat:'goals',
+    tiers:[25,75,200,450,900],
+    rewards:[
+      {coins:2000},
+      {coins:5000},
+      {coins:12000},
+      {coins:30000, packs:['ratings27']},
+      {coins:70000, packs:['zeitgeist'], nametag:'knipser'},
+    ]},
+  {id:'packsOpened', name:'Pack-Öffner', desc:'Öffne Packs im Kartenladen.', icon:'📦', stat:'packsOpened',
+    tiers:[10,30,75,150,300],
+    rewards:[
+      {coins:2000},
+      {coins:4000},
+      {coins:10000},
+      {coins:20000, packs:['ratings27']},
+      {coins:45000, packs:['poeten'], nametag:'sammler'},
+    ]},
+  {id:'cardsAcquired', name:'Kartensammler', desc:'Erhalte neue Karten (Packs, Handel, Belohnungen).', icon:'🗂️', stat:'cardsAcquired',
+    tiers:[50,150,400,800,1500],
+    rewards:[
+      {coins:2000},
+      {coins:5000},
+      {coins:12000},
+      {coins:25000, packs:['ratings27']},
+      {coins:55000, packs:['kronjuwelen'], nametag:'kurator'},
+    ]},
+  {id:'sbcsCompleted', name:'SBC-Meister', desc:'Schließe Herausforderungen (SBCs) ab.', icon:'🛠️', stat:'sbcsCompleted',
+    tiers:[3,10,25,50,100],
+    rewards:[
+      {coins:2000},
+      {coins:6000},
+      {coins:15000},
+      {coins:35000, packs:['ratings27']},
+      {coins:75000, packs:['deutschelegenden'], nametag:'baumeister'},
+    ]},
+  {id:'tradesCompleted', name:'Händler', desc:'Schließe Handelsgeschäfte im Marktplatz ab.', icon:'🤝', stat:'tradesCompleted',
+    tiers:[5,15,40,80,150],
+    rewards:[
+      {coins:2000},
+      {coins:5000},
+      {coins:12000},
+      {coins:28000},
+      {coins:60000, packs:['zeitgeist'], nametag:'makler'},
+    ]},
+  {id:'coinsEarned', name:'Münzsammler', desc:'Verdiene Coins (aus jeder Quelle).', icon:'💰', stat:'coinsEarned',
+    tiers:[50000,200000,750000,2000000,5000000],
+    rewards:[
+      {coins:2000},
+      {coins:8000},
+      {coins:25000},
+      {coins:60000, packs:['ratings27']},
+      {coins:150000, packs:['kronjuwelen'], nametag:'kroesus'},
+    ]},
+  {id:'ligaFirst', name:'Liga-Meister', desc:'Beende eine Liga-A-Woche auf Platz 1.', icon:'🥇', stat:'ligaFirst',
+    tiers:[1,3,6,10,15],
+    rewards:[
+      {coins:3000},
+      {coins:10000},
+      {coins:25000, packs:['ratings27']},
+      {coins:60000, packs:['kronjuwelen']},
+      {coins:120000, packs:['kronjuwelen'], card:'ligaMeister', nametag:'gold'},
+    ]},
+  {id:'ligaSecond', name:'Liga-Vizemeister', desc:'Beende eine Liga-A-Woche auf Platz 2.', icon:'🥈', stat:'ligaSecond',
+    tiers:[1,3,6,10,15],
+    rewards:[
+      {coins:2500},
+      {coins:8000},
+      {coins:18000, packs:['ratings27']},
+      {coins:40000},
+      {coins:80000, packs:['zeitgeist'], nametag:'silber'},
+    ]},
+  {id:'ligaThird', name:'Liga Dritter', desc:'Beende eine Liga-A-Woche auf Platz 3.', icon:'🥉', stat:'ligaThird',
+    tiers:[1,3,6,10,15],
+    rewards:[
+      {coins:2000},
+      {coins:6000},
+      {coins:14000},
+      {coins:30000},
+      {coins:60000, packs:['poeten'], nametag:'bronze'},
+    ]},
+  {id:'promotions', name:'Aufsteiger', desc:'Steige in eine höhere Liga auf.', icon:'📈', stat:'promotions',
+    tiers:[1,3,6,12,20],
+    rewards:[
+      {coins:3000},
+      {coins:8000},
+      {coins:20000},
+      {coins:45000, packs:['ratings27']},
+      {coins:90000, packs:['zeitgeist'], nametag:'aufsteiger'},
+    ]},
+  {id:'wepWins', name:'Wochenendpokal-Sieger', desc:'Gewinne den Wochenendpokal.', icon:'🏆', stat:'wepWins',
+    tiers:[1,2,3,5,8],
+    rewards:[
+      {coins:5000},
+      {coins:15000},
+      {coins:35000, packs:['ratings27']},
+      {coins:80000, packs:['kronjuwelen']},
+      {coins:200000, packs:['kronjuwelen'], card:'wepTrophy', nametag:'pokalkoenig'},
+    ]},
+];
+const ACHIEVEMENT_TIER_LABEL = ['I','II','III','IV','V'];
+// Every possible Nametag - a symbol (deliberately plain Unicode, never emoji, so background-clip:text
+// actually colors it - see the CSS comment), a display label, and the CSS class carrying its own
+// gradient+animation. gold/silber/bronze are the direct successors to the old time-limited
+// profile.ligaBadge (see the migration in init()) - same visual idea (Liga-A-Platzierung), now earned
+// through the Liga-Meister/-Vizemeister/-Dritter achievement lines above and permanent once unlocked.
+const NAMETAGS = {
+  gold: {label:'Gold', symbol:'◆', cls:'nt-gold'},
+  silber: {label:'Silber', symbol:'⬥', cls:'nt-silber'},
+  bronze: {label:'Bronze', symbol:'⬟', cls:'nt-bronze'},
+  unaufhaltsam: {label:'Unaufhaltsam', symbol:'▲', cls:'nt-unaufhaltsam'},
+  knipser: {label:'Knipser', symbol:'●', cls:'nt-knipser'},
+  sammler: {label:'Sammler', symbol:'✦', cls:'nt-sammler'},
+  kurator: {label:'Kurator', symbol:'❖', cls:'nt-kurator'},
+  baumeister: {label:'Baumeister', symbol:'⬢', cls:'nt-baumeister'},
+  makler: {label:'Makler', symbol:'✚', cls:'nt-makler'},
+  kroesus: {label:'Krösus', symbol:'✪', cls:'nt-kroesus'},
+  aufsteiger: {label:'Aufsteiger', symbol:'△', cls:'nt-aufsteiger'},
+  pokalkoenig: {label:'Pokalkönig', symbol:'★', cls:'nt-pokalkoenig'},
+};
+function achievementStatValue(ach){ ensureAchievementState(); return profile.achievementStats[ach.stat]||0; }
+// 0 = not even tier I reached yet, 1-5 = highest tier the raw counter currently qualifies for.
+function achievementUnlockedTier(ach){
+  const v = achievementStatValue(ach);
+  let tier = 0;
+  ach.tiers.forEach((t,i)=>{ if(v>=t) tier = i+1; });
+  return tier;
+}
+function achievementClaimedTier(ach){ ensureAchievementState(); return profile.achievementClaimed[ach.id]||0; }
+// The rare single-card tier-V rewards reuse existing, already-battle-tested special-card machinery
+// instead of inventing a new one: 'ligaMeister' is the SAME weekly-rotating boosted card that used to
+// be granted directly for a Liga A 1st place (see ligaChampionCardForIndex) before that moved to being
+// an achievement instead - bringing it back here for the "Siege"/"Liga-Meister" tier-V payouts.
+// 'wepTrophy' is a single fixed equivalent for the (much rarer) Wochenendpokal-Sieger achievement.
+const WEP_TROPHY_CARD_ID = 9799000;
+function wepTrophyCard(){
+  if(BY_ID.has(WEP_TROPHY_CARD_ID)) return BY_ID.get(WEP_TROPHY_CARD_ID);
+  const base = BY_ID.get(231747); // K. Mbappé
+  if(!base) return null;
+  const card = boostBaseToOv(base, 106, WEP_TROPHY_CARD_ID, 'wep_trophy', 'Pokal-Held', 'ligachamp');
+  card.untradable = true;
+  BY_ID.set(card.id, card);
+  return card;
+}
+function achievementSpecialCard(key){
+  if(key==='ligaMeister') return currentLigaChampionCard();
+  if(key==='wepTrophy') return wepTrophyCard();
+  return null;
+}
+// For call sites doing a fast targeted fb.updateDoc(...,{...,'profile.xyz':fb.increment(n)}) write
+// instead of a full sSet('profile',profile) - merges achievement counter increments into the SAME
+// round trip; applyAchievementDeltas mutates the in-memory profile.achievementStats identically, so
+// memory and remote store always move together exactly like every other counter those call sites
+// already touch (wins, coins, ...). Callers use both together at the same point they already handle
+// their own counters, never just one alone.
+function achievementDeltaPayload(deltas){
+  const payload = {};
+  Object.entries(deltas).forEach(([key, amount])=>{ if(amount) payload['profile.achievementStats.'+key] = fb.increment(amount); });
+  return payload;
+}
+function applyAchievementDeltas(deltas){
+  ensureAchievementState();
+  Object.entries(deltas).forEach(([key, amount])=>{ if(amount) profile.achievementStats[key] = (profile.achievementStats[key]||0) + amount; });
+}
+async function claimAchievementTier(achId, tier){
+  ensureAchievementState();
+  const ach = ACHIEVEMENTS.find(a=>a.id===achId);
+  if(!ach) return;
+  const unlocked = achievementUnlockedTier(ach);
+  const claimed = achievementClaimedTier(ach);
+  if(tier>unlocked || tier<=claimed) return; // not actually claimable (already claimed, or not reached yet)
+  const reward = ach.rewards[tier-1];
+  profile.achievementClaimed[achId] = tier;
+  if(reward.coins) profile.coins = (profile.coins||0) + reward.coins;
+  if(reward.nametag && !profile.unlockedNametags.includes(reward.nametag)) profile.unlockedNametags.push(reward.nametag);
+  let grantedCard = null;
+  if(reward.card){
+    grantedCard = achievementSpecialCard(reward.card);
+    if(grantedCard) collection.push({uid:genId(), cardId:grantedCard.id});
+  }
+  await sSet('profile', profile);
+  if(grantedCard) await sSet('collection', collection);
+  let msg = `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${formatCoins(reward.coins||0)} Coins`;
+  if(reward.nametag) msg += ` · neues Nametag "${NAMETAGS[reward.nametag].label}"`;
+  if(grantedCard) msg += ` · ${grantedCard.n}`;
+  toast(msg);
+  (reward.packs||[]).forEach(packId=>{
+    const pack = PACKS.find(p=>p.id===packId);
+    if(pack) showPackOpening(pack, pack.draw(), {});
+  });
+}
+// Wraps a display name in its equipped nametag's symbol+color+animation, HTML-escaped - or just the
+// escaped plain name if no nametag is known/equipped. `nametagId` is read from whatever per-account
+// snapshot is available at the call site: the viewer's own profile.nametag for their own name, or a
+// cached `nametag` field riding along on a published squad/Liga team/leaderboard entry for anyone
+// else's - the exact same "no live per-account lookup needed" pattern profile.ligaBadge already used.
+function nametagHTML(name, nametagId){
+  const esc = (name==null?'':String(name)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const nt = nametagId && NAMETAGS[nametagId];
+  if(!nt) return esc;
+  return `<span class="nametag ${nt.cls}"><span class="nametag-symbol">${nt.symbol}</span>${esc}</span>`;
+}
+// Same treatment for the short Liga-Kürzel (ligaTeamAbbr) - color+animation only, no symbol (a symbol
+// crammed in front of 3 characters would just look cramped, not identifying).
+function nametagAbbrHTML(abbr, nametagId){
+  const nt = nametagId && NAMETAGS[nametagId];
+  if(!nt) return abbr;
+  return `<span class="nametag ${nt.cls}">${abbr}</span>`;
+}
+// "Mein Verein" -> Nametag ändern: pick any already-unlocked nametag to equip, or none at all.
+function openNametagPicker(){
+  ensureAchievementState();
+  const unlocked = profile.unlockedNametags;
+  openModal(`
+    <h2 style="margin-bottom:12px;">Nametag auswählen</h2>
+    <div class="picker-list" id="nametag-picker-list"></div>`);
+  const list = document.getElementById('nametag-picker-list');
+  const noneBtn = document.createElement('button');
+  noneBtn.className = 'action-btn secondary';
+  noneBtn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
+  noneBtn.textContent = 'Kein Nametag';
+  noneBtn.addEventListener('click', async ()=>{
+    profile.nametag = null;
+    await sSet('profile', profile);
+    closeModal();
+    toast('Kein Nametag ausgewählt.');
+    if(currentTab==='club') renderClub(document.getElementById('view'));
+  });
+  list.appendChild(noneBtn);
+  unlocked.forEach(id=>{
+    const nt = NAMETAGS[id];
+    if(!nt) return;
+    const btn = document.createElement('button');
+    btn.className = 'action-btn secondary';
+    btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
+    btn.innerHTML = nametagHTML(profile.displayName||profile.userId, id) + (profile.nametag===id ? ' <span class="hint" style="margin:0;">(aktiv)</span>' : '');
+    btn.addEventListener('click', async ()=>{
+      profile.nametag = id;
+      await sSet('profile', profile);
+      closeModal();
+      toast(`Nametag "${nt.label}" ausgewählt.`);
+      if(currentTab==='club') renderClub(document.getElementById('view'));
+    });
+    list.appendChild(btn);
+  });
+}
+// The Erfolge tab: every achievement line with its progress bar, 5 tier pips (done/claimable/next/
+// locked), and a claim button for the lowest still-unclaimed completed tier - same "one at a time,
+// real ceremony" philosophy as every other reward queue in the game.
+async function renderAchievementsPanel(view){
+  view.innerHTML = `<div class="view-head"><h2>🏆 Erfolge</h2></div><p class="hint">Lädt…</p>`;
+  await refreshLigaProfileFields(); // achievement progress can be updated by a completely different session (Liga rollover) - see that function's own comment
+  ensureAchievementState();
+  const nametagRow = profile.unlockedNametags.length ? `
+    <div class="ach-card">
+      <div class="ach-title" style="margin-bottom:8px;">Deine Nametags</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        ${profile.unlockedNametags.map(id=>`<div style="padding:6px 12px;border-radius:100px;background:var(--panel);border:1px solid ${profile.nametag===id?'var(--turf-bright)':'var(--line)'};font-size:13px;">${nametagHTML(NAMETAGS[id].label, id)}</div>`).join('')}
+      </div>
+      <p class="hint" style="margin:10px 0 0;">In „Mein Verein" auswählen, welches gerade aktiv ist.</p>
+    </div>` : '';
+  view.innerHTML = `<div class="view-head"><h2>🏆 Erfolge</h2><p>Zähle ab heute, egal was du im Spiel machst - jede Stufe bringt eine Belohnung, Stufe V immer mindestens ein permanentes Nametag.</p></div>
+    ${nametagRow}
+    <div id="ach-list"></div>`;
+  const list = document.getElementById('ach-list');
+  list.innerHTML = ACHIEVEMENTS.map(ach=>{
+    const value = achievementStatValue(ach);
+    const unlocked = achievementUnlockedTier(ach);
+    const claimed = achievementClaimedTier(ach);
+    const nextTier = Math.min(unlocked+1, 5);
+    const nextThreshold = ach.tiers[nextTier-1];
+    const prevThreshold = nextTier>1 ? ach.tiers[nextTier-2] : 0;
+    const pct = unlocked>=5 ? 100 : Math.round(((value-prevThreshold)/(nextThreshold-prevThreshold))*100);
+    const pips = ACHIEVEMENT_TIER_LABEL.map((label,i)=>{
+      const tier = i+1;
+      const cls = tier<=claimed ? 'done' : tier<=unlocked ? 'claimable' : tier===nextTier ? 'next' : '';
+      return `<div class="ach-tier-pip ${cls}">${label}</div>`;
+    }).join('');
+    const claimableTier = claimed<unlocked ? claimed+1 : null;
+    const progressText = unlocked>=5 ? `Stufe V erreicht (${formatCoins(value)})` : `${formatCoins(value)} / ${formatCoins(nextThreshold)} für Stufe ${ACHIEVEMENT_TIER_LABEL[nextTier-1]}`;
+    let rewardPreview = '';
+    if(claimableTier){
+      const r = ach.rewards[claimableTier-1];
+      const parts = [`+${formatCoins(r.coins||0)} Coins`];
+      (r.packs||[]).forEach(pid=>{ const p = PACKS.find(x=>x.id===pid); if(p) parts.push(p.name); });
+      if(r.nametag) parts.push(`Nametag "${NAMETAGS[r.nametag].label}"`);
+      if(r.card) parts.push('Einzelkarte');
+      rewardPreview = `<p class="hint" style="margin:6px 0 0;color:var(--gold);">${parts.join(' · ')}</p>`;
+    }
+    return `<div class="ach-card">
+      <div class="ach-head">
+        <div class="ach-icon">${ach.icon}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="ach-title">${ach.name}</div>
+          <div class="ach-desc">${ach.desc}</div>
+        </div>
+      </div>
+      <div class="ach-bar"><i style="width:${pct}%;"></i></div>
+      <p class="hint" style="margin:0;">${progressText}</p>
+      <div class="ach-tiers" style="margin-top:10px;">${pips}</div>
+      ${rewardPreview}
+      ${claimableTier ? `<button class="action-btn" data-claim="${ach.id}" data-tier="${claimableTier}" style="width:100%;margin-top:10px;">Stufe ${ACHIEVEMENT_TIER_LABEL[claimableTier-1]} abholen${unlocked>claimableTier?` (${unlocked-claimed} ausstehend)`:''}</button>` : ''}
+    </div>`;
+  }).join('');
+  list.querySelectorAll('[data-claim]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      btn.disabled = true;
+      await claimAchievementTier(btn.dataset.claim, parseInt(btn.dataset.tier,10));
+      renderAchievementsPanel(view);
+    });
+  });
 }
 let ligenSubTab = 'mine';
 // The Montag-Freitag fixture list defaults to only upcoming matches plus anything revealed in the last
@@ -21611,10 +22034,16 @@ async function refreshLigaProfileFields(){
     const snap = await fb.getDoc(fb.doc(fb.db,'saves', clubId));
     if(!snap.exists()) return;
     const p = snap.data().profile || {};
-    if('ligaBadge' in p) profile.ligaBadge = p.ligaBadge;
     if('pendingLigaPacks' in p) profile.pendingLigaPacks = p.pendingLigaPacks;
     if('pendingWochenendpokalRewards' in p) profile.pendingWochenendpokalRewards = p.pendingWochenendpokalRewards;
     if('coins' in p) profile.coins = p.coins;
+    // Erfolge/Nametags have the exact same staleness problem ligaBadge used to (see this function's own
+    // comment above) - a Liga-placement achievement tier crossed by the weekend rollover, or an
+    // achievement claimed from a DIFFERENT session, needs the same forced resync here.
+    if('achievementStats' in p) profile.achievementStats = p.achievementStats;
+    if('achievementClaimed' in p) profile.achievementClaimed = p.achievementClaimed;
+    if('unlockedNametags' in p) profile.unlockedNametags = p.unlockedNametags;
+    if('nametag' in p) profile.nametag = p.nametag;
   }catch(e){ console.warn('refresh liga profile fields failed', e); }
 }
 function renderLigenPanel(view){
@@ -21672,12 +22101,11 @@ function renderLigenPanel(view){
     const sortedLetters = allLeaguesSnap ? allLeaguesSnap.docs.map(d=>d.id).sort() : [];
     const sizeOf = l => { if(!allLeaguesSnap) return 0; const d=allLeaguesSnap.docs.find(x=>x.id===l); return d ? (d.data().members||[]).length : 0; };
     const myZones = ligaZonesFor(membership.letter, sortedLetters, sizeOf);
-    const myBadge = profile.ligaBadge && profile.ligaBadge.expiresAt>Date.now() ? profile.ligaBadge : null;
     const header = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:12px 14px;">
         ${ligaBadgeHTML(membership.letter, 48)}
         <div style="flex:1;min-width:0;"><div style="font-family:'Anton';font-size:22px;">Liga ${membership.letter}</div>
         <div class="hint" style="margin:2px 0 0;">${myZones.isTop?'Höchste Liga - keine Aufstiegsmöglichkeit':(myZones.isBottom?'Unterste Liga - kein direkter Abstieg':'Auf-/Abstieg mit den Nachbarligen jede Woche')}</div>
-        ${myBadge ? `<div class="liga-my-badge liga-badge-${myBadge.tier}" style="margin-top:6px;">🏅 Dein Abzeichen: ${LIGA_BADGE_LABEL[myBadge.tier]}</div>` : ''}</div>
+        ${profile.nametag ? `<div class="liga-my-badge" style="margin-top:6px;">🏅 Dein Nametag: ${nametagHTML(NAMETAGS[profile.nametag].label, profile.nametag)}</div>` : ''}</div>
         <button class="action-btn secondary liga-rewards-btn" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0;">🏆 Preise</button>
       </div>`;
     if(weekStart==null){
@@ -24760,12 +25188,9 @@ async function loadLeaderboard(){
     const info = document.createElement('span');
     info.style.cssText = 'flex:1;cursor:pointer;display:flex;gap:8px;align-items:center;';
     const decimal = s.preciseRating!=null ? `<span class="rating-decimal">${ratingDecimalSuffix(s.preciseRating)}</span>` : '';
-    // Liga-Abzeichen (Platz 1-3 in Liga A, gültig 1 Woche - see profile.ligaBadge/publishSquad): the
-    // published squad doc carries its own copy, so this only needs to check expiry, not re-fetch.
-    const badge = s.ligaBadge && s.ligaBadge.expiresAt>Date.now() ? s.ligaBadge : null;
-    const nameClass = badge ? ` liga-name-${badge.tier}` : '';
-    const badgePill = badge ? `<span class="liga-badge-pill liga-badge-${badge.tier}" title="Liga-Abzeichen (Platz ${badge.tier==='gold'?1:badge.tier==='silver'?2:3} Liga A, 1 Woche gültig)">🏅 ${LIGA_BADGE_LABEL[badge.tier]}</span>` : '';
-    info.innerHTML = `<span class="rk${medal?' medal'+medal:''}">${rank}</span><span class="leader-crest">${renderCrestSVG(s.crest || fallbackCrestFor(s.owner), 20)}</span><span style="flex:1;" class="${nameClass}">${s.owner||'Unbenannter Verein'}</span>${badgePill}<span class="mono">${s.rating}${decimal} OVR</span>`;
+    // Nametag (see NAMETAGS/publishSquad): the published squad doc carries its own copy, so this
+    // never needs a live per-account lookup just to render the leaderboard.
+    info.innerHTML = `<span class="rk${medal?' medal'+medal:''}">${rank}</span><span class="leader-crest">${renderCrestSVG(s.crest || fallbackCrestFor(s.owner), 20)}</span><span style="flex:1;">${nametagHTML(s.owner||'Unbenannter Verein', s.nametag)}</span><span class="mono">${s.rating}${decimal} OVR</span>`;
     info.addEventListener('click', ()=>showSquadModal(s));
     const challengeBtn = document.createElement('button');
     challengeBtn.className = 'action-btn secondary';
@@ -26277,7 +26702,8 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
   // write everything in ONE network round-trip so an early tab-close can't lose part of it
   if(fb && clubId && fb.updateDoc && fb.increment){
     try{
-      const payload = { 'profile.coins': fb.increment(finalReward), 'profile.dailyRewardTracker': newTracker };
+      const achDeltas = {wins: result==='WIN'?1:0, goals: myGoals};
+      const payload = { 'profile.coins': fb.increment(finalReward), 'profile.dailyRewardTracker': newTracker, ...achievementDeltaPayload(achDeltas) };
       payload[result==='WIN' ? 'profile.wins' : 'profile.losses'] = fb.increment(1);
       if(result==='WIN') payload['profile.careerWins'] = fb.increment(1);
       if(oppName){ payload['profile.matchHistory'] = newHistory; payload['profile.scorerStats'] = newScorerStats; }
@@ -26287,12 +26713,14 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
       profile.coins += finalReward;
       profile.dailyRewardTracker = newTracker;
       if(result==='WIN'){ profile.wins++; profile.careerWins = (profile.careerWins||0)+1; } else profile.losses++;
+      applyAchievementDeltas(achDeltas);
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
       if(oppUserId) profile.rivalries = newRivalries;
       if(finalSpXp) profile.weekPass.xp += finalSpXp;
     }catch(e){
       console.warn('atomic match-result update failed, falling back', e);
       if(result==='WIN'){ profile.wins++; profile.careerWins = (profile.careerWins||0)+1; } else profile.losses++;
+      applyAchievementDeltas({wins: result==='WIN'?1:0, goals: myGoals});
       profile.coins += finalReward;
       profile.dailyRewardTracker = newTracker;
       if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
@@ -26302,6 +26730,7 @@ async function commitMatchResult(myGoals, oppGoals, winnerSide, wentToET, wentTo
     }
   } else {
     if(result==='WIN'){ profile.wins++; profile.careerWins = (profile.careerWins||0)+1; } else profile.losses++;
+    applyAchievementDeltas({wins: result==='WIN'?1:0, goals: myGoals});
     profile.coins += finalReward;
     profile.dailyRewardTracker = newTracker;
     if(oppName){ profile.matchHistory = newHistory; profile.scorerStats = newScorerStats; }
