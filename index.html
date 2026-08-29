@@ -21841,6 +21841,22 @@ const ACHIEVEMENTS = [
       {coins:60000, packs:['ratings27']},
       {coins:150000, packs:['kronjuwelen'], nametag:'kroesus'},
     ]},
+  // Komplett andere Bedingung als vorher (war: Liga-Aufstiege) - zählt jetzt Gelbe/Rote Karten in
+  // den eigenen Matches. Ein Stufen-Schwellwert ist hier ein {y,r}-Objekt statt einer einzelnen Zahl,
+  // da ab Stufe III zusätzlich eine Mindestanzahl Roter Karten gefordert ist - siehe die
+  // Sonderbehandlung für ach.id==='cardDiscipline' in achievementStatValue/achievementUnlockedTier/tierMet.
+  // Bewusst HIER einsortiert (bei den anderen allgemeinen Match-Erfolgen), nicht bei den Liga-
+  // Platzierungen weiter unten - hat inhaltlich nichts mit der Liga zu tun.
+  {id:'cardDiscipline', name:'Kartensünder', desc:'Sammle Gelbe und Rote Karten in deinen eigenen Matches.', icon:'🟨', stat:'cardDiscipline',
+    cond:t=>t.r>0 ? `${t.y} Gelbe & ${t.r} Rote Karten` : `${t.y} Gelbe Karten`,
+    tiers:[{y:2,r:0},{y:10,r:0},{y:30,r:1},{y:100,r:10},{y:1000,r:50}],
+    rewards:[
+      {coins:3000},
+      {coins:8000},
+      {coins:20000},
+      {coins:45000, packs:['ratings27']},
+      {coins:90000, packs:['zeitgeist'], nametag:'ruepel'},
+    ]},
   // Liga-Meister/-Vizemeister/-Dritter sind bewusst EINSTUFIG - anders als jede andere Erfolgs-Linie
   // hier gibt es kein sinnvolles "immer wieder eine Stufe schwerer" (mehrfach 1./2./3. in Liga A zu
   // werden ist schon selten genug), also einmal schaffen = direkt die volle Belohnung + das
@@ -21862,20 +21878,6 @@ const ACHIEVEMENTS = [
     tiers:[1],
     rewards:[
       {coins:10000, packs:['poeten'], nametag:'bronze'},
-    ]},
-  // Komplett andere Bedingung als vorher (war: Liga-Aufstiege) - zählt jetzt Gelbe/Rote Karten in
-  // den eigenen Matches. Ein Stufen-Schwellwert ist hier ein {y,r}-Objekt statt einer einzelnen Zahl,
-  // da ab Stufe III zusätzlich eine Mindestanzahl Roter Karten gefordert ist - siehe die
-  // Sonderbehandlung für ach.id==='cardDiscipline' in achievementStatValue/achievementUnlockedTier/tierMet.
-  {id:'cardDiscipline', name:'Kartensünder', desc:'Sammle Gelbe und Rote Karten in deinen eigenen Matches.', icon:'🟨', stat:'cardDiscipline',
-    cond:t=>t.r>0 ? `${t.y} Gelbe & ${t.r} Rote Karten` : `${t.y} Gelbe Karten`,
-    tiers:[{y:2,r:0},{y:10,r:0},{y:30,r:1},{y:100,r:10},{y:1000,r:50}],
-    rewards:[
-      {coins:3000},
-      {coins:8000},
-      {coins:20000},
-      {coins:45000, packs:['ratings27']},
-      {coins:90000, packs:['zeitgeist'], nametag:'ruepel'},
     ]},
   {id:'wepWins', name:'Wochenendpokal-Sieger', desc:'Gewinne den Wochenendpokal.', icon:'🏆', stat:'wepWins',
     cond:n=>`${n}x Wochenendpokal gewonnen`,
