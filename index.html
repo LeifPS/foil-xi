@@ -20512,20 +20512,25 @@ function ligaRelegationTie(teamA, teamB){
   }
   return {winner, aggA, aggB, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, leg2:{aGoals:leg2.oppGoals, bGoals:leg2.myGoals}, decider: decider ? {aGoals:decider.myGoals, bGoals:decider.oppGoals, wentToPK:decider.wentToPK} : null};
 }
-// From LIGA_RULES_V2_WEEK_START on, the two relegation legs are no longer computed back-to-back in one
-// instant pass (ligaRelegationTie above, still used unchanged for older weeks) - they're two genuinely
-// separate moments, Samstag 12:00 (Hinspiel) and 15:00 (Rückspiel), each simulated with both sides'
-// CURRENT squad fetched fresh right at that moment (see resolveWeeklyRolloverV2IfNeeded's two phases).
-function ligaRelegationLeg1(teamA, teamB){
+// ===== Ligen rules revision (LIGA_RULES_V2_WEEK_START on): new promotion/relegation shape =====
+// 1st place always promotes automatically. 7th and 8th place always relegate automatically - no
+// playoff needed for relegation at all anymore. The league's own SECOND promotion spot is now an
+// intra-league mini-bracket among places 2-4 instead of the old cross-league tie (2nd of the lower
+// league vs 2nd-to-last of the upper league, see ligaRelegationTie above - still used unchanged for
+// older weeks): 3rd vs 4th play a Halbfinale (Hin-/Rückspiel), the winner then plays 2nd place in a
+// Finale (also Hin-/Rückspiel) for the actual promotion spot. That's 4 live legs, not 2, so Samstag
+// now has four fixed moments instead of two: 12:00/15:00 for the Halbfinale, 18:00/21:00 for the
+// Finale. Direct promotion/relegation and next week's membership+fixtures only become final once the
+// Finale-Rückspiel (21:00) has actually been played - see ligaPromoFinalize.
+function ligaTwoLegLeg1(teamA, teamB){
   return buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:true});
 }
-function ligaRelegationLeg2(teamA, teamB){
+function ligaTwoLegLeg2(teamA, teamB){
   return buildDecisiveMatch(teamB.rating, teamA.rating, teamB.players, teamA.players, null, null, {allowDraw:true});
 }
-// leg1/leg2 are already in the {aGoals,bGoals} shape (teamA's perspective) that ligaRelegationTie
-// itself returns, not the raw buildDecisiveMatch result - same aggregate/decider logic as
-// ligaRelegationTie, just fed two already-played legs instead of playing both right here.
-function ligaRelegationAggregateFromLegs(teamA, teamB, leg1, leg2){
+// leg1/leg2 are already in the {aGoals,bGoals} shape (teamA's perspective) - same aggregate/decider
+// logic as ligaRelegationTie above, just fed two already-played legs instead of playing both right here.
+function ligaTwoLegAggregate(teamA, teamB, leg1, leg2){
   const aggA = leg1.aGoals + leg2.aGoals, aggB = leg1.bGoals + leg2.bGoals;
   let winner, decider = null;
   if(aggA>aggB) winner = 'A';
@@ -20535,6 +20540,13 @@ function ligaRelegationAggregateFromLegs(teamA, teamB, leg1, leg2){
     winner = decider.winnerSide==='me' ? 'A' : 'B';
   }
   return {winner, aggA, aggB, leg1, leg2, decider: decider ? {aGoals:decider.myGoals, bGoals:decider.oppGoals, wentToPK:decider.wentToPK} : null};
+}
+// "Aktuelles Kader zum Anpfiff" - fetched fresh independently at every single stage below, never
+// reusing an earlier stage's snapshot (same principle the old single-pass rollover already used).
+async function ligaFreshTeam(userId, name){
+  const data = await resolveSaveDataForUser(userId);
+  const stats = (data && data.profile) ? squadRatingFromSaveData(data) : {rating:40, players:[]};
+  return {userId, name, ...stats};
 }
 // Whether the commissioner pass has actually completed for a given (just-finished) week - used to
 // decide whether to show the Sonntag split view (old week recap + new week preview) instead of just
@@ -20580,7 +20592,7 @@ async function resolveWeeklyRolloverIfNeeded(){
   // Everything below this point is the ORIGINAL, unmodified instant-rollover pass - still used as-is
   // for any week that started before LIGA_RULES_V2_WEEK_START, so a week already in progress when the
   // new rules shipped keeps working exactly as it always did, right through its own Samstag. Every
-  // later week goes through resolveWeeklyRolloverV2IfNeeded's two-phase version instead.
+  // later week goes through resolveWeeklyRolloverV2IfNeeded's four-phase version instead.
   if(weekStart>=LIGA_RULES_V2_WEEK_START) return resolveWeeklyRolloverV2IfNeeded(weekStart);
   const now = berlinNow();
   if(now.getDay()!==6) return null; // only Samstag ab 00:00 Uhr Berlin time
@@ -20721,53 +20733,69 @@ async function resolveWeeklyRolloverIfNeeded(){
   }catch(e){ console.warn('rollover write failed', e); return null; }
   return {tables, relegationResults, rewards};
 }
-// ===== Ligen rules revision (LIGA_RULES_V2_WEEK_START on): the Samstag commissioner pass splits into
-// two fixed moments instead of running everything the instant anyone opens the tab on Samstag -
-// leagueMeta/relegationLegs_{weekStart} guards phase 1 (Hinspiel, ab 12:00) the same way
-// leagueMeta/rollover_{weekStart} already guarded the whole old pass, and now also guards phase 2
-// (Rückspiel + finalize, ab 15:00). Direct (non-playoff) promotion/relegation and next week's
-// membership+fixtures don't exist yet until phase 2 actually runs - so a league boundary with no
-// playoff pair still only becomes final at 15:00, same moment as everywhere else, for one predictable
-// "the whole league moves at once" story instead of some boundaries settling at 12:00 and others at 15:00.
+const LIGA_V2_CLAIM_TIMEOUT_MS = 3*60*1000;
+// Generic atomic claim for one V2 stage doc - identical "check existence+status, claim if free/stale"
+// pattern as the old single-pass rollover's own flag, just reused across four separate stage docs now.
+async function ligaV2ClaimStage(ref){
+  let claimed = false;
+  try{
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const snap = await tx.get(ref);
+      const data = snap.exists() ? snap.data() : null;
+      if(data && data.status==='done') return;
+      if(data && data.status==='in-progress' && (Date.now()-data.claimedAt)<LIGA_V2_CLAIM_TIMEOUT_MS) return;
+      tx.set(ref, {status:'in-progress', claimedAt:Date.now()});
+      claimed = true;
+    });
+  }catch(e){ console.warn('liga v2 stage claim failed', e); return false; }
+  return claimed;
+}
+// Dispatcher: reads how far this week's four-stage promotion bracket has gotten and runs whichever
+// stage is next due, one at a time - each stage's own doc existing with status:'done' is what "next
+// stage is due" actually checks, the hour gate on top just stops it running before its fixed moment.
 async function resolveWeeklyRolloverV2IfNeeded(weekStart){
   const now = berlinNow();
   if(now.getDay()!==6) return null; // only Samstag
-  if(now.getHours()<12) return null; // nothing due before Hinspiel kickoff
-  const legsRef = fb.doc(fb.db,'leagueMeta','relegationLegs_'+weekStart);
+  if(now.getHours()<12) return null; // nothing due before the Halbfinale-Hinspiel kickoff
+  const semiLeg1Ref = fb.doc(fb.db,'leagueMeta','promoSemiLeg1_'+weekStart);
+  const semiLeg2Ref = fb.doc(fb.db,'leagueMeta','promoSemiLeg2_'+weekStart);
+  const finalLeg1Ref = fb.doc(fb.db,'leagueMeta','promoFinalLeg1_'+weekStart);
   const rolloverRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
-  let legsSnap;
-  try{ legsSnap = await fb.getDoc(legsRef); }
-  catch(e){ console.warn('relegation legs read failed', e); return null; }
-  if(!legsSnap.exists() || legsSnap.data().status!=='done'){
-    return await ligaRelegationPhase1(weekStart, legsRef);
+  let semiLeg1Snap;
+  try{ semiLeg1Snap = await fb.getDoc(semiLeg1Ref); }
+  catch(e){ console.warn('promo semi leg1 read failed', e); return null; }
+  if(!semiLeg1Snap.exists() || semiLeg1Snap.data().status!=='done'){
+    return await ligaPromoSemiLeg1(weekStart, semiLeg1Ref);
   }
-  if(now.getHours()<15) return null; // Hinspiel already stored, Rückspiel isn't due yet
+  if(now.getHours()<15) return null; // Halbfinale-Hinspiel done, Rückspiel isn't due yet
+  let semiLeg2Snap;
+  try{ semiLeg2Snap = await fb.getDoc(semiLeg2Ref); }
+  catch(e){ console.warn('promo semi leg2 read failed', e); return null; }
+  if(!semiLeg2Snap.exists() || semiLeg2Snap.data().status!=='done'){
+    return await ligaPromoSemiLeg2(weekStart, semiLeg1Snap.data(), semiLeg2Ref);
+  }
+  if(now.getHours()<18) return null; // Halbfinale done, Finale-Hinspiel isn't due yet
+  let finalLeg1Snap;
+  try{ finalLeg1Snap = await fb.getDoc(finalLeg1Ref); }
+  catch(e){ console.warn('promo final leg1 read failed', e); return null; }
+  if(!finalLeg1Snap.exists() || finalLeg1Snap.data().status!=='done'){
+    return await ligaPromoFinalLeg1(weekStart, semiLeg1Snap.data(), semiLeg2Snap.data(), finalLeg1Ref);
+  }
+  if(now.getHours()<21) return null; // Finale-Hinspiel done, Rückspiel isn't due yet
   let rolloverSnap;
   try{ rolloverSnap = await fb.getDoc(rolloverRef); }
   catch(e){ console.warn('rollover v2 flag read failed', e); return null; }
   if(rolloverSnap.exists() && rolloverSnap.data().status==='done') return null;
-  return await ligaRelegationPhase2(weekStart, legsSnap.data(), rolloverRef);
+  return await ligaPromoFinalize(weekStart, semiLeg1Snap.data(), finalLeg1Snap.data(), rolloverRef);
 }
-const LIGA_V2_CLAIM_TIMEOUT_MS = 3*60*1000;
-// Phase 1 (Samstag ab 12:00): freezes the just-finished week's final tables, works out which pairs
-// face a relegation playoff, and plays each pair's Hinspiel right now with both sides' current squad -
-// same atomic claim-transaction pattern as the old single-pass rollover, just against its own flag doc.
-async function ligaRelegationPhase1(weekStart, legsRef){
-  let claimed = false;
-  try{
-    await fb.runTransaction(fb.db, async (tx)=>{
-      const snap = await tx.get(legsRef);
-      const data = snap.exists() ? snap.data() : null;
-      if(data && data.status==='done') return;
-      if(data && data.status==='in-progress' && (Date.now()-data.claimedAt)<LIGA_V2_CLAIM_TIMEOUT_MS) return;
-      tx.set(legsRef, {status:'in-progress', claimedAt:Date.now()});
-      claimed = true;
-    });
-  }catch(e){ console.warn('relegation leg1 claim failed', e); return null; }
-  if(!claimed) return null;
+// Stage 1 (Samstag ab 12:00): freezes the just-finished week's final tables and, for every league with
+// an upper neighbour and at least 4 members, pairs its own 3rd vs 4th place for the Halbfinale -
+// playing that pairing's Hinspiel right now with both sides' current squad.
+async function ligaPromoSemiLeg1(weekStart, ref){
+  if(!(await ligaV2ClaimStage(ref))) return null;
   let membershipSnap;
   try{ membershipSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
-  catch(e){ console.warn('leg1: membership read failed', e); return null; }
+  catch(e){ console.warn('promo semi leg1: membership read failed', e); return null; }
   const lettersInUse = membershipSnap.docs.map(d=>d.id).sort();
   if(!lettersInUse.length) return null;
   const weeks = {};
@@ -20778,84 +20806,105 @@ async function ligaRelegationPhase1(weekStart, legsRef){
   for(const letter of lettersInUse){ weeks[letter] = await resolveLigaMatchIfNeeded(letter, weekStart, weeks[letter], {force:true}); }
   const tables = {};
   lettersInUse.forEach(letter=>{ tables[letter] = ligaComputeStandings(weeks[letter].teams, weeks[letter].matches, 5, weekStart); });
-  const relegationTiesPending = [];
+  const pairs = [];
   lettersInUse.forEach(letter=>{
     const table = tables[letter];
-    if(!table.length) return;
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
-    if(!lettersInUse.includes(upperLetter)) return;
-    const upperTable = tables[upperLetter];
-    if(table.length>=5 && upperTable.length>=2){
-      relegationTiesPending.push({letter, upperLetter, challengerRow:table[1], defenderRow:upperTable[upperTable.length-2]});
-    }
+    if(!lettersInUse.includes(upperLetter)) return; // top league - no promotion possible
+    if(table.length<4) return; // not enough members for a places 2-4 bracket
+    pairs.push({letter, thirdRow:table[2], fourthRow:table[3]});
   });
   const legs = [];
-  for(const t of relegationTiesPending){
-    const chData = await resolveSaveDataForUser(t.challengerRow.userId);
-    const defData = await resolveSaveDataForUser(t.defenderRow.userId);
-    const chStats = (chData && chData.profile) ? squadRatingFromSaveData(chData) : {rating:40, players:[]};
-    const defStats = (defData && defData.profile) ? squadRatingFromSaveData(defData) : {rating:40, players:[]};
-    const lowerChallenger = {userId:t.challengerRow.userId, name:t.challengerRow.name, ...chStats};
-    const upperDefender = {userId:t.defenderRow.userId, name:t.defenderRow.name, ...defStats};
-    const leg1 = ligaRelegationLeg1(lowerChallenger, upperDefender);
-    legs.push({letter:t.letter, upperLetter:t.upperLetter, challengerUserId:lowerChallenger.userId, challengerName:lowerChallenger.name, defenderUserId:upperDefender.userId, defenderName:upperDefender.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+  for(const p of pairs){
+    const teamThird = await ligaFreshTeam(p.thirdRow.userId, p.thirdRow.name);
+    const teamFourth = await ligaFreshTeam(p.fourthRow.userId, p.fourthRow.name);
+    const leg1 = ligaTwoLegLeg1(teamThird, teamFourth);
+    legs.push({letter:p.letter, thirdUserId:teamThird.userId, thirdName:teamThird.name, fourthUserId:teamFourth.userId, fourthName:teamFourth.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
   }
-  try{ await fb.setDoc(legsRef, {status:'done', at:Date.now(), tables, legs}); }
-  catch(e){ console.warn('relegation leg1 write failed', e); return null; }
-  return {phase:'leg1', tables, legs};
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), tables, legs}); }
+  catch(e){ console.warn('promo semi leg1 write failed', e); return null; }
+  return {stage:'semiLeg1', tables, legs};
 }
-// Phase 2 (Samstag ab 15:00): plays each pending pair's Rückspiel with a FRESH squad fetch (never the
-// Hinspiel's snapshot - "aktuelles Kader zum Anpfiff" applies to each leg independently), resolves the
-// aggregate/decider, then does exactly what the old single-pass rollover did from "nextLeagueOf" on:
-// rewards, next week's membership, next week's fixtures, mark done.
-async function ligaRelegationPhase2(weekStart, legsData, rolloverRef){
-  let claimed = false;
-  try{
-    await fb.runTransaction(fb.db, async (tx)=>{
-      const snap = await tx.get(rolloverRef);
-      const data = snap.exists() ? snap.data() : null;
-      if(data && data.status==='done') return;
-      if(data && data.status==='in-progress' && (Date.now()-data.claimedAt)<LIGA_V2_CLAIM_TIMEOUT_MS) return;
-      tx.set(rolloverRef, {status:'in-progress', claimedAt:Date.now()});
-      claimed = true;
-    });
-  }catch(e){ console.warn('rollover v2 claim failed', e); return null; }
-  if(!claimed) return null;
-  const {tables, legs} = legsData;
+// Stage 2 (Samstag ab 15:00): plays each Halbfinale pairing's Rückspiel with a FRESH squad fetch,
+// resolves the aggregate/decider, and stores the semi-final winner per league (who then faces that
+// league's own 2nd place in the Finale, stages 3/4 below).
+async function ligaPromoSemiLeg2(weekStart, leg1Data, ref){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  const winners = [];
+  for(const leg of leg1Data.legs){
+    const teamThird = await ligaFreshTeam(leg.thirdUserId, leg.thirdName);
+    const teamFourth = await ligaFreshTeam(leg.fourthUserId, leg.fourthName);
+    const leg2Raw = ligaTwoLegLeg2(teamThird, teamFourth);
+    const tie = ligaTwoLegAggregate(teamThird, teamFourth, leg.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const winnerId = tie.winner==='A' ? teamThird.userId : teamFourth.userId;
+    const winnerName = tie.winner==='A' ? teamThird.name : teamFourth.name;
+    winners.push({letter:leg.letter, winnerId, winnerName});
+  }
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), winners}); }
+  catch(e){ console.warn('promo semi leg2 write failed', e); return null; }
+  return {stage:'semiLeg2', winners};
+}
+// Stage 3 (Samstag ab 18:00): pairs each league's Halbfinale winner against that league's own 2nd
+// place for the Finale (deciding who actually gets the league's 2nd promotion spot), plays the Hinspiel.
+async function ligaPromoFinalLeg1(weekStart, semiLeg1Data, semiLeg2Data, ref){
+  if(!(await ligaV2ClaimStage(ref))) return null;
+  const legs = [];
+  for(const w of semiLeg2Data.winners){
+    const table = semiLeg1Data.tables[w.letter];
+    const secondRow = table[1];
+    const teamSemiWinner = await ligaFreshTeam(w.winnerId, w.winnerName);
+    const teamSecond = await ligaFreshTeam(secondRow.userId, secondRow.name);
+    const leg1 = ligaTwoLegLeg1(teamSemiWinner, teamSecond);
+    legs.push({letter:w.letter, semiWinnerUserId:teamSemiWinner.userId, semiWinnerName:teamSemiWinner.name, secondUserId:teamSecond.userId, secondName:teamSecond.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+  }
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), legs}); }
+  catch(e){ console.warn('promo final leg1 write failed', e); return null; }
+  return {stage:'finalLeg1', legs};
+}
+// Stage 4 (Samstag ab 21:00): plays the Finale-Rückspiel, resolves the aggregate/decider - that
+// winner gets the league's 2nd promotion spot - then finalizes everything: rewards (from the tables
+// frozen back in stage 1, BEFORE any movement - a player promoted from Liga B 2nd place to Liga A
+// still gets Liga B's 2nd-place reward, never Liga A's, no matter which league they land in), 1st
+// place promoting automatically, 7th/8th place relegating automatically (no playoff involved for
+// relegation at all under the new rules), next week's membership, next week's fixtures.
+async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rolloverRef){
+  if(!(await ligaV2ClaimStage(rolloverRef))) return null;
+  const {tables} = semiLeg1Data;
   const lettersInUse = Object.keys(tables);
   const nextLeagueOf = {};
   const rewards = [];
   lettersInUse.forEach(letter=>{
     const table = tables[letter];
     if(!table.length) return;
-    table.forEach(row=>{ nextLeagueOf[row.userId] = letter; });
+    table.forEach(row=>{ nextLeagueOf[row.userId] = letter; }); // default: stay put
     table.forEach((row, idx)=>{
       const place = idx+1;
       const r = ligaRewardForPlace(letter, place);
       rewards.push({userId:row.userId, letter, coins:r.coins, championCard:false, badge:r.badge||null, packs:r.packs||[]});
     });
-    const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
-    if(!lettersInUse.includes(upperLetter)) return;
-    const upperTable = tables[upperLetter];
-    if(upperTable.length>1) nextLeagueOf[upperTable[upperTable.length-1].userId] = letter;
-    nextLeagueOf[table[0].userId] = upperLetter;
   });
-  const relegationResults = [];
-  for(const leg of legs){
-    const chData = await resolveSaveDataForUser(leg.challengerUserId);
-    const defData = await resolveSaveDataForUser(leg.defenderUserId);
-    const chStats = (chData && chData.profile) ? squadRatingFromSaveData(chData) : {rating:40, players:[]};
-    const defStats = (defData && defData.profile) ? squadRatingFromSaveData(defData) : {rating:40, players:[]};
-    const lowerChallenger = {userId:leg.challengerUserId, name:leg.challengerName, ...chStats};
-    const upperDefender = {userId:leg.defenderUserId, name:leg.defenderName, ...defStats};
-    const leg2Raw = ligaRelegationLeg2(lowerChallenger, upperDefender);
-    const tie = ligaRelegationAggregateFromLegs(lowerChallenger, upperDefender, leg.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
-    const winnerId = tie.winner==='A' ? lowerChallenger.userId : upperDefender.userId;
-    const loserId = tie.winner==='A' ? upperDefender.userId : lowerChallenger.userId;
-    nextLeagueOf[winnerId] = leg.upperLetter;
-    nextLeagueOf[loserId] = leg.letter;
-    relegationResults.push({upperLetter:leg.upperLetter, lowerLetter:leg.letter, challenger:lowerChallenger.name, defender:upperDefender.name, ...tie, winnerId});
+  const relegationResults = []; // kept under the old field name for the recap view's lookup - see its semiWinner!=null branch
+  for(const leg of finalLeg1Data.legs){
+    const teamSemiWinner = await ligaFreshTeam(leg.semiWinnerUserId, leg.semiWinnerName);
+    const teamSecond = await ligaFreshTeam(leg.secondUserId, leg.secondName);
+    const leg2Raw = ligaTwoLegLeg2(teamSemiWinner, teamSecond);
+    const tie = ligaTwoLegAggregate(teamSemiWinner, teamSecond, leg.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const winnerId = tie.winner==='A' ? teamSemiWinner.userId : teamSecond.userId;
+    const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(leg.letter)-1];
+    nextLeagueOf[winnerId] = upperLetter;
+    relegationResults.push({letter:leg.letter, upperLetter, semiWinner:teamSemiWinner.name, second:teamSecond.name, ...tie, winnerId});
   }
+  lettersInUse.forEach(letter=>{
+    const table = tables[letter];
+    if(!table.length) return;
+    const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
+    if(lettersInUse.includes(upperLetter)) nextLeagueOf[table[0].userId] = upperLetter; // 1st place always promotes
+    const lowerLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)+1];
+    if(lettersInUse.includes(lowerLetter) && table.length>=2){
+      nextLeagueOf[table[table.length-1].userId] = lowerLetter; // last place ("8th") always relegates
+      nextLeagueOf[table[table.length-2].userId] = lowerLetter; // 2nd-to-last ("7th") always relegates
+    }
+  });
   const nextMembers = {};
   lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
   Object.entries(nextLeagueOf).forEach(([userId,letter])=>{ nextMembers[letter].push(userId); });
@@ -21118,12 +21167,28 @@ function renderLigenPanel(view){
           if(myReward) historyBox += `<div style="display:flex;align-items:center;gap:10px;background:rgba(230,195,67,.12);border:1px solid #e6c343;border-radius:6px;padding:10px 12px;margin-bottom:8px;">
             <span style="font-size:20px;">🏆</span><span>Belohnung erhalten: <b style="color:var(--gold);">${formatCoins(myReward.coins)} Coins</b>${myReward.championCard?' + Liga-Meister-Karte':''}!</span>
           </div>`;
-          const myPlayoff = (hist.relegationResults||[]).find(r=>r.upperLetter===membership.letter || r.lowerLetter===membership.letter);
+          // Two shapes can live under the same field: the old cross-league challenger/defender tie
+          // (upperLetter+lowerLetter, still written by weeks before LIGA_RULES_V2_WEEK_START) and the
+          // new intra-league Finale (semiWinner+second, letter+upperLetter only, no lowerLetter) - the
+          // new one also needs its OWN league (r.letter) in the match condition, since its loser stays
+          // put rather than moving to a "lowerLetter" that doesn't exist for this shape.
+          const myPlayoff = (hist.relegationResults||[]).find(r=>r.upperLetter===membership.letter || r.lowerLetter===membership.letter || r.letter===membership.letter);
           if(myPlayoff){
             const won = myPlayoff.winnerId===clubId;
-            historyBox += `<div style="display:flex;align-items:center;gap:10px;background:${won?'rgba(61,196,130,.12)':'rgba(226,86,79,.12)'};border:1px solid ${won?'#3dc482':'#e2564f'};border-radius:6px;padding:10px 12px;margin-bottom:8px;">
-              <span style="font-size:20px;">${won?'⬆️':'⬇️'}</span>
-              <span>Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: <b>${myPlayoff.challenger}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.defender}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${won?'Aufstieg für dich!':'Aufstieg für '+myPlayoff.winnerId+'.'}</b></span>
+            const isNewStyle = myPlayoff.semiWinner!=null;
+            // the new Finale's loser simply stays put (no promotion, not a demotion) - a neutral icon
+            // and "kein Aufstieg" instead of the old tie's binary "up/down", since only the OLD
+            // cross-league shape ever actually moved its loser to a different league.
+            const icon = won ? '⬆️' : (isNewStyle ? '➖' : '⬇️');
+            const bg = won ? 'rgba(61,196,130,.12)' : (isNewStyle ? 'rgba(150,150,150,.12)' : 'rgba(226,86,79,.12)');
+            const border = won ? '#3dc482' : (isNewStyle ? '#8a8a8a' : '#e2564f');
+            const outcome = won ? 'Aufstieg für dich!' : (isNewStyle ? 'kein Aufstieg, du bleibst in Liga '+myPlayoff.letter+'.' : 'Aufstieg für '+myPlayoff.winnerId+'.');
+            const label = isNewStyle
+              ? `2. Aufstiegsplatz Liga ${myPlayoff.letter}: <b>${myPlayoff.semiWinner}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.second}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`
+              : `Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: <b>${myPlayoff.challenger}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.defender}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`;
+            historyBox += `<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1px solid ${border};border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+              <span style="font-size:20px;">${icon}</span>
+              <span>${label}</span>
             </div>`;
           }
           const oldLetter = Object.keys(hist.tables||{}).find(l=>(hist.tables[l]||[]).some(row=>row.userId===clubId));
