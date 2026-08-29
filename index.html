@@ -19599,7 +19599,7 @@ function boostBotXI(xi, slots, forceManager){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card)};
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card)};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
@@ -20018,7 +20018,7 @@ function squadRatingFromSaveData(data){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slot.label);
     if(info) ov += info.bonus;
-    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card)});
+    list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card)});
   });
   const chemmed = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   const filled = chemmed.length;
@@ -22686,10 +22686,10 @@ async function playWM26GroupMatch(matchIdx){
     await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner, natCode(oppTeam.nation));
     const resultLabel = md.winnerSide==='draw' ? 'Unentschieden' : md.winnerSide==='me' ? 'Sieg' : 'Niederlage';
     toast(`${resultLabel} gegen ${natDE(oppTeam.nation)}: ${md.myGoals}:${md.oppGoals}`);
-    const myScorers = [];
-    md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
-    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
-    const matchRatings = computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide);
+    const myScorers = []; const myAssists = [];
+    md.events90.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
+    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
+    const matchRatings = computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide, myAssists);
     await awardCardXP(matchRatings);
     // WM26-Matches liefen bisher an commitMatchResult vorbei, daher hier dieselben Wochen-Pass-Quest-Bumps
     bumpWeekPassQuest('playMatches', 1);
@@ -22743,10 +22743,10 @@ async function playWM26KnockoutMatch(){
     await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner, natCode(oppTeam.nation));
     won = md.winnerSide==='me';
     toast(`${won?'Sieg':'Niederlage'} gegen ${natDE(oppTeam.nation)}: ${md.myGoals}:${md.oppGoals}${md.wentToPK?' n.E.':md.wentToET?' n.V.':''}`);
-    const myScorers = [];
-    md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
-    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
-    await awardCardXP(computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide));
+    const myScorers = []; const myAssists = [];
+    md.events90.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
+    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
+    await awardCardXP(computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide, myAssists));
     // WM26-Matches liefen bisher an commitMatchResult vorbei, daher hier dieselben Wochen-Pass-Quest-Bumps
     bumpWeekPassQuest('playMatches', 1);
     if(md.myGoals>0) bumpWeekPassQuest('scoreGoals', md.myGoals);
@@ -25368,7 +25368,7 @@ function getMySquadPlayers(){
       if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
       const info = positionEligibility(card, slot.label);
       if(info) ov += info.bonus;
-      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card)});
+      list.push({n:card.n, pos:slot.label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, uid, level:card.level||0, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card)});
     }
   });
   return computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
@@ -25430,15 +25430,25 @@ function fallbackScorerPool(){
 // the penalty-scorer calls in buildDecisiveMatch for what actually gets passed.
 // opts: {minute, paceBonus} - minute gates Gamechanger's late-goal bonus, paceBonus (the same ±0.15
 // counter-attack number already computed for computeLambda) scales Raserei/Schneller Schritt.
+// A player's own sub-attribute if this card actually has one (see detailedSubstatsFor, attached as
+// .substats on every match-time player object) - falls back to the given headline stat for
+// hand-authored cards with no real database link, same fallback detailedSubstatsFor itself uses.
+function subOrFallback(p, key, fallbackKey){
+  return (p.substats && p.substats[key]!=null) ? p.substats[key] : (p[fallbackKey]!=null ? p[fallbackKey] : (p.ov||75));
+}
 function pickScorer(players, oppPlayers=null, opts={}){
   if(!players || !players.length){
     const pool = fallbackScorerPool();
     const p = pool[Math.floor(Math.random()*pool.length)];
-    return {n:p.n, img:p.img, id:p.id, ov:p.ov};
+    return {scorer:{n:p.n, img:p.img, id:p.id, ov:p.ov}, assist:null};
   }
   const minute = opts.minute!=null ? opts.minute : 45;
   const paceBonus = clamp(opts.paceBonus||0, 0, 0.15); // only ever a bonus - a pace DISadvantage never penalises Raserei/Schneller Schritt holders
-  const scoreSkillOf = p => (p.ov||75)*0.55 + (p.sho!=null?p.sho:(p.ov||75))*0.45;
+  // Finishing skill now blends the real Abschlussposition/Abschluss/Schusskraft sub-attributes instead
+  // of the flat Schuss headline number - a card that's genuinely a clinical finisher (high Abschluss)
+  // but a middling all-round Schuss now actually converts like one. Falls back to Schuss/OVR wherever
+  // a sub-attribute is missing (hand-authored cards with no real database link).
+  const scoreSkillOf = p => (p.ov||75)*0.4 + (subOrFallback(p,'positioning','sho')*0.25 + subOrFallback(p,'finishing','sho')*0.45 + subOrFallback(p,'shotPower','sho')*0.3)*0.6;
   // === providers: these PlayStyles boost a TEAMMATE's chance of scoring, not their own - a
   // genuinely different mechanic from every self-boosting finishing trait above, and each targets a
   // different kind of teammate (the single most likely finisher, the whole forward line, the pace
@@ -25490,10 +25500,40 @@ function pickScorer(players, oppPlayers=null, opts={}){
     for(let i=0;i<reps;i++) weighted.push(p);
   });
   const chosen = weighted[Math.floor(Math.random()*weighted.length)] || players[0];
-  // ov (the real effective rating actually used in the match - chemistry/manager/position bonus
-  // already baked in) and level travel with the scorer so the goal-flash card (see showGoalCardFlash)
-  // can show the correct badge/rating for an opponent's card too, not just my own
-  return {n:chosen.n, img:chosen.img, id:chosen.id, uid:chosen.uid, ov:chosen.ov, level:chosen.level};
+  return {scorer: playerToScorerShape(chosen), assist: pickAssist(chosen, players)};
+}
+// Decides whether this goal even HAD an assist - a genuine solo run (a dribble past everyone, a pure
+// pace/strength finish) has none, exactly like real football - and if so, who provided it. Solo chance
+// scales with the SCORER's own Dribbling sub-attribute (a genuine dribbler goes it alone more often).
+// The provider is then picked from the rest of the team weighted by the actual passing sub-attributes
+// a real assist rides on: Übersicht (vision/through balls) for anyone, Flanke (crossing) extra for wide
+// players, Kurzpass/Langpass/Effet as the general passing-quality baseline - not the flat Pass headline
+// number.
+function pickAssist(scorer, teammates){
+  const soloChance = clamp(0.18 + (subOrFallback(scorer,'dribbling','dri')-75)/220, 0.08, 0.55);
+  if(Math.random() < soloChance) return null;
+  const candidates = (teammates||[]).filter(p=>p!==scorer && p.n!==scorer.n);
+  if(!candidates.length) return null;
+  const weighted = [];
+  candidates.forEach(p=>{
+    const isWide = ['LW','RW','LM','RM','LB','RB','LWB','RWB'].includes(mainPos(p.pos));
+    const vision = subOrFallback(p,'vision','pas');
+    const crossing = subOrFallback(p,'crossing','pas');
+    const passing = (subOrFallback(p,'shortPassing','pas') + subOrFallback(p,'longPassing','pas') + subOrFallback(p,'curve','pas'))/3;
+    const skill = vision*0.4 + passing*0.4 + crossing*(isWide?0.45:0.1);
+    const reps = Math.max(1, Math.round(Math.max(1, skill-40)/8));
+    for(let i=0;i<reps;i++) weighted.push(p);
+  });
+  const chosen = weighted[Math.floor(Math.random()*weighted.length)];
+  return chosen ? playerToScorerShape(chosen) : null;
+}
+// ov (the real effective rating actually used in the match - chemistry/manager/position bonus already
+// baked in) and level travel with the scorer so the goal-flash card (see showGoalCardFlash) can show
+// the correct badge/rating for an opponent's card too, not just my own. Shared by pickScorer's own
+// weighted pick and by anywhere else a SPECIFIC player (not a pool) needs converting to event-scorer
+// shape - e.g. an in-game penalty's pre-selected taker (see pickPenaltyTaker).
+function playerToScorerShape(p){
+  return {n:p.n, img:p.img, id:p.id, uid:p.uid, ov:p.ov, level:p.level};
 }
 function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90, minuteOffset=0, myRedMinute=null, oppRedMinute=null, mySentOff=null, oppSentOff=null, myPaceBonus=0, oppPaceBonus=0){
   const used = new Set();
@@ -25505,11 +25545,13 @@ function buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, maxMinute=90
   const events = [];
   for(let i=0;i<myGoals;i++){
     const minute = uniqueMinute()+minuteOffset;
-    events.push({minute, side:'me', scorer:pickScorer(scorerPoolExcluding(myPlayers, myRedMinute, mySentOff, minute), oppPlayers, {minute, paceBonus:myPaceBonus})});
+    const {scorer, assist} = pickScorer(scorerPoolExcluding(myPlayers, myRedMinute, mySentOff, minute), oppPlayers, {minute, paceBonus:myPaceBonus});
+    events.push({minute, side:'me', scorer, assist});
   }
   for(let i=0;i<oppGoals;i++){
     const minute = uniqueMinute()+minuteOffset;
-    events.push({minute, side:'opp', scorer:pickScorer(scorerPoolExcluding(oppPlayers, oppRedMinute, oppSentOff, minute), myPlayers, {minute, paceBonus:oppPaceBonus})});
+    const {scorer, assist} = pickScorer(scorerPoolExcluding(oppPlayers, oppRedMinute, oppSentOff, minute), myPlayers, {minute, paceBonus:oppPaceBonus});
+    events.push({minute, side:'opp', scorer, assist});
   }
   events.sort((a,b)=>a.minute-b.minute);
   return events;
@@ -25541,7 +25583,24 @@ function penaltyKickerSkill(p){
   // a real Dead Ball specialist is a genuinely better penalty taker than their Shooting stat alone
   // suggests - also bumps them up buildPenaltyOrder's ranking, so they actually step up earlier
   const deadBallMult = 1 + playerTraitTier(p, 'Ruhender Ball')*0.05;
-  return (p.sho!=null ? p.sho : (p.ov||70)) * posMult * deadBallMult;
+  // the real EA FC "Elfmeter" sub-attribute, not the flat Schuss headline number - see .substats,
+  // attached to every match-time player object via detailedSubstatsFor. Falls back to Schuss for
+  // hand-authored cards with no real database link (same fallback detailedSubstatsFor itself uses).
+  const base = (p.substats && p.substats.penalties!=null) ? p.substats.penalties : (p.sho!=null ? p.sho : (p.ov||70));
+  return base * posMult * deadBallMult;
+}
+// Who actually steps up for an in-game (90-minute) awarded penalty - reuses the exact same
+// substat-aware skill ranking as the shootout order (buildPenaltyOrder), but as a WEIGHTED pick
+// (decaying weight down the ranking) rather than always the single best taker, since real teams don't
+// literally always hand it to the nominal Dead-Ball specialist every single time.
+function pickPenaltyTaker(players, sentOffPlayer){
+  const order = buildPenaltyOrder(players, sentOffPlayer ? {n:sentOffPlayer.n} : null);
+  if(!order.length) return players[0];
+  const weights = order.map((_,i)=>Math.pow(0.65,i));
+  const total = weights.reduce((a,b)=>a+b,0);
+  let r = Math.random()*total;
+  for(let i=0;i<order.length;i++){ r-=weights[i]; if(r<=0) return order[i]; }
+  return order[0];
 }
 // the automatic, pre-shootout kicker order: best takers step up first (exactly like a real captain/
 // coach would set the list), and - critically - every kicker is used at most once per full pass
@@ -25708,14 +25767,20 @@ function planCardsAndPenalties(cardMult=1, players=[], attackDriAvg=null, oppDef
     : 0.08;
   const penaltyChance = penaltyChanceBase * clamp(1-teamBestHookValue(oppPlayers,'antiPenalty')*0.3, 0.6, 1);
   if(Math.random() < penaltyChance){
-    // a Dead Ball specialist on the taking team converts more often; an opposing keeper with real
-    // shot-stopping PlayStyles (Deflector) saves more - each tier (normal/elite) nudges the ~78%
-    // real-world baseline, capped so it stays a nudge, not a coinflip
+    // Who actually takes it, and how likely THEY are to score, now both come from the real Elfmeter
+    // sub-attribute (see pickPenaltyTaker/penaltyKickerSkill) instead of a flat team-wide ~78% chance
+    // that ignored who was even taking it - a genuine penalty specialist now converts meaningfully
+    // more often than a defender pressed into duty, and an opposing keeper with real shot-stopping
+    // PlayStyles (Deflector) still saves more, same as before.
+    const minute = 1+Math.floor(Math.random()*90);
+    const taker = pickPenaltyTaker(scorerPoolExcluding(players, redMinute, sentOffPlayer, minute), sentOffPlayer);
+    const takerPenSkill = (taker.substats && taker.substats.penalties!=null) ? taker.substats.penalties : (taker.sho!=null ? taker.sho : (taker.ov||75));
     const deadBallTier = teamBestTraitTier(players, ['Ruhender Ball']);
     const oppGK = (oppPlayers||[]).find(p=>posGroup2(mainPos(p.pos))==='GK');
     const gkStopTier = oppGK ? hookValue(oppGK,'gkSave') : 0;
-    const pkChance = clamp(0.78 + deadBallTier*0.04 - gkStopTier*0.04, 0.62, 0.90);
-    penalty = {minute:1+Math.floor(Math.random()*90), scored: Math.random()<pkChance};
+    const keeperAbility = oppGK ? (oppGK.defn!=null ? oppGK.defn : (oppGK.ov||75)) : 75;
+    const pkChance = clamp(0.78 + (takerPenSkill-82)/260 - (keeperAbility-80)/300 + deadBallTier*0.04 - gkStopTier*0.04, 0.55, 0.93);
+    penalty = {minute, scored: Math.random()<pkChance, taker};
   }
   return {cards, redMinute, sentOffPlayer, penalty};
 }
@@ -26304,15 +26369,17 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   let myGoals = simGoals(myExp), oppGoals = simGoals(oppExp);
   const events90 = buildMatchEvents(myGoals, oppGoals, myPlayers, oppPlayers, 90, 0, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer, myPaceBonus, oppPaceBonus);
 
-  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count
+  // penalty kicks are an ADDITIONAL scoring chance, on top of the base build-up-play goal count. The
+  // taker was already chosen in planCardsAndPenalties (weighted by their real Elfmeter sub-attribute,
+  // see pickPenaltyTaker) - reuse that same player here rather than picking a second, independent
+  // scorer via the generic pickScorer, which would let the "who actually took it" flavor drift away
+  // from the skill that decided whether it went in.
   if(myIncidents.penalty && myIncidents.penalty.scored){
-    const myPkPool = scorerPoolExcluding(myPlayers, myIncidents.redMinute, myIncidents.sentOffPlayer, myIncidents.penalty.minute);
-    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:pickScorer(myPkPool, oppPlayers, {minute:myIncidents.penalty.minute, paceBonus:myPaceBonus}), isPenalty:true});
+    events90.push({minute:myIncidents.penalty.minute, side:'me', scorer:playerToScorerShape(myIncidents.penalty.taker), assist:null, isPenalty:true});
     myGoals++;
   }
   if(oppIncidents.penalty && oppIncidents.penalty.scored){
-    const oppPkPool = scorerPoolExcluding(oppPlayers, oppIncidents.redMinute, oppIncidents.sentOffPlayer, oppIncidents.penalty.minute);
-    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:pickScorer(oppPkPool, myPlayers, {minute:oppIncidents.penalty.minute, paceBonus:oppPaceBonus}), isPenalty:true});
+    events90.push({minute:oppIncidents.penalty.minute, side:'opp', scorer:playerToScorerShape(oppIncidents.penalty.taker), assist:null, isPenalty:true});
     oppGoals++;
   }
   events90.sort((a,b)=>a.minute-b.minute);
@@ -26369,14 +26436,14 @@ function flipMatchDataSides(md){
     } : null
   };
 }
-function goalRowHTML(minute, scorer, teamName, side){
+function goalRowHTML(minute, scorer, teamName, side, assist){
   const imgTag = scorer.img
     ? `<img src="${proxyImg(scorer.img)}" data-raw="${scorer.img}" alt="" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">`
     : `<img src="${NOTFOUND_FACE_IMG}" alt="">`;
   return `<div class="goal-row ${side}">
       <span class="gm">${minute}'</span>
       <span class="gav-wrap">${imgTag}</span>
-      <span class="gname">${scorer.n}</span>
+      <span class="gname">${scorer.n}${assist ? ` <span style="color:var(--muted);font-weight:400;">(${assist.n})</span>` : ''}</span>
       <span class="gteam">${teamName}</span>
     </div>`;
 }
@@ -26384,8 +26451,8 @@ function goalRowHTML(minute, scorer, teamName, side){
 // in the same minute never show two overlays on top of each other, just one after the other.
 let goalFlashQueue = [];
 let goalFlashBusy = false;
-function queueGoalCardFlash(scorer, side, teamName, isPenalty){
-  goalFlashQueue.push({kind:'goal', scorer, side, teamName, isPenalty});
+function queueGoalCardFlash(scorer, side, teamName, isPenalty, assist){
+  goalFlashQueue.push({kind:'goal', scorer, side, teamName, isPenalty, assist});
   processGoalFlashQueue();
 }
 // Gelbe/Rote Karte - dieselbe große Karten-Vorschau-Überlagerung wie ein Tor, nur mit
@@ -26401,13 +26468,13 @@ function processGoalFlashQueue(){
   goalFlashBusy = true;
   const shown = next.kind==='card'
     ? showCardFlash(next.player, next.side, next.teamName, next.type)
-    : showGoalCardFlash(next.scorer, next.side, next.teamName, next.isPenalty);
+    : showGoalCardFlash(next.scorer, next.side, next.teamName, next.isPenalty, next.assist);
   shown.then(()=>{
     goalFlashBusy = false;
     processGoalFlashQueue();
   });
 }
-function showGoalCardFlash(scorer, side, teamName, isPenalty){
+function showGoalCardFlash(scorer, side, teamName, isPenalty, assist){
   return new Promise(resolve=>{
     const host = document.getElementById('live-match');
     if(!host){ resolve(); return; }
@@ -26428,7 +26495,7 @@ function showGoalCardFlash(scorer, side, teamName, isPenalty){
     overlay.innerHTML = `
       <div class="gf-label ${side==='opp'?'opp':''}">${isPenalty?'ELFMETER!':'TOR!'}</div>
       <div class="gf-card-slot"></div>
-      <div class="gf-meta"><b>${scorer.n}</b><br>${teamName}</div>`;
+      <div class="gf-meta"><b>${scorer.n}</b>${assist ? `<br><span style="font-size:.75em;opacity:.8;">Vorlage: ${assist.n}</span>` : ''}<br>${teamName}</div>`;
     if(card) overlay.querySelector('.gf-card-slot').appendChild(cardEl(card,'mini'));
     host.appendChild(overlay);
     setTimeout(()=>{ overlay.remove(); resolve(); }, 2500);
@@ -26522,10 +26589,10 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
             if(logEl){
               const row = document.createElement('div');
               const goalTeamName = e.side==='me' ? nametagHTML(myName, profile&&profile.nametag) : nametagHTML(oppName, oppNametag);
-              row.innerHTML = goalRowHTML(m, e.scorer, goalTeamName+(e.isPenalty?' (Elfmeter)':''), e.side);
+              row.innerHTML = goalRowHTML(m, e.scorer, goalTeamName+(e.isPenalty?' (Elfmeter)':''), e.side, e.assist);
               logEl.prepend(row.firstElementChild);
             }
-            queueGoalCardFlash(e.scorer, e.side, e.side==='me'?nametagHTML(myName, profile&&profile.nametag):nametagHTML(oppName, oppNametag), e.isPenalty);
+            queueGoalCardFlash(e.scorer, e.side, e.side==='me'?nametagHTML(myName, profile&&profile.nametag):nametagHTML(oppName, oppNametag), e.isPenalty, e.assist);
           });
           incidents.filter(inc=>inc.minute===m).forEach(inc=>{
             if(inc.type==='yellow') playSfx('notification');
@@ -26658,13 +26725,13 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null, oppNametag=null)
   resetWinProbSmoothing();
   liveMatchSkipAll = false;
   const totalHorizon = md.wentToET ? 120 : 90;
-  const myScorers = [];
-  md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+  const myScorers = []; const myAssists = [];
+  md.events90.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
   const incidents = md.incidents || [];
   let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, md.allowDraw, oppNametag);
   if(md.wentToET){
     toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
-    md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+    md.eventsET.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
     const durET = Math.max(2000, Math.round(md.durationMs*(30/90)));
     const startedAtET = md.startedAt + md.durationMs;
     const waitET = startedAtET - Date.now();
@@ -26676,7 +26743,7 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null, oppNametag=null)
     await animateShootout(md.shootout, myName, oppName, oppAbbr, oppNametag);
   }
   clearMatchMiniState();
-  return {myGoals: myTally, oppGoals: oppTally, myScorers};
+  return {myGoals: myTally, oppGoals: oppTally, myScorers, myAssists};
 }
 const RESULT_LABEL_DE = {WIN:'SIEG', LOSS:'NIEDERLAGE'};
 // Split into two phases so the outcome can be COMMITTED (all saved-state writes: coins, wins/losses,
@@ -26830,20 +26897,27 @@ function revealMatchResultUI(committed, wentToET, wentToPK){
     setTimeout(()=>{ if(autorollEnabled && !queueActive && !inMatch) joinQueue(false); }, 4000);
   }
 }
-function computeMatchRatings(myPlayers, myGoals, oppGoals, myScorers, incidents, winnerSide){
+function computeMatchRatings(myPlayers, myGoals, oppGoals, myScorers, incidents, winnerSide, myAssists){
   const scorerCounts = {};
   (myScorers||[]).forEach(n=>{ scorerCounts[n] = (scorerCounts[n]||0)+1; });
+  // Assists now feed into the match rating (and, since cardXpGainFromRating scales straight off the
+  // rating, into XP too) - a smaller bump than a goal itself, still diminishing per extra assist, same
+  // shape as the goal bonus just scaled down.
+  const assistCounts = {};
+  (myAssists||[]).forEach(n=>{ assistCounts[n] = (assistCounts[n]||0)+1; });
   const myCards = (incidents||[]).filter(inc=>inc.side==='me');
   const resultBonus = winnerSide==='me' ? 0.45 : (myGoals===oppGoals ? 0.1 : -0.35);
   const ratings = myPlayers.map(p=>{
     let r = 6.4 + resultBonus;
     const goals = scorerCounts[p.n] || 0;
     if(goals>0) r += Math.min(2.8, goals*1.6); // diminishing per extra goal, capped
+    const assists = assistCounts[p.n] || 0;
+    if(assists>0) r += Math.min(1.4, assists*0.8); // diminishing per extra assist, capped
     const card = myCards.find(inc=>inc.player && inc.player.n===p.n);
     if(card){ r += (card.type==='red'||card.type==='red2') ? -2.2 : (card.type==='yellow' ? -0.7 : 0); }
     r += (Math.random()-0.5)*0.7; // small natural variance
     r = Math.max(2.5, Math.min(10, r));
-    return {n:p.n, pos:p.pos, rating: Math.round(r*10)/10, goals, uid:p.uid};
+    return {n:p.n, pos:p.pos, rating: Math.round(r*10)/10, goals, assists, uid:p.uid};
   });
   const motm = ratings.reduce((best,p)=> (!best || p.rating>best.rating) ? p : best, null);
   return {ratings, motm};
@@ -26859,7 +26933,7 @@ function renderMatchRatingsHTML(matchRatings){
       </div>` : ''}
       <div style="display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;font-size:12.5px;">
         ${ratings.map(p=>`
-          <div style="color:var(--chalk);">${p.n}${p.goals?` \u26bd${p.goals>1?'\u00d7'+p.goals:''}`:''}</div>
+          <div style="color:var(--chalk);">${p.n}${p.goals?` \u26bd${p.goals>1?'\u00d7'+p.goals:''}`:''}${p.assists?` \ud83c\udd70\ufe0f${p.assists>1?'\u00d7'+p.assists:''}`:''}</div>
           <div style="color:var(--muted);text-align:right;">${posDE(p.pos)}</div>
           <div style="text-align:right;font-family:'JetBrains Mono';font-weight:700;color:${ratingColor(p.rating)};">${p.rating.toFixed(1)}</div>
         `).join('')}
@@ -26882,14 +26956,14 @@ async function runLocalMatch(myRating, opp, opts={}){
     // NOW, not after the ~45s animation, so refreshing mid-match can never dodge a loss (see
     // commitMatchResult's comment). opts.onOutcomeDecided lets the caller commit its OWN state too
     // (win streak / tournament round / O Rei streak) at this same safe moment.
-    const myScorers = [];
-    md.events90.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
-    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>myScorers.push(e.scorer.n));
+    const myScorers = []; const myAssists = [];
+    md.events90.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
+    if(md.eventsET) md.eventsET.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
     const committed = await commitMatchResult(md.myGoals, md.oppGoals, md.winnerSide, md.wentToET, md.wentToPK, oppName, myScorers, opts.friendly);
     if(opts.onOutcomeDecided) await opts.onOutcomeDecided(committed);
     const final = await playFullMatch(md, myName, oppName, null, opp.nametag||null);
     revealMatchResultUI(committed, md.wentToET, md.wentToPK);
-    const matchRatings = computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide);
+    const matchRatings = computeMatchRatings(myPlayers, md.myGoals, md.oppGoals, myScorers, md.incidents, md.winnerSide, myAssists);
     await awardCardXP(matchRatings);
     const resultArea = document.getElementById('result-area');
     if(resultArea) resultArea.insertAdjacentHTML('beforeend', renderMatchRatingsHTML(matchRatings));
@@ -27064,7 +27138,7 @@ function pickRealisticOpponent(targetRating){
     attempt = {xi: weakenedBase, chemPlayers: weakenedChem, rating: weakenedRating};
   }
   const {xi, chemPlayers, rating} = attempt;
-  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img, id:p.id, sho:p.sho, defn:p.defn, pac:p.pac, dri:p.dri, phy:p.phy, pas:p.pas}));
+  const players = xi.map((p,i)=>({n:p.n, pos:slots[i].label, ov:chemPlayers[i].chemOv, img:p.img, id:p.id, sho:p.sho, defn:p.defn, pac:p.pac, dri:p.dri, phy:p.phy, pas:p.pas, substats:detailedSubstatsFor(p)}));
   const cardRefs = xi.map((p,i)=>({id:p.id, pos:slots[i].label}));
   return {owner:chosen.club, rating, players, cardRefs, formation:'433', isBot:true, managerName: mgr?mgr.n:null};
 }
@@ -27267,7 +27341,7 @@ async function enterSyncedMatch(matchDoc){
     }
   }
   const myPlayersForRating = getMySquadPlayers();
-  const matchRatings = computeMatchRatings(myPlayersForRating, myGoalsFinal, oppGoalsFinal, final.myScorers, incidents, winnerSide);
+  const matchRatings = computeMatchRatings(myPlayersForRating, myGoalsFinal, oppGoalsFinal, final.myScorers, incidents, winnerSide, final.myAssists);
   await awardCardXP(matchRatings);
   const resultArea = document.getElementById('result-area');
   if(resultArea) resultArea.insertAdjacentHTML('beforeend', renderMatchRatingsHTML(matchRatings));
