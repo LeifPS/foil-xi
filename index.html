@@ -102,7 +102,19 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
   .nav-btn-m svg{width:22px;height:22px;}
   .nav-btn-m.active{color:var(--turf-bright);background:rgba(61,196,130,.12);}
   .nav-btn-m .nav-badge{top:4px;right:14%;}
+  /* one-time "swipe for more tabs" hint - see maybeShowNavSwipeHint(). pointer-events:none so it never
+     blocks a tap on the bar underneath while it's still fading in/out. */
+  #nav-swipe-hint{position:fixed;left:50%;bottom:calc(66px + env(safe-area-inset-bottom,0));z-index:42;
+    transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:100px;
+    background:rgba(13,16,23,.94);border:1px solid var(--line);color:var(--chalk);font-size:12px;font-weight:600;
+    white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,.45);pointer-events:none;
+    animation:navHintFadeIn .3s ease-out, navHintFadeOut .35s ease-in 4.5s forwards;}
+  .nav-swipe-hint-arrow{display:inline-block;animation:navHintSwipe 1.1s ease-in-out infinite;}
+  @keyframes navHintFadeIn{0%{opacity:0;transform:translateX(-50%) translateY(6px);}100%{opacity:1;transform:translateX(-50%) translateY(0);}}
+  @keyframes navHintFadeOut{to{opacity:0;}}
+  @keyframes navHintSwipe{0%,100%{transform:translateX(0);}50%{transform:translateX(7px);}}
 }
+@media(min-width:821px){#nav-swipe-hint{display:none;}}
 
 #view{flex:1;padding:22px 20px 60px;}
 /* extra bottom room on mobile so content doesn't sit behind the fixed #nav-mobile bar - declared after
@@ -13984,6 +13996,16 @@ function weekPassClaimableCount(){
   });
   return count;
 }
+// Count of not-yet-claimed achievement tiers, summed across every line - same "purely derived from
+// already-loaded profile data" pattern as weekPassClaimableCount right above (no extra network read
+// needed, unlike ligaPendingCount/tradeIncomingCount/duelIncomingCount which poll Firestore).
+function achievementsClaimableCount(){
+  if(!profile) return 0;
+  ensureAchievementState();
+  let count = 0;
+  ACHIEVEMENTS.forEach(ach=>{ count += Math.max(0, achievementUnlockedTier(ach) - achievementClaimedTier(ach)); });
+  return count;
+}
 // Count of pending INCOMING trade offers - shown as a nav badge on "Handel" so a new offer is visible
 // without opening the tab, same idea as the Liga badge above. Refreshed on boot and whenever the trade
 // tab's own incoming list reloads (see loadTrades).
@@ -14024,7 +14046,61 @@ function renderNavBadges(){
   if(profile){
     addBadge('store', computeStreakDay().canClaim ? 1 : 0);
     addBadge('week', weekPassClaimableCount());
+    addBadge('achievements', achievementsClaimableCount());
   }
+}
+// Bug fix: #nav-mobile's icons scroll via native overflow-x (see the CSS comment above it) so a user
+// can swipe across the bar to reveal the tabs past the first 5. On some phones/browsers a swipe that
+// starts on a <button> still fires a synthetic click at touchend even though the finger clearly moved
+// (a well-known "ghost click after scroll" quirk) - which silently switches to whatever tab the finger
+// happened to lift over, mid-swipe. Track real finger movement ourselves and swallow the click (in the
+// CAPTURE phase, so it never reaches the per-button listeners renderNav() attaches below) whenever the
+// touch moved more than a few px, i.e. was clearly a scroll gesture rather than a tap.
+let navMobileSwipeSuppressClick = false;
+function attachNavMobileSwipeGuard(navMobile){
+  if(navMobile.dataset.swipeGuardAttached) return;
+  navMobile.dataset.swipeGuardAttached = '1';
+  let startX = 0, startY = 0, moved = false;
+  navMobile.addEventListener('touchstart', (e)=>{
+    const t = e.touches[0]; if(!t) return;
+    startX = t.clientX; startY = t.clientY; moved = false;
+  }, {passive:true});
+  navMobile.addEventListener('touchmove', (e)=>{
+    const t = e.touches[0]; if(!t) return;
+    if(Math.abs(t.clientX-startX)>10 || Math.abs(t.clientY-startY)>10) moved = true;
+  }, {passive:true});
+  navMobile.addEventListener('touchend', ()=>{
+    if(!moved) return;
+    navMobileSwipeSuppressClick = true;
+    // any ghost click fires in the same turn right after touchend on every engine this targets -
+    // clear the flag on the next frame so it can never swallow a LATER, genuine tap.
+    requestAnimationFrame(()=>{ navMobileSwipeSuppressClick = false; });
+  }, {passive:true});
+  navMobile.addEventListener('click', (e)=>{
+    if(navMobileSwipeSuppressClick){ e.preventDefault(); e.stopPropagation(); }
+  }, true);
+}
+// First-time-on-mobile hint: swiping the icon bar to reach the other tabs turned out to be unintuitive
+// for a lot of players who never discovered it - show a small one-time "swipe for more" hint with an
+// animated arrow the first time the mobile layout is ever seen, dismissed by any interaction with the
+// bar (or after a few seconds) and never shown again (localStorage, not tied to any one account).
+function maybeShowNavSwipeHint(){
+  if(window.innerWidth>820) return;
+  if(localStorage.getItem('foilNavSwipeHintSeen')) return;
+  if(document.getElementById('nav-swipe-hint')) return;
+  const navMobile = document.getElementById('nav-mobile');
+  if(!navMobile) return;
+  const hint = document.createElement('div');
+  hint.id = 'nav-swipe-hint';
+  hint.innerHTML = `<span>Wische für mehr Tabs</span><span class="nav-swipe-hint-arrow">➜</span>`;
+  document.body.appendChild(hint);
+  const dismiss = ()=>{
+    hint.remove();
+    try{ localStorage.setItem('foilNavSwipeHintSeen','1'); }catch(_){}
+  };
+  navMobile.addEventListener('touchstart', dismiss, {once:true, passive:true});
+  navMobile.addEventListener('scroll', dismiss, {once:true, passive:true});
+  setTimeout(dismiss, 5000);
 }
 function renderNav(){
   const nav = document.getElementById('nav');
@@ -14045,6 +14121,8 @@ function renderNav(){
   navMobile.querySelectorAll('.nav-btn-m').forEach(b=>b.addEventListener('click', ()=>{
     currentTab=b.dataset.tab; persistLastTab(currentTab); renderNav(); renderView(currentTab); renderMatchMiniWidget();
   }));
+  attachNavMobileSwipeGuard(navMobile);
+  maybeShowNavSwipeHint();
   const adminBtn = document.getElementById('admin-fab');
   if(adminBtn) adminBtn.remove();
   renderNavBadges();
@@ -22161,6 +22239,7 @@ async function renderAchievementsPanel(view){
       btn.disabled = true;
       await claimAchievementTier(btn.dataset.claim, parseInt(btn.dataset.tier,10));
       renderAchievementsPanel(view);
+      renderNavBadges();
     });
   });
 }
@@ -27081,6 +27160,7 @@ function revealMatchResultUI(committed, wentToET, wentToPK){
     return;
   }
   updateCoinDisplay(); // the visible coin counter only ticks up/down here, at reveal time - see commitMatchResult
+  renderNavBadges(); // a match is the main way most Erfolge-Linien progress - refresh the "claimable" badge right away, not just on the next tab switch
   const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses'), winrateEl=document.getElementById('stat-winrate');
   if(winsEl) winsEl.textContent = profile.wins;
   if(lossesEl) lossesEl.textContent = profile.losses;
