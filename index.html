@@ -8620,6 +8620,7 @@ function getBaselineRAP(card){
 }
 let salesHistoryCache = null; // Map id -> [prices], most recent first
 async function loadSalesHistory(){
+  loadRapOverrides(); // same "everything computeRAP needs" load, piggybacked on every existing call site
   if(salesHistoryCache) return salesHistoryCache;
   salesHistoryCache = new Map();
   await fbReady;
@@ -8640,10 +8641,44 @@ async function recordSale(cardId, price){
   try{ await fb.setDoc(fb.doc(fb.db,'sales', genId()), {cardId, price, timestamp:Date.now()}, {}); }
   catch(e){ console.warn('record sale failed', e); }
 }
+// Admin-set fixed RAP values, keyed by card id (same key computeRAP already uses for salesHistoryCache) -
+// takes priority over both real sales data and the baseline curve for that exact card, until cleared.
+// Loaded once per session (same "load once, cache forever" pattern as salesHistoryCache) piggybacking on
+// loadSalesHistory's existing call sites below, since both feed the same computeRAP() calculation.
+let rapOverrideCache = null; // Map id -> value
+async function loadRapOverrides(){
+  if(rapOverrideCache) return rapOverrideCache;
+  rapOverrideCache = new Map();
+  await fbReady;
+  if(!fb) return rapOverrideCache;
+  try{
+    const snap = await fb.getDocs(fb.collection(fb.db,'rapOverrides'));
+    // Firestore doc IDs are always strings, but every card.id in this game is a number (matching
+    // setRapOverride/computeRAP's Map key) - Number(d.id) here, not d.id, or a fresh session's reload
+    // would silently never match any card again.
+    snap.docs.forEach(d=>{ const v = d.data().value; if(typeof v==='number') rapOverrideCache.set(Number(d.id), v); });
+  }catch(e){ console.warn('rap override load failed', e); }
+  return rapOverrideCache;
+}
+async function setRapOverride(cardId, value){
+  await fbReady;
+  if(!fb) return;
+  await loadRapOverrides();
+  await fb.setDoc(fb.doc(fb.db,'rapOverrides', String(cardId)), {value}, {});
+  rapOverrideCache.set(cardId, value);
+}
+async function clearRapOverride(cardId){
+  await fbReady;
+  if(!fb) return;
+  await loadRapOverrides();
+  try{ await fb.deleteDoc(fb.doc(fb.db,'rapOverrides', String(cardId))); }catch(e){ console.warn('rap override clear failed', e); }
+  rapOverrideCache.delete(cardId);
+}
 function computeRAP(card){
   // untradable cards are always 0, full stop - real sale prices recorded before a card was flagged
   // untradable (e.g. an old market sale) must never blend back in and show a leftover value.
   if(card.untradable) return 0;
+  if(rapOverrideCache && rapOverrideCache.has(card.id)) return rapOverrideCache.get(card.id);
   const arr = (salesHistoryCache && salesHistoryCache.get(card.id)) || [];
   const baseline = getBaselineRAP(card);
   if(arr.length>=3){
@@ -15972,6 +16007,7 @@ async function renderAdminPanel(view){
         <button class="action-btn secondary" id="admin-add-card" style="width:auto;">Karte direkt hinzuf\u00fcgen</button>
         <button class="action-btn secondary" id="admin-add-all-cards" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Alle Karten hinzuf\u00fcgen (mir)</button>
         <button class="action-btn secondary" id="admin-unlock-legendpack" style="width:auto;">Fu\u00dfballg\u00f6tter Pack sofort freischalten (mir)</button>
+        <button class="action-btn secondary" id="admin-set-rap" style="width:auto;">Karten-RAP \u00e4ndern</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
         <input id="admin-custom-coins" type="number" placeholder="Beliebige Anzahl..." style="width:180px;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 12px;border-radius:9px;">
@@ -16056,6 +16092,7 @@ async function renderAdminPanel(view){
   });
   document.getElementById('admin-open-any-pack').addEventListener('click', openAdminPackPicker);
   document.getElementById('admin-add-card').addEventListener('click', openAdminAddCardModal);
+  document.getElementById('admin-set-rap').addEventListener('click', openAdminSetRapModal);
   document.getElementById('admin-unlock-legendpack').addEventListener('click', async ()=>{
     if(profile.ogPackUnlocked){ toast('War schon freigeschaltet.'); return; }
     profile.ogPackUnlocked = true;
@@ -16153,6 +16190,57 @@ function openAdminAddCardModal(){
       });
       results.appendChild(wrap);
     });
+  });
+}
+// Search-then-set, same two-step flow as openAdminAddCardModal above - pick any card in the game (not
+// just ones the admin owns), then fix its RAP to an exact value. Overrides real sales data/the baseline
+// curve for THAT card id for every player, until cleared - see computeRAP/rapOverrideCache.
+function openAdminSetRapModal(){
+  openModal(`
+    <h2 style="margin-bottom:4px;">Karten-RAP ändern</h2>
+    <p class="hint" style="margin-top:0;">Setzt den RAP-Wert einer Karte fest, unabhängig von echten Verkäufen/der Rating-Basiskurve.</p>
+    <input id="admin-rap-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:10px 0 12px;">
+    <div class="picker-list" id="admin-rap-results" style="max-height:340px;overflow-y:auto;"></div>`);
+  const pool = adminFullCardPool();
+  const input = document.getElementById('admin-rap-search');
+  const results = document.getElementById('admin-rap-results');
+  input.addEventListener('input', async ()=>{
+    const q = input.value.trim().toLowerCase();
+    if(q.length<2){ results.innerHTML=''; return; }
+    await loadRapOverrides();
+    results.innerHTML = '';
+    pool.filter(c=>c.n.toLowerCase().includes(q)).slice(0,20).forEach(card=>{
+      const wrap = document.createElement('div');
+      wrap.style.cursor='pointer';
+      wrap.appendChild(cardEl(card,'mini'));
+      wrap.addEventListener('click', ()=>openAdminSetRapValueModal(card));
+      results.appendChild(wrap);
+    });
+  });
+}
+function openAdminSetRapValueModal(card){
+  const current = computeRAP(card);
+  const hasOverride = rapOverrideCache && rapOverrideCache.has(card.id);
+  openModal(`
+    <h2 style="margin-bottom:4px;">${card.n} (${card.variantLabel||'Basis'}, ${card.ov} OVR)</h2>
+    <p class="hint" style="margin-top:0;">Aktueller RAP: <b style="color:var(--gold);">${formatCoins(current)}</b>${hasOverride ? ' (manuell gesetzt)' : ' (berechnet)'}</p>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input id="admin-rap-value" type="number" min="0" value="${current}" style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;">
+      <button class="action-btn" id="admin-rap-save" style="width:auto;padding:10px 18px;">Setzen</button>
+    </div>
+    ${hasOverride ? `<button class="action-btn secondary" id="admin-rap-clear" style="width:100%;border-color:var(--danger);color:var(--danger);">Override entfernen (zurück zu berechnet)</button>` : ''}`);
+  document.getElementById('admin-rap-save').addEventListener('click', async ()=>{
+    const value = parseInt(document.getElementById('admin-rap-value').value, 10);
+    if(!Number.isFinite(value) || value<0){ toast('Ungültiger Wert.'); return; }
+    await setRapOverride(card.id, value);
+    toast(`RAP von ${card.n} auf ${formatCoins(value)} gesetzt.`);
+    closeModal();
+  });
+  const clearBtn = document.getElementById('admin-rap-clear');
+  if(clearBtn) clearBtn.addEventListener('click', async ()=>{
+    await clearRapOverride(card.id);
+    toast(`RAP-Override von ${card.n} entfernt.`);
+    closeModal();
   });
 }
 // Grants every card that doesn't already have a matching cardId in the admin's own collection - not a
