@@ -94,7 +94,17 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
     display:flex;position:fixed;left:0;right:0;bottom:0;z-index:41;
     background:linear-gradient(180deg,#0d1017,#0a0d13);border-top:1px solid var(--line);
     overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
-    padding-bottom:env(safe-area-inset-bottom,0);
+    /* pan-x (not pan-y/none): tells the browser this bar only ever scrolls horizontally, so a swipe
+       that starts here is unambiguously OUR horizontal tab-scroll, never a candidate for the browser's
+       own vertical page gestures. Doesn't reach the iOS-reserved home-indicator strip at the very
+       bottom edge itself (nothing in web content can override that OS-level swipe-up-to-go-home zone -
+       see the extra padding below for the actual mitigation there). */
+    touch-action:pan-x;
+    /* a few px on top of the safe-area inset, not just the inset alone - keeps the actual icon row a
+       little further from the physical bottom edge / home-indicator strip, so a real thumb swipe across
+       the icons is less likely to start inside iOS's reserved gesture zone and get grabbed by the OS
+       (App-Switcher/Home) instead of reaching the page at all. */
+    padding-bottom:calc(env(safe-area-inset-bottom,0) + 6px);
   }
   #nav-mobile::-webkit-scrollbar{display:none;}
   .nav-btn-m{flex:0 0 20%;scroll-snap-align:start;display:flex;align-items:center;justify-content:center;
