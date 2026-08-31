@@ -21569,12 +21569,18 @@ function wepComputeParticipants(tables, champion){
 }
 // Swiss-phase standings (points/GD/GF/deterministic tiebreak, same shape/spirit as ligaComputeStandings
 // but over a flat list of single matches rather than a fixed round-robin schedule).
-function wepComputeStandings(participants, matches, seed){
+// viewerUserId (optional, DISPLAY-ONLY - every backend stage call omits it and always gets the real,
+// complete table, since qualification/pairing must never depend on who happens to be viewing): a match
+// the viewer is personally part of but hasn't watched live yet (see wepPlayMatch/playWepLiveMatch)
+// doesn't count into the table yet either - otherwise the standings would spoil that exact match's
+// result just as much as printing the score directly would, same reasoning as ligaComputeStandings.
+function wepComputeStandings(participants, matches, seed, viewerUserId){
   const table = participants.map(p=>({userId:p.userId, name:p.name, nametag:p.nametag||null, pts:0, gf:0, ga:0}));
   const byId = new Map(table.map(t=>[t.userId,t]));
   matches.forEach(m=>{
     const a = byId.get(m.aUserId), b = byId.get(m.bUserId);
     if(!a||!b) return;
+    if(viewerUserId && (m.aUserId===viewerUserId || m.bUserId===viewerUserId) && !(m.revealedBy||[]).includes(viewerUserId)) return;
     a.gf+=m.aGoals; a.ga+=m.bGoals; b.gf+=m.bGoals; b.ga+=m.aGoals;
     if(m.aGoals===m.bGoals){ a.pts+=1; b.pts+=1; }
     else if(m.aGoals>m.bGoals) a.pts+=3; else b.pts+=3;
@@ -21609,9 +21615,16 @@ function wepSwissPairs(standings, playedPairKeys){
   return pairs;
 }
 // One Swiss-phase match: a single leg, draws allowed (it's a league-style phase, not a knockout tie).
+// mid/revealedBy/md/nativeMeIsA: the match is already fully decided the instant this runs (same as
+// every other Wochenendpokal stage, computed once on the backend) - but a PARTICIPANT shouldn't be
+// able to just read the score off the standings table before they've actually watched it live, exactly
+// like a Liga fixture (see ligaMatchRowHTML/playLigaLiveMatch). md is the full buildDecisiveMatch result
+// so playWepLiveMatch can replay the SAME already-decided match instead of secretly re-simulating a new
+// one; nativeMeIsA records which side "me" is inside that raw md (buildDecisiveMatch always calls
+// whichever side is passed first "me") so playback can flip it for whichever participant is watching.
 function wepPlayMatch(teamA, teamB){
   const md = buildDecisiveMatch(teamA.rating, teamB.rating, teamA.players, teamB.players, null, null, {allowDraw:true});
-  return {aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null, aGoals:md.myGoals, bGoals:md.oppGoals};
+  return {mid:genId(), aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null, aGoals:md.myGoals, bGoals:md.oppGoals, revealedBy:[], nativeMeIsA:true, md};
 }
 // Dispatcher: reads how far this week's 7-stage Sonntag schedule has gotten and runs whichever stage
 // is next due - same "separate doc per stage, hour-gated" pattern as resolveWeeklyRolloverV2IfNeeded.
@@ -21713,8 +21726,9 @@ async function wepRunSemi1(s1Data, s2Data, s3Data, ref, weekStart){
   for(const [a,b] of pairsSpec){
     const teamA = await ligaFreshTeam(a.userId, a.name);
     const teamB = await ligaFreshTeam(b.userId, b.name);
-    const leg1 = ligaTwoLegLeg1(teamA, teamB);
-    semis.push({aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+    const leg1md = ligaTwoLegLeg1(teamA, teamB); // "me"=teamA in this raw md - see wepPlayMatch's nativeMeIsA comment
+    semis.push({aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null,
+      leg1:{mid:genId(), aGoals:leg1md.myGoals, bGoals:leg1md.oppGoals, revealedBy:[], nativeMeIsA:true, md:leg1md}});
   }
   try{ await fb.setDoc(ref, {status:'done', at:Date.now(), finalStandings:standings, semis}); }
   catch(e){ console.warn('wep semi1 write failed', e); return null; }
@@ -21727,8 +21741,9 @@ async function wepRunSemi2(semi1Data, ref){
   for(const s of semi1Data.semis){
     const teamA = await ligaFreshTeam(s.aUserId, s.aName);
     const teamB = await ligaFreshTeam(s.bUserId, s.bName);
-    const leg2Raw = ligaTwoLegLeg2(teamA, teamB);
-    const tie = ligaTwoLegAggregate(teamA, teamB, s.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const leg2md = ligaTwoLegLeg2(teamA, teamB); // "me"=teamB in this raw md (return leg, sides swapped) - nativeMeIsA:false
+    const leg2 = {mid:genId(), aGoals:leg2md.oppGoals, bGoals:leg2md.myGoals, revealedBy:[], nativeMeIsA:false, md:leg2md};
+    const tie = ligaTwoLegAggregate(teamA, teamB, s.leg1, leg2);
     const winnerId = tie.winner==='A' ? teamA.userId : teamB.userId;
     const winnerName = tie.winner==='A' ? teamA.name : teamB.name;
     semis.push({...s, ...tie, winnerId, winnerName});
@@ -21743,8 +21758,9 @@ async function wepRunFinal1(semi2Data, ref){
   const [s0, s1b] = semi2Data.semis;
   const teamA = await ligaFreshTeam(s0.winnerId, s0.winnerName);
   const teamB = await ligaFreshTeam(s1b.winnerId, s1b.winnerName);
-  const leg1 = ligaTwoLegLeg1(teamA, teamB);
-  const final = {aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}};
+  const leg1md = ligaTwoLegLeg1(teamA, teamB);
+  const final = {aUserId:teamA.userId, aName:teamA.name, aNametag:teamA.nametag||null, bUserId:teamB.userId, bName:teamB.name, bNametag:teamB.nametag||null,
+    leg1:{mid:genId(), aGoals:leg1md.myGoals, bGoals:leg1md.oppGoals, revealedBy:[], nativeMeIsA:true, md:leg1md}};
   try{ await fb.setDoc(ref, {status:'done', at:Date.now(), final}); }
   catch(e){ console.warn('wep final1 write failed', e); return null; }
   return {stage:'final1', final};
@@ -21757,8 +21773,9 @@ async function wepRunFinal2(final1Data, ref, weekStart){
   const {final} = final1Data;
   const teamA = await ligaFreshTeam(final.aUserId, final.aName);
   const teamB = await ligaFreshTeam(final.bUserId, final.bName);
-  const leg2Raw = ligaTwoLegLeg2(teamA, teamB);
-  const tie = ligaTwoLegAggregate(teamA, teamB, final.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+  const leg2md = ligaTwoLegLeg2(teamA, teamB);
+  const leg2 = {mid:genId(), aGoals:leg2md.oppGoals, bGoals:leg2md.myGoals, revealedBy:[], nativeMeIsA:false, md:leg2md};
+  const tie = ligaTwoLegAggregate(teamA, teamB, final.leg1, leg2);
   const winnerId = tie.winner==='A' ? teamA.userId : teamB.userId;
   const winnerName = tie.winner==='A' ? teamA.name : teamB.name;
   const winnerNametag = tie.winner==='A' ? teamA.nametag : teamB.nametag;
@@ -21820,15 +21837,142 @@ function renderWochenendpokalPendingRewards(box){
     renderWochenendpokalPendingRewards(box);
   });
 }
-function wepSingleMatchRowHTML(m){
-  return `<div class="leader-row" style="margin-bottom:4px;"><span style="flex:1;">${nametagHTML(m.aName, m.aNametag)}</span><span class="mono" style="min-width:50px;text-align:center;">${m.aGoals} : ${m.bGoals}</span><span style="flex:1;text-align:right;">${nametagHTML(m.bName, m.bNametag)}</span></div>`;
-}
-function wepTwoLegRowHTML(tie, aName, bName, aNametag, bNametag){
-  const deciderText = tie.decider ? `, Entscheidung ${tie.decider.aGoals}:${tie.decider.bGoals}${tie.decider.wentToPK?' n.E.':''}` : '';
-  return `<div class="leader-row" style="margin-bottom:8px;flex-wrap:wrap;">
-    <span style="flex:1;min-width:160px;"><b>${nametagHTML(aName, aNametag)}</b> vs <b>${nametagHTML(bName, bNametag)}</b></span>
-    <span class="hint" style="margin:0;">Hin ${tie.leg1.aGoals}:${tie.leg1.bGoals}, Rück ${tie.leg2.aGoals}:${tie.leg2.bGoals}${deciderText} — Aggregat ${tie.aggA}:${tie.aggB}</span>
+// Reuses the exact Liga fixture-card look (crest, abbreviated Kürzel, big goal numbers, trophy on the
+// winning side) instead of the old plain text "leader-row" - same visual language players already know
+// from the Ligen tab. viewerUserId's OWN match stays hidden (a "Live spielen" ▶ button in place of the
+// score) until they've actually watched/skipped it, exactly like a Liga fixture - anyone else's match
+// (both sides are someone other than the viewer) shows immediately, since there's no suspense to protect
+// there. data-wep-* attributes carry just enough to locate this exact match/leg again on click - see
+// the delegated handler wired in renderWochenendpokalPanel and playWepLiveMatch/playWepSwissMatch/
+// playWepSemiLeg/playWepFinalLeg below.
+function wepFixtureRowHTML(m, viewerUserId, dataAttrs){
+  const isMine = viewerUserId && (m.aUserId===viewerUserId || m.bUserId===viewerUserId);
+  const pendingForViewer = isMine && !(m.revealedBy||[]).includes(viewerUserId);
+  const decided = !pendingForViewer;
+  const aWon = decided && m.aGoals>m.bGoals, bWon = decided && m.bGoals>m.aGoals;
+  const teamBlock = (name, nametag, goals, won, goalsFirst)=>{
+    const unit = `<div class="liga-fixture-team-unit">
+      ${renderCrestSVG(fallbackCrestFor(name), 40)}
+      <div class="liga-fixture-abbr${won?' liga-fixture-winner':''}">${won?'🏆 ':''}${nametagAbbrHTML(ligaTeamAbbr(name), nametag)}</div>
+    </div>`;
+    if(!decided) return `<div class="liga-fixture-side">${unit}</div>`;
+    const num = `<div class="liga-fixture-goals${won?' liga-fixture-winner':''}">${goals}</div>`;
+    return `<div class="liga-fixture-side liga-fixture-side-decided">${goalsFirst?num+unit:unit+num}</div>`;
+  };
+  const attrStr = Object.entries(dataAttrs||{}).map(([k,v])=>`data-${k}="${v}"`).join(' ');
+  const center = pendingForViewer
+    ? `<button class="liga-fixture-play" type="button" ${attrStr} title="Live spielen">▶</button>`
+    : `<div class="liga-fixture-dash">–</div>`;
+  return `<div class="liga-fixture-card${isMine?' liga-fixture-mine':''}">
+    ${teamBlock(m.aName, m.aNametag, m.aGoals, aWon, false)}
+    <div class="liga-fixture-center">${center}</div>
+    ${teamBlock(m.bName, m.bNametag, m.bGoals, bWon, true)}
   </div>`;
+}
+// Halbfinale/Finale: Hin- and Rückspiel each get their OWN fixture card (independently watchable/
+// revealable - watching the Hinspiel must not spoil the Rückspiel or vice versa), the aggregate/
+// decider/"weiter" line only appears once BOTH legs are revealed for this viewer (or the tie isn't
+// theirs at all) - showing it any earlier would spoil whichever leg is still hidden.
+function wepTwoLegFixtureHTML(tie, viewerUserId, docId, semiIndex, isFinal){
+  const leg1M = {...tie.leg1, aUserId:tie.aUserId, aName:tie.aName, aNametag:tie.aNametag, bUserId:tie.bUserId, bName:tie.bName, bNametag:tie.bNametag};
+  const leg1Attrs = semiIndex!=null
+    ? {'wep-kind':'semi', 'wep-doc':docId, 'wep-idx':semiIndex, 'wep-leg':'leg1'}
+    : {'wep-kind':'final', 'wep-doc':docId, 'wep-leg':'leg1'};
+  let html = `<div class="lbl" style="margin:12px 0 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase;">Hinspiel</div>`;
+  html += wepFixtureRowHTML(leg1M, viewerUserId, leg1Attrs);
+  const isMine = viewerUserId && (tie.aUserId===viewerUserId || tie.bUserId===viewerUserId);
+  const leg1Revealed = !isMine || (tie.leg1.revealedBy||[]).includes(viewerUserId);
+  if(tie.leg2){
+    const leg2M = {...tie.leg2, aUserId:tie.aUserId, aName:tie.aName, aNametag:tie.aNametag, bUserId:tie.bUserId, bName:tie.bName, bNametag:tie.bNametag};
+    const leg2Attrs = semiIndex!=null
+      ? {'wep-kind':'semi', 'wep-doc':docId, 'wep-idx':semiIndex, 'wep-leg':'leg2'}
+      : {'wep-kind':'final', 'wep-doc':docId, 'wep-leg':'leg2'};
+    html += `<div class="lbl" style="margin:12px 0 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase;">Rückspiel</div>`;
+    html += wepFixtureRowHTML(leg2M, viewerUserId, leg2Attrs);
+    const leg2Revealed = !isMine || (tie.leg2.revealedBy||[]).includes(viewerUserId);
+    if(leg1Revealed && leg2Revealed){
+      const deciderText = tie.decider ? `, Entscheidung ${tie.decider.aGoals}:${tie.decider.bGoals}${tie.decider.wentToPK?' n.E.':''}` : '';
+      const winnerNametag = tie.winnerId===tie.aUserId ? tie.aNametag : tie.bNametag;
+      if(isFinal && tie.winnerName){
+        html += `<p class="hint" style="margin:8px 0 0;">Aggregat ${tie.aggA}:${tie.aggB}${deciderText}</p>
+          <p class="hint" style="margin-top:8px;color:var(--gold);">🏆 Wochenendpokal-Sieger: <b>${nametagHTML(tie.winnerName, winnerNametag)}</b>!</p>`;
+      } else {
+        const winnerLine = tie.winnerName ? ` — Weiter: <b>${nametagHTML(tie.winnerName, winnerNametag)}</b>` : '';
+        html += `<p class="hint" style="margin:8px 0 0;">Aggregat ${tie.aggA}:${tie.aggB}${deciderText}${winnerLine}</p>`;
+      }
+    }
+  }
+  return html;
+}
+// Shared "watch the already-decided match live, then mark it revealed for me" flow for every
+// Wochenendpokal stage - same idea as playLigaLiveMatch, parameterized over WHERE in a stage doc the
+// match/leg actually lives (a flat `matches` array for Schweizer Runden vs. per-tie leg1/leg2 objects
+// for Halbfinale/Finale). getMatch(data) pulls the specific {aUserId,aName,...,md,nativeMeIsA,
+// revealedBy,mid} object out of the stage doc's data; setMatch(data, updated) returns the PARTIAL
+// Firestore update that writes that same object back with a bumped revealedBy, wherever it actually
+// lives in that doc's shape.
+async function playWepLiveMatch(docId, getMatch, setMatch){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  await fbReady;
+  if(!fb) return;
+  const ref = fb.doc(fb.db,'leagueMeta', docId);
+  let snap;
+  try{ snap = await fb.getDoc(ref); }catch(e){ toast('Konnte nicht geladen werden.'); return; }
+  if(!snap.exists()) return;
+  const m = getMatch(snap.data());
+  if(!m) return;
+  const viewerIsA = m.aUserId===clubId, viewerIsB = m.bUserId===clubId;
+  if(!viewerIsA && !viewerIsB) return;
+  const md = (viewerIsA===m.nativeMeIsA) ? {...m.md} : flipMatchDataSides(m.md);
+  md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+  md.allowDraw = true; // Wochenendpokal-Legs sind wie Liga-Matches immer 3-way, siehe playLigaLiveMatch
+  const myName = viewerIsA ? m.aName : m.bName, oppName = viewerIsA ? m.bName : m.aName;
+  const oppNametag = viewerIsA ? m.bNametag : m.aNametag;
+  inMatch = true;
+  openModal(`<h2 style="margin-bottom:4px;">Wochenendpokal</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${nametagHTML(myName, profile.nametag)} vs ${nametagHTML(oppName, oppNametag)}</p><button type="button" id="wep-skip-match-btn" class="action-btn secondary" style="width:auto;padding:9px 16px;margin-bottom:10px;">Zum Ergebnis springen ⏭</button>`);
+  const box = document.querySelector('#modal-root .modal-box');
+  ensureMatchAreaHost(box);
+  const skipBtn = document.getElementById('wep-skip-match-btn');
+  if(skipBtn) skipBtn.addEventListener('click', ()=>{ liveMatchSkipAll = true; skipBtn.disabled = true; skipBtn.textContent = 'Wird übersprungen …'; });
+  try{ await playFullMatch(md, myName, oppName, ligaTeamAbbr(oppName), oppNametag); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
+  finally{ inMatch = false; }
+  try{
+    if(fb.runTransaction){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const freshSnap = await tx.get(ref);
+        if(!freshSnap.exists()) return;
+        const cur = freshSnap.data();
+        const curMatch = getMatch(cur);
+        if(!curMatch) return;
+        const updated = {...curMatch, revealedBy:[...new Set([...(curMatch.revealedBy||[]), clubId])]};
+        tx.update(ref, setMatch(cur, updated));
+      });
+    } else {
+      const data = snap.data();
+      const updated = {...m, revealedBy:[...new Set([...(m.revealedBy||[]), clubId])]};
+      await fb.setDoc(ref, setMatch(data, updated), {merge:true});
+    }
+  }catch(e){ console.warn('mark wep match revealed failed', e); }
+  closeModal();
+  renderView('ligen');
+}
+function playWepSwissMatch(docId, mid){
+  return playWepLiveMatch(docId,
+    data => (data.matches||[]).find(x=>x.mid===mid),
+    (data, updated) => ({matches: data.matches.map(x=> x.mid===mid ? updated : x)}));
+}
+function playWepSemiLeg(docId, semiIndex, legKey){
+  return playWepLiveMatch(docId,
+    data => {
+      const s = (data.semis||[])[semiIndex];
+      return s ? {...s[legKey], aUserId:s.aUserId, aName:s.aName, aNametag:s.aNametag, bUserId:s.bUserId, bName:s.bName, bNametag:s.bNametag} : null;
+    },
+    (data, updated) => ({semis: data.semis.map((s,i)=> i!==semiIndex ? s : {...s, [legKey]: {mid:updated.mid, aGoals:updated.aGoals, bGoals:updated.bGoals, revealedBy:updated.revealedBy, nativeMeIsA:updated.nativeMeIsA, md:updated.md}})}));
+}
+function playWepFinalLeg(docId, legKey){
+  return playWepLiveMatch(docId,
+    data => data.final ? {...data.final[legKey], aUserId:data.final.aUserId, aName:data.final.aName, aNametag:data.final.aNametag, bUserId:data.final.bUserId, bName:data.final.bName, bNametag:data.final.bNametag} : null,
+    (data, updated) => ({final: {...data.final, [legKey]: {mid:updated.mid, aGoals:updated.aGoals, bGoals:updated.bGoals, revealedBy:updated.revealedBy, nativeMeIsA:updated.nativeMeIsA, md:updated.md}}}));
 }
 function wepStandingsTableHTML(standings, highlightTop4){
   return standings.map((t,i)=>`<div class="leader-row" style="margin-bottom:3px;${highlightTop4 && i<4?'font-weight:700;':''}">
@@ -21893,36 +22037,45 @@ async function renderWochenendpokalPanel(box){
   const roundMatches = [s1.matches];
   if(s2snap.exists()) roundMatches.push(s2snap.data().matches);
   if(s3snap.exists()) roundMatches.push(s3snap.data().matches);
+  const swissDocIds = ['wepSwiss1_'+weekStart, 'wepSwiss2_'+weekStart, 'wepSwiss3_'+weekStart];
   roundMatches.forEach((matches, idx)=>{
     html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Schweizer Runde ${idx+1}</div>`;
-    html += matches.map(wepSingleMatchRowHTML).join('');
+    html += matches.map(m=>wepFixtureRowHTML(m, clubId, {'wep-kind':'swiss', 'wep-doc':swissDocIds[idx], 'wep-mid':m.mid})).join('');
   });
   const allSwissMatches = [].concat(...roundMatches);
-  const standings = wepComputeStandings(s1.participants, allSwissMatches, weekStart);
+  // clubId as viewer here (display only, see wepComputeStandings's own comment) - the REAL standings
+  // that decided the actual Top-4/pairings were already computed unfiltered on the backend above.
+  const standings = wepComputeStandings(s1.participants, allSwissMatches, weekStart, clubId);
   html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">${s3snap.exists() ? 'Tabelle nach der Schweizer Phase (Top 4 → Halbfinale)' : 'Tabelle nach Runde '+roundMatches.length}</div>`;
   html += wepStandingsTableHTML(standings, s3snap.exists());
+  // Halbfinale/Finale each read (and, on reveal, write back to) whichever doc is CURRENTLY authoritative
+  // for that tie's data - once the return-leg stage has run, ITS doc carries a full copy of both legs
+  // (see wepRunSemi2/wepRunFinal2's {...s, ...tie} merge), so the Hinspiel-only doc is never touched
+  // again from here on.
   if(se1snap.exists()){
     const se1 = se1snap.data();
+    const semiDocId = se2snap.exists() ? 'wepSemi2_'+weekStart : 'wepSemi1_'+weekStart;
+    const semis = se2snap.exists() ? se2snap.data().semis : se1.semis;
     html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Halbfinale</div>`;
-    if(se2snap.exists()){
-      html += se2snap.data().semis.map(s=>wepTwoLegRowHTML(s, s.aName, s.bName, s.aNametag, s.bNametag)).join('');
-    } else {
-      html += se1.semis.map(s=>`<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;"><b>${nametagHTML(s.aName, s.aNametag)}</b> vs <b>${nametagHTML(s.bName, s.bNametag)}</b></span><span class="hint" style="margin:0;">Hinspiel ${s.leg1.aGoals}:${s.leg1.bGoals}</span></div>`).join('');
-    }
+    html += semis.map((s,i)=>wepTwoLegFixtureHTML(s, clubId, semiDocId, i)).join('');
   }
   if(f1snap.exists()){
     const f1 = f1snap.data();
+    const finalDocId = (f2snap.exists() && f2snap.data().status==='done') ? 'wepFinal2_'+weekStart : 'wepFinal1_'+weekStart;
+    const final = (f2snap.exists() && f2snap.data().status==='done') ? f2snap.data().final : f1.final;
     html += `<div class="lbl" style="margin:16px 0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Finale</div>`;
-    if(f2snap.exists() && f2snap.data().status==='done'){
-      const f2 = f2snap.data();
-      html += wepTwoLegRowHTML(f2.final, f1.final.aName, f1.final.bName, f1.final.aNametag, f1.final.bNametag);
-      html += `<p class="hint" style="margin-top:8px;color:var(--gold);">🏆 Wochenendpokal-Sieger: <b>${nametagHTML(f2.final.winnerName, f2.final.winnerId===f1.final.aUserId?f1.final.aNametag:f1.final.bNametag)}</b>!</p>`;
-    } else {
-      html += `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;"><b>${nametagHTML(f1.final.aName, f1.final.aNametag)}</b> vs <b>${nametagHTML(f1.final.bName, f1.final.bNametag)}</b></span><span class="hint" style="margin:0;">Hinspiel ${f1.final.leg1.aGoals}:${f1.final.leg1.bGoals}</span></div>`;
-    }
+    html += wepTwoLegFixtureHTML(final, clubId, finalDocId, null, true);
   }
   box.innerHTML = html;
   box.prepend(pendingHost);
+  box.onclick = (e)=>{
+    const btn = e.target.closest('[data-wep-kind]');
+    if(!btn) return;
+    const kind = btn.dataset.wepKind, docId = btn.dataset.wepDoc;
+    if(kind==='swiss') playWepSwissMatch(docId, btn.dataset.wepMid);
+    else if(kind==='semi') playWepSemiLeg(docId, parseInt(btn.dataset.wepIdx,10), btn.dataset.wepLeg);
+    else if(kind==='final') playWepFinalLeg(docId, btn.dataset.wepLeg);
+  };
 }
 // ===== Erfolge (Achievements) + Nametags =====
 // A brand new, permanent progression system, fully separate from Liga/Wochenendpokal rewards. Every
