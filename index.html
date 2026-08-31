@@ -8085,7 +8085,7 @@ async function claimWeekPassReward(level){
   } else if(reward.type==='card'){
     profile.weekPass = newWp;
     const card = BY_ID.get(reward.cardId);
-    if(card){ collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id); await sSet('collection', collection); }
+    if(card){ collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id, 1, !!card.untradable); await sSet('collection', collection); }
     await sSet('profile', profile);
     toast(`🏆 ${card ? card.n : 'Exklusive Karte'} freigeschaltet!`);
     if(card) showCutscene(card, ()=>{});
@@ -9012,54 +9012,95 @@ async function clearRapOverride(cardId){
 // (server + local delta) is always correct the instant a bump happens, regardless of load ordering or
 // write latency, and a later server load only ever ADDS the rest-of-the-world total on top instead of
 // overwriting/losing the local delta.
-let cardMintServerCache = null; // Map id -> server count (players), null until first loaded
-let cardMintLocalDelta = new Map(); // Map id -> bumps made THIS session, always live from the start
+// Handelbare und nicht handelbare (UT) Exemplare werden getrennt gezählt (eigenes Firestore-Feld je
+// Sorte, "count" vs. "utCount") - eine UT-Karte aus einem UT-Pack oder ein Admin-Grant ist nie im
+// echten Umlauf handelbar und soll das nicht so aussehen lassen, als gäbe es mehr frei handelbare
+// Kopien als tatsächlich existieren.
+let cardMintServerCache = null; // Map id -> server count, tradable (players), null until first loaded
+let cardMintServerCacheUt = null; // Map id -> server count, untradable (players)
+let cardMintLocalDelta = new Map(); // Map id -> tradable bumps made THIS session, always live from the start
+let cardMintLocalDeltaUt = new Map(); // same, untradable
 let mgrMintServerCache = null; // same idea, managers (separate id space)
+let mgrMintServerCacheUt = null;
 let mgrMintLocalDelta = new Map();
-function cardMintDisplayCount(cardId){
+let mgrMintLocalDeltaUt = new Map();
+function cardMintTradableCount(cardId){
   const base = cardMintServerCache && cardMintServerCache.has(cardId) ? cardMintServerCache.get(cardId) : 0;
   return base + (cardMintLocalDelta.get(cardId)||0);
 }
-function mgrMintDisplayCount(mgrId){
+function cardMintUntradableCount(cardId){
+  const base = cardMintServerCacheUt && cardMintServerCacheUt.has(cardId) ? cardMintServerCacheUt.get(cardId) : 0;
+  return base + (cardMintLocalDeltaUt.get(cardId)||0);
+}
+function mgrMintTradableCount(mgrId){
   const base = mgrMintServerCache && mgrMintServerCache.has(mgrId) ? mgrMintServerCache.get(mgrId) : 0;
   return base + (mgrMintLocalDelta.get(mgrId)||0);
+}
+function mgrMintUntradableCount(mgrId){
+  const base = mgrMintServerCacheUt && mgrMintServerCacheUt.has(mgrId) ? mgrMintServerCacheUt.get(mgrId) : 0;
+  return base + (mgrMintLocalDeltaUt.get(mgrId)||0);
+}
+function cardMintDisplayCount(cardId){
+  return cardMintTradableCount(cardId) + cardMintUntradableCount(cardId);
+}
+function mgrMintDisplayCount(mgrId){
+  return mgrMintTradableCount(mgrId) + mgrMintUntradableCount(mgrId);
+}
+// Formatiert "Exemplare im Umlauf" mit UT-Aufschlüsselung, z.B. "39 (davon 🔒 12 UT)" - das UT-Anhängsel
+// erscheint nur, wenn es tatsächlich untradable Exemplare gibt, damit die weit häufigere handelbare
+// Karte nicht unnötig mit einem "(davon 0 UT)" zugetextet wird.
+function mintCountLabel(id, isManager){
+  const trad = isManager ? mgrMintTradableCount(id) : cardMintTradableCount(id);
+  const ut = isManager ? mgrMintUntradableCount(id) : cardMintUntradableCount(id);
+  const total = trad + ut;
+  return `${total.toLocaleString('de-DE')}${ut>0?` <span class="hint" style="font-size:10px;font-weight:400;">(davon 🔒 ${ut.toLocaleString('de-DE')} UT)</span>`:''}`;
 }
 async function loadCardMintCounts(){
   if(cardMintServerCache) return cardMintServerCache;
   cardMintServerCache = new Map();
+  cardMintServerCacheUt = new Map();
   await fbReady;
   if(!fb) return cardMintServerCache;
   try{
     const snap = await fb.getDocs(fb.collection(fb.db,'cardMints'));
-    snap.docs.forEach(d=>{ const c = d.data().count; if(typeof c==='number') cardMintServerCache.set(Number(d.id), c); });
+    snap.docs.forEach(d=>{
+      const data = d.data();
+      if(typeof data.count==='number') cardMintServerCache.set(Number(d.id), data.count);
+      if(typeof data.utCount==='number') cardMintServerCacheUt.set(Number(d.id), data.utCount);
+    });
   }catch(e){ console.warn('card mint counts load failed', e); }
   return cardMintServerCache;
 }
 async function loadMgrMintCounts(){
   if(mgrMintServerCache) return mgrMintServerCache;
   mgrMintServerCache = new Map();
+  mgrMintServerCacheUt = new Map();
   await fbReady;
   if(!fb) return mgrMintServerCache;
   try{
     const snap = await fb.getDocs(fb.collection(fb.db,'mgrMints'));
-    snap.docs.forEach(d=>{ const c = d.data().count; if(typeof c==='number') mgrMintServerCache.set(Number(d.id), c); });
+    snap.docs.forEach(d=>{
+      const data = d.data();
+      if(typeof data.count==='number') mgrMintServerCache.set(Number(d.id), data.count);
+      if(typeof data.utCount==='number') mgrMintServerCacheUt.set(Number(d.id), data.utCount);
+    });
   }catch(e){ console.warn('manager mint counts load failed', e); }
   return mgrMintServerCache;
 }
-async function bumpCardMintCount(cardId, qty=1){
+async function bumpCardMintCount(cardId, qty=1, untradable=false){
   if(isAdmin()) return;
-  cardMintLocalDelta.set(cardId, (cardMintLocalDelta.get(cardId)||0)+qty);
+  (untradable ? cardMintLocalDeltaUt : cardMintLocalDelta).set(cardId, ((untradable?cardMintLocalDeltaUt:cardMintLocalDelta).get(cardId)||0)+qty);
   await fbReady;
   if(!fb) return;
-  try{ await fb.setDoc(fb.doc(fb.db,'cardMints', String(cardId)), {count: fb.increment(qty)}, {merge:true}); }
+  try{ await fb.setDoc(fb.doc(fb.db,'cardMints', String(cardId)), {[untradable?'utCount':'count']: fb.increment(qty)}, {merge:true}); }
   catch(e){ console.warn('card mint count bump failed', e); }
 }
-async function bumpMgrMintCount(mgrId, qty=1){
+async function bumpMgrMintCount(mgrId, qty=1, untradable=false){
   if(isAdmin()) return;
-  mgrMintLocalDelta.set(mgrId, (mgrMintLocalDelta.get(mgrId)||0)+qty);
+  (untradable ? mgrMintLocalDeltaUt : mgrMintLocalDelta).set(mgrId, ((untradable?mgrMintLocalDeltaUt:mgrMintLocalDelta).get(mgrId)||0)+qty);
   await fbReady;
   if(!fb) return;
-  try{ await fb.setDoc(fb.doc(fb.db,'mgrMints', String(mgrId)), {count: fb.increment(qty)}, {merge:true}); }
+  try{ await fb.setDoc(fb.doc(fb.db,'mgrMints', String(mgrId)), {[untradable?'utCount':'count']: fb.increment(qty)}, {merge:true}); }
   catch(e){ console.warn('manager mint count bump failed', e); }
 }
 // One-time (repeatable) admin recompute: scans EVERY account's real saved collection/managerCollection
@@ -9076,87 +9117,52 @@ async function recomputeAllCardMintCounts(){
     const snap = await fb.getDocs(fb.collection(fb.db,'saves'));
     docs = snap.docs;
   }catch(e){ return {ok:false, reason:'scan-failed', detail:(e&&(e.code||e.message))||String(e)}; }
-  const cardTotals = new Map(), mgrTotals = new Map();
+  const cardTotals = new Map(), cardTotalsUt = new Map(), mgrTotals = new Map(), mgrTotalsUt = new Map();
   let accountsScanned = 0;
   docs.forEach(d=>{
     if(ADMIN_USERS.has(d.id)) return;
     accountsScanned++;
     const data = d.data();
-    (data.collection||[]).forEach(entry=>{ cardTotals.set(entry.cardId, (cardTotals.get(entry.cardId)||0)+1); });
-    (data.managerCollection||[]).forEach(entry=>{ mgrTotals.set(entry.mgrId, (mgrTotals.get(entry.mgrId)||0)+1); });
+    // handelbar vs. UT wird pro Kopie entschieden: entweder war GENAU DIESE Kopie beim Erhalt als
+    // untradable markiert (entry.untradable, z.B. aus einem UT-Pack), oder die Kartenvorlage selbst ist
+    // grundsätzlich nie handelbar (card.untradable, z.B. Admin-Varianten) - beides zählt als UT-Bestand.
+    (data.collection||[]).forEach(entry=>{
+      const card = BY_ID.get(entry.cardId);
+      const map = (entry.untradable || (card && card.untradable)) ? cardTotalsUt : cardTotals;
+      map.set(entry.cardId, (map.get(entry.cardId)||0)+1);
+    });
+    (data.managerCollection||[]).forEach(entry=>{
+      const mgr = MGR_BY_ID.get(entry.mgrId);
+      const map = (mgr && mgr.untradable) ? mgrTotalsUt : mgrTotals;
+      map.set(entry.mgrId, (map.get(entry.mgrId)||0)+1);
+    });
   });
-  const writeAll = async (collName, totals)=>{
-    const ids = [...totals.keys()];
+  const writeAll = async (collName, tradMap, utMap)=>{
+    const ids = [...new Set([...tradMap.keys(), ...utMap.keys()])];
+    if(!ids.length) return;
     if(fb.writeBatch){
       const CHUNK = 400; // stay under Firestore's 500-write batch limit
       for(let i=0;i<ids.length;i+=CHUNK){
         const batch = fb.writeBatch(fb.db);
-        ids.slice(i,i+CHUNK).forEach(id=> batch.set(fb.doc(fb.db,collName,String(id)), {count:totals.get(id)}));
+        ids.slice(i,i+CHUNK).forEach(id=> batch.set(fb.doc(fb.db,collName,String(id)), {count:tradMap.get(id)||0, utCount:utMap.get(id)||0}));
         await batch.commit();
       }
     } else {
-      for(const id of ids) await fb.setDoc(fb.doc(fb.db,collName,String(id)), {count:totals.get(id)});
+      for(const id of ids) await fb.setDoc(fb.doc(fb.db,collName,String(id)), {count:tradMap.get(id)||0, utCount:utMap.get(id)||0});
     }
   };
   try{
-    await writeAll('cardMints', cardTotals);
-    await writeAll('mgrMints', mgrTotals);
+    await writeAll('cardMints', cardTotals, cardTotalsUt);
+    await writeAll('mgrMints', mgrTotals, mgrTotalsUt);
   }catch(e){ return {ok:false, reason:'write-failed', detail:(e&&(e.code||e.message))||String(e)}; }
   // an exact recompute from real data supersedes the server snapshot entirely, but any bumps already
   // made THIS session (cards obtained after the scan started) must still layer on top of it - so this
-  // resets the server half only, leaving cardMintLocalDelta/mgrMintLocalDelta untouched.
+  // resets the server half only, leaving the local-delta maps untouched.
   cardMintServerCache = new Map(cardTotals);
+  cardMintServerCacheUt = new Map(cardTotalsUt);
   mgrMintServerCache = new Map(mgrTotals);
-  return {ok:true, accountsScanned, distinctCards:cardTotals.size, distinctManagers:mgrTotals.size};
-}
-// Per-player counterpart to the admin-only recompute above: runs completely automatically, once ever
-// per account, the very first time that account's client can reach Firestore after this feature
-// shipped - reports everything already in THIS player's own collection/managerCollection into the
-// global cardMints/mgrMints counters (an fb.increment per distinct id, not an overwrite, since every
-// other player's own one-time report needs to add up on top of it) and then permanently marks
-// profile.cardMintBackfilled so it can never run a second time for that account. This is what makes
-// "im Umlauf" eventually reach the true historical total for EVERY player over time, purely by people
-// logging in, without needing an admin to remember to run the manual recompute at all - the two are
-// complementary, not a replacement for each other (the admin tool is still there for an instant fix).
-async function backfillOwnCardMintCounts(){
-  if(profile.cardMintBackfilled) return;
-  await fbReady;
-  if(!fb) return; // stay unflagged - retried next session once a backend is actually reachable
-  if(isAdmin()){
-    // admin accounts never contribute to "im Umlauf" (see bumpCardMintCount) - nothing to report, just
-    // mark it done so this check doesn't re-run every single boot.
-    profile.cardMintBackfilled = true;
-    await sSet('profile', profile);
-    return;
-  }
-  try{
-    const cardTotals = new Map();
-    collection.forEach(c=>cardTotals.set(c.cardId, (cardTotals.get(c.cardId)||0)+1));
-    const mgrTotals = new Map();
-    managerCollection.forEach(m=>mgrTotals.set(m.mgrId, (mgrTotals.get(m.mgrId)||0)+1));
-    const writeAll = async (collName, totals)=>{
-      const ids = [...totals.keys()];
-      if(!ids.length) return;
-      if(fb.writeBatch){
-        const CHUNK = 400; // stay under Firestore's 500-write batch limit
-        for(let i=0;i<ids.length;i+=CHUNK){
-          const batch = fb.writeBatch(fb.db);
-          ids.slice(i,i+CHUNK).forEach(id=> batch.set(fb.doc(fb.db,collName,String(id)), {count: fb.increment(totals.get(id))}, {merge:true}));
-          await batch.commit();
-        }
-      } else {
-        for(const id of ids) await fb.setDoc(fb.doc(fb.db,collName,String(id)), {count: fb.increment(totals.get(id))}, {merge:true});
-      }
-    };
-    await writeAll('cardMints', cardTotals);
-    await writeAll('mgrMints', mgrTotals);
-    // reflect it locally right away too (same idea as bumpCardMintCount's own optimistic delta) so
-    // this session's own Index view is already correct instead of waiting on a fresh server re-read.
-    cardTotals.forEach((qty,id)=> cardMintLocalDelta.set(id, (cardMintLocalDelta.get(id)||0)+qty));
-    mgrTotals.forEach((qty,id)=> mgrMintLocalDelta.set(id, (mgrMintLocalDelta.get(id)||0)+qty));
-    profile.cardMintBackfilled = true;
-    await sSet('profile', profile);
-  }catch(e){ console.warn('own card mint backfill failed', e); }
+  mgrMintServerCacheUt = new Map(mgrTotalsUt);
+  return {ok:true, accountsScanned, distinctCards:cardTotals.size+cardTotalsUt.size, distinctManagers:mgrTotals.size+mgrTotalsUt.size};
 }
 function computeRAP(card){
   // untradable cards are always 0, full stop - real sale prices recorded before a card was flagged
@@ -11644,14 +11650,14 @@ async function submitSBC(){
   renderNav();
   renderView('sbc');
   if(activeSBC.directCard==='BALLONDOR_CARD'){
-    collection.push({uid:genId(), cardId:BALLONDOR_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(BALLONDOR_CARD.id);
+    collection.push({uid:genId(), cardId:BALLONDOR_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(BALLONDOR_CARD.id, 1, !!BALLONDOR_CARD.untradable);
     await sSet('collection', collection);
     toast('\ud83c\udfc6 Unglaublich! Du hast die Ballon d\u2019Or-Karte gewonnen!');
     showCutscene(BALLONDOR_CARD, ()=>{});
   } else if(activeSBC.directCardId){
     const card = BY_ID.get(activeSBC.directCardId);
     if(card){
-      collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id);
+      collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id, 1, !!card.untradable);
       await sSet('collection', collection);
       toast(`\ud83c\udfc6 ${card.n} freigeschaltet \u2014 einzigartig, sonst nirgends erh\u00e4ltlich!`);
       showCutscene(card, ()=>{});
@@ -14025,7 +14031,6 @@ async function init(){
   refreshTradeIncomingBadge();
   checkWishlistAgainstMarket();
   setInterval(checkWishlistAgainstMarket, 90000);
-  backfillOwnCardMintCounts();
   if(profile.pendingWarning){
     const warningMsg = profile.pendingWarning;
     profile.pendingWarning = null;
@@ -15214,15 +15219,19 @@ async function addCardsToCollection(cards, opts={}){
                      // cards from a "pick X of Y" pack without touching same-identity duplicates)
   cards.forEach(c=>{
     const uid = genId();
-    if(c.isManager){ managerCollection.push({uid, mgrId:c.id}); touchedManagers=true; bumpMgrMintCount(c.id); }
+    // handelbar/UT für "im Umlauf" entscheidet sich pro Kopie aus zwei Quellen: entweder dieser
+    // gesamte Zug war als UT deklariert (opts.untradable, z.B. Wochen-Pass-Pack), oder die Karte selbst
+    // ist grundsätzlich nie handelbar (c.untradable, z.B. Admin-Varianten) - beides zählt als UT.
+    const instanceUntradable = !!(opts.untradable || c.untradable);
+    if(c.isManager){ managerCollection.push({uid, mgrId:c.id}); touchedManagers=true; bumpMgrMintCount(c.id, 1, instanceUntradable); }
     else {
       const entry = {uid, cardId:c.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId};
       // per-instance override (this specific owned copy, NOT the shared card type - see
       // leveledOwnedCard/applyCardLevel) used by e.g. Wochen-Pass-Packs so the same card pulled from
       // a normal store pack stays tradable while this copy doesn't
-      if(opts.untradable) entry.untradable = true;
+      if(instanceUntradable) entry.untradable = true;
       collection.push(entry); touchedPlayers=true;
-      bumpCardMintCount(c.id);
+      bumpCardMintCount(c.id, 1, instanceUntradable);
     }
     added.push({uid, card:c});
   });
@@ -16879,7 +16888,7 @@ function openAdminAddCardModal(){
       wrap.style.cursor='pointer';
       wrap.appendChild(cardEl(card,'mini'));
       wrap.addEventListener('click', async ()=>{
-        collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id);
+        collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id, 1, !!card.untradable);
         await sSet('collection', collection);
         toast(`${card.n} (${card.variantLabel||'Basis'}) hinzugef\u00fcgt.`);
         closeModal();
@@ -16957,7 +16966,7 @@ function openAdminGiveAllCardsModal(){
   const confirmBtn = document.getElementById('admin-all-cards-confirm');
   if(missing.length) confirmBtn.addEventListener('click', async ()=>{
     confirmBtn.disabled = true; confirmBtn.textContent = 'Wird hinzugefügt…';
-    missing.forEach(card=>{ collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id); });
+    missing.forEach(card=>{ collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id, 1, !!card.untradable); });
     await sSet('collection', collection);
     toast(`${missing.length} Karten hinzugefügt — du besitzt jetzt alle ${pool.length}.`);
     closeModal();
@@ -18539,7 +18548,7 @@ function showCardIndexDetailModal(item){
   const earliest = earliestEntry ? earliestEntry.obtainedAt : null;
   const obtainedLabel = earliest ? new Date(earliest).toLocaleDateString('de-DE') : (kind==='manager' ? '\u2014' : (copies>0 ? 'Unbekannt (vor Index-Update)' : '\u2014'));
   const mintServerLoaded = kind==='manager' ? !!mgrMintServerCache : !!cardMintServerCache;
-  const mintCount = mintServerLoaded ? (kind==='manager' ? mgrMintDisplayCount(card.id) : cardMintDisplayCount(card.id)) : null;
+  const mintLabel = mintServerLoaded ? mintCountLabel(card.id, kind==='manager') : 'Lädt…';
   const mgrBoostText = kind==='manager' ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue} Punkte`) : '';
   openModal(`
     <h2 style="margin-bottom:2px;">${card.n}</h2>
@@ -18552,7 +18561,7 @@ function showCardIndexDetailModal(item){
       <div class="cardidx-detail-grid">
         <div class="cardidx-detail-tile"><div class="v">\ud83c\udfb4 ${copies}${untradableCopies?` <span class="hint" style="font-size:10px;font-weight:400;">(${untradableCopies} \ud83d\udd12)</span>`:''}</div><div class="l">Eigene Kopien</div></div>
         <div class="cardidx-detail-tile"><div class="v">\ud83d\udcc5 ${obtainedLabel}</div><div class="l">Erhalten am (\u00e4lteste Kopie)</div></div>
-        <div class="cardidx-detail-tile"><div class="v" id="cardidx-mint-count">\ud83c\udf0d ${mintCount!=null ? mintCount.toLocaleString('de-DE') : 'L\u00e4dt\u2026'}</div><div class="l">Exemplare im Umlauf (alle Spieler)</div></div>
+        <div class="cardidx-detail-tile"><div class="v" id="cardidx-mint-count">\ud83c\udf0d ${mintLabel}</div><div class="l">Exemplare im Umlauf (alle Spieler)</div></div>
         <div class="cardidx-detail-tile"><div class="v">\ud83d\udcb0 ${formatCoins(computeRAP(card))}</div><div class="l">Gesch\u00e4tzter Marktwert (RAP)</div></div>
       </div>
       ${cardIndexProvenanceHTML(earliestEntry)}
@@ -18619,8 +18628,7 @@ function showCardIndexDetailModal(item){
   }
   (kind==='manager' ? loadMgrMintCounts() : loadCardMintCounts()).then(()=>{
     const el = document.getElementById('cardidx-mint-count');
-    const count = kind==='manager' ? mgrMintDisplayCount(card.id) : cardMintDisplayCount(card.id);
-    if(el) el.textContent = `\ud83c\udf0d ${count.toLocaleString('de-DE')}`;
+    if(el) el.innerHTML = `\ud83c\udf0d ${mintCountLabel(card.id, kind==='manager')}`;
   });
   if(!card.untradable && !marketListingsCache.length){
     loadMarketListings().then(()=>{
@@ -23789,7 +23797,7 @@ async function claimAchievementTier(achId, tier){
   let grantedCard = null;
   if(reward.card){
     grantedCard = achievementSpecialCard(reward.card);
-    if(grantedCard){ collection.push({uid:genId(), cardId:grantedCard.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(grantedCard.id); }
+    if(grantedCard){ collection.push({uid:genId(), cardId:grantedCard.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(grantedCard.id, 1, !!grantedCard.untradable); }
   }
   await sSet('profile', profile);
   if(grantedCard) await sSet('collection', collection);
@@ -24924,7 +24932,7 @@ async function playBallonDorChallenge(){
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
     if(outcome.result==='WIN'){
-      collection.push({uid:genId(), cardId:BALLONDOR_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(BALLONDOR_CARD.id);
+      collection.push({uid:genId(), cardId:BALLONDOR_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(BALLONDOR_CARD.id, 1, !!BALLONDOR_CARD.untradable);
       profile.ballondorClaimed = true;
       await sSet('collection', collection);
       await sSet('profile', profile);
@@ -24976,7 +24984,7 @@ async function playBallonDorRodriChallenge(){
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
     if(outcome.result==='WIN'){
-      collection.push({uid:genId(), cardId:RODRI_BALLONDOR_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(RODRI_BALLONDOR_CARD.id);
+      collection.push({uid:genId(), cardId:RODRI_BALLONDOR_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(RODRI_BALLONDOR_CARD.id, 1, !!RODRI_BALLONDOR_CARD.untradable);
       profile.ballondorRodriClaimed = true;
       await sSet('collection', collection);
       await sSet('profile', profile);
@@ -25055,7 +25063,7 @@ async function playPrimeChallenge(ch){
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly:true, onComplete: (outcome)=>{
     if(outcome.result==='WIN'){
-      collection.push({uid:genId(), cardId:ch.card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(ch.card.id);
+      collection.push({uid:genId(), cardId:ch.card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(ch.card.id, 1, !!ch.card.untradable);
       sSet('collection', collection);
       toast(`\ud83c\udfc6 PRIME ${ch.card.n} gewonnen!`);
       showCutscene(ch.card, ()=>{});
@@ -25128,7 +25136,7 @@ async function playWmQuestMatch(m){
 async function claimWmQuestReward(){
   if(!wmQuestAllDone() || profile.wmQuestMbappeClaimed || !WM_QUEST_MBAPPE_CARD) return;
   profile.wmQuestMbappeClaimed = true;
-  collection.push({uid:genId(), cardId:WM_QUEST_MBAPPE_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(WM_QUEST_MBAPPE_CARD.id);
+  collection.push({uid:genId(), cardId:WM_QUEST_MBAPPE_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(WM_QUEST_MBAPPE_CARD.id, 1, !!WM_QUEST_MBAPPE_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${WM_QUEST_MBAPPE_CARD.n} (102 OVR) freigeschaltet!`);
@@ -25264,7 +25272,7 @@ async function playOliseQuestMatch(m){
 async function claimOliseQuestReward(){
   if(!oliseQuestAllDone() || profile.oliseQuestCardClaimed || !OLISE_QUEST_CARD) return;
   profile.oliseQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:OLISE_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(OLISE_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:OLISE_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(OLISE_QUEST_CARD.id, 1, !!OLISE_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${OLISE_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25381,7 +25389,7 @@ async function playAlissonQuestMatch(m){
 async function claimAlissonQuestReward(){
   if(!alissonQuestAllDone() || profile.alissonQuestCardClaimed || !ALISSON_QUEST_CARD) return;
   profile.alissonQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:ALISSON_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(ALISSON_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:ALISSON_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(ALISSON_QUEST_CARD.id, 1, !!ALISSON_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${ALISSON_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25499,7 +25507,7 @@ async function playYamalQuestMatch(m){
 async function claimYamalQuestReward(){
   if(!yamalQuestAllDone() || profile.yamalQuestCardClaimed || !YAMAL_QUEST_CARD) return;
   profile.yamalQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:YAMAL_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(YAMAL_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:YAMAL_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(YAMAL_QUEST_CARD.id, 1, !!YAMAL_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${YAMAL_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25617,7 +25625,7 @@ async function playRudigerQuestMatch(m){
 async function claimRudigerQuestReward(){
   if(!rudigerQuestAllDone() || profile.rudigerQuestCardClaimed || !RUDIGER_QUEST_CARD) return;
   profile.rudigerQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:RUDIGER_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(RUDIGER_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:RUDIGER_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(RUDIGER_QUEST_CARD.id, 1, !!RUDIGER_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${RUDIGER_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25735,7 +25743,7 @@ async function playHaalandQuestMatch(m){
 async function claimHaalandQuestReward(){
   if(!haalandQuestAllDone() || profile.haalandQuestCardClaimed || !HAALAND_QUEST_CARD) return;
   profile.haalandQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:HAALAND_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(HAALAND_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:HAALAND_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(HAALAND_QUEST_CARD.id, 1, !!HAALAND_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${HAALAND_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25853,7 +25861,7 @@ async function playChongQuestMatch(m){
 async function claimChongQuestReward(){
   if(!chongQuestAllDone() || profile.chongQuestCardClaimed || !CHONG_QUEST_CARD) return;
   profile.chongQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:CHONG_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(CHONG_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:CHONG_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(CHONG_QUEST_CARD.id, 1, !!CHONG_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${CHONG_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25971,7 +25979,7 @@ async function playPinaQuestMatch(m){
 async function claimPinaQuestReward(){
   if(!pinaQuestAllDone() || profile.pinaQuestCardClaimed || !PINA_QUEST_CARD) return;
   profile.pinaQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:PINA_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(PINA_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:PINA_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(PINA_QUEST_CARD.id, 1, !!PINA_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${PINA_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -26098,7 +26106,7 @@ async function playKaneQuestMatch(m){
 async function claimKaneQuestReward(){
   if(!kaneQuestAllDone() || profile.kaneQuestCardClaimed || !KANE_QUEST_CARD) return;
   profile.kaneQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:KANE_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(KANE_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:KANE_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(KANE_QUEST_CARD.id, 1, !!KANE_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${KANE_QUEST_CARD.n} (102 OVR) freigeschaltet!`);
@@ -26234,7 +26242,7 @@ async function playSyllaQuestMatch(m){
 async function claimSyllaQuestReward(){
   if(!syllaQuestAllDone() || profile.syllaQuestCardClaimed || !SYLLA_QUEST_CARD) return;
   profile.syllaQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:SYLLA_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(SYLLA_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:SYLLA_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(SYLLA_QUEST_CARD.id, 1, !!SYLLA_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${SYLLA_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -26351,7 +26359,7 @@ async function playKroosQuestMatch(m){
 async function claimKroosQuestReward(){
   if(!kroosQuestAllDone() || profile.kroosQuestCardClaimed || !KROOS_QUEST_CARD) return;
   profile.kroosQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:KROOS_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(KROOS_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:KROOS_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(KROOS_QUEST_CARD.id, 1, !!KROOS_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${KROOS_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -26468,7 +26476,7 @@ async function playNeymarQuestMatch(m){
 async function claimNeymarQuestReward(){
   if(!neymarQuestAllDone() || profile.neymarQuestCardClaimed || !NEYMAR_QUEST_CARD) return;
   profile.neymarQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:NEYMAR_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(NEYMAR_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:NEYMAR_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(NEYMAR_QUEST_CARD.id, 1, !!NEYMAR_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${NEYMAR_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -26593,7 +26601,7 @@ async function playMarceloQuestMatch(m){
 async function claimMarceloQuestReward(){
   if(!marceloQuestAllDone() || profile.marceloQuestCardClaimed || !MARCELO_QUEST_CARD) return;
   profile.marceloQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:MARCELO_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(MARCELO_QUEST_CARD.id);
+  collection.push({uid:genId(), cardId:MARCELO_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(MARCELO_QUEST_CARD.id, 1, !!MARCELO_QUEST_CARD.untradable);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${MARCELO_QUEST_CARD.n} (103 OVR) freigeschaltet!`);
@@ -26993,7 +27001,7 @@ function showIconSwapModal(){
       if((profile.iconSwapTokens||0) < card.swapCost){ toast('Nicht genug Token.'); return; }
       profile.iconSwapTokens -= card.swapCost;
       profile.iconSwapRedeemed = [...(profile.iconSwapRedeemed||[]), card.id];
-      collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id);
+      collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id, 1, !!card.untradable);
       await sSet('profile', profile);
       await sSet('collection', collection);
       toast(`${card.n} eingelöst!`);
