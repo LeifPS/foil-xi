@@ -1953,6 +1953,32 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .cardidx-source-rate{font-family:'JetBrains Mono';color:var(--turf-bright);font-size:11px;flex-shrink:0;}
 .cardidx-offer-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:12px;}
 .cardidx-offer-row:first-child{border-top:none;}
+.cardidx-mystery-tile{width:128px;height:204px;border-radius:14px;background:repeating-linear-gradient(115deg,#0d0f14 0 2px,#111319 2px 9px);
+  border:1.5px dashed rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border-color .15s,transform .15s;}
+.cardidx-mystery-tile:hover{border-color:rgba(255,255,255,.32);transform:translateY(-2px);}
+.cardidx-mystery-q{font-family:'Anton';font-size:52px;color:rgba(255,255,255,.14);}
+.cardidx-chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:2px;}
+.cardidx-chip{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:6px 12px 6px 8px;font-size:12px;color:var(--chalk);}
+.cardidx-chip img, .cardidx-chip .cardidx-chip-mono{width:18px;height:18px;border-radius:4px;object-fit:cover;flex-shrink:0;}
+.cardidx-chip .cardidx-chip-mono{background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--muted);}
+.cardidx-chip .cardidx-chip-flag{width:18px;height:13px;border-radius:2px;object-fit:cover;flex-shrink:0;}
+.cardidx-chip b{color:var(--gold);font-weight:700;}
+.cardidx-pos-pill{display:inline-flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:11.5px;margin:0 6px 6px 0;}
+.cardidx-pos-pill b{color:var(--gold);}
+.cardidx-ps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+.cardidx-ps-item{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;}
+.cardidx-ps-item.elite{border-color:rgba(255,215,0,.4);background:rgba(255,215,0,.06);}
+.cardidx-ps-item img{width:22px;height:22px;flex-shrink:0;}
+.cardidx-ps-item .t{font-size:11.5px;font-weight:600;color:var(--chalk);line-height:1.2;}
+.cardidx-ps-item .d{font-size:9.5px;color:var(--muted);line-height:1.3;margin-top:1px;}
+.cardidx-version-row{display:flex;align-items:center;gap:10px;padding:7px 4px;border-top:1px solid var(--line);cursor:pointer;border-radius:6px;transition:background .15s;}
+.cardidx-version-row:first-child{border-top:none;}
+.cardidx-version-row:hover{background:rgba(255,255,255,.04);}
+.cardidx-version-row .ov{font-family:'JetBrains Mono';font-weight:700;color:var(--gold);min-width:30px;}
+.cardidx-version-row .nm{flex:1;font-size:12.5px;}
+.cardidx-version-row .own{font-size:10px;color:var(--turf-bright);font-weight:700;text-transform:uppercase;}
+.cardidx-discovery-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:8px;}
+.cardidx-discovery-bar > div{height:100%;background:linear-gradient(90deg,var(--turf-bright),var(--gold));border-radius:3px;transition:width .4s ease;}
 .match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
 .goal-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:6px 10px;border-radius:8px;animation:trayIn .3s;}
 .goal-row.opp{border-left:2px solid var(--danger);}
@@ -8637,7 +8663,7 @@ async function initFirebase(){
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
       getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
       updateDoc:fsMod.updateDoc, increment:fsMod.increment, runTransaction:fsMod.runTransaction,
-      arrayUnion:fsMod.arrayUnion, arrayRemove:fsMod.arrayRemove,
+      arrayUnion:fsMod.arrayUnion, arrayRemove:fsMod.arrayRemove, writeBatch:fsMod.writeBatch,
       auth, createUserWithEmailAndPassword:authMod.createUserWithEmailAndPassword,
       signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signOut:authMod.signOut,
       setPersistence:authMod.setPersistence, browserLocalPersistence:authMod.browserLocalPersistence,
@@ -8837,12 +8863,19 @@ async function clearRapOverride(cardId){
   rapOverrideCache.delete(cardId);
 }
 // Global "wie viele gibt es" counter for the Karten-Index - one shared Firestore doc per card id
-// (collection 'cardMints', doc id = String(cardId), field `count`), incremented by 1 every time a
-// genuinely NEW copy of that card is created for some player (pack draws, quest/achievement/admin
+// (collection 'cardMints', doc id = String(cardId), field `count`; managers use a separate 'mgrMints'
+// collection so the two id spaces - BY_ID vs MGR_BY_ID - can never collide), incremented by 1 every
+// time a genuinely NEW copy of that card is created for some player (pack draws, quest/achievement
 // grants, Icon-Swap redemptions). Deliberately NOT incremented on a market purchase or an accepted
-// trade offer - those move an already-existing copy between two players' collections, they don't
-// mint a new one, so the global total must stay unchanged.
-let cardMintCache = null; // Map id -> count
+// trade offer - those move an already-existing copy between two players' collections, they don't mint
+// a new one, so the global total must stay unchanged. Also deliberately NOT incremented for anything
+// an admin account does (isAdmin() check) - admin test/debug grants ("Karte direkt hinzufügen", "Alle
+// Karten hinzufügen") aren't real player acquisitions and would otherwise permanently pollute "im
+// Umlauf" for everyone. Since the counter only starts counting from the moment it shipped, it can't
+// retroactively know about copies players already owned before that - see recomputeAllCardMintCounts
+// for the one-time full-catalog backfill that fixes that starting baseline.
+let cardMintCache = null; // Map id -> count (players)
+let mgrMintCache = null; // Map id -> count (managers, separate id space)
 async function loadCardMintCounts(){
   if(cardMintCache) return cardMintCache;
   cardMintCache = new Map();
@@ -8854,12 +8887,76 @@ async function loadCardMintCounts(){
   }catch(e){ console.warn('card mint counts load failed', e); }
   return cardMintCache;
 }
+async function loadMgrMintCounts(){
+  if(mgrMintCache) return mgrMintCache;
+  mgrMintCache = new Map();
+  await fbReady;
+  if(!fb) return mgrMintCache;
+  try{
+    const snap = await fb.getDocs(fb.collection(fb.db,'mgrMints'));
+    snap.docs.forEach(d=>{ const c = d.data().count; if(typeof c==='number') mgrMintCache.set(Number(d.id), c); });
+  }catch(e){ console.warn('manager mint counts load failed', e); }
+  return mgrMintCache;
+}
 async function bumpCardMintCount(cardId, qty=1){
+  if(isAdmin()) return;
   if(cardMintCache) cardMintCache.set(cardId, (cardMintCache.get(cardId)||0)+qty);
   await fbReady;
   if(!fb) return;
   try{ await fb.setDoc(fb.doc(fb.db,'cardMints', String(cardId)), {count: fb.increment(qty)}, {merge:true}); }
   catch(e){ console.warn('card mint count bump failed', e); }
+}
+async function bumpMgrMintCount(mgrId, qty=1){
+  if(isAdmin()) return;
+  if(mgrMintCache) mgrMintCache.set(mgrId, (mgrMintCache.get(mgrId)||0)+qty);
+  await fbReady;
+  if(!fb) return;
+  try{ await fb.setDoc(fb.doc(fb.db,'mgrMints', String(mgrId)), {count: fb.increment(qty)}, {merge:true}); }
+  catch(e){ console.warn('manager mint count bump failed', e); }
+}
+// One-time (repeatable) admin recompute: scans EVERY account's real saved collection/managerCollection
+// and rebuilds cardMints/mgrMints from scratch as an exact snapshot - unlike the incremental bump
+// functions above (which only see acquisitions from the moment they shipped onward), this also counts
+// everything players already owned before the counter existed, so the very first run brings "im Umlauf"
+// up to the true historical total instead of starting from zero. Admin accounts (ADMIN_USERS) are
+// skipped entirely, matching bumpCardMintCount's own admin exclusion.
+async function recomputeAllCardMintCounts(){
+  await fbReady;
+  if(!fb) return {ok:false, reason:'offline'};
+  let docs;
+  try{
+    const snap = await fb.getDocs(fb.collection(fb.db,'saves'));
+    docs = snap.docs;
+  }catch(e){ return {ok:false, reason:'scan-failed', detail:(e&&(e.code||e.message))||String(e)}; }
+  const cardTotals = new Map(), mgrTotals = new Map();
+  let accountsScanned = 0;
+  docs.forEach(d=>{
+    if(ADMIN_USERS.has(d.id)) return;
+    accountsScanned++;
+    const data = d.data();
+    (data.collection||[]).forEach(entry=>{ cardTotals.set(entry.cardId, (cardTotals.get(entry.cardId)||0)+1); });
+    (data.managerCollection||[]).forEach(entry=>{ mgrTotals.set(entry.mgrId, (mgrTotals.get(entry.mgrId)||0)+1); });
+  });
+  const writeAll = async (collName, totals)=>{
+    const ids = [...totals.keys()];
+    if(fb.writeBatch){
+      const CHUNK = 400; // stay under Firestore's 500-write batch limit
+      for(let i=0;i<ids.length;i+=CHUNK){
+        const batch = fb.writeBatch(fb.db);
+        ids.slice(i,i+CHUNK).forEach(id=> batch.set(fb.doc(fb.db,collName,String(id)), {count:totals.get(id)}));
+        await batch.commit();
+      }
+    } else {
+      for(const id of ids) await fb.setDoc(fb.doc(fb.db,collName,String(id)), {count:totals.get(id)});
+    }
+  };
+  try{
+    await writeAll('cardMints', cardTotals);
+    await writeAll('mgrMints', mgrTotals);
+  }catch(e){ return {ok:false, reason:'write-failed', detail:(e&&(e.code||e.message))||String(e)}; }
+  cardMintCache = new Map(cardTotals);
+  mgrMintCache = new Map(mgrTotals);
+  return {ok:true, accountsScanned, distinctCards:cardTotals.size, distinctManagers:mgrTotals.size};
 }
 function computeRAP(card){
   // untradable cards are always 0, full stop - real sale prices recorded before a card was flagged
@@ -14218,7 +14315,7 @@ document.addEventListener('visibilitychange', ()=>{
 });
 
 // ===== nav & routing =====
-const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['index','Karten-Index'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass'],['achievements','Erfolge']];
+const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['index','Index'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass'],['achievements','Erfolge']];
 // Icon-only equivalents for #nav-mobile (see its CSS comment) - plain inline SVGs, not emoji, so the
 // active/inactive color actually applies (emoji glyphs are fixed-color and ignore `color`). One path
 // per tab, same stroke style throughout for a consistent set.
@@ -14845,7 +14942,7 @@ async function addCardsToCollection(cards, opts={}){
                      // cards from a "pick X of Y" pack without touching same-identity duplicates)
   cards.forEach(c=>{
     const uid = genId();
-    if(c.isManager){ managerCollection.push({uid, mgrId:c.id}); touchedManagers=true; }
+    if(c.isManager){ managerCollection.push({uid, mgrId:c.id}); touchedManagers=true; bumpMgrMintCount(c.id); }
     else {
       const entry = {uid, cardId:c.id, obtainedAt:Date.now()};
       // per-instance override (this specific owned copy, NOT the shared card type - see
@@ -16320,6 +16417,12 @@ async function renderAdminPanel(view){
       <button class="action-btn secondary" id="admin-great-reset" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Great Reset auslösen</button>
     </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Index: Gesamtbestand neu berechnen</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Scannt JEDEN Account (außer Admins) und setzt "Exemplare im Umlauf" im Index für jede Karte/jeden Trainer exakt auf die real gezählte Summe - nötig, weil der laufende Zähler erst ab seiner Einführung mitzählt und alles, was Spieler vorher schon besaßen, sonst fehlen würde. Beliebig oft wiederholbar.</p>
+      <button class="action-btn secondary" id="admin-recompute-mints" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Jetzt neu berechnen</button>
+      <p class="hint" id="admin-recompute-mints-result" style="margin:10px 0 0;"></p>
+    </div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Ligen einteilen</h3>
       <p class="hint" style="margin-top:0;margin-bottom:10px;">Einmalige, unumkehrbare Einteilung ALLER Accounts (außer Test-Accounts und Leaderboard-gesperrten) in Ligen à 8, nach Kaderstärke sortiert. Läuft nur, wenn noch nie eingeteilt wurde.</p>
       <button class="action-btn secondary" id="admin-seed-leagues" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Ligen jetzt einmalig einteilen</button>
@@ -16340,6 +16443,19 @@ async function renderAdminPanel(view){
       <div id="admin-recent-users-row" style="margin-bottom:14px;"></div>
       <div id="admin-user-content"></div>
     </div>`;
+  document.getElementById('admin-recompute-mints').addEventListener('click', async (e)=>{
+    e.target.disabled = true; e.target.textContent = 'Läuft…';
+    const resultEl = document.getElementById('admin-recompute-mints-result');
+    const out = await recomputeAllCardMintCounts();
+    if(out.ok){
+      resultEl.textContent = `Fertig: ${out.accountsScanned} Accounts gescannt, ${out.distinctCards} Karten + ${out.distinctManagers} Trainer aktualisiert.`;
+      resultEl.style.color = 'var(--turf-bright)';
+    } else {
+      resultEl.textContent = `Fehlgeschlagen (${out.reason||'unbekannt'})${out.detail?': '+out.detail:''}.`;
+      resultEl.style.color = 'var(--danger)';
+    }
+    e.target.disabled = false; e.target.textContent = 'Jetzt neu berechnen';
+  });
   document.getElementById('admin-great-reset').addEventListener('click', triggerGreatReset);
   document.getElementById('admin-seed-leagues').addEventListener('click', async (e)=>{
     e.target.disabled = true; e.target.textContent = 'Läuft…';
@@ -17491,79 +17607,111 @@ function drawClubGrid(){
   }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Spieler gefunden</h3><p>Versuche einen anderen Filter oder \u00f6ffne ein Pack im Kartenladen.</p></div>`});
 }
 
-// ===== KARTEN-INDEX: nachschlagbares Lexikon ausschlie\u00dflich der eigenen Sammlung (nie fremder/nicht
-// besessener Karten) - anders als "Mein Verein" (das jede Kopie einzeln als eigene Kader-Kachel zeigt)
-// gruppiert der Index nach Karten-TEMPLATE (ein Eintrag pro cardId, mit Kopienz\u00e4hler), damit jede
-// Karte hier wie ein Lexikoneintrag funktioniert: anklicken zeigt Bio/Werte plus alles, was sich \u00fcber
-// Marktwert, Erhalt und Bezugsquelle sagen l\u00e4sst. =====
-let cardIndexFilter = {q:'', pos:'ALL', nat:'ALL', lg:'ALL', club:'ALL', variant:'ALL', minOv:'', sort:'ov'};
-// One entry per distinct owned cardId - {card, entries:[collection rows for this cardId]} - so the grid
-// shows "how many different cards do I own" while the detail modal can still answer "how many COPIES".
-function ownedCardIndexEntries(){
-  const byId = new Map();
-  collection.forEach(entry=>{
-    const card = leveledOwnedCard(entry);
-    if(!card) return;
-    if(!byId.has(card.id)) byId.set(card.id, {card, entries:[]});
-    byId.get(card.id).entries.push(entry);
-  });
-  return [...byId.values()];
+// ===== INDEX: nachschlagbares Lexikon JEDER Karte und jedes Trainers im Spiel - entdeckte (=besessene)
+// Eintraege zeigen alles, unentdeckte nur eine schwarze "?"-Silhouette (Name/Werte/alles andere bleibt
+// verborgen, bis die Karte tatsaechlich gezogen/verdient wird). Gruppiert nach Karten-TEMPLATE (ein
+// Eintrag pro id, mit Kopienzaehler) statt einer Kachel pro Kader-Kopie wie in "Mein Verein".
+let cardIndexFilter = {q:'', pos:'ALL', nat:'ALL', lg:'ALL', club:'ALL', variant:'ALL', minOv:'', sort:'ov', ownedOnly:false};
+// The full catalog - EVERY player card (adminFullCardPool - force-builds the 2 lazily-registered WM26
+// pools too, see its own comment) plus every manager (MGR_BY_ID is fully static, no lazy pools there) -
+// built once and cached, since re-walking BY_ID/MGR_BY_ID (many thousands of entries) on every keystroke
+// is exactly the kind of avoidable per-render cost that made the very first version of this index lag so
+// badly. Ownership itself is intentionally NOT cached here (collection/managerCollection change far more
+// often than the catalog does) - see cardIndexOwnedCounts, computed fresh but cheaply on every draw.
+let cardIndexUniverseCache = null;
+function buildCardIndexUniverse(){
+  if(cardIndexUniverseCache) return cardIndexUniverseCache;
+  const players = adminFullCardPool();
+  const managers = Array.from(MGR_BY_ID.values());
+  cardIndexUniverseCache = players.map(c=>({id:c.id, kind:'player', card:c}))
+    .concat(managers.map(c=>({id:c.id, kind:'manager', card:c})));
+  return cardIndexUniverseCache;
 }
-function renderCardIndex(view){
-  const owned = ownedCardIndexEntries();
+// Filter dropdown options come from the FULL catalog now (not just what you own) - browsing "all Brazil
+// cards" and seeing a few discovered plus a wall of "?" silhouettes for the rest is the point of a real
+// index (what's out there vs. what you've found), same idea as a Pok\u00e9dex regional filter. Cached
+// alongside the catalog since these are intrinsic DB values that never change mid-session.
+let cardIndexFilterOptionsCache = null;
+function cardIndexFilterOptions(){
+  if(cardIndexFilterOptionsCache) return cardIndexFilterOptionsCache;
+  const universe = buildCardIndexUniverse();
   const distinctSorted = (getValue, getLabel)=>{
     const map = new Map();
-    owned.forEach(x=>{ const v = getValue(x.card); if(v && !map.has(v)) map.set(v, getLabel(x.card)); });
+    universe.forEach(x=>{ if(x.kind==='manager') return; const v = getValue(x.card); if(v && !map.has(v)) map.set(v, getLabel(x.card)); });
     return [...map.entries()].sort((a,b)=>a[1].localeCompare(b[1],'de'));
   };
-  const natOptions = distinctSorted(c=>c.nat, c=>natDE(c.nat));
-  const lgOptions = distinctSorted(c=>c.lg, c=>c.lg);
-  const clubOptions = distinctSorted(c=>c.club, c=>c.club);
-  const variantOptions = distinctSorted(c=>c.variant||'base', c=>c.variantLabel||'Standard');
-  const totalCopies = collection.length;
+  cardIndexFilterOptionsCache = {
+    nat: distinctSorted(c=>c.nat, c=>natDE(c.nat)),
+    lg: distinctSorted(c=>c.lg, c=>c.lg),
+    club: distinctSorted(c=>c.club, c=>c.club),
+    variant: distinctSorted(c=>c.variant||'base', c=>c.variantLabel||'Standard'),
+  };
+  return cardIndexFilterOptionsCache;
+}
+function cardIndexOwnedCounts(){
+  const players = new Map(), managers = new Map();
+  collection.forEach(c=>players.set(c.cardId, (players.get(c.cardId)||0)+1));
+  managerCollection.forEach(m=>managers.set(m.mgrId, (managers.get(m.mgrId)||0)+1));
+  return {players, managers};
+}
+function renderCardIndex(view){
+  const opts = cardIndexFilterOptions();
+  const universe = buildCardIndexUniverse();
+  const owned = cardIndexOwnedCounts();
+  const discoveredCount = universe.filter(x=> (x.kind==='manager'?owned.managers:owned.players).has(x.id)).length;
+  const discoveredPct = universe.length ? Math.round(discoveredCount/universe.length*100) : 0;
+  const totalCopies = collection.length + managerCollection.length;
+  let ownedRap = 0;
+  const seenRap = new Set();
+  collection.forEach(c=>{ if(seenRap.has(c.cardId)) return; seenRap.add(c.cardId); const base = BY_ID.get(c.cardId); if(base) ownedRap += computeRAP(base); });
   view.innerHTML = `
     <div class="view-head">
-      <h2>Karten-Index</h2>
-      <p>Nachschlagewerk deiner Sammlung \u2014 nur Karten, die du tats\u00e4chlich besitzt. Rating, Werte, Bio, aktuelle Marktangebote, wie viele Exemplare weltweit im Umlauf sind, wann du sie bekommen hast und wo man sie herbekommt.</p>
+      <h2>\ud83d\udcc7 Index</h2>
+      <p>Jede Karte und jeder Trainer im Spiel \u2014 entdeckte zeigen alles (Werte, Bio, Marktwert, Bezugsquelle, ...), unentdeckte bleiben als <b>?</b>-Silhouette verborgen, bis du sie tats\u00e4chlich bekommst.</p>
     </div>
     <div class="cardidx-summary">
-      <div class="cardidx-stat-tile"><div class="v">${owned.length}</div><div class="l">Verschiedene Karten</div></div>
-      <div class="cardidx-stat-tile"><div class="v">${totalCopies}</div><div class="l">Kopien insgesamt</div></div>
-      <div class="cardidx-stat-tile"><div class="v">${formatCoins(owned.reduce((s,x)=>s+computeRAP(x.card),0))}</div><div class="l">Gesamtwert (RAP)</div></div>
+      <div class="cardidx-stat-tile"><div class="v">${discoveredCount.toLocaleString('de-DE')} / ${universe.length.toLocaleString('de-DE')}</div><div class="l">\ud83d\udd0d Entdeckt</div>
+        <div class="cardidx-discovery-bar"><div style="width:${discoveredPct}%;"></div></div></div>
+      <div class="cardidx-stat-tile"><div class="v">${totalCopies.toLocaleString('de-DE')}</div><div class="l">\ud83c\udfb4 Eigene Kopien insgesamt</div></div>
+      <div class="cardidx-stat-tile"><div class="v">${formatCoins(ownedRap)}</div><div class="l">\ud83d\udcb0 Gesamtwert (RAP)</div></div>
     </div>
     <div class="toolbar" style="margin-bottom:10px;">
-      <input id="cardidx-search" placeholder="Spieler suchen..." value="${cardIndexFilter.q}">
+      <input id="cardidx-search" placeholder="\ud83d\udd0e Spieler/Trainer suchen (nur entdeckte)..." value="${cardIndexFilter.q}">
       <select id="cardidx-pos">
         <option value="ALL">Alle Positionen</option>
-        <option value="GK">Torh\u00fcter</option>
-        <option value="DEF">Verteidiger</option>
-        <option value="MID">Mittelfeldspieler</option>
-        <option value="FWD">St\u00fcrmer</option>
+        <option value="GK">\ud83e\udde4 Torh\u00fcter</option>
+        <option value="DEF">\ud83d\udee1\ufe0f Verteidiger</option>
+        <option value="MID">\u2699\ufe0f Mittelfeldspieler</option>
+        <option value="FWD">\u2694\ufe0f St\u00fcrmer</option>
+        <option value="MGR">\ud83d\udccb Trainer</option>
       </select>
       <select id="cardidx-nat">
         <option value="ALL">Alle Nationen</option>
-        ${natOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+        ${opts.nat.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
       </select>
       <select id="cardidx-lg">
         <option value="ALL">Alle Ligen</option>
-        ${lgOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+        ${opts.lg.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
       </select>
       <select id="cardidx-club">
         <option value="ALL">Alle Vereine</option>
-        ${clubOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+        ${opts.club.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
       </select>
       <select id="cardidx-variant">
         <option value="ALL">Alle Varianten</option>
-        ${variantOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+        ${opts.variant.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
       </select>
       <select id="cardidx-sort">
         <option value="ov">Sortierung: Rating (hoch\u2192niedrig)</option>
-        <option value="name">Sortierung: Name (A\u2192Z)</option>
+        <option value="name">Sortierung: Name (A\u2192Z, nur entdeckte)</option>
         <option value="copies">Sortierung: Kopien (meiste zuerst)</option>
         <option value="newest">Sortierung: Zuletzt erhalten</option>
         <option value="rap">Sortierung: Marktwert/RAP (hoch\u2192niedrig)</option>
       </select>
       <input id="cardidx-min-ov" type="number" min="1" max="115" placeholder="Min. Rating" value="${cardIndexFilter.minOv||''}" style="max-width:110px;">
+      <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;padding:0 4px;">
+        <input type="checkbox" id="cardidx-owned-only" ${cardIndexFilter.ownedOnly?'checked':''}> Nur eigene Karten
+      </label>
       <button class="action-btn secondary" id="cardidx-filters-reset" style="width:auto;padding:8px 12px;font-size:11.5px;">Filter zur\u00fccksetzen</button>
     </div>
     <div class="mono hint" id="cardidx-summary-line" style="margin-bottom:10px;"></div>
@@ -17582,14 +17730,13 @@ function renderCardIndex(view){
   document.getElementById('cardidx-variant').addEventListener('change', e=>{ cardIndexFilter.variant=e.target.value; drawCardIndexGrid(); });
   document.getElementById('cardidx-sort').addEventListener('change', e=>{ cardIndexFilter.sort=e.target.value; drawCardIndexGrid(); });
   document.getElementById('cardidx-min-ov').addEventListener('input', e=>{ cardIndexFilter.minOv=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-owned-only').addEventListener('change', e=>{ cardIndexFilter.ownedOnly=e.target.checked; drawCardIndexGrid(); });
   document.getElementById('cardidx-filters-reset').addEventListener('click', ()=>{
-    cardIndexFilter = {q:'', pos:'ALL', nat:'ALL', lg:'ALL', club:'ALL', variant:'ALL', minOv:'', sort:'ov'};
+    cardIndexFilter = {q:'', pos:'ALL', nat:'ALL', lg:'ALL', club:'ALL', variant:'ALL', minOv:'', sort:'ov', ownedOnly:false};
     renderCardIndex(view);
   });
   drawCardIndexGrid();
-  loadCardMintCounts(); // fire-and-forget - only the detail modal actually displays this, but starting
-                         // the load as soon as the index opens means it's likely already cached by the
-                         // time someone taps into a card, instead of every first click paying for it.
+  loadCardMintCounts(); loadMgrMintCounts(); // fire-and-forget prefetch, see the detail modal below
 }
 function cardIndexOwnedEarliestObtained(entries){
   const dates = entries.map(e=>e.obtainedAt).filter(Boolean);
@@ -17598,48 +17745,73 @@ function cardIndexOwnedEarliestObtained(entries){
 function drawCardIndexGrid(){
   const grid = document.getElementById('cardidx-grid');
   if(!grid) return;
-  let items = ownedCardIndexEntries();
-  if(cardIndexFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(cardIndexFilter.q.toLowerCase()));
-  if(cardIndexFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===cardIndexFilter.pos);
-  if(cardIndexFilter.nat!=='ALL') items = items.filter(x=>x.card.nat===cardIndexFilter.nat);
-  if(cardIndexFilter.lg!=='ALL') items = items.filter(x=>x.card.lg===cardIndexFilter.lg);
-  if(cardIndexFilter.club!=='ALL') items = items.filter(x=>x.card.club===cardIndexFilter.club);
-  if(cardIndexFilter.variant!=='ALL') items = items.filter(x=>(x.card.variant||'base')===cardIndexFilter.variant);
+  const universe = buildCardIndexUniverse();
+  const owned = cardIndexOwnedCounts();
+  let items = universe.map(x=>{
+    const copies = (x.kind==='manager'?owned.managers:owned.players).get(x.id)||0;
+    return {...x, copies, discovered: copies>0};
+  });
+  if(cardIndexFilter.ownedOnly) items = items.filter(x=>x.discovered);
+  // a text search can only ever match a NAME you already know - undiscovered entries never match,
+  // by design (that's the whole point of hiding their name behind "?").
+  if(cardIndexFilter.q){
+    const q = cardIndexFilter.q.toLowerCase();
+    items = items.filter(x=>x.discovered && x.card.n && x.card.n.toLowerCase().includes(q));
+  }
+  if(cardIndexFilter.pos!=='ALL'){
+    items = cardIndexFilter.pos==='MGR' ? items.filter(x=>x.kind==='manager')
+      : items.filter(x=>x.kind==='player' && posGroup(x.card.pos)===cardIndexFilter.pos);
+  }
+  if(cardIndexFilter.nat!=='ALL') items = items.filter(x=>x.kind==='player' && x.card.nat===cardIndexFilter.nat);
+  if(cardIndexFilter.lg!=='ALL') items = items.filter(x=>x.kind==='player' && x.card.lg===cardIndexFilter.lg);
+  if(cardIndexFilter.club!=='ALL') items = items.filter(x=>x.kind==='player' && x.card.club===cardIndexFilter.club);
+  if(cardIndexFilter.variant!=='ALL') items = items.filter(x=>x.kind==='player' && (x.card.variant||'base')===cardIndexFilter.variant);
   if(cardIndexFilter.minOv){
     const minOv = Math.floor(Number(cardIndexFilter.minOv)||0);
     if(minOv>0) items = items.filter(x=>x.card.ov>=minOv);
   }
   items.sort((a,b)=>{
-    if(cardIndexFilter.sort==='name') return a.card.n.localeCompare(b.card.n,'de');
-    if(cardIndexFilter.sort==='copies') return b.entries.length-a.entries.length;
-    if(cardIndexFilter.sort==='rap') return computeRAP(b.card)-computeRAP(a.card);
-    if(cardIndexFilter.sort==='newest') return (cardIndexOwnedEarliestObtained(b.entries)||0)-(cardIndexOwnedEarliestObtained(a.entries)||0);
+    if(cardIndexFilter.sort==='name') return (a.discovered?a.card.n:'zzz').localeCompare(b.discovered?b.card.n:'zzz','de');
+    if(cardIndexFilter.sort==='copies') return b.copies-a.copies;
+    if(cardIndexFilter.sort==='rap') return (b.discovered?computeRAP(b.card):-1)-(a.discovered?computeRAP(a.card):-1);
+    if(cardIndexFilter.sort==='newest'){
+      const dateOf = x=>{ if(!x.discovered) return 0; const rows = x.kind==='manager' ? [] : collection.filter(c=>c.cardId===x.id); return cardIndexOwnedEarliestObtained(rows)||0; };
+      return dateOf(b)-dateOf(a);
+    }
     return b.card.ov-a.card.ov;
   });
   const summaryEl = document.getElementById('cardidx-summary-line');
-  if(summaryEl) summaryEl.textContent = `${items.length} von ${ownedCardIndexEntries().length} Karten in deiner Sammlung angezeigt`;
-  renderLazyGrid(grid, items, ({card, entries})=>{
+  if(summaryEl) summaryEl.textContent = `${items.length.toLocaleString('de-DE')} von ${universe.length.toLocaleString('de-DE')} Eintr\u00e4gen angezeigt (${items.filter(x=>x.discovered).length.toLocaleString('de-DE')} entdeckt)`;
+  renderLazyGrid(grid, items, (item)=>{
+    if(!item.discovered){
+      const div = document.createElement('div');
+      div.className = 'cardidx-mystery-tile';
+      div.innerHTML = `<div class="cardidx-mystery-q">?</div>`;
+      div.addEventListener('click', ()=>showCardIndexDetailModal(item));
+      return div;
+    }
     const wrap = document.createElement('div');
     wrap.className = 'cardidx-card-wrap';
     wrap.style.cursor = 'pointer';
-    if(entries.length>1){
+    if(item.copies>1){
       const badge = document.createElement('div');
       badge.className = 'cardidx-copies-badge';
-      badge.textContent = `\u00d7${entries.length}`;
+      badge.textContent = `\u00d7${item.copies}`;
       wrap.appendChild(badge);
     }
-    wrap.appendChild(cardEl(card, 'mini'));
-    wrap.addEventListener('click', ()=>showCardIndexDetailModal(card, entries));
+    wrap.appendChild(cardEl(item.card, 'mini'));
+    wrap.addEventListener('click', ()=>showCardIndexDetailModal(item));
     return wrap;
-  }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Karten gefunden</h3><p>Versuche einen anderen Filter, oder \u00f6ffne ein Pack im Kartenladen \u2014 der Index zeigt nur Karten, die du bereits besitzt.</p></div>`});
+  }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Eintr\u00e4ge gefunden</h3><p>Versuche einen anderen Filter.</p></div>`});
 }
-// Named, non-Pack sources - checked BEFORE the Monte-Carlo Pack simulation below, since every one of
-// these is a hand-authored one-off reward that either never sits in any PACKS pool at all (quest chain/
-// admin/achievement/Icon-Swap/Ballon d'Or/PRIME grants), or - the 3 unique SBC rewards - is technically
+// Named, non-Pack sources - checked BEFORE the exact Pack-pool check below, since every one of these is
+// a hand-authored one-off reward that either never sits in any PACKS pool at all (quest chain/admin/
+// achievement/Icon-Swap/Ballon d'Or/PRIME grants), or - the 3 unique SBC rewards - is technically
 // reachable only by completing that exact SBC, never a random pull. Detected generically off shared
 // fields/variants those grant paths already stamp onto the card (see each grant site), not hardcoded
 // per-card-id lists, so a newly added card of the same kind is automatically covered too.
 function cardSpecialSource(card){
+  if(card.isManager) return null;
   if(card.variant==='admin') return 'Nur pers\u00f6nlich von einem Admin vergeben (Debug-/Easter-Egg-Karte) \u2014 kein regul\u00e4rer Erhalt im Spiel m\u00f6glich.';
   const sbc = SBC_DEFS.find(s=>s.directCardId===card.id);
   if(sbc) return `Einmalige Belohnung f\u00fcr den Abschluss der Kader-Herausforderung \u201e${sbc.name}\u201c (Herausforderungen-Tab).`;
@@ -17655,98 +17827,337 @@ function cardSpecialSource(card){
   if(card.variant==='week_mvp') return 'Wochen-Pass-Belohnung (Level 15 oder 30) \u2014 rotiert w\u00f6chentlich, aktuell eventuell nicht mehr im Angebot.';
   return null;
 }
-// Rather than hand-maintaining which of the ~20 PACKS pools contains a given card (every pool is built
-// from opaque range/variant filters inside each pack's own draw() closure), just run every pack's real
-// draw() function a bunch of times and see whether the card actually comes out - authoritative, and
-// self-updates if a pack's pool ever changes, at the cost of being probabilistic for very rare pulls
-// (a <1%-per-pack card can occasionally be missed). Cached per card id for the rest of the session.
+// Exact (not sampled) pack-pool membership check: temporarily instruments the shared pick() helper
+// while calling each pack's own draw() once, so EVERY pool that draw() call ever builds gets inspected
+// for the card - not just whichever single card randomly "won" the pick. This is what actually fixes
+// "keine Bezugsquelle gefunden" for genuinely pack-obtainable cards: the old approach ran pack.draw()
+// many times and only counted a hit when the exact card was the winner, so a low-probability single
+// card in a large pool (thousands of real-database players) could easily never win across even 150
+// tries even though it's clearly IN the pool - checking pool membership directly can't miss that.
+// Multiple iterations are still needed only to explore packs with several conditional draw branches
+// (a rare captain slot, a tiered rarity roll, etc.) - each branch just needs to be visited once, so far
+// fewer iterations are needed than the old per-card-win sampling ever did.
 let cardPackSourceCache = new Map();
-function computeCardPackSources(card, iterations=150){
+function computeCardPackSources(card, iterations=20){
   if(cardPackSourceCache.has(card.id)) return cardPackSourceCache.get(card.id);
   const hits = [];
+  const realPick = pick;
   PACKS.forEach(pack=>{
-    let count = 0;
-    for(let i=0;i<iterations;i++){
-      let drawn;
-      try{ drawn = pack.draw({}); }catch(e){ return; }
-      if(Array.isArray(drawn) && drawn.some(c=>c && c.id===card.id)) count++;
-    }
-    if(count>0) hits.push({pack, rate:count/iterations});
+    let found = false, totalP = 0, sampled = 0;
+    try{
+      for(let i=0;i<iterations;i++){
+        pick = (pool)=>{
+          if(pool && pool.length && pool.some(c=>c && c.id===card.id)){ found = true; totalP += 1/pool.length; }
+          return realPick(pool);
+        };
+        try{ pack.draw({}); sampled++; }catch(e){ /* this pack needs args this run didn't supply - skip just this iteration */ }
+      }
+    } finally { pick = realPick; }
+    if(found) hits.push({pack, expectedPerPack: totalP/Math.max(1,sampled)});
   });
-  hits.sort((a,b)=>b.rate-a.rate);
+  hits.sort((a,b)=>b.expectedPerPack-a.expectedPerPack);
   cardPackSourceCache.set(card.id, hits);
   return hits;
+}
+function packChanceLabel(expectedPerPack){
+  if(expectedPerPack>=0.995) return 'so gut wie garantiert';
+  if(expectedPerPack>=0.01) return `ca. ${Math.round(expectedPerPack*100)}% pro Pack`;
+  return '< 1% pro Pack';
 }
 function cardIndexSourceHTML(card){
   const special = cardSpecialSource(card);
   if(special) return `<p class="hint" style="margin:0;">${special}</p>`;
   const hits = computeCardPackSources(card);
-  if(!hits.length) return `<p class="hint" style="margin:0;">Keine aktuelle Bezugsquelle gefunden \u2014 vermutlich ein alter Event-/Turnier-Gewinn, der inzwischen aus der Rotation ist.</p>`;
-  return hits.map(({pack, rate})=>{
-    const rateLabel = rate>=0.3 ? 'h\u00e4ufig' : (rate>=0.08 ? 'gelegentlich' : 'selten');
-    return `<div class="cardidx-source-row">
-      <span>${pack.name}${pack.hidden?' <span class="hint" style="font-size:10px;">(nicht k\u00e4uflich)</span>':pack.cost?` <span class="hint" style="font-size:10px;">(${formatCoins(pack.cost)} Coins)</span>`:''}</span>
-      <span class="cardidx-source-rate">${rateLabel}</span>
-    </div>`;
-  }).join('');
+  if(!hits.length) return `<p class="hint" style="margin:0;">Keine bekannte aktuelle Bezugsquelle \u2014 vermutlich ein vergangener Event-/Turnier-/Community-Gewinn, der nicht mehr im aktiven Pack-Angebot ist.</p>`;
+  return hits.map(({pack, expectedPerPack})=>`<div class="cardidx-source-row">
+      <span>\ud83d\udce6 ${pack.name}${pack.hidden?' <span class="hint" style="font-size:10px;">(nicht k\u00e4uflich)</span>':pack.cost?` <span class="hint" style="font-size:10px;">(${formatCoins(pack.cost)} Coins)</span>`:''}</span>
+      <span class="cardidx-source-rate">${packChanceLabel(expectedPerPack)}</span>
+    </div>`).join('');
 }
 function cardIndexOffersHTML(card){
-  if(card.untradable) return `<p class="hint" style="margin:0;">Nicht handelbar \u2014 kein Transfermarkt-Angebot m\u00f6glich.</p>`;
-  const offers = marketListingsCache.filter(l=>l.itemType!=='manager' && l.itemType!=='pack' && l.cardId===card.id)
-    .sort((a,b)=>a.price-b.price);
+  if(card.untradable) return `<p class="hint" style="margin:0;">\ud83d\udd12 Nicht handelbar \u2014 kein Transfermarkt-Angebot m\u00f6glich.</p>`;
+  const offers = marketListingsCache.filter(l=>l.itemType===(card.isManager?'manager':undefined) || (!card.isManager && l.itemType!=='manager' && l.itemType!=='pack'))
+    .filter(l=>l.cardId===card.id).sort((a,b)=>a.price-b.price);
   if(!offers.length) return `<p class="hint" style="margin:0;">Gerade kein Angebot am Transfermarkt.</p>`;
   return offers.slice(0,5).map(l=>`<div class="cardidx-offer-row">
-      <span>${l.sellerUserId||'Unbekannt'}</span>
-      <span class="mono" style="color:var(--gold);">${formatCoins(l.price)}</span>
+      <span>\ud83d\udc64 ${l.sellerUserId||'Unbekannt'}</span>
+      <span class="mono" style="color:var(--gold);">\ud83e\ude99 ${formatCoins(l.price)}</span>
     </div>`).join('') + (offers.length>5 ? `<p class="hint" style="margin:6px 0 0;">+${offers.length-5} weitere Angebote am Transfermarkt.</p>` : '');
 }
-function showCardIndexDetailModal(card, entries){
-  const copies = entries.length;
+// ---- "denk sie aus": deterministic per-id filler for bio/detailed-substats on cards that never had
+// real ones (synthetic PLAYERS_BASE filler players, hand-authored quest/admin/event cards) - seeded off
+// the card's own id so the same card always gets the exact same made-up numbers every time it's viewed,
+// rather than a new random guess on every render. Never touches the real card object.
+function seededRng(seed){
+  let s = Math.abs(Math.floor(seed))%2147483647; if(s<=0) s += 2147483646;
+  return ()=>{ s = (s*16807)%2147483647; return (s-1)/2147483646; };
+}
+function synthesizeBio(card){
+  const rng = seededRng(card.id*7+13);
+  const age = 18+Math.floor(rng()*19);
+  const birthdate = new Date(new Date().getFullYear()-age, Math.floor(rng()*12), 1+Math.floor(rng()*27)).toISOString();
+  const height = 168+Math.floor(rng()*27);
+  const weight = Math.round(height*0.42+rng()*10-5);
+  return {birthdate, height, weight, foot: rng()<0.77?'Right':'Left', weakFoot:1+Math.floor(rng()*5), skillMoves:1+Math.floor(rng()*5)};
+}
+function synthesizeSubstats(card){
+  const rng = seededRng(card.id*31+7);
+  const pac=card.pac||55, sho=card.sho||55, pas=card.pas||55, dri=card.dri||55, defn=card.defn||55, phy=card.phy||55;
+  const j = base => Math.max(1, Math.min(99, Math.round(base+(rng()-0.5)*16)));
+  return {
+    acceleration:j(pac), sprintSpeed:j(pac),
+    positioning:j(sho), finishing:j(sho), shotPower:j(sho), longShots:j(sho-5), volleys:j(sho-10), penalties:j(sho-6),
+    vision:j(pas), crossing:j(pas-5), freeKickAccuracy:j(pas-8), shortPassing:j(pas), longPassing:j(pas), curve:j(pas-5),
+    agility:j(dri), balance:j(dri), reactions:j((pac+dri)/2), ballControl:j(dri), dribbling:j(dri), composure:j((pas+dri)/2),
+    interceptions:j(defn), headingAccuracy:j((defn+phy)/2), defensiveAwareness:j(defn), standingTackle:j(defn), slidingTackle:j(defn-5),
+    jumping:j(phy), stamina:j(phy), strength:j(phy), aggression:j(phy-5),
+    gkDiving:card.gk?j(defn):1, gkHandling:card.gk?j(defn):1, gkKicking:card.gk?j(pas):1, gkReflexes:card.gk?j(dri):1, gkPositioning:card.gk?j(defn):1,
+  };
+}
+function cardIndexBioHTML(card){
+  if(card.isManager) return '';
+  const hasReal = card.birthdate || card.height || card.weight || card.skillMoves || card.weakFoot;
+  const b = hasReal ? card : synthesizeBio(card);
+  const stars = n => '\u2605'.repeat(n)+'\u2606'.repeat(5-n);
+  const age = Math.floor((Date.now()-new Date(b.birthdate).getTime())/(365.25*24*3600*1000));
+  const tiles = [
+    ['\ud83c\udf82', `${age}`, 'Alter'], ['\ud83d\udccf', `${b.height} cm`, 'Gr\u00f6\u00dfe'], ['\u2696\ufe0f', `${b.weight} kg`, 'Gewicht'],
+    ['\ud83e\uddb6', b.foot==='Left'?'Links':'Rechts', 'Starker Fu\u00df'], ['\ud83e\uddb6', stars(b.weakFoot), 'Schwacher Fu\u00df'], ['\u2728', stars(b.skillMoves), 'Skill Moves'],
+  ];
+  return `<div class="card-info-section">
+    <div class="card-info-section-title">\ud83d\udccb Spielerdaten${hasReal?'':' <span class="hint" style="font-size:10px;font-weight:400;">(gesch\u00e4tzt \u2014 keine echten Daten hinterlegt)</span>'}</div>
+    <div class="card-info-bio-grid">
+      ${tiles.map(([ic,v,l])=>`<div class="card-info-bio-tile"><div class="v">${ic} ${v}</div><div class="l">${l}</div></div>`).join('')}
+    </div>
+  </div>`;
+}
+function cardIndexDetailedStatsHTML(card){
+  if(card.isManager) return '';
+  let stats = detailedSubstatsFor(card), synthesized = false;
+  if(!stats){ stats = synthesizeSubstats(card); synthesized = true; }
+  const groups = card.gk ? [...SUBSTAT_GROUPS, GK_SUBSTAT_GROUP] : SUBSTAT_GROUPS;
+  return `<div class="card-info-section">
+    <div class="card-info-section-title">\ud83d\udcca Einzelwerte${synthesized?' <span class="hint" style="font-size:10px;font-weight:400;">(gesch\u00e4tzt)</span>':''}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px;">
+      ${groups.map(g=>`<div style="margin-bottom:12px;"><div class="card-info-substat-group-title">${g.label}</div>${g.keys.map(([k,lbl])=>stats[k]!=null?substatRowHTML(lbl,stats[k]):'').join('')}</div>`).join('')}
+    </div>
+  </div>`;
+}
+// Real EA FC PlayStyle effects, one line each (base name only - the "+" elite tier is the same effect,
+// just stronger) - PLAYSTYLE_INFO only carries icon/kind/elite, never a description, so "was macht das
+// eigentlich" was previously answerable nowhere in the game at all.
+const PLAYSTYLE_DESC = {
+  'Abdr\u00e4ngen':'Besseres seitliches Verteidigen im Laufduell, ohne ins Tackling zu m\u00fcssen.',
+  'Abfangen':'H\u00f6here Chance, gegnerische P\u00e4sse abzufangen.',
+  'Akrobat.':'Bessere Technik bei akrobatischen Abschl\u00fcssen (Fallr\u00fcckzieher, Direktabnahmen).',
+  'Angeschn. Schuss':'Pr\u00e4zisere, st\u00e4rker angeschnittene Distanzsch\u00fcsse ins lange Eck.',
+  'Antizipation':'Reagiert schneller auf B\u00e4lle in der N\u00e4he und blockt/tackelt effektiver.',
+  'Beinarbeit':'Engere Ballkontrolle bei schnellen Richtungswechseln im Dribbling.',
+  'Block':'H\u00f6here Chance, Sch\u00fcsse und P\u00e4sse mit dem K\u00f6rper zu blocken.',
+  'Deflector':'Torh\u00fcter kontrolliert Abpraller nach Paraden besser statt sie freizugeben.',
+  'Durchsetzungskraft':'Gewinnt Zweik\u00e4mpfe und schirmt den Ball dank k\u00f6rperlicher Pr\u00e4senz besser ab.',
+  'Einfallsreich':'Unvorhersehbarere, kreativere erste Ballkontakte und P\u00e4sse.',
+  'Entsch. Pass':'Schnellere, sch\u00e4rfere Steckp\u00e4sse durch die letzte gegnerische Linie.',
+  'First Touch':'Sicherere Ballannahme unter Druck, weniger Fehler beim ersten Kontakt.',
+  'Flacher Vollspannschuss':'H\u00e4rtere, flach gehaltene Distanzsch\u00fcsse.',
+  'Flankenfang':'Torh\u00fcter f\u00e4ngt Flanken zuverl\u00e4ssiger ab statt sie nur abzuwehren.',
+  'Gamechanger':'Bleibt auch unter Druck und im vollen Sprint ballsicher und kreativ.',
+  'Gro\u00dfe Reichweite':'Torh\u00fcter hat eine gr\u00f6\u00dfere Parade-Reichweite.',
+  'Gr\u00e4tsche':'Zuverl\u00e4ssigere Gr\u00e4tschen mit geringerem Foul-/Kartenrisiko.',
+  'Harter Pass':'Schnellere, stark angeschnittene Flach- und Flankenp\u00e4sse.',
+  'Herauskommen':'Torh\u00fcter kommt aggressiver und schneller im 1-gegen-1 heraus.',
+  'Kante':'Gewinnt k\u00f6rperbetonte Lauf- und Kopfballduelle leichter.',
+  'Kopfballmacht':'Deutlich druckvollere, platziertere Kopfb\u00e4lle.',
+  'Langer Einwurf':'Einw\u00fcrfe erreichen fast Flankenqualit\u00e4t-Weiten.',
+  'Lupfer':'Pr\u00e4zisere Lupfer \u00fcber einen herausgekommenen Torh\u00fcter.',
+  'Powerschuss':'Extrem harte, aufgeladene Distanzsch\u00fcsse.',
+  'Pr\u00e4ziser Kopfball':'Platzierte statt nur kraftvolle Kopfb\u00e4lle.',
+  'Raserei':'Kurzer, extrem schneller Antritts-Sprint bei freier Bahn.',
+  'Ruhender Ball':'Bessere Freist\u00f6\u00dfe und Elfmeter.',
+  'Ruhepol':'Bleibt auch unter direktem Gegnerdruck ballsicher.',
+  'Schneller Schritt':'Explosivere kurze Antritte auf engem Raum.',
+  'Schnittstellenpass':'Schnelle, hart getretene Steckp\u00e4sse in die Schnittstelle.',
+  'Technik':'Sauberere Ballkontrolle bei technisch anspruchsvollen Aktionen.',
+  'Tiki-Taka':'Schnellere, pr\u00e4zisere Doppelp\u00e4sse auf engem Raum.',
+  'Tricks':'F\u00fchrt Dribbelmoves schneller und \u00fcberzeugender aus.',
+  'Unerbittlich':'Erm\u00fcdet sp\u00fcrbar langsamer \u00fcber die volle Spielzeit.',
+  'Weiter Abwurf':'Torh\u00fcter wirft deutlich weiter ab statt nur kurz.',
+  'Weiter Pass':'Pr\u00e4zisere lange Diagonal- und Steilp\u00e4sse.',
+};
+function playstyleDescFor(name){ return PLAYSTYLE_DESC[name.replace(/\+$/,'')] || ''; }
+function cardIndexPlaystyleHTML(card){
+  if(card.isManager) return '';
+  const traits = resolveCardTraits(card);
+  if(!traits.length) return '';
+  const sorted = traits.slice().sort((a,b)=>{
+    const ea = PLAYSTYLE_INFO[a]?PLAYSTYLE_INFO[a].elite:false, eb = PLAYSTYLE_INFO[b]?PLAYSTYLE_INFO[b].elite:false;
+    return (eb?1:0)-(ea?1:0);
+  });
+  return `<div class="card-info-section">
+    <div class="card-info-section-title">\u26a1 PlayStyles</div>
+    <div class="cardidx-ps-grid">
+      ${sorted.map(t=>{
+        const info = PLAYSTYLE_INFO[t];
+        return `<div class="cardidx-ps-item${info&&info.elite?' elite':''}">
+          ${info?`<img src="${info.icon}" alt="">`:''}
+          <div><div class="t">${t}</div><div class="d">${playstyleDescFor(t)}</div></div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+function cardIndexChemistryHTML(card){
+  if(card.isManager) return '';
+  const alwaysMax = card.lg==='Legenden' || card.lg==='OG Icons';
+  const text = alwaysMax
+    ? 'Legenden- und OG-Icons-Karten spielen sich \u00fcberall zu Hause: immer maximale Chemie (3 Sterne), egal wer sonst noch in der Aufstellung steht.'
+    : 'Chemie richtet sich nach Vereins-, Liga- und Nationalit\u00e4ts-Verbindungen zu den Spielern neben dieser Position in deiner Aufstellung (bis zu 3 Sterne), plus einem kleinen Bonus bei gleicher Nationalit\u00e4t wie dein Trainer.';
+  return `<div class="card-info-section">
+    <div class="card-info-section-title">\ud83d\udd17 Chemie</div>
+    <p class="hint" style="margin:0;">${text}</p>
+  </div>`;
+}
+// Every OTHER card in the game that's the exact same real player (shared baseId) - a different variant/
+// rating of someone you already have partly discovered. Deliberately does NOT include same-id leveled
+// (XP-boosted) copies of the SAME card - those keep the same id (see applyCardLevel), so they were never
+// separate catalog entries to begin with and can't show up here at all.
+function otherVersionsOf(card){
+  if(card.isManager || !card.baseId) return [];
+  const out = [];
+  BY_ID.forEach(c=>{ if(c.id!==card.id && !c.isManager && c.baseId===card.baseId) out.push(c); });
+  return out.sort((a,b)=>b.ov-a.ov);
+}
+function cardIndexVersionsHTML(card){
+  const versions = otherVersionsOf(card);
+  if(!versions.length) return '';
+  const rows = versions.map(v=>{
+    const isOwned = collection.some(c=>c.cardId===v.id);
+    return `<div class="cardidx-version-row" data-cid="${v.id}">
+      <span class="ov">${v.ov}</span>
+      <span class="nm">${v.variant && v.variant!=='base' ? v.variantLabel : 'Standard'}</span>
+      ${isOwned?'<span class="own">\u2713 besitzt</span>':'<span class="hint" style="font-size:10px;">?</span>'}
+    </div>`;
+  }).join('');
+  return `<div class="card-info-section">
+    <div class="card-info-section-title">\ud83d\uddc2\ufe0f Andere Versionen dieses Spielers</div>
+    ${rows}
+  </div>`;
+}
+// Icon-first identity chips (Nation/Liga/Verein/Version) - flags/crests/badges before any text, per the
+// index's whole design language; each falls back to a plain initials chip when no real logo is on file.
+function cardIndexChipsHTML(card){
+  if(card.isManager) return '';
+  const chips = [];
+  if(card.nat){
+    const code = NAT_FLAG[card.nat];
+    chips.push(`<div class="cardidx-chip">${code?`<img class="cardidx-chip-flag" src="https://flagcdn.com/w40/${code}.png" alt="" loading="lazy" onerror="this.style.display='none'">`:`<div class="cardidx-chip-mono">${(card.nat||'?').slice(0,2).toUpperCase()}</div>`}${natDE(card.nat)}</div>`);
+  }
+  if(card.lg){
+    const logo = resolveLeagueLogo(card);
+    chips.push(`<div class="cardidx-chip">${logo?`<img src="${logo}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<div class="cardidx-chip-mono">${initialsOf2(card.lg)}</div>`}${card.lg}</div>`);
+  }
+  if(card.club){
+    const isLegendIcon = card.lg==='Legenden' || card.lg==='OG Icons';
+    const logo = isLegendIcon ? LEGENDS_ICON_BADGE : (CLUB_LOGO[card.club]||card.clubImg);
+    chips.push(`<div class="cardidx-chip">${logo?`<img src="${logo}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<div class="cardidx-chip-mono">${initialsOf2(card.club)}</div>`}${card.club}</div>`);
+  }
+  if(card.variant && card.variant!=='base'){
+    const icon = VARIANT_ICON[card.theme];
+    chips.push(`<div class="cardidx-chip">${icon?`<svg width="18" height="18" viewBox="0 0 24 24">${icon}</svg>`:''}<b>${card.variantLabel}</b></div>`);
+  }
+  if(!chips.length) return '';
+  return `<div class="cardidx-chip-row" style="margin-bottom:14px;">${chips.join('')}</div>`;
+}
+function cardIndexPositionsHTML(card){
+  if(card.isManager) return '';
+  const posList = cardPositions(card.pos);
+  if(!posList.length) return '';
+  return `<div style="margin-bottom:14px;">${posList.map((p,idx)=>{
+    const bonus = POS_BONUS_LABEL[positionBonusTier(card.ov, idx)];
+    return `<span class="cardidx-pos-pill">${posDE(p)}${bonus?` <b>${bonus}</b>`:''}</span>`;
+  }).join('')}</div>`;
+}
+function showCardIndexDetailModal(item){
+  const {card, kind, discovered} = item;
+  if(!discovered){
+    openModal(`
+      <h2 style="margin-bottom:2px;">?</h2>
+      <p class="hint" style="margin:0 0 14px;">Noch nicht entdeckt \u2014 alle Informationen zu dieser Karte bleiben verborgen, bis du sie tats\u00e4chlich bekommst.</p>
+      <div style="display:flex;justify-content:center;margin-bottom:16px;">
+        <div class="cardidx-mystery-tile" style="width:172px;height:272px;cursor:default;"><div class="cardidx-mystery-q" style="font-size:80px;">?</div></div>
+      </div>
+      <div class="card-info-section">
+        <div class="card-info-section-title">\ud83d\udcc7 Alles Weitere</div>
+        <div class="cardidx-detail-grid">
+          ${['Nation','Liga','Verein','Rating','Positionen','PlayStyles','Marktwert','Bezugsquelle'].map(l=>`<div class="cardidx-detail-tile"><div class="v">?</div><div class="l">${l}</div></div>`).join('')}
+        </div>
+      </div>
+      <button class="modal-close" id="cardidx-close" style="width:100%;margin-top:16px;">Schlie\u00dfen</button>
+    `);
+    document.getElementById('cardidx-close').addEventListener('click', closeModal);
+    return;
+  }
+  const entries = kind==='manager' ? [] : collection.filter(c=>c.cardId===card.id);
+  const copies = item.copies;
   const untradableCopies = entries.filter(e=>e.untradable).length;
   const earliest = cardIndexOwnedEarliestObtained(entries);
-  const obtainedLabel = earliest ? new Date(earliest).toLocaleDateString('de-DE') : 'Unbekannt (vor Karten-Index)';
-  const mintCount = cardMintCache && cardMintCache.has(card.id) ? cardMintCache.get(card.id) : null;
+  const obtainedLabel = earliest ? new Date(earliest).toLocaleDateString('de-DE') : (kind==='manager' ? '\u2014' : 'Unbekannt (vor Index-Update)');
+  const mintCache = kind==='manager' ? mgrMintCache : cardMintCache;
+  const mintCount = mintCache && mintCache.has(card.id) ? mintCache.get(card.id) : null;
+  const mgrBoostText = kind==='manager' ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue} Punkte`) : '';
   openModal(`
     <h2 style="margin-bottom:2px;">${card.n}</h2>
-    <p class="hint" style="margin:0 0 14px;">${card.variant && card.variant!=='base' ? card.variantLabel+' \u00b7 ' : ''}${card.ov} OVR \u00b7 ${natDE(card.nat)||card.nat||''}${card.club?' \u00b7 '+card.club:''}${card.lg?' \u00b7 '+card.lg:''}</p>
-    <div style="display:flex;justify-content:center;margin-bottom:16px;">${cardEl(card).outerHTML}</div>
+    <p class="hint" style="margin:0 0 10px;">${kind==='manager' ? `\ud83d\udccb Trainer \u00b7 ${mgrBoostText}${card.tier?' \u00b7 '+card.tier:''}` : `${card.variant && card.variant!=='base' ? card.variantLabel+' \u00b7 ' : ''}\ud83c\udfc5 ${card.ov} OVR`}</p>
+    <div style="display:flex;justify-content:center;margin-bottom:14px;">${cardEl(card).outerHTML}</div>
+    ${cardIndexChipsHTML(card)}
+    ${cardIndexPositionsHTML(card)}
     <div class="card-info-section">
       <div class="card-info-section-title">\ud83d\udcc7 Deine Sammlung</div>
       <div class="cardidx-detail-grid">
-        <div class="cardidx-detail-tile"><div class="v">${copies}${untradableCopies?` <span class="hint" style="font-size:10px;font-weight:400;">(${untradableCopies} nicht handelbar)</span>`:''}</div><div class="l">Eigene Kopien</div></div>
-        <div class="cardidx-detail-tile"><div class="v">${obtainedLabel}</div><div class="l">Erhalten am (\u00e4lteste Kopie)</div></div>
-        <div class="cardidx-detail-tile"><div class="v" id="cardidx-mint-count">${mintCount!=null ? mintCount.toLocaleString('de-DE') : 'L\u00e4dt\u2026'}</div><div class="l">Exemplare im Umlauf (alle Spieler)</div></div>
-        <div class="cardidx-detail-tile"><div class="v">${formatCoins(computeRAP(card))}</div><div class="l">Gesch\u00e4tzter Marktwert (RAP)</div></div>
+        <div class="cardidx-detail-tile"><div class="v">\ud83c\udfb4 ${copies}${untradableCopies?` <span class="hint" style="font-size:10px;font-weight:400;">(${untradableCopies} \ud83d\udd12)</span>`:''}</div><div class="l">Eigene Kopien</div></div>
+        <div class="cardidx-detail-tile"><div class="v">\ud83d\udcc5 ${obtainedLabel}</div><div class="l">Erhalten am (\u00e4lteste Kopie)</div></div>
+        <div class="cardidx-detail-tile"><div class="v" id="cardidx-mint-count">\ud83c\udf0d ${mintCount!=null ? mintCount.toLocaleString('de-DE') : 'L\u00e4dt\u2026'}</div><div class="l">Exemplare im Umlauf (alle Spieler)</div></div>
+        <div class="cardidx-detail-tile"><div class="v">\ud83d\udcb0 ${formatCoins(computeRAP(card))}</div><div class="l">Gesch\u00e4tzter Marktwert (RAP)</div></div>
       </div>
     </div>
     <div class="card-info-section">
-      <div class="card-info-section-title">\ud83d\udcb0 Aktuelle Angebote (Transfermarkt)</div>
+      <div class="card-info-section-title">\ud83d\udcb1 Aktuelle Angebote (Transfermarkt)</div>
       <div id="cardidx-offers-box">${cardIndexOffersHTML(card)}</div>
     </div>
     <div class="card-info-section">
       <div class="card-info-section-title">\ud83d\udce6 Bezugsquelle</div>
       <div id="cardidx-source-box"><p class="hint" style="margin:0;">Wird berechnet\u2026</p></div>
     </div>
-    ${bioHTML(card)}
-    ${playstyleListHTML(card)}
-    ${detailedStatsHTML(card)}
+    ${cardIndexChemistryHTML(card)}
+    ${cardIndexVersionsHTML(card)}
+    ${cardIndexBioHTML(card)}
+    ${cardIndexPlaystyleHTML(card)}
+    ${cardIndexDetailedStatsHTML(card)}
     <div style="display:flex;gap:10px;margin-top:16px;">
-      <button class="action-btn secondary" id="cardidx-price-history" style="flex:1;">Preisverlauf ansehen</button>
+      ${!card.isManager?'<button class="action-btn secondary" id="cardidx-price-history" style="flex:1;">\ud83d\udcc8 Preisverlauf</button>':''}
       <button class="modal-close" id="cardidx-close" style="flex:1;">Schlie\u00dfen</button>
     </div>
   `);
   document.getElementById('cardidx-close').addEventListener('click', closeModal);
-  document.getElementById('cardidx-price-history').addEventListener('click', ()=>showPriceHistoryModal(card));
-  // source computation (Monte-Carlo over every pack) can take a noticeable moment - render the rest of
-  // the modal instantly, then swap this one section in once ready. Guard every DOM write against the
-  // modal having already been closed/replaced in the meantime.
-  setTimeout(()=>{
+  const priceHistBtn = document.getElementById('cardidx-price-history');
+  if(priceHistBtn) priceHistBtn.addEventListener('click', ()=>showPriceHistoryModal(card));
+  document.querySelectorAll('.cardidx-version-row[data-cid]').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const v = BY_ID.get(Number(row.dataset.cid));
+      if(!v) return;
+      const vCopies = collection.filter(c=>c.cardId===v.id).length;
+      showCardIndexDetailModal({id:v.id, kind:'player', card:v, copies:vCopies, discovered:vCopies>0});
+    });
+  });
+  // Bezugsquelle-Berechnung kann kurz dauern - Rest der Ansicht sofort zeigen, Sektion danach nachladen.
+  if(!card.isManager) setTimeout(()=>{
     const box = document.getElementById('cardidx-source-box');
     if(box) box.innerHTML = cardIndexSourceHTML(card);
   }, 10);
-  loadCardMintCounts().then(()=>{
+  else { const box = document.getElementById('cardidx-source-box'); if(box) box.innerHTML = `<p class="hint" style="margin:0;">Trainer stammen aus eigenen Pack-Pools \u2014 Details siehe Kartenladen-Beschreibung des jeweiligen Packs.</p>`; }
+  (kind==='manager' ? loadMgrMintCounts() : loadCardMintCounts()).then(()=>{
     const el = document.getElementById('cardidx-mint-count');
-    if(el) el.textContent = (cardMintCache.get(card.id)||0).toLocaleString('de-DE');
+    if(el) el.textContent = `\ud83c\udf0d ${((kind==='manager'?mgrMintCache:cardMintCache).get(card.id)||0).toLocaleString('de-DE')}`;
   });
   if(!card.untradable && !marketListingsCache.length){
     loadMarketListings().then(()=>{
