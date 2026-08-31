@@ -9053,7 +9053,8 @@ function mintCountLabel(id, isManager){
   const trad = isManager ? mgrMintTradableCount(id) : cardMintTradableCount(id);
   const ut = isManager ? mgrMintUntradableCount(id) : cardMintUntradableCount(id);
   const total = trad + ut;
-  return `${total.toLocaleString('de-DE')}${ut>0?` <span class="hint" style="font-size:10px;font-weight:400;">(davon 🔒 ${ut.toLocaleString('de-DE')} UT)</span>`:''}`;
+  const utIcon = `<img src="https://images.zenithfcm.com/untradable-flag-player-card.png" alt="" title="Nicht handelbar" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px;">`;
+  return `${total.toLocaleString('de-DE')}${ut>0?` <span class="hint" style="font-size:10px;font-weight:400;">(davon ${utIcon} ${ut.toLocaleString('de-DE')} UT)</span>`:''}`;
 }
 async function loadCardMintCounts(){
   if(cardMintServerCache) return cardMintServerCache;
