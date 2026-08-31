@@ -1883,10 +1883,55 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .bracket-match.bracket-just-revealed{animation:bracketReveal .5s cubic-bezier(.34,1.56,.64,1);}
 .bracket-match.bracket-final-revealed{animation:bracketReveal .5s cubic-bezier(.34,1.56,.64,1), legikoneGlow 1.6s ease-in-out 2;border-color:var(--gold);}
 .bracket-match.bracket-match-pending{display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;animation:legikoneGlow 1.6s ease-in-out infinite;}
-.bracket-live-btn{background:var(--turf-bright);color:#04140f;border:none;border-radius:6px;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;width:100%;height:100%;}
+.bracket-live-btn{background:var(--turf-bright);color:#04140f;border:none;border-radius:6px;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:6px;}
 .bracket-live-btn:hover{filter:brightness(1.08);}
+.bracket-match.bracket-match-final{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 16px -4px var(--gold);background:linear-gradient(180deg,rgba(255,215,0,.08),var(--panel2));}
 @keyframes tableRowIn{0%{opacity:0;transform:translateX(-8px);}100%{opacity:1;transform:translateX(0);}}
 .bracket-fresh-row{animation:tableRowIn .35s ease both;}
+/* ---- WM 2026: unscoped flag icons (the .nc-flag equivalents are .pcard-scoped, WM26 tables/bracket
+   live outside any .pcard) + redesigned group table + bracket side crest/flag chip ---- */
+.wm26-flag{width:20px;height:14px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.15);flex-shrink:0;}
+.wm26-flag-mono{width:20px;height:14px;border-radius:2px;background:rgba(255,255,255,.12);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;flex-shrink:0;}
+.wm26-flag.sm, .wm26-flag-mono.sm{width:15px;height:11px;font-size:6px;}
+.bracket-side-flag{width:15px;height:11px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.15);flex-shrink:0;}
+.bracket-side-flag-mono{width:15px;height:11px;border-radius:2px;background:rgba(255,255,255,.14);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:5.5px;font-weight:700;flex-shrink:0;}
+.bracket-side-you{width:15px;height:11px;border-radius:2px;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--turf-bright);}
+.bracket-side-you svg{width:100%;height:100%;}
+.bracket-side{gap:7px;}
+.bracket-side-name{display:flex;align-items:center;gap:6px;min-width:0;}
+.bracket-col-title{display:flex;align-items:center;justify-content:center;gap:5px;}
+.bracket-col-title .bct-ico{font-size:11px;}
+.wm26-table{margin-bottom:14px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 2px 10px -4px rgba(0,0,0,.4);}
+.wm26-table-title{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;font-size:11.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--chalk);background:linear-gradient(180deg,rgba(255,255,255,.05),transparent);border-bottom:1px solid var(--line);}
+.wm26-table-title .wm26-mine-tag{font-size:9.5px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--turf-bright);background:rgba(95,225,201,.12);border:1px solid rgba(95,225,201,.35);border-radius:20px;padding:2px 8px;}
+.wm26-thead, .wm26-row{display:grid;grid-template-columns:22px 1fr 22px 22px 22px 58px 38px 34px;gap:0;align-items:center;}
+.wm26-thead{padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;background:rgba(255,255,255,.03);}
+.wm26-thead > div, .wm26-row > div{text-align:center;}
+.wm26-thead .wm26-c-team, .wm26-row .wm26-c-team{text-align:left;}
+.wm26-row{padding:7px 10px;font-size:11.5px;border-top:1px solid var(--line);position:relative;transition:background .15s;}
+.wm26-row.q-direct{box-shadow:inset 3px 0 0 var(--turf-bright);}
+.wm26-row.q-third{box-shadow:inset 3px 0 0 var(--gold);}
+.wm26-row.wm26-row-me{background:rgba(95,225,201,.09);}
+.wm26-c-rank{font-family:'JetBrains Mono';color:var(--muted);font-size:10.5px;}
+.wm26-c-team{display:flex;align-items:center;gap:7px;overflow:hidden;}
+.wm26-c-team-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.wm26-c-gf{font-family:'JetBrains Mono';color:var(--muted);}
+.wm26-c-pts{font-weight:800;color:var(--gold);font-size:12.5px;}
+.wm26-legend{display:flex;gap:14px;flex-wrap:wrap;padding:8px 12px;font-size:10px;color:var(--muted);border-top:1px solid var(--line);background:rgba(255,255,255,.02);}
+.wm26-legend span{display:flex;align-items:center;gap:5px;}
+.wm26-legend i{width:8px;height:8px;border-radius:2px;display:inline-block;}
+.wm26-legend i.q-direct{background:var(--turf-bright);}
+.wm26-legend i.q-third{background:var(--gold);}
+.wm26-hero{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:14px;border-radius:12px;background:radial-gradient(120% 160% at 0% 0%,rgba(95,225,201,.14),transparent 60%),var(--panel2);border:1px solid var(--line);}
+.wm26-hero-crest{width:46px;height:46px;flex-shrink:0;}
+.wm26-hero-crest svg{width:100%;height:100%;}
+.wm26-hero-vs{font-size:11px;color:var(--muted);opacity:.7;font-weight:700;}
+.wm26-hero-text{min-width:0;}
+.wm26-hero-text b{color:var(--turf-bright);}
+.wm26-progress-dots{display:flex;gap:5px;margin-top:8px;}
+.wm26-progress-dots i{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block;border:1px solid rgba(255,255,255,.08);}
+.wm26-progress-dots i.done{background:var(--turf-bright);border-color:var(--turf-bright);}
+.wm26-progress-dots i.now{background:var(--gold);border-color:var(--gold);box-shadow:0 0 6px var(--gold);}
 .match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
 .goal-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:6px 10px;border-radius:8px;animation:trayIn .3s;}
 .goal-row.opp{border-left:2px solid var(--danger);}
@@ -23514,27 +23559,41 @@ async function playWM26KnockoutMatch(){
   await sSet('profile', profile);
   renderWM26Panel();
 }
+// real, unscoped flag icon for a group/bracket team - .nc-flag is .pcard-scoped so can't be reused here;
+// the player's own row/side shows their club crest (renderCrestSVG) instead of a flag, since '__PLAYER__'
+// has no NAT_FLAG entry and a crest reads as "you" more clearly than the replaced nation's flag would.
+function wm26FlagChip(nation, isPlayer, variant){
+  if(isPlayer){
+    return variant==='bracket' ? `<div class="bracket-side-you">${renderCrestSVG(profile.crest,15)}</div>` : `<div class="bracket-side-you" style="width:20px;height:14px;">${renderCrestSVG(profile.crest,20)}</div>`;
+  }
+  const code = NAT_FLAG[nation];
+  const imgCls = variant==='bracket' ? 'bracket-side-flag' : 'wm26-flag';
+  const monoCls = variant==='bracket' ? 'bracket-side-flag-mono' : 'wm26-flag-mono';
+  return code ? `<img class="${imgCls}" src="https://flagcdn.com/w40/${code}.png" alt="" title="${natDE(nation)}" loading="lazy" onerror="this.style.display='none'">` : `<div class="${monoCls}" title="${natDE(nation)}">${(nation||'?').slice(0,2).toUpperCase()}</div>`;
+}
 // dedicated renderer (not the shared renderStandingsTableHTML, which only knows win/loss records and
 // derives points as wins*3 - WM group tables need real W-D-L points, since group matches allow draws).
-function renderWM26StandingsHTML(standings){
-  let html = `<div style="margin-bottom:12px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;overflow:hidden;">
-    <div style="display:grid;grid-template-columns:1fr 22px 22px 22px 56px 40px 40px;gap:0;font-size:11px;font-weight:600;background:var(--line);padding:8px;color:var(--muted);text-align:center;">
-      <div style="text-align:left;padding:0 8px;">Team</div><div>S</div><div>U</div><div>N</div><div>Tore</div><div>Diff</div><div>Pkt</div>
-    </div>`;
-  standings.forEach((r,idx)=>{
-    const highlight = idx<2 ? 'background:rgba(95,225,201,0.08);' : (idx===2 ? 'background:rgba(255,215,0,0.05);' : '');
+function renderWM26StandingsHTML(standings, opts={}){
+  const rows = standings.map((r,idx)=>{
+    const qCls = idx<2 ? 'q-direct' : (idx===2 ? 'q-third' : '');
     const label = r.isPlayer ? (profile.displayName||'Du') : natDE(r.nation);
-    html += `<div style="display:grid;grid-template-columns:1fr 22px 22px 22px 56px 40px 40px;gap:0;padding:8px;border-top:1px solid var(--line);${highlight}align-items:center;font-size:11px;">
-      <div style="text-align:left;padding:0 8px;color:${r.isPlayer?'var(--turf-bright)':'var(--chalk)'};font-weight:${r.isPlayer?'700':'400'};">${escBracketName(label)}</div>
-      <div style="text-align:center;color:var(--muted);">${r.w}</div>
-      <div style="text-align:center;color:var(--muted);">${r.d}</div>
-      <div style="text-align:center;color:var(--muted);">${r.l}</div>
-      <div style="text-align:center;color:var(--muted);" class="mono">${r.gf}:${r.ga}</div>
-      <div style="text-align:center;color:var(--muted);">${r.gd>=0?'+':''}${r.gd}</div>
-      <div style="text-align:center;font-weight:600;color:var(--gold);">${r.pts}</div>
+    return `<div class="wm26-row ${qCls}${r.isPlayer?' wm26-row-me':''}">
+      <div class="wm26-c-rank">${idx+1}</div>
+      <div class="wm26-c-team">${wm26FlagChip(r.nation, r.isPlayer)}<span class="wm26-c-team-name" style="color:${r.isPlayer?'var(--turf-bright)':'var(--chalk)'};font-weight:${r.isPlayer?'700':'400'};">${escBracketName(label)}</span></div>
+      <div>${r.w}</div>
+      <div>${r.d}</div>
+      <div>${r.l}</div>
+      <div class="wm26-c-gf">${r.gf}:${r.ga}</div>
+      <div class="mono" style="color:var(--muted);">${r.gd>=0?'+':''}${r.gd}</div>
+      <div class="wm26-c-pts">${r.pts}</div>
     </div>`;
-  });
-  return html+`</div>`;
+  }).join('');
+  return `<div class="wm26-table">
+    ${opts.title ? `<div class="wm26-table-title"><span>${escBracketName(opts.title)}</span>${opts.mine?'<span class="wm26-mine-tag">Deine Gruppe</span>':''}</div>` : ''}
+    <div class="wm26-thead"><div></div><div class="wm26-c-team">Team</div><div>S</div><div>U</div><div>N</div><div>Tore</div><div>Diff</div><div>Pkt</div></div>
+    ${rows}
+    ${opts.legend ? `<div class="wm26-legend"><span><i class="q-direct"></i>Direkt qualifiziert</span><span><i class="q-third"></i>Bester Gruppendritter?</span></div>` : ''}
+  </div>`;
 }
 // Full 5-round bracket tree, reusing the same geometry constants/CSS as the hosted-tournament bracket
 // (BRACKET_MATCH_H etc., buildBracketTreeHTML's .bracket-* classes) but as its own renderer, since
@@ -23551,10 +23610,12 @@ function renderWM26BracketHTML(rounds, playerLoc){
   const totalHeight = BRACKET_TITLE_H + centers[0][centers[0].length-1] + BRACKET_MATCH_H/2 + 6;
   const totalWidth = totalRounds*BRACKET_COL_W + (totalRounds-1)*BRACKET_COL_GAP;
   const teamLabel = team => !team ? 'TBD' : (team.isPlayer ? (profile.displayName||'Du') : natDE(team.nation));
+  const teamFlag = team => !team ? '' : wm26FlagChip(team.nation, team.isPlayer, 'bracket');
+  const roundIcon = ri => ri===totalRounds-1 ? '🏆' : (ri===totalRounds-2 ? '🥉' : '⚽');
   let cols = '', lines = '';
   for(let r=0;r<totalRounds;r++){
     const colLeft = r*(BRACKET_COL_W+BRACKET_COL_GAP);
-    cols += `<div class="bracket-col-title" style="left:${colLeft}px;width:${BRACKET_COL_W}px;">${escBracketName(WM26_STAGE_LABEL[WM26_KO_ORDER[r]])}</div>`;
+    cols += `<div class="bracket-col-title" style="left:${colLeft}px;width:${BRACKET_COL_W}px;"><span class="bct-ico">${roundIcon(r)}</span>${escBracketName(WM26_STAGE_LABEL[WM26_KO_ORDER[r]])}</div>`;
     rounds[r].matches.forEach((m,i)=>{
       const cy = BRACKET_TITLE_H + centers[r][i];
       const top = cy - BRACKET_MATCH_H/2;
@@ -23562,16 +23623,18 @@ function renderWM26BracketHTML(rounds, playerLoc){
       const involvesPlayer = (m.aTeam&&m.aTeam.isPlayer) || (m.bTeam&&m.bTeam.isPlayer);
       let inner;
       if(isPlayerMatch){
-        inner = `<button class="bracket-live-btn" type="button" id="wm26-ko-play-btn">▶ gegen ${escBracketName(teamLabel(m.aTeam.isPlayer?m.bTeam:m.aTeam))} spielen</button>`;
+        const oppTeam = m.aTeam.isPlayer?m.bTeam:m.aTeam;
+        inner = `<button class="bracket-live-btn" type="button" id="wm26-ko-play-btn">▶ ${wm26FlagChip(oppTeam.nation,false,'bracket')} gegen ${escBracketName(teamLabel(oppTeam))} spielen</button>`;
       } else if(m.pending){
-        inner = `<div class="bracket-side"><span class="bracket-side-name">${escBracketName(teamLabel(m.aTeam))}</span></div>
-          <div class="bracket-side"><span class="bracket-side-name">${escBracketName(teamLabel(m.bTeam))}</span></div>`;
+        inner = `<div class="bracket-side"><span class="bracket-side-name">${teamFlag(m.aTeam)}${escBracketName(teamLabel(m.aTeam))}</span></div>
+          <div class="bracket-side"><span class="bracket-side-name">${teamFlag(m.bTeam)}${escBracketName(teamLabel(m.bTeam))}</span></div>`;
       } else {
         const aWon = m.winnerSide==='me';
-        inner = `<div class="bracket-side${aWon?' bracket-winner':''}"><span class="bracket-side-name">${escBracketName(teamLabel(m.aTeam))}</span><span class="bracket-score">${m.aGoals}</span></div>
-          <div class="bracket-side${!aWon?' bracket-winner':''}"><span class="bracket-side-name">${escBracketName(teamLabel(m.bTeam))}</span><span class="bracket-score">${m.bGoals}</span></div>`;
+        inner = `<div class="bracket-side${aWon?' bracket-winner':''}"><span class="bracket-side-name">${teamFlag(m.aTeam)}${escBracketName(teamLabel(m.aTeam))}</span><span class="bracket-score">${m.aGoals}</span></div>
+          <div class="bracket-side${!aWon?' bracket-winner':''}"><span class="bracket-side-name">${teamFlag(m.bTeam)}${escBracketName(teamLabel(m.bTeam))}</span><span class="bracket-score">${m.bGoals}</span></div>`;
       }
-      const cls = ['bracket-match', involvesPlayer?'bracket-match-me':'', isPlayerMatch?'bracket-match-pending':''].filter(Boolean).join(' ');
+      const isFinal = r===totalRounds-1;
+      const cls = ['bracket-match', involvesPlayer?'bracket-match-me':'', isPlayerMatch?'bracket-match-pending':'', isFinal?'bracket-match-final':''].filter(Boolean).join(' ');
       cols += `<div class="${cls}" style="left:${colLeft}px;top:${top}px;width:${BRACKET_COL_W}px;height:${BRACKET_MATCH_H}px;">${inner}</div>`;
       if(r<totalRounds-1){
         lines += `<div class="bracket-line-h" style="left:${colLeft+BRACKET_COL_W}px;top:${cy}px;width:${BRACKET_COL_GAP/2}px;"></div>`;
@@ -23593,8 +23656,14 @@ function renderWM26Panel(){
   const t = wm26CurrentRun();
   if(!t || t.stage==='done'){
     const banner = t && t.stage==='done' ? (t.wonCup
-      ? `<p style="margin-top:0;">🏆 Deine letzte WM: <b style="color:var(--gold);">Weltmeister!</b></p>`
-      : `<p style="margin-top:0;">Deine letzte WM endete: <b style="color:var(--chalk);">Aus in der ${WM26_STAGE_LABEL[t.eliminatedAt]}</b></p>`) : '';
+      ? `<div class="wm26-hero" style="background:radial-gradient(120% 160% at 0% 0%,rgba(255,215,0,.16),transparent 60%),var(--panel2);border-color:rgba(255,215,0,.35);">
+          <div class="wm26-hero-crest">${renderCrestSVG(profile.crest,46)}</div>
+          <div class="wm26-hero-text"><p style="margin:0;font-weight:700;">🏆 Deine letzte WM: <b style="color:var(--gold);">Weltmeister!</b></p></div>
+        </div>`
+      : `<div class="wm26-hero">
+          <div class="wm26-hero-crest">${renderCrestSVG(profile.crest,46)}</div>
+          <div class="wm26-hero-text"><p style="margin:0;">Deine letzte WM endete: <b style="color:var(--chalk);">Aus in der ${WM26_STAGE_LABEL[t.eliminatedAt]}</b></p></div>
+        </div>`) : '';
     box.innerHTML = `
       ${banner}
       <p class="hint" style="margin-top:0;">Die echte WM 2026 nachgespielt: 48 Teams, 12 Gruppen à 4, danach K.o.-Runde ab den letzten 32 (Gruppensieger + -zweite plus die 8 besten Gruppendritten). Du übernimmst zufällig den Platz einer echten Nation. Startgeld: <b style="color:var(--gold);">${formatCoins(WM26_ENTRY_FEE)} Coins</b>. Scheiterst du, gibt's Trostpreis-Coins je nach Runde. Gewinnst du: 20% WM Winners Pack, 80% <b style="color:var(--gold);">World Cup Pack</b> (neue WM-Variante +5 OVR und WM-Kapitän +16 OVR, aus allen 48 Teams).</p>
@@ -23610,11 +23679,18 @@ function renderWM26Panel(){
     const groupsHtml = Object.keys(WM26_GROUPS).sort().map(letter=>{
       const isMine = letter===t.groupId;
       const st = isMine ? standings : t.otherGroups[letter].standings;
-      return `<div class="lbl" style="margin:14px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Gruppe ${letter}${isMine?' — deine Gruppe':''}</div>${renderWM26StandingsHTML(st)}`;
+      return renderWM26StandingsHTML(st, {title:`Gruppe ${letter}`, mine:isMine, legend:isMine});
     }).join('');
+    const dots = `<div class="wm26-progress-dots">${[0,1,2].map(i=>`<i class="${i<playedCount?'done':(i===playedCount?'now':'')}"></i>`).join('')}</div>`;
     box.innerHTML = `
-      <p class="hint" style="margin-top:0;">Gruppe ${t.groupId} — du ersetzt <b style="color:var(--chalk);">${natDE(t.replacedNation)}</b>. Gruppenspiel ${Math.min(playedCount+1,3)} von 3.</p>
-      <p class="hint" style="margin:0 0 8px;">Platz 1-2 der Gruppe qualifizieren sich direkt, dazu die 8 besten Gruppendritten von allen 12 Gruppen.</p>
+      <div class="wm26-hero">
+        <div class="wm26-hero-crest">${renderCrestSVG(profile.crest,46)}</div>
+        <div class="wm26-hero-text">
+          <p class="hint" style="margin:0;">Gruppe ${t.groupId} — du ersetzt <b>${wm26FlagChip(t.replacedNation,false)} ${natDE(t.replacedNation)}</b></p>
+          <p class="hint" style="margin:2px 0 0;">Gruppenspiel ${Math.min(playedCount+1,3)} von 3</p>
+          ${dots}
+        </div>
+      </div>
       ${nextMatchIdx>=0 ? `<button class="action-btn" id="wm26-play-group" style="width:220px;">Spiel starten</button>` : ''}
       <div id="wm26-match-area" style="margin:14px 0;"></div>
       ${groupsHtml}`;
