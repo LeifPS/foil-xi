@@ -1971,12 +1971,9 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .cardidx-ps-item img{width:22px;height:22px;flex-shrink:0;}
 .cardidx-ps-item .t{font-size:11.5px;font-weight:600;color:var(--chalk);line-height:1.2;}
 .cardidx-ps-item .d{font-size:9.5px;color:var(--muted);line-height:1.3;margin-top:1px;}
-.cardidx-version-row{display:flex;align-items:center;gap:10px;padding:7px 4px;border-top:1px solid var(--line);cursor:pointer;border-radius:6px;transition:background .15s;}
-.cardidx-version-row:first-child{border-top:none;}
-.cardidx-version-row:hover{background:rgba(255,255,255,.04);}
-.cardidx-version-row .ov{font-family:'JetBrains Mono';font-weight:700;color:var(--gold);min-width:30px;}
-.cardidx-version-row .nm{flex:1;font-size:12.5px;}
-.cardidx-version-row .own{font-size:10px;color:var(--turf-bright);font-weight:700;text-transform:uppercase;}
+.cardidx-version-scroll{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 8px;}
+.cardidx-version-tile{flex-shrink:0;cursor:pointer;transition:transform .15s;}
+.cardidx-version-tile:hover{transform:translateY(-3px);}
 .cardidx-discovery-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:8px;}
 .cardidx-discovery-bar > div{height:100%;background:linear-gradient(90deg,var(--turf-bright),var(--gold));border-radius:3px;transition:width .4s ease;}
 .match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
@@ -18030,17 +18027,18 @@ function otherVersionsOf(card){
 function cardIndexVersionsHTML(card){
   const versions = otherVersionsOf(card);
   if(!versions.length) return '';
-  const rows = versions.map(v=>{
-    const isOwned = collection.some(c=>c.cardId===v.id);
-    return `<div class="cardidx-version-row" data-cid="${v.id}">
-      <span class="ov">${v.ov}</span>
-      <span class="nm">${v.variant && v.variant!=='base' ? v.variantLabel : 'Standard'}</span>
-      ${isOwned?'<span class="own">\u2713 besitzt</span>':'<span class="hint" style="font-size:10px;">?</span>'}
-    </div>`;
+  // Real card visuals side by side, exactly like the main index grid - an owned version shows its
+  // actual face, an undiscovered one stays a "?" mystery tile (same spoiler rule as everywhere else in
+  // the index). Either way, clicking jumps straight into that version's own detail modal (see the
+  // .cardidx-version-tile click wiring in showCardIndexDetailModal).
+  const tiles = versions.map(v=>{
+    const isOwnedV = collection.some(c=>c.cardId===v.id);
+    const inner = isOwnedV ? cardEl(v,'mini').outerHTML : `<div class="cardidx-mystery-tile"><div class="cardidx-mystery-q">?</div></div>`;
+    return `<div class="cardidx-version-tile" data-cid="${v.id}">${inner}</div>`;
   }).join('');
   return `<div class="card-info-section">
     <div class="card-info-section-title">\ud83d\uddc2\ufe0f Andere Versionen dieses Spielers</div>
-    ${rows}
+    <div class="cardidx-version-scroll">${tiles}</div>
   </div>`;
 }
 // Icon-first identity chips (Nation/Liga/Verein/Version) - flags/crests/badges before any text, per the
@@ -18141,9 +18139,10 @@ function showCardIndexDetailModal(item){
   document.getElementById('cardidx-close').addEventListener('click', closeModal);
   const priceHistBtn = document.getElementById('cardidx-price-history');
   if(priceHistBtn) priceHistBtn.addEventListener('click', ()=>showPriceHistoryModal(card));
-  document.querySelectorAll('.cardidx-version-row[data-cid]').forEach(row=>{
-    row.addEventListener('click', ()=>{
-      const v = BY_ID.get(Number(row.dataset.cid));
+  document.querySelectorAll('.cardidx-version-tile[data-cid]').forEach(tile=>{
+    tile.style.cursor = 'pointer';
+    tile.addEventListener('click', ()=>{
+      const v = BY_ID.get(Number(tile.dataset.cid));
       if(!v) return;
       const vCopies = collection.filter(c=>c.cardId===v.id).length;
       showCardIndexDetailModal({id:v.id, kind:'player', card:v, copies:vCopies, discovered:vCopies>0});
