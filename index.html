@@ -1625,6 +1625,36 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .vs-x{font-family:'Anton';color:var(--muted);font-size:18px;}
 .score{font-family:'Anton';font-size:52px;letter-spacing:.05em;margin:10px 0;text-shadow:0 2px 16px rgba(0,0,0,.5);}
 
+/* Online-Matchmaking-Suchscreen (siehe renderQueueSearchHTML/joinQueue): eigenes Wappen gegen ein
+   pulsierendes "?"-Mysterium-Wappen statt reinem Text+Timer, plus Fortschrittsbalken bis zum
+   CPU-Fallback-Timeout - macht sichtbar WORAUF gewartet wird, nicht nur DASS gewartet wird. */
+.qsearch{max-width:340px;margin:6px auto 0;text-align:center;}
+.qsearch-vs{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:18px;}
+.qsearch-side{width:104px;}
+.qsearch-crest{display:flex;justify-content:center;align-items:center;margin-bottom:6px;}
+.qsearch-name{font-size:11.5px;font-weight:700;color:var(--chalk);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.qsearch-rating{font-size:11px;color:var(--muted);margin-top:1px;}
+.qsearch-vs-badge{font-family:'Anton';font-size:15px;color:var(--muted);flex-shrink:0;}
+.qsearch-mystery{position:relative;width:46px;height:46px;margin-left:auto;margin-right:auto;}
+.qsearch-mystery-q{position:relative;z-index:1;font-family:'Anton';font-size:22px;color:var(--muted);
+  width:46px;height:46px;border-radius:50%;background:var(--panel2);border:1px dashed var(--line);
+  display:flex;align-items:center;justify-content:center;}
+.qsearch-radar-ring{position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--turf-bright);
+  opacity:0;animation:qsearchRadarPing 1.8s ease-out infinite;}
+@keyframes qsearchRadarPing{0%{transform:scale(.7);opacity:.7;}100%{transform:scale(1.35);opacity:0;}}
+.qsearch-status{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;
+  color:var(--muted);margin-bottom:10px;}
+.qsearch-dots{display:flex;gap:5px;}
+.qsearch-dots span{width:5px;height:5px;border-radius:50%;background:var(--turf-bright);opacity:.25;
+  animation:maintDotPulse 1.4s ease-in-out infinite;}
+.qsearch-dots span:nth-child(2){animation-delay:.18s;}
+.qsearch-dots span:nth-child(3){animation-delay:.36s;}
+.qsearch-progress-track{height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:8px;}
+.qsearch-progress-fill{height:100%;width:0%;background:var(--turf-bright);border-radius:3px;
+  transition:width .3s linear,background-color .3s;}
+.qsearch-progress-fill.qsearch-progress-urgent{background:var(--gold);}
+.qsearch-timer{font-size:11px;color:var(--muted);margin-bottom:12px;}
+
 /* Live match scoreboard card (see animateTimedMatch) - pulls the score/minute/win-probability out of a
    plain stack of centered lines into one cohesive scoreboard, team names flanking the score itself. */
 .live-scoreboard{background:linear-gradient(180deg,#181c25,#0e1117);border:1px solid var(--line);
@@ -19697,6 +19727,10 @@ function initGlobalSfxListeners(){
   }, true);
 }
 let queueActive = false;
+// module-level (not local to joinQueue) so the "Suche läuft im Hintergrund weiter" re-render, which
+// happens on a completely separate call stack whenever the player switches back to the Spielen-Tab
+// mid-search, can still show an accurate elapsed timer/progress bar instead of restarting from 0.
+let queueStartTime = null;
 let autorollEnabled = false;
 // tracks whether the CURRENT (or most recently started) queue search was kicked off by the player
 // manually tapping "Gegner suchen" vs. Autoroll firing it automatically - read by commitMatchResult
@@ -27139,9 +27173,14 @@ function renderPlay(view){
     const findBtn = document.getElementById('find-opp');
     if(findBtn){ findBtn.disabled = true; findBtn.style.opacity = '.5'; }
     const ma = document.getElementById('match-area');
-    if(ma) ma.innerHTML = `<div style="text-align:center;"><div class="mono" style="color:var(--muted);margin-bottom:10px;">Suche l\u00e4uft im Hintergrund weiter\u2026</div><button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button></div>`;
+    if(ma) ma.innerHTML = renderQueueSearchHTML(squadRating().rating||'--');
     const cancelBtn = document.getElementById('queue-cancel');
     if(cancelBtn) cancelBtn.addEventListener('click', leaveQueue);
+    // Timer/Fortschrittsbalken sollen sofort den echten Stand zeigen (nicht bei 0 neu anlaufen) - poll()
+    // selbst l\u00e4uft ja schon seit dem urspr\u00fcnglichen joinQueue() im Hintergrund weiter und ruft
+    // updateQueueSearchProgress() bei jedem Tick erneut auf, das hier ist nur der Sofort-Sync beim
+    // Zur\u00fcckwechseln auf diesen Tab.
+    if(queueStartTime) updateQueueSearchProgress(queueStartTime);
   } else if(pendingDuelId){
     const findBtn = document.getElementById('find-opp');
     if(findBtn){ findBtn.disabled = true; findBtn.style.opacity = '.5'; }
@@ -29236,6 +29275,7 @@ function matchIdFor(myId, myJoined, otherId, otherJoined){
 }
 async function leaveQueueSilently(){
   if(queueTimer){ clearTimeout(queueTimer); queueTimer=null; }
+  queueStartTime = null;
   try{ if(fb) await fb.deleteDoc(fb.doc(fb.db,'queue',profile.userId)); }catch(e){}
 }
 async function leaveQueue(){
@@ -29415,6 +29455,53 @@ async function enterSyncedMatch(matchDoc){
     inMatch = false;
   }
 }
+// Gemeinsames Markup für den "Suche nach einem Gegner"-Screen, sowohl fürs erste Rendern in joinQueue
+// als auch fürs Wieder-Reinrendern in renderPlay, wenn der Spieler mitten in einer laufenden Suche
+// zurück auf den Spielen-Tab wechselt - eigene Vereinswappen gegen ein pulsierendes "?"-Mysterium-
+// Wappen (der Gegner ist ja noch nicht bekannt), plus Fortschrittsbalken/Timer bis zum CPU-Fallback.
+function renderQueueSearchHTML(rating){
+  return `
+    <div class="qsearch">
+      <div class="qsearch-vs">
+        <div class="qsearch-side">
+          <div class="qsearch-crest">${renderCrestSVG(profile.crest, 46)}</div>
+          <div class="qsearch-name">${profile.displayName||profile.userId}</div>
+          <div class="qsearch-rating mono">${rating} OVR</div>
+        </div>
+        <div class="qsearch-vs-badge">VS</div>
+        <div class="qsearch-side">
+          <div class="qsearch-crest qsearch-mystery">
+            <div class="qsearch-radar-ring"></div>
+            <span class="qsearch-mystery-q">?</span>
+          </div>
+          <div class="qsearch-name" style="color:var(--muted);">Gegner</div>
+          <div class="qsearch-rating mono" style="color:var(--muted);">???</div>
+        </div>
+      </div>
+      <div class="qsearch-status">
+        <span>Suche nach einem Gegner</span>
+        <span class="qsearch-dots"><span></span><span></span><span></span></span>
+      </div>
+      <div class="qsearch-progress-track"><div class="qsearch-progress-fill" id="queue-progress"></div></div>
+      <div class="qsearch-timer mono"><span id="queue-timer">0s</span> / ${Math.round(QUEUE_TIMEOUT_MS/1000)}s</div>
+      <p class="hint" style="margin-bottom:14px;">Kein Mitspieler rechtzeitig gefunden? Dann geht's automatisch gegen eine faire CPU-Elf weiter.</p>
+      <button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
+    </div>`;
+}
+// Aktualisiert Timer + Fortschrittsbalken des laufenden Such-Screens (siehe renderQueueSearchHTML) -
+// von poll() bei jedem Tick aufgerufen, no-op falls der Screen gerade gar nicht sichtbar ist (Spieler
+// z.B. auf einem anderen Tab).
+function updateQueueSearchProgress(startTime){
+  const timerEl = document.getElementById('queue-timer');
+  const elapsedMs = Date.now()-startTime;
+  if(timerEl) timerEl.textContent = Math.round(elapsedMs/1000) + 's';
+  const fillEl = document.getElementById('queue-progress');
+  if(fillEl){
+    const frac = Math.min(1, elapsedMs/QUEUE_TIMEOUT_MS);
+    fillEl.style.width = (frac*100)+'%';
+    fillEl.classList.toggle('qsearch-progress-urgent', frac>=0.7);
+  }
+}
 async function joinQueue(manual=true){
   if(queueActive || inMatch || pendingDuelId) return; // already searching, already in a match, or awaiting a challenge reply
   queueActive = true;
@@ -29430,6 +29517,7 @@ async function joinQueue(manual=true){
   }
   const myPlayers = getMySquadPlayers();
   const startTime = Date.now();
+  queueStartTime = startTime;
   try{
     await fb.setDoc(fb.doc(fb.db,'queue',profile.userId), {
       userId: profile.userId, name: profile.displayName || profile.userId, rating, players: myPlayers,
@@ -29438,6 +29526,7 @@ async function joinQueue(manual=true){
   }catch(e){
     console.warn('queue join failed', e);
     queueActive = false;
+    queueStartTime = null;
     toast('Matchmaking nicht erreichbar \u2014 du spielst stattdessen gegen eine CPU-Elf.');
     startBotMatch(rating);
     return;
@@ -29445,11 +29534,7 @@ async function joinQueue(manual=true){
   if(!queueActive) return; // was cancelled while the write above was in flight
   const area = document.getElementById('match-area');
   if(area){
-    area.innerHTML = `
-      <div style="text-align:center;">
-        <div class="mono" style="color:var(--muted);margin-bottom:10px;">Suche nach einem Gegner\u2026 <span id="queue-timer">0s</span></div>
-        <button class="action-btn secondary" id="queue-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
-      </div>`;
+    area.innerHTML = renderQueueSearchHTML(rating);
     const cancelBtn = document.getElementById('queue-cancel');
     if(cancelBtn) cancelBtn.addEventListener('click', leaveQueue);
   }
@@ -29459,11 +29544,11 @@ async function joinQueue(manual=true){
   const attemptedCandidates = new Set(); // only ever try match-creation once per candidate, not every tick
   const poll = async ()=>{
     if(!queueActive) return;
-    const timerEl = document.getElementById('queue-timer');
-    if(timerEl) timerEl.textContent = Math.round((Date.now()-startTime)/1000) + 's';
+    updateQueueSearchProgress(startTime);
 
     if(Date.now()-startTime > QUEUE_TIMEOUT_MS){
       queueActive = false;
+      queueStartTime = null;
       await leaveQueueSilently();
       toast('Kein Gegner rechtzeitig gefunden \u2014 du spielst stattdessen gegen eine CPU-Elf.');
       startBotMatch(rating);
