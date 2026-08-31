@@ -275,6 +275,11 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
      gfx-no-badgeanim: Liga-Buchstaben-Abzeichen-Puls + Nametag-Farbverlauf-Animation (siehe .nametag). */
 body.gfx-no-cardshine .pcard, body.gfx-no-cardshine .pcard *{ animation:none !important; }
 body.gfx-no-cardshine .pcard::before{ display:none !important; }
+/* gfx-no-shine: JUST the diagonal white shine-sweep (.pcard::before) - independent of gfx-no-cardshine
+   above, which kills that same element but also every other card animation (glow pulse, breathe,
+   sparkle) along with it. This one exists for the player who wants the sweep gone specifically but
+   everything else (glow/breathe/sparkle) left running. */
+body.gfx-no-shine .pcard::before{ display:none !important; }
 body.gfx-no-fxlayers .pcard .gem-facets,
 body.gfx-no-fxlayers .pcard .refresh-fx,
 body.gfx-no-fxlayers .pcard .legikone-fx,
@@ -13476,10 +13481,10 @@ async function boot(){
 // just a convenience "set all 4 at once" shortcut - profile.gfx is the actual persisted state, so a
 // user who picks a preset and then flips one checkbox keeps that individual override.
 const GFX_PRESETS = {
-  full:   {cardshine:true,  fxlayers:true,  confetti:true,  badgeanim:true},
-  medium: {cardshine:true,  fxlayers:false, confetti:true,  badgeanim:true},
-  lite:   {cardshine:false, fxlayers:false, confetti:true,  badgeanim:true},
-  off:    {cardshine:false, fxlayers:false, confetti:false, badgeanim:false},
+  full:   {cardshine:true,  fxlayers:true,  confetti:true,  badgeanim:true, shine:true},
+  medium: {cardshine:true,  fxlayers:false, confetti:true,  badgeanim:true, shine:true},
+  lite:   {cardshine:false, fxlayers:false, confetti:true,  badgeanim:true, shine:false},
+  off:    {cardshine:false, fxlayers:false, confetti:false, badgeanim:false, shine:false},
 };
 const GFX_PRESET_LABEL = {full:'Voll', medium:'Mittel', lite:'Reduziert', off:'Aus'};
 // Lazy migration: older accounts only ever had profile.graphicsPreset ('full'/'lite') - derive the new
@@ -13487,6 +13492,11 @@ const GFX_PRESET_LABEL = {full:'Voll', medium:'Mittel', lite:'Reduziert', off:'A
 // Firestore write just for a display preference default.
 function ensureGfxToggles(){
   if(!profile.gfx) profile.gfx = {...GFX_PRESETS[profile.graphicsPreset==='lite' ? 'lite' : 'full']};
+  // `shine` was added after cardshine/fxlayers/confetti/badgeanim - an account whose profile.gfx was
+  // already saved before that never got a `shine` key at all, and `!undefined` reads as "off", which
+  // would silently kill the shine-sweep for every existing player the first time this runs. Default
+  // any missing key to on, exactly as it always behaved before this toggle existed.
+  if(profile.gfx.shine===undefined) profile.gfx.shine = true;
 }
 function applyGraphicsPreset(){
   if(!profile) return;
@@ -13496,6 +13506,7 @@ function applyGraphicsPreset(){
   document.body.classList.toggle('gfx-no-fxlayers', !g.fxlayers);
   document.body.classList.toggle('gfx-no-confetti', !g.confetti);
   document.body.classList.toggle('gfx-no-badgeanim', !g.badgeanim);
+  document.body.classList.toggle('gfx-no-shine', !g.shine);
 }
 async function init(){
   // WM-Variante/WM-Kapitän cards are otherwise only registered into BY_ID lazily, on first actual use
@@ -17190,7 +17201,8 @@ function renderClub(view){
       </div>
       <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px;">
         <div class="settings-label">Einzelne Effekte</div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-cardshine"> Karten-Glanzanimation (Glow/Shine/Sparkle)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-cardshine"> Karten-Grundanimation gesamt (Glow-Puls, Breathe, Foil-Sparkle, Shine)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-shine"> Nur wei\u00dfer Glanzstreifen (diagonaler Shine-Sweep \u00fcber die Karte)</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-fxlayers"> Karten-Sondereffekte (Gem-Facetten, Refresh-Sweep, Legikone, WM26-Kapit\u00e4n, Icon-Promo)</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-confetti"> Konfetti bei WM-Pokal-Cutscene</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="gfx-toggle-badgeanim"> Liga-Abzeichen-/Nametag-Animation</label>
@@ -17304,7 +17316,7 @@ function renderClub(view){
   ensureGfxToggles();
   const graphicsPresetSelect = document.getElementById('graphics-preset-select');
   graphicsPresetSelect.value = GFX_PRESETS[profile.graphicsPreset] ? profile.graphicsPreset : 'full';
-  const gfxToggleIds = {cardshine:'gfx-toggle-cardshine', fxlayers:'gfx-toggle-fxlayers', confetti:'gfx-toggle-confetti', badgeanim:'gfx-toggle-badgeanim'};
+  const gfxToggleIds = {cardshine:'gfx-toggle-cardshine', shine:'gfx-toggle-shine', fxlayers:'gfx-toggle-fxlayers', confetti:'gfx-toggle-confetti', badgeanim:'gfx-toggle-badgeanim'};
   const syncGfxCheckboxes = ()=>{ Object.entries(gfxToggleIds).forEach(([key,id])=>{ document.getElementById(id).checked = !!profile.gfx[key]; }); };
   syncGfxCheckboxes();
   graphicsPresetSelect.addEventListener('change', async e=>{
