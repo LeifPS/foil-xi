@@ -26096,7 +26096,12 @@ function pickScorer(players, oppPlayers=null, opts={}){
     const g = posGroup2(p.pos);
     const pos = mainPos(p.pos);
     const posW = g==='FWD' ? 4.4 : g==='MID' ? 2.4 : g==='DEF' ? 0.55 : 0.04;
-    const ratingFactor = Math.pow(1.05, scoreSkillOf(p)-72);
+    // Capped - realistic skill values (~40-99) only ever put the exponent in a sane range, but an
+    // extreme outlier (a 999-substat admin/joke card) sent this into the sextillions, ballooning `reps`
+    // below past the JS engine's max array length and crashing the whole match with a RangeError the
+    // instant that player touched the pitch. Every other multiplier in this weighting is already
+    // clamped (see `mult` below) - this one just wasn't.
+    const ratingFactor = clamp(Math.pow(1.05, scoreSkillOf(p)-72), 0.05, 50);
     let mult = 1;
     mult *= 1 + hookValue(p,'scorerSelf')*0.35;
     if(minute>75) mult *= 1 + hookValue(p,'scorerLate')*0.45; // Gamechanger: a real super-sub/late-impact bonus, worthless before minute 75
