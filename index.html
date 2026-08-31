@@ -1819,27 +1819,58 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .leader-row .rk.medal-3{background:#cd8a5b;}
 .leader-row .rating-decimal{color:var(--muted);font-size:10.5px;font-weight:400;}
 /* ---- Wochen Pass ---- */
-.wp-header{text-align:center;margin-bottom:18px;}
-.wp-badge{width:64px;height:64px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;
-  font-family:'Anton';font-size:26px;color:#1a1408;
+.wp-hero{position:relative;overflow:hidden;border-radius:18px;padding:22px 20px 20px;margin-bottom:22px;text-align:center;
+  background:radial-gradient(120% 140% at 50% -20%, rgba(255,215,106,.18), transparent 60%), linear-gradient(165deg,#1c1710,#100e0a 75%);
+  border:1px solid rgba(255,215,106,.25);}
+.wp-hero::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(115deg, rgba(255,255,255,.03) 0 2px, transparent 2px 14px);}
+.wp-hero-top{display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;position:relative;}
+.wp-hero-days{background:rgba(255,255,255,.08);border-radius:20px;padding:3px 11px;color:var(--chalk);font-weight:700;}
+.wp-header{text-align:center;position:relative;}
+.wp-badge{width:78px;height:78px;border-radius:50%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Anton';font-size:28px;color:#1a1408;line-height:1;
   background:radial-gradient(circle at 35% 30%, #fff3c4, #ffd76a 60%, #b8933a 100%);
-  box-shadow:0 0 24px -4px #ffd76a, 0 4px 10px rgba(0,0,0,.5);}
-.wp-track{display:flex;gap:10px;overflow-x:auto;padding:6px 4px 18px;-webkit-overflow-scrolling:touch;}
-.wp-tile{flex-shrink:0;width:96px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 8px 8px;text-align:center;position:relative;transition:border-color .2s, box-shadow .2s;}
-.wp-tile.current{border-color:#ffd76a;box-shadow:0 0 16px -4px #ffd76a;}
-.wp-tile.claimed{opacity:.55;}
-.wp-tile.locked{opacity:.4;}
-.wp-tile-max{border-color:#ffd76a;background:radial-gradient(circle at 50% 20%, rgba(255,215,106,.14), var(--panel) 70%);}
-.wp-tile .wp-lv{font-family:'Anton';font-size:12px;color:var(--muted);}
-.wp-tile .wp-icon{font-size:22px;margin:6px 0 4px;}
+  box-shadow:0 0 30px -4px #ffd76a, 0 4px 14px rgba(0,0,0,.55), 0 0 0 4px rgba(255,215,106,.14);
+  animation:wpBadgePulse 3s ease-in-out infinite;}
+.wp-badge .wp-badge-lbl{font-family:'JetBrains Mono';font-size:8px;font-weight:700;letter-spacing:.03em;margin-top:-2px;}
+@keyframes wpBadgePulse{0%,100%{box-shadow:0 0 30px -4px #ffd76a, 0 4px 14px rgba(0,0,0,.55), 0 0 0 4px rgba(255,215,106,.14);}50%{box-shadow:0 0 42px -2px #ffd76a, 0 4px 14px rgba(0,0,0,.55), 0 0 0 7px rgba(255,215,106,.08);}}
+.wp-xp-chips{display:flex;justify-content:center;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.wp-xp-chip{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:20px;padding:4px 11px;font-size:10.5px;color:var(--muted);}
+.wp-xp-chip b{color:var(--chalk);}
+.chem-bar{height:5px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;}
+.chem-bar i{display:block;height:100%;border-radius:5px;transition:width .3s;}
+.wp-bar-shine{position:relative;overflow:hidden;height:9px;border-radius:6px;background:rgba(255,255,255,.07);box-shadow:inset 0 1px 3px rgba(0,0,0,.4);}
+.wp-bar-shine > i{display:block;height:100%;border-radius:6px;transition:width .4s ease;position:relative;overflow:hidden;}
+.wp-bar-shine > i::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);background-size:220% 220%;animation:autoShine 2.6s ease-in-out infinite;}
+.wp-section-title{display:flex;align-items:center;gap:8px;font-size:13.5px;margin:24px 0 10px;color:var(--chalk);font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.wp-section-title .n{background:rgba(255,215,106,.12);color:#ffd76a;border-radius:20px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;}
+.wp-track{display:flex;gap:12px;overflow-x:auto;padding:8px 4px 18px;-webkit-overflow-scrolling:touch;}
+.wp-tile{flex-shrink:0;width:104px;background:linear-gradient(165deg,var(--panel2),var(--panel) 70%);border:1px solid var(--line);border-radius:14px;padding:12px 9px 9px;text-align:center;position:relative;transition:transform .2s, border-color .2s, box-shadow .2s;overflow:hidden;}
+.wp-tile::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--tile-acc,var(--line));}
+.wp-tile.reward-coins{--tile-acc:#ffd76a;}
+.wp-tile.reward-pack{--tile-acc:#b98bff;}
+.wp-tile.reward-card{--tile-acc:linear-gradient(90deg,#ff8bd0,#8bd0ff,#ffe98b);}
+.wp-tile.current{border-color:#ffd76a;box-shadow:0 0 20px -4px #ffd76a;transform:translateY(-3px);animation:wpTileGlow 1.8s ease-in-out infinite;}
+@keyframes wpTileGlow{0%,100%{box-shadow:0 0 16px -6px #ffd76a;}50%{box-shadow:0 0 26px -2px #ffd76a;}}
+.wp-tile.claimed{opacity:.7;}
+.wp-tile.claimed::after{content:"✓";position:absolute;top:6px;right:8px;color:var(--turf-bright);font-weight:700;font-size:13px;text-shadow:0 0 8px rgba(61,220,132,.6);}
+.wp-tile.locked{opacity:.42;filter:grayscale(.4);}
+.wp-tile-max{border-color:#ffd76a;background:radial-gradient(circle at 50% 0%, rgba(255,215,106,.2), var(--panel) 70%);width:114px;}
+.wp-tile .wp-lv{font-family:'Anton';font-size:13px;color:var(--muted);}
+.wp-tile .wp-icon{font-size:24px;margin:7px 0 5px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
 .wp-tile .wp-label{font-size:9.5px;color:var(--chalk);line-height:1.3;min-height:26px;}
-.wp-tile .wp-claim{width:100%;margin-top:7px;padding:4px 0;font-size:9.5px;border-radius:7px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;}
-.wp-tile .wp-check{margin-top:7px;font-size:13px;color:var(--turf-bright);}
-.wp-tile .wp-lockicon{margin-top:7px;font-size:12px;opacity:.7;}
-.wp-quest-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px;}
-.wp-quest{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;transition:opacity .2s;}
-.wp-quest .wp-quest-label{font-size:12.5px;color:var(--chalk);line-height:1.35;min-height:32px;}
-.wp-quest .wp-claim{padding:5px 12px;font-size:10.5px;border-radius:7px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;}
+.wp-tile .wp-claim{width:100%;margin-top:8px;padding:5px 0;font-size:9.5px;border-radius:8px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;box-shadow:0 2px 8px -2px rgba(61,220,132,.5);}
+.wp-tile .wp-check{margin-top:8px;font-size:11px;color:var(--turf-bright);font-weight:700;opacity:0;height:0;}
+.wp-tile .wp-lockicon{margin-top:8px;font-size:13px;opacity:.7;}
+.wp-quest-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(230px, 1fr));gap:11px;}
+.wp-quest{background:linear-gradient(165deg,var(--panel2),var(--panel) 80%);border:1px solid var(--line);border-radius:14px;padding:13px 15px;transition:opacity .2s, border-color .2s;display:flex;gap:11px;}
+.wp-quest.done{border-color:rgba(61,220,132,.4);}
+.wp-quest-ico{flex-shrink:0;width:34px;height:34px;border-radius:10px;background:rgba(255,215,106,.1);display:flex;align-items:center;justify-content:center;font-size:16px;}
+.wp-quest-body{flex:1;min-width:0;}
+.wp-quest .wp-quest-label{font-size:12.5px;color:var(--chalk);line-height:1.35;margin-bottom:7px;}
+.wp-quest .wp-claim{padding:6px 13px;font-size:10.5px;border-radius:8px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;}
+.wp-bonus-hero{position:relative;overflow:hidden;border-radius:16px;padding:18px 18px 16px;margin-top:4px;text-align:center;
+  background:radial-gradient(120% 160% at 50% 0%, rgba(255,215,106,.16), transparent 65%), var(--panel2);border:1px solid rgba(255,215,106,.3);}
 /* SBC redesign: each tier gets its own left-accent color + subtle background tint, replacing the
    generic reused .pack-card look so SBCs read as their own thing at a glance. */
 .sbc-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:14px;}
@@ -6813,6 +6844,66 @@ const PLAYERS_MANAGERS = [
     "boostType": "flat",
     "boostValue": 1,
     "clubAvg": 71
+  },
+  {
+    "id": 9700418,
+    "n": "Sarina Voss",
+    "club": "Real Madrid",
+    "nat": "Netherlands",
+    "tier": "Legendär",
+    "boostType": "percent",
+    "boostValue": 5,
+    "clubAvg": 83
+  },
+  {
+    "id": 9700419,
+    "n": "Emma Halvorsen",
+    "club": "FC Bayern München",
+    "nat": "Norway",
+    "tier": "Legendär",
+    "boostType": "percent",
+    "boostValue": 5,
+    "clubAvg": 82
+  },
+  {
+    "id": 9700420,
+    "n": "Laura Fischer",
+    "club": "Arsenal",
+    "nat": "Germany",
+    "tier": "Elite",
+    "boostType": "percent",
+    "boostValue": 3,
+    "clubAvg": 80
+  },
+  {
+    "id": 9700421,
+    "n": "Corinne Marchetti",
+    "club": "Juventus",
+    "nat": "France",
+    "tier": "Elite",
+    "boostType": "percent",
+    "boostValue": 3,
+    "clubAvg": 79
+  },
+  {
+    "id": 9700422,
+    "n": "Carla Dubois",
+    "club": "Bayer 04 Leverkusen",
+    "nat": "Belgium",
+    "tier": "Gold",
+    "boostType": "flat",
+    "boostValue": 3,
+    "clubAvg": 77
+  },
+  {
+    "id": 9700423,
+    "n": "Beatriz Almeida",
+    "club": "Athletic Club",
+    "nat": "Portugal",
+    "tier": "Gold",
+    "boostType": "flat",
+    "boostValue": 3,
+    "clubAvg": 77
   }
 ];
 const PLAYERS_GOAT = [{"id":9600001,"n":"M. Salah","pos":"RM, RW","ov":105,"pot":105,"nat":"Egypt","lg":"Premier League","club":"Liverpool","pac":109,"sho":108,"pas":95,"dri":110,"defn":54,"phy":85,"foot":"Left","img":"https://cdn3.futbin.com/content/fifa26/img/players/p167981491.png?fm=png&ixlib=java-2.1.0&verzion=2&w=252&s=fe5d518424edfe3f5761a3b25b108369","gk":false,"variant":"goat","variantLabel":"GOAT","theme":"goat","baseId":209331},{"id":9600002,"n":"K. Mbappé","pos":"ST, LW, LM","ov":104,"pot":104,"nat":"France","lg":"La Liga","club":"Real Madrid","pac":115,"sho":108,"pas":89,"dri":110,"defn":45,"phy":84,"foot":"Right","img":"https://cdn3.futbin.com/content/fifa26/img/players/p50563395.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=6e7e22702d1090ec78e3b4c4d6373f01","gk":false,"variant":"goat","variantLabel":"GOAT","theme":"goat","baseId":231747},{"id":9600003,"n":"J. Bellingham","pos":"CAM, CM","ov":102,"pot":102,"nat":"England","lg":"La Liga","club":"Real Madrid","pac":97,"sho":103,"pas":91,"dri":107,"defn":86,"phy":93,"foot":"Right","img":"https://cdn3.futbin.com/content/fifa25/img/players/p117692883.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=4848423ebd30920694753ff81d905650","gk":false,"variant":"goat","variantLabel":"GOAT","theme":"goat","baseId":252371},{"id":9600004,"n":"Rodri","pos":"CDM, CM","ov":101,"pot":101,"nat":"Spain","lg":"Premier League","club":"Manchester City","pac":80,"sho":95,"pas":93,"dri":99,"defn":93,"phy":92,"foot":"Right","img":"https://cdn3.futbin.com/content/fifa26/img/players/p67340730.png?fm=png&ixlib=java-2.1.0&verzion=1&w=252&s=a7fd33ef020e935d2357f810a12602fc","gk":false,"variant":"goat","variantLabel":"GOAT","theme":"goat","baseId":231866},{"id":9600005,"n":"O. Dembélé","pos":"ST, RW, CAM","ov":100,"pot":100,"nat":"France","lg":"Ligue 1","club":"Paris Saint-Germain","pac":105,"sho":102,"pas":89,"dri":107,"defn":56,"phy":75,"foot":"Left","img":"https://cdn3.futbin.com/content/fifa26/img/players/p84117523.png?fm=png&ixlib=java-2.1.0&verzion=2&w=252&s=65f3b55c62cee9aea613f432208e578a","gk":false,"variant":"goat","variantLabel":"GOAT","theme":"goat","baseId":231443}];
@@ -7926,6 +8017,12 @@ function weekPassRewardIcon(reward){
   if(reward.type==='pack') return '🎁';
   return '🪙';
 }
+function weekPassRewardClass(reward){ return `reward-${reward.type==='card'?'card':reward.type==='pack'?'pack':'coins'}`; }
+const WEEK_PASS_QUEST_ICON = {
+  winMatches:'🏆', playMatches:'⚽', scoreGoals:'🥅', earnCoins:'🪙', openPack:'🎁',
+  cleanSheet:'🧤', bigWin:'🔥', shootoutWin:'🎯',
+};
+function weekPassQuestIcon(def){ return WEEK_PASS_QUEST_ICON[def.type] || '⭐'; }
 // icon markup shared by the untradable badge on cards - reused here (without needing a card object)
 // for the Wochen-Pass pack tiles/labels, since every card those packs grant is untradable
 const UT_PACK_ICON = `<img src="https://images.zenithfcm.com/untradable-flag-player-card.png" alt="" title="Alle Karten aus diesem Pack sind nicht handelbar" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;">`;
@@ -8108,17 +8205,17 @@ function renderWeekPass(view){
   const bonusIntoNext = Math.min(WEEK_PASS_BONUS_XP_STEP, Math.max(0, bonusOverflow - bonusClaimed*WEEK_PASS_BONUS_XP_STEP));
   const bonusPct = bonusClaimable ? 100 : Math.round(bonusIntoNext/WEEK_PASS_BONUS_XP_STEP*100);
   const bonusHTML = level>=WEEK_PASS_MAX_LEVEL ? `
-    <h3 style="font-size:15px;margin:24px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Bonus (nach Stufe ${WEEK_PASS_MAX_LEVEL})</h3>
-    <p class="hint" style="margin-top:0;margin-bottom:10px;">Alle ${formatCoins(WEEK_PASS_BONUS_XP_STEP)} zusätzliche XP: +5.000 Coins - jede 3. Stufe zusätzlich ein kleines Pack, jede 8. ein großes.</p>
-    <div class="wp-header" style="margin-bottom:4px;">
-      <div class="wp-badge" style="background:linear-gradient(135deg,#ffd76a,#c9a24a);">${bonusClaimed}</div>
-      <div class="chem-bar" style="max-width:320px;margin:10px auto 0;"><i style="width:${bonusPct}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
-      <p class="hint" style="margin-top:6px;">${bonusClaimable ? 'Bereit zum Abholen!' : `${bonusIntoNext} / ${WEEK_PASS_BONUS_XP_STEP} XP bis Bonus ${nextBonusN}`}</p>
-    </div>
-    <div style="display:flex;justify-content:center;margin-bottom:6px;">
-      <button class="action-btn${bonusClaimable?'':' secondary'}" id="wp-claim-bonus" style="width:auto;padding:9px 20px;" ${bonusClaimable?'':'disabled'}>
-        ${bonusClaimable ? `Bonus ${nextBonusN} abholen (+5.000 Coins${nextBonusN%3===0?' + kleines Pack':''}${nextBonusN%8===0?' + großes Pack':''})` : 'Noch nicht bereit'}
-      </button>
+    <div class="wp-section-title"><span class="n">💎</span> Bonus (nach Stufe ${WEEK_PASS_MAX_LEVEL})</div>
+    <div class="wp-bonus-hero">
+      <p class="hint" style="margin-top:0;margin-bottom:12px;">Alle ${formatCoins(WEEK_PASS_BONUS_XP_STEP)} zusätzliche XP: <b style="color:var(--gold);">+5.000 Coins</b> — jede 3. Stufe zusätzlich ein kleines Pack, jede 8. ein großes.</p>
+      <div class="wp-badge" style="background:linear-gradient(135deg,#ffd76a,#c9a24a);width:66px;height:66px;font-size:22px;">${bonusClaimed}</div>
+      <div class="wp-bar-shine" style="max-width:320px;margin:12px auto 0;"><i style="width:${bonusPct}%;background:linear-gradient(90deg,#c9a24a,#ffd76a,#fff3c4);"></i></div>
+      <p class="hint" style="margin-top:8px;">${bonusClaimable ? '✨ Bereit zum Abholen!' : `${bonusIntoNext} / ${WEEK_PASS_BONUS_XP_STEP} XP bis Bonus ${nextBonusN}`}</p>
+      <div style="display:flex;justify-content:center;margin-top:6px;">
+        <button class="action-btn${bonusClaimable?'':' secondary'}" id="wp-claim-bonus" style="width:auto;padding:10px 22px;" ${bonusClaimable?'':'disabled'}>
+          ${bonusClaimable ? `🎁 Bonus ${nextBonusN} abholen (+5.000 Coins${nextBonusN%3===0?' + kleines Pack':''}${nextBonusN%8===0?' + großes Pack':''})` : 'Noch nicht bereit'}
+        </button>
+      </div>
     </div>` : '';
   const tiles = Array.from({length:WEEK_PASS_MAX_LEVEL}, (_,i)=>i+1).map(lv=>{
     const unlocked = level>=lv;
@@ -8127,10 +8224,10 @@ function renderWeekPass(view){
     const isMax = lv===WEEK_PASS_MAX_LEVEL;
     const state = claimed ? 'claimed' : (lv===level+1 && active ? 'current' : (unlocked ? '' : 'locked'));
     const btn = claimed
-      ? `<div class="wp-check">✓</div>`
+      ? ''
       : (unlocked && active ? `<button class="wp-claim" data-level="${lv}">Holen</button>` : `<div class="wp-lockicon">🔒</div>`);
-    return `<div class="wp-tile ${state} ${isMax?'wp-tile-max':''}">
-      <div class="wp-lv">${lv}</div>
+    return `<div class="wp-tile ${weekPassRewardClass(reward)} ${state} ${isMax?'wp-tile-max':''}">
+      <div class="wp-lv">${isMax?'🏁 ':''}${lv}</div>
       <div class="wp-icon">${weekPassRewardIcon(reward)}</div>
       <div class="wp-label">${weekPassRewardLabel(reward)}</div>
       ${btn}
@@ -8142,28 +8239,41 @@ function renderWeekPass(view){
     if(!def) return '';
     const done = q.progress>=def.target;
     const pctQ = Math.min(100, Math.round(q.progress/def.target*100));
-    const btn = (done && active) ? `<button class="wp-claim" data-quest="${q.id}">Holen</button>` : `<div class="mono" style="font-size:11px;color:var(--muted);">${q.progress} / ${def.target}</div>`;
-    return `<div class="wp-quest">
-      <div class="wp-quest-label">${def.label}</div>
-      <div class="chem-bar" style="margin:6px 0;"><i style="width:${pctQ}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <span class="mono" style="font-size:11px;color:var(--gold);">+${def.xp} XP</span>
-        ${btn}
+    const btn = (done && active) ? `<button class="wp-claim" data-quest="${q.id}">Holen</button>` : `<span class="mono" style="font-size:11px;color:var(--muted);">${q.progress} / ${def.target}</span>`;
+    return `<div class="wp-quest${done?' done':''}">
+      <div class="wp-quest-ico">${weekPassQuestIcon(def)}</div>
+      <div class="wp-quest-body">
+        <div class="wp-quest-label">${def.label}</div>
+        <div class="wp-bar-shine" style="margin:0 0 8px;"><i style="width:${pctQ}%;background:linear-gradient(90deg,#c9a24a,#ffd76a,#fff3c4);"></i></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span class="mono" style="font-size:11px;color:var(--gold);">✨ +${def.xp} XP</span>
+          ${btn}
+        </div>
       </div>
     </div>`;
   }).join('');
   view.innerHTML = `
-    <div class="view-head"><h2>Wochen Pass</h2><p class="hint">${active ? `Noch ${daysLeft} Tag${daysLeft===1?'':'e'} · ${WEEK_PASS_XP_WIN} XP pro Sieg, ${WEEK_PASS_XP_LOSS} XP pro Niederlage (nur echte Spiele)` : 'Dieser Wochen Pass ist beendet.'}</p></div>
-    <div class="wp-header">
-      <div class="wp-badge">${level}</div>
-      <div class="chem-bar" style="max-width:320px;margin:10px auto 0;"><i style="width:${pct}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
-      <p class="hint" style="margin-top:6px;">${level>=WEEK_PASS_MAX_LEVEL ? 'Maximale Stufe erreicht' : `${xpIntoLevel} / ${xpForNext} XP bis Stufe ${level+1}`}</p>
+    <div class="view-head"><h2>🎟️ Wochen Pass</h2></div>
+    <div class="wp-hero">
+      <div class="wp-hero-top">
+        <span class="wp-hero-days">${active ? `⏳ Noch ${daysLeft} Tag${daysLeft===1?'':'e'}` : '🏁 Beendet'}</span>
+      </div>
+      <div class="wp-header">
+        <div class="wp-badge"><span>${level}</span><span class="wp-badge-lbl">STUFE</span></div>
+        <div class="wp-bar-shine" style="max-width:320px;margin:14px auto 0;"><i style="width:${pct}%;background:linear-gradient(90deg,#c9a24a,#ffd76a,#fff3c4);"></i></div>
+        <p class="hint" style="margin-top:8px;">${level>=WEEK_PASS_MAX_LEVEL ? '🏆 Maximale Stufe erreicht' : `${xpIntoLevel} / ${xpForNext} XP bis Stufe ${level+1}`}</p>
+      </div>
+      <div class="wp-xp-chips">
+        <div class="wp-xp-chip">🏆 <b>+${WEEK_PASS_XP_WIN}</b> XP pro Sieg</div>
+        <div class="wp-xp-chip">😔 <b>+${WEEK_PASS_XP_LOSS}</b> XP pro Niederlage</div>
+      </div>
     </div>
-    <h3 style="font-size:15px;margin:20px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Quests</h3>
+    <div class="wp-section-title"><span class="n">🎯</span> Quests</div>
     <p class="hint" style="margin-top:0;margin-bottom:12px;">Immer 3 gleichzeitig aktiv. Schaffst du eine, gibt's sofort Bonus-XP fürs Level und eine neue Quest rückt nach.</p>
-    ${quests.some(q=>{ const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id); return def && q.progress>=def.target; }) && active ? `<button class="action-btn secondary" id="wp-claim-all-quests" style="width:auto;padding:8px 14px;font-size:12px;margin-bottom:12px;">Alle fertigen Quests abholen</button>` : ''}
+    ${quests.some(q=>{ const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id); return def && q.progress>=def.target; }) && active ? `<button class="action-btn secondary" id="wp-claim-all-quests" style="width:auto;padding:8px 14px;font-size:12px;margin-bottom:12px;">✅ Alle fertigen Quests abholen</button>` : ''}
     <div class="wp-quest-grid">${questTiles}</div>
-    <div class="wp-track" style="margin-top:22px;">${tiles}</div>
+    <div class="wp-section-title"><span class="n">🏅</span> Stufen-Belohnungen</div>
+    <div class="wp-track">${tiles}</div>
     ${bonusHTML}`;
   view.querySelectorAll('.wp-claim[data-level]').forEach(btn=>{
     btn.addEventListener('click', ()=>claimWeekPassReward(Number(btn.dataset.level)));
@@ -8892,33 +9002,53 @@ async function clearRapOverride(cardId){
 // Umlauf" for everyone. Since the counter only starts counting from the moment it shipped, it can't
 // retroactively know about copies players already owned before that - see recomputeAllCardMintCounts
 // for the one-time full-catalog backfill that fixes that starting baseline.
-let cardMintCache = null; // Map id -> count (players)
-let mgrMintCache = null; // Map id -> count (managers, separate id space)
+// Split into a server snapshot (loaded once, lazily) plus a same-session local delta (applied
+// IMMEDIATELY and unconditionally on every bump, never gated on whether the server snapshot has
+// loaded yet) - the previous single-Map design silently dropped a bump's local update whenever it
+// happened to fire before loadCardMintCounts() was ever called this session (cardMintCache was still
+// `null`, so the `if(cardMintCache)` guard skipped it), and separately raced its own fire-and-forget
+// Firestore write against an immediate tab-switch read - both of which could show "0 im Umlauf" for a
+// card someone had literally just that second obtained. Splitting the two means the DISPLAYED count
+// (server + local delta) is always correct the instant a bump happens, regardless of load ordering or
+// write latency, and a later server load only ever ADDS the rest-of-the-world total on top instead of
+// overwriting/losing the local delta.
+let cardMintServerCache = null; // Map id -> server count (players), null until first loaded
+let cardMintLocalDelta = new Map(); // Map id -> bumps made THIS session, always live from the start
+let mgrMintServerCache = null; // same idea, managers (separate id space)
+let mgrMintLocalDelta = new Map();
+function cardMintDisplayCount(cardId){
+  const base = cardMintServerCache && cardMintServerCache.has(cardId) ? cardMintServerCache.get(cardId) : 0;
+  return base + (cardMintLocalDelta.get(cardId)||0);
+}
+function mgrMintDisplayCount(mgrId){
+  const base = mgrMintServerCache && mgrMintServerCache.has(mgrId) ? mgrMintServerCache.get(mgrId) : 0;
+  return base + (mgrMintLocalDelta.get(mgrId)||0);
+}
 async function loadCardMintCounts(){
-  if(cardMintCache) return cardMintCache;
-  cardMintCache = new Map();
+  if(cardMintServerCache) return cardMintServerCache;
+  cardMintServerCache = new Map();
   await fbReady;
-  if(!fb) return cardMintCache;
+  if(!fb) return cardMintServerCache;
   try{
     const snap = await fb.getDocs(fb.collection(fb.db,'cardMints'));
-    snap.docs.forEach(d=>{ const c = d.data().count; if(typeof c==='number') cardMintCache.set(Number(d.id), c); });
+    snap.docs.forEach(d=>{ const c = d.data().count; if(typeof c==='number') cardMintServerCache.set(Number(d.id), c); });
   }catch(e){ console.warn('card mint counts load failed', e); }
-  return cardMintCache;
+  return cardMintServerCache;
 }
 async function loadMgrMintCounts(){
-  if(mgrMintCache) return mgrMintCache;
-  mgrMintCache = new Map();
+  if(mgrMintServerCache) return mgrMintServerCache;
+  mgrMintServerCache = new Map();
   await fbReady;
-  if(!fb) return mgrMintCache;
+  if(!fb) return mgrMintServerCache;
   try{
     const snap = await fb.getDocs(fb.collection(fb.db,'mgrMints'));
-    snap.docs.forEach(d=>{ const c = d.data().count; if(typeof c==='number') mgrMintCache.set(Number(d.id), c); });
+    snap.docs.forEach(d=>{ const c = d.data().count; if(typeof c==='number') mgrMintServerCache.set(Number(d.id), c); });
   }catch(e){ console.warn('manager mint counts load failed', e); }
-  return mgrMintCache;
+  return mgrMintServerCache;
 }
 async function bumpCardMintCount(cardId, qty=1){
   if(isAdmin()) return;
-  if(cardMintCache) cardMintCache.set(cardId, (cardMintCache.get(cardId)||0)+qty);
+  cardMintLocalDelta.set(cardId, (cardMintLocalDelta.get(cardId)||0)+qty);
   await fbReady;
   if(!fb) return;
   try{ await fb.setDoc(fb.doc(fb.db,'cardMints', String(cardId)), {count: fb.increment(qty)}, {merge:true}); }
@@ -8926,7 +9056,7 @@ async function bumpCardMintCount(cardId, qty=1){
 }
 async function bumpMgrMintCount(mgrId, qty=1){
   if(isAdmin()) return;
-  if(mgrMintCache) mgrMintCache.set(mgrId, (mgrMintCache.get(mgrId)||0)+qty);
+  mgrMintLocalDelta.set(mgrId, (mgrMintLocalDelta.get(mgrId)||0)+qty);
   await fbReady;
   if(!fb) return;
   try{ await fb.setDoc(fb.doc(fb.db,'mgrMints', String(mgrId)), {count: fb.increment(qty)}, {merge:true}); }
@@ -8972,8 +9102,11 @@ async function recomputeAllCardMintCounts(){
     await writeAll('cardMints', cardTotals);
     await writeAll('mgrMints', mgrTotals);
   }catch(e){ return {ok:false, reason:'write-failed', detail:(e&&(e.code||e.message))||String(e)}; }
-  cardMintCache = new Map(cardTotals);
-  mgrMintCache = new Map(mgrTotals);
+  // an exact recompute from real data supersedes the server snapshot entirely, but any bumps already
+  // made THIS session (cards obtained after the scan started) must still layer on top of it - so this
+  // resets the server half only, leaving cardMintLocalDelta/mgrMintLocalDelta untouched.
+  cardMintServerCache = new Map(cardTotals);
+  mgrMintServerCache = new Map(mgrTotals);
   return {ok:true, accountsScanned, distinctCards:cardTotals.size, distinctManagers:mgrTotals.size};
 }
 function computeRAP(card){
@@ -11599,19 +11732,64 @@ function renderMarketSection(el){
   loadMarketListings();
 }
 let marketListingsCache = [];
-async function loadMarketListings(){
+// The actual network fetch, split out from loadMarketListings() below so it can also be called from
+// contexts with no #market-grid in the DOM at all (the Wunschlisten-Hintergrundcheck runs regardless of
+// which tab is open, or even with no tab visited yet this session) - loadMarketListings() itself still
+// bails out early without a grid element, this doesn't.
+async function fetchMarketListingsCache(){
   await fbReady;
-  const grid = document.getElementById('market-grid');
-  if(!grid) return;
-  if(!fb){ grid.innerHTML = `<p class="hint">Transfermarkt ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`; return; }
+  if(!fb) return marketListingsCache;
   try{
     marketListingsCache = await cachedRead('market-listings', 15000, async ()=>{
       const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.orderBy('createdAt','desc'), fb.limit(200)));
       return snap.docs.map(d=>({id:d.id, ...d.data()}));
     });
   }catch(e){ console.warn('market read failed', e); marketListingsCache = []; }
+  return marketListingsCache;
+}
+async function loadMarketListings(){
+  await fbReady;
+  const grid = document.getElementById('market-grid');
+  if(!grid) return;
+  if(!fb){ grid.innerHTML = `<p class="hint">Transfermarkt ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`; return; }
+  await fetchMarketListingsCache();
   drawMarketGrid();
   loadSalesHistory().then(()=>drawMarketGrid());
+}
+// ---- Wunschliste: eigene Karten-IDs (profile.wishlist) markieren, die man haben m\u00f6chte - taucht eine
+// davon als NEUES Transfermarkt-Angebot auf, gibt's einen Toast plus einen roten Punkt am Index-Tab
+// (siehe renderNavBadges). L\u00e4uft im Hintergrund (init() ruft das einmalig + alle 90s auf), unabh\u00e4ngig
+// davon, welcher Tab gerade offen ist - man muss nicht zuf\u00e4llig im Handel-Tab sein, damit es greift.
+let wishlistNotifyCount = 0;
+function isCardWishlisted(cardId){ return !!(profile && profile.wishlist && profile.wishlist.includes(cardId)); }
+async function toggleWishlist(cardId){
+  if(!profile.wishlist) profile.wishlist = [];
+  const idx = profile.wishlist.indexOf(cardId);
+  if(idx>=0) profile.wishlist.splice(idx,1); else profile.wishlist.push(cardId);
+  await sSet('profile', profile);
+  return idx<0; // true = just added
+}
+async function checkWishlistAgainstMarket(){
+  if(!profile || !profile.wishlist || !profile.wishlist.length) return;
+  await fetchMarketListingsCache();
+  if(!fb) return;
+  const seen = new Set(profile.wishlistSeenListingIds||[]);
+  const newHits = [];
+  marketListingsCache.forEach(l=>{
+    if(l.itemType==='manager' || l.itemType==='pack') return;
+    if(!profile.wishlist.includes(l.cardId) || seen.has(l.id)) return;
+    newHits.push(l);
+    seen.add(l.id);
+  });
+  if(!newHits.length) return;
+  profile.wishlistSeenListingIds = [...seen];
+  await sSet('profile', profile);
+  newHits.forEach(l=>{
+    const card = BY_ID.get(l.cardId);
+    toast(`\u2b50 Wunschlisten-Karte im Angebot: ${card?card.n:'Karte'} f\u00fcr ${formatCoins(l.price)} Coins!`);
+  });
+  wishlistNotifyCount += newHits.length;
+  renderNavBadges();
 }
 const MARKET_PER_SELLER_CAP = 12;
 function drawMarketGrid(){
@@ -13796,6 +13974,8 @@ async function init(){
   hideBootLoader();
   refreshLigaPendingBadge();
   refreshTradeIncomingBadge();
+  checkWishlistAgainstMarket();
+  setInterval(checkWishlistAgainstMarket, 90000);
   if(profile.pendingWarning){
     const warningMsg = profile.pendingWarning;
     profile.pendingWarning = null;
@@ -14525,6 +14705,7 @@ function renderNavBadges(){
     addBadge('store', computeStreakDay().canClaim ? 1 : 0);
     addBadge('week', weekPassClaimableCount());
     addBadge('achievements', achievementsClaimableCount());
+    addBadge('index', wishlistNotifyCount);
   }
 }
 // Bug fix: #nav-mobile's icons scroll via native overflow-x (see the CSS comment above it) so a user
@@ -16562,12 +16743,25 @@ function adminFullCardPool(){
   // every player card that exists gets registered into BY_ID at boot (see the many BY_ID.set(...) calls
   // scattered across the card-definition sections) - reading straight from there instead of listing each
   // source array by hand means this never again silently misses a newly added card category/roster.
-  // Two pools are built LAZILY on first real use though (see wm26VarianteSpecials/wm26KapitaenSpecials -
-  // the World Cup Pack's WM-Variante/WM-Kapitän cards), so BY_ID simply doesn't have them yet if nobody's
-  // opened that pack this session - force-build both here so "every card" is actually every card, not
-  // just whatever happened to already be touched.
+  // Several pools are built LAZILY on first real use though, so BY_ID simply doesn't have them yet if
+  // nobody's actually triggered that specific code path this session - force-build every one of them
+  // here so "every card" (Karten-Index included) is actually every card, not just whatever happened to
+  // already be touched:
+  //  - wm26VarianteSpecials/wm26KapitaenSpecials: the World Cup Pack's WM-Variante/WM-Kapitän cards.
+  //  - siegeTrophyCard/ligaMeisterTrophyCard/wepTrophyCard: the 3 Erfolge-tab trophy reward cards.
+  //  - ligaChampionCardForIndex: the weekly-rotating "Liga-Meister"-Ligen-Belohnungskarte - only the
+  //    CURRENT week's entry ever gets built by normal play (currentLigaChampionCard), so every other
+  //    week's card in LIGA_CHAMPION_ROSTER needs its own explicit force-build call here.
   wm26VarianteSpecials(); wm26KapitaenSpecials();
-  return Array.from(BY_ID.values()).filter(c=>!c.isManager);
+  siegeTrophyCard(); ligaMeisterTrophyCard(); wepTrophyCard();
+  LIGA_CHAMPION_ROSTER.forEach((_,i)=>ligaChampionCardForIndex(i));
+  // Kontrahent-Karten (getKontrahentRoster) und "weakened" CPU-Gegner-Karten (siehe pickRealisticOpponent)
+  // sind rein interne, im laufenden Match on-the-fly erzeugte Gegner-Auffüllkarten ohne jeden echten
+  // Erwerbsweg - kein Spieler kann sie je in seine Sammlung bekommen. Sie landen trotzdem in BY_ID
+  // (damit cardEl() sie während des Matches anzeigen kann), gehören aber nicht in den Index: ohne diesen
+  // Filter würden sie als niemals erhältliche "Phantom"-Karten auftauchen, und zwar nur für die Vereine,
+  // gegen die zufällig schon mal gespielt wurde - ein inkonsistenter, verwirrender Zustand.
+  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='kontrahent' && c.id<20000000);
 }
 // Icon Promo Pack (see PACKS' 'ligapack' - id kept as-is so existing LIGA_REWARD_TABLE entries and any
 // already-scheduled reward keep working unchanged, only the display name/pool/odds changed): 7 brand-
@@ -17710,6 +17904,9 @@ function cardIndexOwnedCounts(){
   return {players, managers};
 }
 function renderCardIndex(view){
+  // opening the tab acknowledges any pending "Wunschlisten-Karte im Angebot"-Benachrichtigung, same as
+  // every other nav-badge in this game clears once its own tab is actually visited.
+  if(wishlistNotifyCount>0){ wishlistNotifyCount = 0; renderNavBadges(); }
   const opts = cardIndexFilterOptions();
   const universe = cardIndexVisibleUniverse();
   const owned = cardIndexOwnedCounts();
@@ -18163,41 +18360,44 @@ function cardIndexChemElitePool(){
   cardIndexChemElitePoolCache = visible.slice().sort((a,b)=>b.ov-a.ov).slice(0,CARDIDX_CHEM_ELITE_POOL_SIZE);
   return cardIndexChemElitePoolCache;
 }
-// Maps "how many elite-pool cards share this exact link" to a 1-5 rating calibrated against real
-// achievable in-game chemistry (0-3 stars per player): 5 = nahezu immer volle Chemie erreichbar,
-// 4 = sehr oft, 3 = \u00fcblicherweise 1-2 Chemie-Sterne, 2 = meist nur 1, 1 = nahezu nie. Thresholds were
-// hand-tuned against real counts (Premier League ~74, Real Madrid ~44, Brazil ~38, Serie A ~15,
-// AC Milan ~7, Fenerbah\u00e7e ~1 of the top 300 cards in the game).
-function cardIndexChemBucket(count){
-  if(count>=50) return 5;
-  if(count>=25) return 4;
-  if(count>=12) return 3;
-  if(count>=4) return 2;
-  return 1;
-}
 function cardIndexChemistryCounts(card, field){
   const pool = cardIndexChemElitePool();
   const value = card[field];
-  const same = pool.filter(c=>c[field]===value);
-  return {total: same.length, bucket: cardIndexChemBucket(same.length)};
+  return pool.filter(c=>c[field]===value).length;
+}
+// A single MAX-of-three-dimensions rating turned out to be far too generous: any globally common
+// NATION alone (Brazil, Germany, France, ...) let virtually every star player from a football
+// powerhouse score high regardless of how obscure their actual club/league was (an AC Milan/Serie A
+// Brazilian was landing at 4-5 stars purely off the Brazil link). Real chemistry needs a genuine
+// nearby-teammate match, and club is by far the hardest/most specific one to satisfy, league is
+// moderate, and nation is the easiest/broadest and should count for the LEAST - so this is now a
+// weighted score (club counts 2.5x nation) that requires more than one merely-decent dimension to
+// reach a high rating, not just the single best one. Thresholds hand-tuned against real elite-pool
+// counts (out of the top 300 cards in the game): Premier League ~74, La Liga ~78, Real Madrid ~44,
+// Brazil ~38, Serie A ~15, AC Milan ~7, Fenerbah\u00e7e ~1.
+function cardIndexChemWeightedScore(club, lg, nat){ return club*0.5 + lg*0.3 + nat*0.2; }
+function cardIndexChemBucket(score){
+  if(score>=45) return 5;
+  if(score>=28) return 4;
+  if(score>=16) return 3;
+  if(score>=8) return 2;
+  return 1;
 }
 async function cardIndexChemistryStarsHTML(card){
-  const nat = cardIndexChemistryCounts(card,'nat');
-  const lg = cardIndexChemistryCounts(card,'lg');
-  const club = cardIndexChemistryCounts(card,'club');
-  // The easiest of the three independent paths decides the rating (any ONE strong link is enough for
-  // real chemistry) - a weak club link no longer gets masked/inflated just because the nation link
-  // happens to be strong, and vice versa.
-  let stars = Math.max(nat.bucket, lg.bucket, club.bucket);
+  const clubCount = cardIndexChemistryCounts(card,'club');
+  const lgCount = cardIndexChemistryCounts(card,'lg');
+  const natCount = cardIndexChemistryCounts(card,'nat');
+  let stars = cardIndexChemBucket(cardIndexChemWeightedScore(clubCount, lgCount, natCount));
   const topSquads = await loadTopSquadsForChemistry();
   let inTopSquads = 0;
   topSquads.forEach(cards=> inTopSquads += cards.filter(c=>c.nat===card.nat||c.lg===card.lg||c.club===card.club).length);
   // Live evidence from real top-10 squads can nudge the rating up by at most 1 star (never down, and
-  // never above 5) if it's genuinely well-represented there beyond what the static pool alone predicts.
-  if(inTopSquads>=8 && stars<5) stars++;
+  // never above 5), and only when it's REALLY strongly represented there - raised well above the old
+  // threshold so this can no longer be an easy backdoor around the stricter pool-based score above.
+  if(inTopSquads>=14 && stars<5) stars++;
   const starsVisual = '\u2605'.repeat(stars)+'\u2606'.repeat(5-stars);
   return `<div class="cardidx-chem-stars">${starsVisual}</div>
-    <p class="hint" style="margin:6px 0 0;">Unter den ${CARDIDX_CHEM_ELITE_POOL_SIZE} bestbewerteten Karten im Spiel: ${club.total} vom selben Verein, ${lg.total} aus derselben Liga, ${nat.total} mit derselben Nation \u00b7 ${inTopSquads} Vorkommen in den aktuellen Top-10-Kadern.</p>`;
+    <p class="hint" style="margin:6px 0 0;">Unter den ${CARDIDX_CHEM_ELITE_POOL_SIZE} bestbewerteten Karten im Spiel: ${clubCount} vom selben Verein, ${lgCount} aus derselben Liga, ${natCount} mit derselben Nation \u00b7 ${inTopSquads} Vorkommen in den aktuellen Top-10-Kadern.</p>`;
 }
 function cardIndexChemistryHTML(card){
   if(card.isManager) return '';
@@ -18288,8 +18488,8 @@ function showCardIndexDetailModal(item){
   const earliestEntry = entries.slice().sort((a,b)=>(a.obtainedAt||0)-(b.obtainedAt||0))[0];
   const earliest = earliestEntry ? earliestEntry.obtainedAt : null;
   const obtainedLabel = earliest ? new Date(earliest).toLocaleDateString('de-DE') : (kind==='manager' ? '\u2014' : (copies>0 ? 'Unbekannt (vor Index-Update)' : '\u2014'));
-  const mintCache = kind==='manager' ? mgrMintCache : cardMintCache;
-  const mintCount = mintCache && mintCache.has(card.id) ? mintCache.get(card.id) : null;
+  const mintServerLoaded = kind==='manager' ? !!mgrMintServerCache : !!cardMintServerCache;
+  const mintCount = mintServerLoaded ? (kind==='manager' ? mgrMintDisplayCount(card.id) : cardMintDisplayCount(card.id)) : null;
   const mgrBoostText = kind==='manager' ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue} Punkte`) : '';
   openModal(`
     <h2 style="margin-bottom:2px;">${card.n}</h2>
@@ -18321,6 +18521,7 @@ function showCardIndexDetailModal(item){
     ${cardIndexPlaystyleHTML(card)}
     ${cardIndexDetailedStatsHTML(card)}
     <div style="display:flex;gap:10px;margin-top:16px;">
+      ${!card.isManager&&copies===0?`<button class="action-btn secondary" id="cardidx-wishlist-toggle" style="flex:1;">${isCardWishlisted(card.id)?'\u2b50 Von Wunschliste entfernen':'\u2606 Auf Wunschliste setzen'}</button>`:''}
       ${!card.isManager?'<button class="action-btn secondary" id="cardidx-price-history" style="flex:1;">\ud83d\udcc8 Preisverlauf</button>':''}
       <button class="modal-close" id="cardidx-close" style="flex:1;">Schlie\u00dfen</button>
     </div>
@@ -18328,6 +18529,12 @@ function showCardIndexDetailModal(item){
   document.getElementById('cardidx-close').addEventListener('click', closeModal);
   const priceHistBtn = document.getElementById('cardidx-price-history');
   if(priceHistBtn) priceHistBtn.addEventListener('click', ()=>showPriceHistoryModal(card));
+  const wishlistBtn = document.getElementById('cardidx-wishlist-toggle');
+  if(wishlistBtn) wishlistBtn.addEventListener('click', async ()=>{
+    const nowOn = await toggleWishlist(card.id);
+    wishlistBtn.textContent = nowOn ? '\u2b50 Von Wunschliste entfernen' : '\u2606 Auf Wunschliste setzen';
+    toast(nowOn ? `${card.n} zur Wunschliste hinzugef\u00fcgt \u2014 du bekommst Bescheid, sobald sie im Transfermarkt auftaucht.` : `${card.n} von der Wunschliste entfernt.`);
+  });
   document.querySelectorAll('.cardidx-version-tile[data-cid]').forEach(tile=>{
     tile.style.cursor = 'pointer';
     tile.addEventListener('click', ()=>{
@@ -18362,7 +18569,8 @@ function showCardIndexDetailModal(item){
   }
   (kind==='manager' ? loadMgrMintCounts() : loadCardMintCounts()).then(()=>{
     const el = document.getElementById('cardidx-mint-count');
-    if(el) el.textContent = `\ud83c\udf0d ${((kind==='manager'?mgrMintCache:cardMintCache).get(card.id)||0).toLocaleString('de-DE')}`;
+    const count = kind==='manager' ? mgrMintDisplayCount(card.id) : cardMintDisplayCount(card.id);
+    if(el) el.textContent = `\ud83c\udf0d ${count.toLocaleString('de-DE')}`;
   });
   if(!card.untradable && !marketListingsCache.length){
     loadMarketListings().then(()=>{
