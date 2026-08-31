@@ -7841,6 +7841,47 @@ function weekPassRewardLabel(reward){
   const pack = PACKS.find(p=>p.id===reward.packId);
   return pack ? `${pack.name} ${UT_PACK_ICON}` : 'Pack';
 }
+// ===== Post-Level-30-Bonus: once the pass is fully maxed, XP earned from there on isn't wasted - every
+// WEEK_PASS_BONUS_XP_STEP of it (profile.weekPass.xp already accumulates uncapped past the max level,
+// see WEEK_PASS_MAX_LEVEL's own comment) unlocks another 5.000-Coins bonus, no cap on how many per week.
+// Every 3rd bonus adds a small pack on top, every 8th a large one (both independently - the 24th bonus
+// gets both). bonusClaimed is a plain counter (unlike `claimed`, a list of arbitrary level numbers) since
+// these milestones are homogeneous and always claimed strictly in order, never skipped.
+const WEEK_PASS_BONUS_XP_STEP = 2500;
+function weekPassBonusUnlockedCount(xp){
+  const overflow = (xp||0) - WEEK_PASS_LEVEL_THRESHOLDS[WEEK_PASS_MAX_LEVEL];
+  return overflow>0 ? Math.floor(overflow/WEEK_PASS_BONUS_XP_STEP) : 0;
+}
+// Weighted pack choice per tier, exactly as specified - 70/30 for the small (every-3rd) pack,
+// 60/20/20 for the large (every-8th) one.
+function weekPassBonusSmallPackId(){ return Math.random()<0.7 ? 'gold' : 'sevenof88'; }
+function weekPassBonusBigPackId(){ const r = Math.random(); return r<0.6 ? 'zeitgeist' : (r<0.8 ? 'kronjuwelen' : 'poeten'); }
+async function claimWeekPassBonus(){
+  if(!weekPassActive()) return;
+  const wp = profile.weekPass;
+  const unlocked = weekPassBonusUnlockedCount(wp.xp);
+  if(wp.bonusClaimed>=unlocked) return;
+  const n = wp.bonusClaimed+1;
+  const newWp = {...wp, bonusClaimed:n};
+  await atomicCoinChange(5000, {weekPass:newWp});
+  toast(`+5.000 Coins (Wochen-Pass-Bonus ${n})!`);
+  // Wochen-Pass-Packs sind immer UT (untauschbar), genau wie jedes andere Wochen-Pass-Pack (siehe
+  // claimWeekPassReward) - per-Instanz-Flag auf dem Collection-Eintrag, nicht auf der Karten-Vorlage.
+  if(n%3===0){
+    // roll the random id ONCE, outside .find()'s callback - inlining the call there would re-roll a
+    // brand new random pick for every single PACKS element the callback gets run against, not once,
+    // occasionally rerolling all the way past a match and returning undefined for the whole claim.
+    const smallId = weekPassBonusSmallPackId();
+    const pack = PACKS.find(p=>p.id===smallId);
+    if(pack) showPackOpening({...pack, name:`${pack.name} ${UT_PACK_ICON}`}, pack.draw(), {untradable:true});
+  }
+  if(n%8===0){
+    const bigId = weekPassBonusBigPackId();
+    const pack = PACKS.find(p=>p.id===bigId);
+    if(pack) showPackOpening({...pack, name:`${pack.name} ${UT_PACK_ICON}`}, pack.draw(), {untradable:true});
+  }
+  if(currentTab==='week') renderWeekPass(document.getElementById('view'));
+}
 async function claimWeekPassReward(level){
   const wp = profile.weekPass;
   if(wp.claimed.includes(level)) return;
@@ -7965,6 +8006,26 @@ function renderWeekPass(view){
   const pct = level>=WEEK_PASS_MAX_LEVEL ? 100 : Math.round(xpIntoLevel/xpForNext*100);
   const daysLeft = Math.max(0, Math.ceil((WEEK_PASS_END-Date.now())/(24*60*60*1000)));
   const active = weekPassActive();
+  const bonusClaimed = wp.bonusClaimed||0;
+  const bonusUnlocked = weekPassBonusUnlockedCount(wp.xp);
+  const bonusClaimable = bonusUnlocked>bonusClaimed && active;
+  const nextBonusN = bonusClaimed+1;
+  const bonusOverflow = Math.max(0, wp.xp - WEEK_PASS_LEVEL_THRESHOLDS[WEEK_PASS_MAX_LEVEL]);
+  const bonusIntoNext = Math.min(WEEK_PASS_BONUS_XP_STEP, Math.max(0, bonusOverflow - bonusClaimed*WEEK_PASS_BONUS_XP_STEP));
+  const bonusPct = bonusClaimable ? 100 : Math.round(bonusIntoNext/WEEK_PASS_BONUS_XP_STEP*100);
+  const bonusHTML = level>=WEEK_PASS_MAX_LEVEL ? `
+    <h3 style="font-size:15px;margin:24px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Bonus (nach Stufe ${WEEK_PASS_MAX_LEVEL})</h3>
+    <p class="hint" style="margin-top:0;margin-bottom:10px;">Alle ${formatCoins(WEEK_PASS_BONUS_XP_STEP)} zusätzliche XP: +5.000 Coins - jede 3. Stufe zusätzlich ein kleines Pack, jede 8. ein großes.</p>
+    <div class="wp-header" style="margin-bottom:4px;">
+      <div class="wp-badge" style="background:linear-gradient(135deg,#ffd76a,#c9a24a);">${bonusClaimed}</div>
+      <div class="chem-bar" style="max-width:320px;margin:10px auto 0;"><i style="width:${bonusPct}%;background:linear-gradient(90deg,#ffd76a,#fff3c4);"></i></div>
+      <p class="hint" style="margin-top:6px;">${bonusClaimable ? 'Bereit zum Abholen!' : `${bonusIntoNext} / ${WEEK_PASS_BONUS_XP_STEP} XP bis Bonus ${nextBonusN}`}</p>
+    </div>
+    <div style="display:flex;justify-content:center;margin-bottom:6px;">
+      <button class="action-btn${bonusClaimable?'':' secondary'}" id="wp-claim-bonus" style="width:auto;padding:9px 20px;" ${bonusClaimable?'':'disabled'}>
+        ${bonusClaimable ? `Bonus ${nextBonusN} abholen (+5.000 Coins${nextBonusN%3===0?' + kleines Pack':''}${nextBonusN%8===0?' + großes Pack':''})` : 'Noch nicht bereit'}
+      </button>
+    </div>` : '';
   const tiles = Array.from({length:WEEK_PASS_MAX_LEVEL}, (_,i)=>i+1).map(lv=>{
     const unlocked = level>=lv;
     const claimed = wp.claimed.includes(lv);
@@ -8008,13 +8069,16 @@ function renderWeekPass(view){
     <p class="hint" style="margin-top:0;margin-bottom:12px;">Immer 3 gleichzeitig aktiv. Schaffst du eine, gibt's sofort Bonus-XP fürs Level und eine neue Quest rückt nach.</p>
     ${quests.some(q=>{ const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id); return def && q.progress>=def.target; }) && active ? `<button class="action-btn secondary" id="wp-claim-all-quests" style="width:auto;padding:8px 14px;font-size:12px;margin-bottom:12px;">Alle fertigen Quests abholen</button>` : ''}
     <div class="wp-quest-grid">${questTiles}</div>
-    <div class="wp-track" style="margin-top:22px;">${tiles}</div>`;
+    <div class="wp-track" style="margin-top:22px;">${tiles}</div>
+    ${bonusHTML}`;
   view.querySelectorAll('.wp-claim[data-level]').forEach(btn=>{
     btn.addEventListener('click', ()=>claimWeekPassReward(Number(btn.dataset.level)));
   });
   view.querySelectorAll('.wp-claim[data-quest]').forEach(btn=>{
     btn.addEventListener('click', ()=>claimWeekPassQuest(btn.dataset.quest));
   });
+  const claimBonusBtn = document.getElementById('wp-claim-bonus');
+  if(claimBonusBtn) claimBonusBtn.addEventListener('click', ()=>claimWeekPassBonus());
   const claimAllBtn = document.getElementById('wp-claim-all-quests');
   if(claimAllBtn) claimAllBtn.addEventListener('click', async ()=>{
     claimAllBtn.disabled = true;
@@ -13387,7 +13451,8 @@ async function init(){
     if(!profile.crest) profile.crest = {shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(profile.displayName||'?')[0].toUpperCase()};
     if(profile.iconSwapTokens===undefined) profile.iconSwapTokens = 0;
     if(!profile.iconSwapRedeemed) profile.iconSwapRedeemed = [];
-    if(!profile.weekPass || profile.weekPass.weekId!==WEEK_PASS_ID) profile.weekPass = {weekId: WEEK_PASS_ID, xp:0, claimed:[]};
+    if(!profile.weekPass || profile.weekPass.weekId!==WEEK_PASS_ID) profile.weekPass = {weekId: WEEK_PASS_ID, xp:0, claimed:[], bonusClaimed:0};
+    if(profile.weekPass.bonusClaimed===undefined) profile.weekPass.bonusClaimed = 0; // pre-existing weekPass docs from before the post-Level-30-Bonus existed
     if(!profile.dailyRewardTracker) profile.dailyRewardTracker = {date:'', count:0};
     if(profile.prestige===undefined) profile.prestige = 0;
     if(profile.lastResetId===undefined) profile.lastResetId = null;
@@ -14169,6 +14234,7 @@ function weekPassClaimableCount(){
     const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id);
     if(def && q.progress>=def.target) count++;
   });
+  count += Math.max(0, weekPassBonusUnlockedCount(wp.xp) - (wp.bonusClaimed||0));
   return count;
 }
 // Count of not-yet-claimed achievement tiers, summed across every line - same "purely derived from
