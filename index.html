@@ -9050,8 +9050,11 @@ function mgrMintDisplayCount(mgrId){
 // erscheint nur, wenn es tatsächlich untradable Exemplare gibt, damit die weit häufigere handelbare
 // Karte nicht unnötig mit einem "(davon 0 UT)" zugetextet wird.
 function mintCountLabel(id, isManager){
-  const trad = isManager ? mgrMintTradableCount(id) : cardMintTradableCount(id);
-  const ut = isManager ? mgrMintUntradableCount(id) : cardMintUntradableCount(id);
+  // Math.max(0,...): eine Karte, die schon vor dem allerersten Admin-Recompute verbraucht wurde,
+  // zieht kurzzeitig von einem nie gezählten Bestand ab - rein kosmetisch abgefangen, damit sowas nie
+  // als "-1" auftaucht, statt es als echten Datenfehler zu verschleiern (siehe recomputeAllCardMintCounts).
+  const trad = Math.max(0, isManager ? mgrMintTradableCount(id) : cardMintTradableCount(id));
+  const ut = Math.max(0, isManager ? mgrMintUntradableCount(id) : cardMintUntradableCount(id));
   const total = trad + ut;
   const utIcon = `<img src="https://images.zenithfcm.com/untradable-flag-player-card.png" alt="" title="Nicht handelbar" style="width:11px;height:11px;object-fit:contain;vertical-align:-1px;">`;
   return `${total.toLocaleString('de-DE')}${ut>0?` <span class="hint" style="font-size:10px;font-weight:400;">(davon ${utIcon} ${ut.toLocaleString('de-DE')} UT)</span>`:''}`;
@@ -11637,10 +11640,23 @@ async function submitSBC(){
       openSBCBuilder(activeSBC); return;
     }
   }
+  // "im Umlauf" ist ein LIVE-Bestand (siehe cardMintDisplayCount) - eine SBC verbraucht die
+  // eingesetzten Karten dauerhaft, also muss der Zähler hier genauso runter wie er beim Erhalt
+  // raufging. Handel/Markt tun das absichtlich NICHT (dort wechselt nur der Besitzer, siehe
+  // buyMarketListing/finalizeTradeAccept), nur echter Verbrauch/Zerstörung zählt ab.
+  collection.filter(c=>uids.includes(c.uid)).forEach(entry=>{
+    const c = BY_ID.get(entry.cardId);
+    bumpCardMintCount(entry.cardId, -1, !!(entry.untradable || (c && c.untradable)));
+  });
   collection = collection.filter(c=>!uids.includes(c.uid));
   if(activeSBC.managerReq && sbcManagerSelection){
+    const removedMgrEntry = managerCollection.find(m=>m.uid===sbcManagerSelection);
     managerCollection = managerCollection.filter(m=>m.uid!==sbcManagerSelection);
     await sSet('managerCollection', managerCollection);
+    if(removedMgrEntry){
+      const mgr = MGR_BY_ID.get(removedMgrEntry.mgrId);
+      bumpMgrMintCount(removedMgrEntry.mgrId, -1, !!(mgr && mgr.untradable));
+    }
   }
   profile.completedSBCs = profile.completedSBCs || {};
   profile.completedSBCs[activeSBC.id] = (profile.completedSBCs[activeSBC.id]||0) + 1;
@@ -15439,10 +15455,19 @@ function showPickScreen(cards, pickCount, addedPromise){
   async function pruneToKept(keepUids){
     const added = await addedPromise;
     let touchedPlayers=false, touchedManagers=false;
+    // jede gezogene Karte wurde beim Ziehen schon in "im Umlauf" gezählt (addCardsToCollection) -
+    // was hier NICHT behalten wird, existiert am Ende gar nicht wirklich, also muss der Zähler für
+    // jede verworfene Karte wieder runter, exakt spiegelbildlich zum Aufbau beim Erhalt.
     added.forEach(({uid,card})=>{
       if(keepUids.has(uid)) return;
-      if(card.isManager){ managerCollection = managerCollection.filter(m=>m.uid!==uid); touchedManagers=true; }
-      else { collection = collection.filter(x=>x.uid!==uid); touchedPlayers=true; }
+      if(card.isManager){
+        managerCollection = managerCollection.filter(m=>m.uid!==uid); touchedManagers=true;
+        bumpMgrMintCount(card.id, -1, !!card.untradable);
+      } else {
+        const entry = collection.find(x=>x.uid===uid);
+        collection = collection.filter(x=>x.uid!==uid); touchedPlayers=true;
+        bumpCardMintCount(card.id, -1, !!((entry && entry.untradable) || card.untradable));
+      }
     });
     if(touchedPlayers) await sSet('collection', collection);
     if(touchedManagers) await sSet('managerCollection', managerCollection);
