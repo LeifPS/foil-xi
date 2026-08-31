@@ -9109,6 +9109,55 @@ async function recomputeAllCardMintCounts(){
   mgrMintServerCache = new Map(mgrTotals);
   return {ok:true, accountsScanned, distinctCards:cardTotals.size, distinctManagers:mgrTotals.size};
 }
+// Per-player counterpart to the admin-only recompute above: runs completely automatically, once ever
+// per account, the very first time that account's client can reach Firestore after this feature
+// shipped - reports everything already in THIS player's own collection/managerCollection into the
+// global cardMints/mgrMints counters (an fb.increment per distinct id, not an overwrite, since every
+// other player's own one-time report needs to add up on top of it) and then permanently marks
+// profile.cardMintBackfilled so it can never run a second time for that account. This is what makes
+// "im Umlauf" eventually reach the true historical total for EVERY player over time, purely by people
+// logging in, without needing an admin to remember to run the manual recompute at all - the two are
+// complementary, not a replacement for each other (the admin tool is still there for an instant fix).
+async function backfillOwnCardMintCounts(){
+  if(profile.cardMintBackfilled) return;
+  await fbReady;
+  if(!fb) return; // stay unflagged - retried next session once a backend is actually reachable
+  if(isAdmin()){
+    // admin accounts never contribute to "im Umlauf" (see bumpCardMintCount) - nothing to report, just
+    // mark it done so this check doesn't re-run every single boot.
+    profile.cardMintBackfilled = true;
+    await sSet('profile', profile);
+    return;
+  }
+  try{
+    const cardTotals = new Map();
+    collection.forEach(c=>cardTotals.set(c.cardId, (cardTotals.get(c.cardId)||0)+1));
+    const mgrTotals = new Map();
+    managerCollection.forEach(m=>mgrTotals.set(m.mgrId, (mgrTotals.get(m.mgrId)||0)+1));
+    const writeAll = async (collName, totals)=>{
+      const ids = [...totals.keys()];
+      if(!ids.length) return;
+      if(fb.writeBatch){
+        const CHUNK = 400; // stay under Firestore's 500-write batch limit
+        for(let i=0;i<ids.length;i+=CHUNK){
+          const batch = fb.writeBatch(fb.db);
+          ids.slice(i,i+CHUNK).forEach(id=> batch.set(fb.doc(fb.db,collName,String(id)), {count: fb.increment(totals.get(id))}, {merge:true}));
+          await batch.commit();
+        }
+      } else {
+        for(const id of ids) await fb.setDoc(fb.doc(fb.db,collName,String(id)), {count: fb.increment(totals.get(id))}, {merge:true});
+      }
+    };
+    await writeAll('cardMints', cardTotals);
+    await writeAll('mgrMints', mgrTotals);
+    // reflect it locally right away too (same idea as bumpCardMintCount's own optimistic delta) so
+    // this session's own Index view is already correct instead of waiting on a fresh server re-read.
+    cardTotals.forEach((qty,id)=> cardMintLocalDelta.set(id, (cardMintLocalDelta.get(id)||0)+qty));
+    mgrTotals.forEach((qty,id)=> mgrMintLocalDelta.set(id, (mgrMintLocalDelta.get(id)||0)+qty));
+    profile.cardMintBackfilled = true;
+    await sSet('profile', profile);
+  }catch(e){ console.warn('own card mint backfill failed', e); }
+}
 function computeRAP(card){
   // untradable cards are always 0, full stop - real sale prices recorded before a card was flagged
   // untradable (e.g. an old market sale) must never blend back in and show a leftover value.
@@ -13976,6 +14025,7 @@ async function init(){
   refreshTradeIncomingBadge();
   checkWishlistAgainstMarket();
   setInterval(checkWishlistAgainstMarket, 90000);
+  backfillOwnCardMintCounts();
   if(profile.pendingWarning){
     const warningMsg = profile.pendingWarning;
     profile.pendingWarning = null;
