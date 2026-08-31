@@ -9749,6 +9749,26 @@ const ADMIN_JACKSON_CARD = {
   variant:'admin', variantLabel:'Admin', theme:'admin', untradable:true,
 };
 BY_ID.set(ADMIN_JACKSON_CARD.id, ADMIN_JACKSON_CARD);
+// Second Admin-only easter egg, same rules as ADMIN_JACKSON_CARD above (never in any pack pool, same
+// "Admin" black/red theme) - 9999 everywhere instead of 999. Two things were explicitly asked for that
+// the engine hard-caps regardless of what's requested, worth flagging rather than silently pretending
+// they're fully honored: (1) traits = traits.slice(0,3) in resolveCardTraits is a global "every card in
+// this game only ever HAS 3" rule, not something per-card - listing more than 3 here would just have
+// the 4th+ silently never render/apply, so this only lists 3 (all elite). (2) positionBonusTier only
+// ever grants "++" to the FIRST listed position (rankIndex 0) and "+" to the second, for every card in
+// the game, purely by list order - not something settable per-position - so with ST first this card's
+// "++" applies there exactly like Michael Jackson's does, not on all 15 positions simultaneously.
+const ADMIN_TRUMP_SUBSTATS = {};
+ADMIN_JACKSON_SUBSTAT_KEYS.forEach(k=>{ ADMIN_TRUMP_SUBSTATS[k] = 9999; });
+const ADMIN_TRUMP_CARD = {
+  id:9799998, n:'Donald Trump', pos:'ST, CAM, CM, LW, RW, LM, RM, CDM, CB, LB, RB, LWB, RWB, CF, GK', ov:9999, pot:9999,
+  nat:'United States', lg:'Legenden', club:'The White House',
+  pac:9999, sho:9999, pas:9999, dri:9999, defn:9999, phy:9999, foot:'Right', gk:false,
+  img:'https://www.nicepng.com/png/full/4-41166_trump-funny-face-donald-trump-png.png',
+  substats:ADMIN_TRUMP_SUBSTATS, traits:['Durchsetzungskraft+','Kante+','Ruhepol+'], manualTraits:true,
+  variant:'admin', variantLabel:'Admin', theme:'admin', untradable:true,
+};
+BY_ID.set(ADMIN_TRUMP_CARD.id, ADMIN_TRUMP_CARD);
 // Jackpot Pack's ultra-rare 0.2% pull (see the 'jackpot' pack def below) - built from the existing
 // OG Icons Pelé card (id 9800300, 111 OV) boosted to exactly 115, the single highest-rated card in
 // the game. A normal pack pull like every other Jackpot card, so deliberately left tradable.
