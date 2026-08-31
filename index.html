@@ -467,6 +467,38 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 18px 36px rgba(0,0,0,.8), 0 0 0 1px rgba(201,138,62,.4) inset, 0 0 18px -4px #c98a3e;}
   50%{box-shadow:0 18px 36px rgba(0,0,0,.8), 0 0 0 1px rgba(232,199,138,.5) inset, 0 0 30px -2px #e8c78a;}
 }
+/* Admin: the one variant no pack can ever pull (see ADMIN_JACKSON_CARD) - black/red "breached system"
+   look instead of any real rarity's gold/prestige palette, plus its own hack-overlay FX layer below. */
+.pcard.theme-admin{--acc:#ff2020;border:2px solid transparent;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,0,0,.05) 0 2px, transparent 2px 4px) padding-box,
+    radial-gradient(circle at 50% 32%, #170202 0%, #060000 55%, #000 100%) padding-box,
+    linear-gradient(160deg,#3d0000,#ff0000,#ff8080,#ff0000,#3d0000) border-box !important;
+  animation: adminGlow 2s ease-in-out infinite, ultimateBreathe 2.6s ease-in-out infinite;}
+.pcard.theme-admin::before{animation:autoShine 1.3s ease-in-out infinite;}
+.pcard.theme-admin .name{color:#ff5c5c;text-shadow:0 0 8px rgba(255,0,0,.75);}
+.pcard.theme-admin .name.name-variant{color:#ff5c5c;text-shadow:0 0 8px rgba(255,0,0,.75);}
+@keyframes adminGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.7), 0 0 20px -2px #ff0000;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.7), 0 0 46px 2px #ff3b3b;}
+}
+.admin-hack-fx{position:absolute;inset:0;z-index:1;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.admin-hack-scan{position:absolute;left:0;right:0;top:-30%;height:26%;
+  background:linear-gradient(180deg, rgba(255,0,0,0) 0%, rgba(255,60,60,.32) 50%, rgba(255,0,0,0) 100%);
+  animation:adminScan 2.6s linear infinite;}
+@keyframes adminScan{0%{top:-30%;}100%{top:110%;}}
+.admin-hack-glitch{position:absolute;left:0;right:0;height:3px;background:rgba(255,0,0,.6);
+  mix-blend-mode:screen;opacity:0;animation:adminGlitch 2.4s steps(1) infinite;}
+@keyframes adminGlitch{
+  0%,92%{opacity:0;transform:translateX(0);}
+  93%{opacity:.9;transform:translateX(-5px);}
+  94%{opacity:.9;transform:translateX(6px);}
+  95%,100%{opacity:0;transform:translateX(0);}
+}
+.admin-hack-stamp{position:absolute;left:50%;top:58%;transform:translate(-50%,-50%) rotate(-18deg);
+  font-family:'JetBrains Mono';font-weight:700;font-size:14px;letter-spacing:.28em;color:rgba(255,30,30,.42);
+  text-shadow:0 0 6px rgba(255,0,0,.6);white-space:nowrap;animation:adminStampFlicker 3.4s ease-in-out infinite;}
+@keyframes adminStampFlicker{0%,100%{opacity:.35;}45%{opacity:.12;}50%{opacity:.55;}55%{opacity:.12;}}
 .pcard .ogicon-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
 /* No static centerpiece at all (a wreath sitting still in the middle was tried and cut) - just a
    steady rain of small green laurel leaves, gold crowns and gold stars drifting down the whole card,
@@ -8550,7 +8582,7 @@ const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8
   uclw:'#0a1e4d',uclw_mgr:'#e8003c', ballondor:'#f2c14e', wm_mgr:'#aa151b', prime:'#ffd76a',
   sigicon:'#7ad9ff', eradef:'#ffcf5c', sigseason:'#ff6fb1',
   ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00', iconswap:'#22d3ee', poet:'#b06cff',
-  promocard:'#ffce00'};
+  promocard:'#ffce00', admin:'#ff2020'};
 function cardAccent(card){
   if(card.variant==='meistertrainer') return '#ff8a3d';
   if(card.variant==='uclw_mgr') return THEME_ACC.uclw_mgr;
@@ -9689,6 +9721,34 @@ BY_ID.set(MARCELO_QUEST_CARD.id, MARCELO_QUEST_CARD);
 // reward, never obtainable any other way, so letting them be traded/sold away (and RAP-priced as if
 // they were) would undercut the whole point.
 [WM_QUEST_MBAPPE_CARD, OLISE_QUEST_CARD, ALISSON_QUEST_CARD, YAMAL_QUEST_CARD, RUDIGER_QUEST_CARD, HAALAND_QUEST_CARD, CHONG_QUEST_CARD, PINA_QUEST_CARD, KANE_QUEST_CARD, SYLLA_QUEST_CARD, KROOS_QUEST_CARD, NEYMAR_QUEST_CARD, MARCELO_QUEST_CARD].forEach(c=>{ if(c) c.untradable = true; });
+// Admin-only easter egg - deliberately absurd (999 OVR, every single stat/substat at 999, every
+// position on the pitch) and NEVER reachable through any pack/SBC/quest/Transfermarkt: it only exists
+// because it's registered directly into BY_ID here, and adminFullCardPool() (the search pool behind
+// "Karte direkt hinzufügen" in the Admin-Panel) reads straight off BY_ID - no pack/pool array anywhere
+// in the game references this id, so it's unobtainable any other way. Its own "Admin" variant/theme
+// (black/red "breached system" look + a scanline/glitch hack-overlay FX layer, see .theme-admin and
+// .admin-hack-fx) marks it as clearly not a real in-game rarity.
+const ADMIN_JACKSON_SUBSTAT_KEYS = ['acceleration','sprintSpeed','positioning','finishing','shotPower','longShots','volleys','penalties',
+  'vision','crossing','freeKickAccuracy','shortPassing','longPassing','curve','agility','balance',
+  'reactions','ballControl','dribbling','composure','interceptions','headingAccuracy','defensiveAwareness',
+  'standingTackle','slidingTackle','jumping','stamina','strength','aggression',
+  'gkDiving','gkHandling','gkKicking','gkReflexes','gkPositioning'];
+const ADMIN_JACKSON_SUBSTATS = {};
+ADMIN_JACKSON_SUBSTAT_KEYS.forEach(k=>{ ADMIN_JACKSON_SUBSTATS[k] = 999; });
+const ADMIN_JACKSON_CARD = {
+  // ST listed first (not GK) so the card displays/plays as a flashy outfield attacker by default -
+  // mainPos() always reads the FIRST listed position, and a "TW"-labeled card would also show the
+  // GK-relabeled stat abbreviations (STAT_DE_GK) instead of the real TEM/SCH/PAS/DRI/DEF/PHY ones.
+  // GK is still listed (last) so it's still selectable for that slot too - "alle Positionen" really
+  // does mean every single one, just not the one shown up front.
+  id:9799999, n:'Michael Jackson', pos:'ST, CAM, CM, LW, RW, LM, RM, CDM, CB, LB, RB, LWB, RWB, CF, GK', ov:999, pot:999,
+  nat:'United States', lg:'Legenden', club:'Neverland Ranch',
+  pac:999, sho:999, pas:999, dri:999, defn:999, phy:999, foot:'Right', gk:false,
+  img:'https://www.freepnglogos.com/uploads/michael-jackson-png/looking-you-bad-michael-jackson-transparent-png-stickpng-26.png',
+  substats:ADMIN_JACKSON_SUBSTATS, traits:['Beinarbeit+','Tricks+','Schneller Schritt+'], manualTraits:true,
+  variant:'admin', variantLabel:'Admin', theme:'admin', untradable:true,
+};
+BY_ID.set(ADMIN_JACKSON_CARD.id, ADMIN_JACKSON_CARD);
 // Jackpot Pack's ultra-rare 0.2% pull (see the 'jackpot' pack def below) - built from the existing
 // OG Icons Pelé card (id 9800300, 111 OV) boosted to exactly 115, the single highest-rated card in
 // the game. A normal pack pull like every other Jackpot card, so deliberately left tradable.
@@ -13752,6 +13812,23 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="iconpromo-confetti">${confettiHTML}</div>
     </div>`;
   })() : '';
+  // Admin-Karte (never in any pack pool - see ADMIN_JACKSON_CARD, only obtainable via the admin panel's
+  // "Karte direkt hinzufügen"): scanline sweep + a couple of randomly-timed RGB-glitch slice bars + a
+  // rotated, flickering "ADMIN ACCESS" watermark stamp - same "own dedicated FX layer, randomized per
+  // render so no two instances glitch identically" pattern as the Icon Promo confetti above.
+  const isAdminTier = card.theme==='admin';
+  const adminFxHTML = isAdminTier ? (()=>{
+    const glitchBars = Array.from({length:3},(_,i)=>{
+      const top = (10 + Math.random()*75).toFixed(1);
+      const delay = (i*0.8 + Math.random()*0.4).toFixed(2);
+      return `<div class="admin-hack-glitch" style="top:${top}%;animation-delay:${delay}s;"></div>`;
+    }).join('');
+    return `<div class="admin-hack-fx">
+      <div class="admin-hack-scan"></div>
+      ${glitchBars}
+      <div class="admin-hack-stamp">ADMIN ACCESS</div>
+    </div>`;
+  })() : '';
   const div = document.createElement('div');
   div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
@@ -13844,6 +13921,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${goatFxHTML}
     ${ogiconFxHTML}
     ${iconpromoFxHTML}
+    ${adminFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
