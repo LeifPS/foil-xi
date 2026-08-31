@@ -16840,13 +16840,17 @@ function adminFullCardPool(){
   wm26VarianteSpecials(); wm26KapitaenSpecials();
   siegeTrophyCard(); ligaMeisterTrophyCard(); wepTrophyCard();
   LIGA_CHAMPION_ROSTER.forEach((_,i)=>ligaChampionCardForIndex(i));
-  // Kontrahent-Karten (getKontrahentRoster) und "weakened" CPU-Gegner-Karten (siehe pickRealisticOpponent)
-  // sind rein interne, im laufenden Match on-the-fly erzeugte Gegner-Auffüllkarten ohne jeden echten
-  // Erwerbsweg - kein Spieler kann sie je in seine Sammlung bekommen. Sie landen trotzdem in BY_ID
-  // (damit cardEl() sie während des Matches anzeigen kann), gehören aber nicht in den Index: ohne diesen
-  // Filter würden sie als niemals erhältliche "Phantom"-Karten auftauchen, und zwar nur für die Vereine,
-  // gegen die zufällig schon mal gespielt wurde - ein inkonsistenter, verwirrender Zustand.
-  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='kontrahent' && c.id<20000000);
+  // Kontrahent-Karten (getKontrahentRoster, id 20000000+base.id*10+ti, ~20-24 Mio.) und "weakened"
+  // CPU-Gegner-Karten (pickRealisticOpponent, id 30000000+c.id, ~30-30,4 Mio.) sind rein interne, im
+  // laufenden Match on-the-fly erzeugte Gegner-Auffüllkarten ohne jeden echten Erwerbsweg - kein Spieler
+  // kann sie je in seine Sammlung bekommen. Sie landen trotzdem in BY_ID (damit cardEl() sie während des
+  // Matches anzeigen kann), gehören aber nicht in den Index: ohne diesen Filter würden sie als niemals
+  // erhältliche "Phantom"-Karten auftauchen, und zwar nur für die Vereine, gegen die zufällig schon mal
+  // gespielt wurde - ein inkonsistenter, verwirrender Zustand. Die Ausschluss-Range endet bei 40 Mio.,
+  // NICHT einfach bei "alles ab 20 Mio." - WM26-Variante (50000000+base.id) und WM26-Kapitän
+  // (60000000+base.id, siehe wm26VarianteSpecials/wm26KapitaenSpecials oben) sind echte, erhältliche
+  // Karten und lagen mit einem zu weiten Cutoff hier fälschlich mit im Ausschluss.
+  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='kontrahent' && (c.id<20000000 || c.id>=40000000));
 }
 // Icon Promo Pack (see PACKS' 'ligapack' - id kept as-is so existing LIGA_REWARD_TABLE entries and any
 // already-scheduled reward keep working unchanged, only the display name/pool/odds changed): 7 brand-
