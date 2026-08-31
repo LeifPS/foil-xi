@@ -17367,9 +17367,10 @@ function squadRating(){
   if(filled===0) return {rating:0, filled:0, preciseRating:0};
   const base = effSum/filled;
   const bonus = (exactCount/11)*2;
-  // 999 is effectively "uncapped" for anything achievable in practice (even a maxed-out card +
-  // chemistry + manager boost lands nowhere close) - kept as a sanity ceiling only, not a real limit.
-  const preciseRating = Math.min(999, base+bonus);
+  // No ceiling anymore - a real (if absurd) 999/1500/9999-OVR card should actually show a team rating
+  // that reflects it, not get silently capped back down to something that used to look "uncapped in
+  // practice" before those existed.
+  const preciseRating = base+bonus;
   const rating = Math.round(preciseRating);
   return {rating, filled, preciseRating};
 }
@@ -25970,11 +25971,16 @@ function poissonGoals(lambda){
   if(lambda<=0) return 0;
   const L = Math.exp(-lambda);
   let k=0, p=1;
-  do{ k++; p *= Math.random(); }while(p>L && k<12);
+  do{ k++; p *= Math.random(); }while(p>L && k<24);
   return k-1;
 }
+// Old ceiling (8) meant a genuinely rare double-digit scoreline could never actually appear no matter
+// how lucky the sampling above got - clamped away every single time. 20 is a generous sanity ceiling
+// only (same spirit as the old one), not a real limit anyone playing normal matches will ever bump
+// into: it takes both a high lambda (see computeLambda - a huge rating mismatch) AND landing deep in
+// the Poisson tail (bad luck for the other side / great luck for this one) to get anywhere close.
 function simGoals(lambda){
-  return clamp(poissonGoals(lambda), 0, 8);
+  return clamp(poissonGoals(lambda), 0, 20);
 }
 // precise=true (see profile.showDecimalEffOv / previewEffectiveOvAtSlot) keeps chemOv as an unrounded
 // float (1 decimal, rounded by the caller) instead of an integer - default false preserves the exact
@@ -26791,7 +26797,12 @@ function computeTeamProfile(players, fallbackOv){
 // attack/defense difference the formula is actually built around.
 function computeLambda(attack, oppDefense, paceBonus=0){
   const diff = attack - oppDefense;
-  return clamp(1.3 + diff/11 + paceBonus, 0.22, 4.9);
+  // Ceiling raised from the old 4.9: a normal match's attack/defense gap never comes close to needing
+  // it (reaching even the old 4.9 already required a ~40-point average edge, essentially never seen
+  // outside an admin-card blowout) - a genuinely overwhelming mismatch can now push the expected goal
+  // count high enough that double-digit-plus scorelines become a real, if still not guaranteed,
+  // possibility (see simGoals/poissonGoals for the rest of "much better or very lucky").
+  return clamp(1.3 + diff/11 + paceBonus, 0.22, 9.5);
 }
 // allowDraw=false (every non-Liga match: Ranked/WM26/Turniere/...) keeps the old single-number
 // behavior exactly - a real draw isn't a possible final result there (extra time/penalties always
