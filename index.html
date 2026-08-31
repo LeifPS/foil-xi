@@ -1932,6 +1932,22 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .wm26-progress-dots i{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block;border:1px solid rgba(255,255,255,.08);}
 .wm26-progress-dots i.done{background:var(--turf-bright);border-color:var(--turf-bright);}
 .wm26-progress-dots i.now{background:var(--gold);border-color:var(--gold);box-shadow:0 0 6px var(--gold);}
+/* ---- Karten-Index: owned-only card lookup with rich per-card metadata ---- */
+.cardidx-summary{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+.cardidx-stat-tile{flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+.cardidx-stat-tile .v{font-size:19px;font-weight:800;color:var(--chalk);}
+.cardidx-stat-tile .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:2px;}
+.cardidx-card-wrap{position:relative;}
+.cardidx-copies-badge{position:absolute;top:4px;right:4px;background:rgba(6,8,12,.82);color:var(--gold);font-size:10.5px;font-weight:700;border-radius:20px;padding:2px 8px;z-index:2;border:1px solid rgba(255,215,0,.35);}
+.cardidx-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}
+.cardidx-detail-tile{margin-bottom:12px;}
+.cardidx-detail-tile .v{font-size:16px;font-weight:700;color:var(--chalk);}
+.cardidx-detail-tile .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:1px;}
+.cardidx-source-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:12px;}
+.cardidx-source-row:first-child{border-top:none;}
+.cardidx-source-rate{font-family:'JetBrains Mono';color:var(--turf-bright);font-size:11px;flex-shrink:0;}
+.cardidx-offer-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:12px;}
+.cardidx-offer-row:first-child{border-top:none;}
 .match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
 .goal-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:6px 10px;border-radius:8px;animation:trayIn .3s;}
 .goal-row.opp{border-left:2px solid var(--danger);}
@@ -7939,7 +7955,7 @@ async function claimWeekPassReward(level){
   } else if(reward.type==='card'){
     profile.weekPass = newWp;
     const card = BY_ID.get(reward.cardId);
-    if(card){ collection.push({uid:genId(), cardId:card.id}); await sSet('collection', collection); }
+    if(card){ collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now()}); bumpCardMintCount(card.id); await sSet('collection', collection); }
     await sSet('profile', profile);
     toast(`🏆 ${card ? card.n : 'Exklusive Karte'} freigeschaltet!`);
     if(card) showCutscene(card, ()=>{});
@@ -8814,6 +8830,31 @@ async function clearRapOverride(cardId){
   await loadRapOverrides();
   try{ await fb.deleteDoc(fb.doc(fb.db,'rapOverrides', String(cardId))); }catch(e){ console.warn('rap override clear failed', e); }
   rapOverrideCache.delete(cardId);
+}
+// Global "wie viele gibt es" counter for the Karten-Index - one shared Firestore doc per card id
+// (collection 'cardMints', doc id = String(cardId), field `count`), incremented by 1 every time a
+// genuinely NEW copy of that card is created for some player (pack draws, quest/achievement/admin
+// grants, Icon-Swap redemptions). Deliberately NOT incremented on a market purchase or an accepted
+// trade offer - those move an already-existing copy between two players' collections, they don't
+// mint a new one, so the global total must stay unchanged.
+let cardMintCache = null; // Map id -> count
+async function loadCardMintCounts(){
+  if(cardMintCache) return cardMintCache;
+  cardMintCache = new Map();
+  await fbReady;
+  if(!fb) return cardMintCache;
+  try{
+    const snap = await fb.getDocs(fb.collection(fb.db,'cardMints'));
+    snap.docs.forEach(d=>{ const c = d.data().count; if(typeof c==='number') cardMintCache.set(Number(d.id), c); });
+  }catch(e){ console.warn('card mint counts load failed', e); }
+  return cardMintCache;
+}
+async function bumpCardMintCount(cardId, qty=1){
+  if(cardMintCache) cardMintCache.set(cardId, (cardMintCache.get(cardId)||0)+qty);
+  await fbReady;
+  if(!fb) return;
+  try{ await fb.setDoc(fb.doc(fb.db,'cardMints', String(cardId)), {count: fb.increment(qty)}, {merge:true}); }
+  catch(e){ console.warn('card mint count bump failed', e); }
 }
 function computeRAP(card){
   // untradable cards are always 0, full stop - real sale prices recorded before a card was flagged
@@ -11293,14 +11334,14 @@ async function submitSBC(){
   renderNav();
   renderView('sbc');
   if(activeSBC.directCard==='BALLONDOR_CARD'){
-    collection.push({uid:genId(), cardId:BALLONDOR_CARD.id});
+    collection.push({uid:genId(), cardId:BALLONDOR_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(BALLONDOR_CARD.id);
     await sSet('collection', collection);
     toast('\ud83c\udfc6 Unglaublich! Du hast die Ballon d\u2019Or-Karte gewonnen!');
     showCutscene(BALLONDOR_CARD, ()=>{});
   } else if(activeSBC.directCardId){
     const card = BY_ID.get(activeSBC.directCardId);
     if(card){
-      collection.push({uid:genId(), cardId:card.id});
+      collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now()}); bumpCardMintCount(card.id);
       await sSet('collection', collection);
       toast(`\ud83c\udfc6 ${card.n} freigeschaltet \u2014 einzigartig, sonst nirgends erh\u00e4ltlich!`);
       showCutscene(card, ()=>{});
@@ -12185,7 +12226,7 @@ async function buyMarketListing(listing){
 
     if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
     else if(isPack){ packCollection.push({uid:genId(), packId:listing.cardId}); await sSet('packCollection', packCollection); }
-    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp}); await sSet('collection', collection); }
+    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp, obtainedAt:Date.now()}); await sSet('collection', collection); }
     await atomicCoinChange(-listing.price);
     if(!isPack) recordSale(listing.cardId, listing.price);
     closeModal();
@@ -12586,7 +12627,7 @@ async function finalizeTradeAccept(t, payment){
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
     if(payment.managerUid) managerCollection = managerCollection.filter(m=>m.uid!==payment.managerUid);
-    (t.offerCards||[]).forEach(c=>collection.push({uid:genId(), cardId:c.cardId, xp:offerCardXpByUid[c.uid]||0}));
+    (t.offerCards||[]).forEach(c=>collection.push({uid:genId(), cardId:c.cardId, xp:offerCardXpByUid[c.uid]||0, obtainedAt:Date.now()}));
     (t.offerManagers||[]).forEach(m=>managerCollection.push({uid:genId(), mgrId:m.mgrId}));
     (t.offerPacks||[]).forEach(p=>packCollection.push({uid:genId(), packId:p.packId}));
     await sSet('collection', collection);
@@ -14166,7 +14207,7 @@ document.addEventListener('visibilitychange', ()=>{
 });
 
 // ===== nav & routing =====
-const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass'],['achievements','Erfolge']];
+const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['index','Karten-Index'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass'],['achievements','Erfolge']];
 // Icon-only equivalents for #nav-mobile (see its CSS comment) - plain inline SVGs, not emoji, so the
 // active/inactive color actually applies (emoji glyphs are fixed-color and ignore `color`). One path
 // per tab, same stroke style throughout for a consistent set.
@@ -14183,6 +14224,7 @@ const TAB_ICON = {
   // owns the cup shape, and Erfolge needs to read as visually distinct from it at a glance in the nav.
   achievements: '<circle cx="12" cy="8.5" r="5"/><path d="M12 6 12.9 7.8 15 8.1 13.5 9.6 13.9 11.6 12 10.6 10.1 11.6 10.5 9.6 9 8.1 11.1 7.8 12 6Z" fill="currentColor" stroke="none"/><path d="M9 13 6.5 21 12 18l5.5 3L15 13"/>',
   trade_locked: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  index: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
   admin: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V19a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 17.35a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.65 13 1.7 1.7 0 0 0 3.09 12H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.65 7a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 2.65 1.7 1.7 0 0 0 10.09 1H10a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 2.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 7a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51.96Z"/>',
 };
 // One fitting accent color per tab for the mobile icon nav (see renderNav/hexToRgba) - previously every
@@ -14192,6 +14234,7 @@ const TAB_ICON = {
 const TAB_COLOR = {
   store: '#e8c468', club: '#3ddc84', squad: '#4da8ff', sbc: '#ff9d4d', trade: '#b98bff',
   play: '#e2564f', ligen: '#f0a83c', week: '#5fe1c9', achievements: '#ff6fae', admin: '#ff5f5f',
+  index: '#8fb8ff',
 };
 function hexToRgba(hex, alpha){
   const h = hex.replace('#','');
@@ -14420,6 +14463,7 @@ function renderView(tab){
   if(tab==='store') return renderStore(view);
   if(tab==='club') return renderClub(view);
   if(tab==='squad') return renderSquad(view);
+  if(tab==='index') return renderCardIndex(view);
   if(tab==='sbc') return renderSBCList(view);
   if(tab==='trade') return renderTrade(view);
   if(tab==='play') return renderPlay(view);
@@ -14792,12 +14836,13 @@ async function addCardsToCollection(cards, opts={}){
     const uid = genId();
     if(c.isManager){ managerCollection.push({uid, mgrId:c.id}); touchedManagers=true; }
     else {
-      const entry = {uid, cardId:c.id};
+      const entry = {uid, cardId:c.id, obtainedAt:Date.now()};
       // per-instance override (this specific owned copy, NOT the shared card type - see
       // leveledOwnedCard/applyCardLevel) used by e.g. Wochen-Pass-Packs so the same card pulled from
       // a normal store pack stays tradable while this copy doesn't
       if(opts.untradable) entry.untradable = true;
       collection.push(entry); touchedPlayers=true;
+      bumpCardMintCount(c.id);
     }
     added.push({uid, card:c});
   });
@@ -16422,7 +16467,7 @@ function openAdminAddCardModal(){
       wrap.style.cursor='pointer';
       wrap.appendChild(cardEl(card,'mini'));
       wrap.addEventListener('click', async ()=>{
-        collection.push({uid:genId(), cardId:card.id});
+        collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now()}); bumpCardMintCount(card.id);
         await sSet('collection', collection);
         toast(`${card.n} (${card.variantLabel||'Basis'}) hinzugef\u00fcgt.`);
         closeModal();
@@ -16500,7 +16545,7 @@ function openAdminGiveAllCardsModal(){
   const confirmBtn = document.getElementById('admin-all-cards-confirm');
   if(missing.length) confirmBtn.addEventListener('click', async ()=>{
     confirmBtn.disabled = true; confirmBtn.textContent = 'Wird hinzugefügt…';
-    missing.forEach(card=>{ collection.push({uid:genId(), cardId:card.id}); });
+    missing.forEach(card=>{ collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now()}); bumpCardMintCount(card.id); });
     await sSet('collection', collection);
     toast(`${missing.length} Karten hinzugefügt — du besitzt jetzt alle ${pool.length}.`);
     closeModal();
@@ -17432,6 +17477,271 @@ function drawClubGrid(){
     wrap.addEventListener('click', ()=>showCardInfoModal(card, uid));
     return wrap;
   }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Spieler gefunden</h3><p>Versuche einen anderen Filter oder \u00f6ffne ein Pack im Kartenladen.</p></div>`});
+}
+
+// ===== KARTEN-INDEX: nachschlagbares Lexikon ausschlie\u00dflich der eigenen Sammlung (nie fremder/nicht
+// besessener Karten) - anders als "Mein Verein" (das jede Kopie einzeln als eigene Kader-Kachel zeigt)
+// gruppiert der Index nach Karten-TEMPLATE (ein Eintrag pro cardId, mit Kopienz\u00e4hler), damit jede
+// Karte hier wie ein Lexikoneintrag funktioniert: anklicken zeigt Bio/Werte plus alles, was sich \u00fcber
+// Marktwert, Erhalt und Bezugsquelle sagen l\u00e4sst. =====
+let cardIndexFilter = {q:'', pos:'ALL', nat:'ALL', lg:'ALL', club:'ALL', variant:'ALL', minOv:'', sort:'ov'};
+// One entry per distinct owned cardId - {card, entries:[collection rows for this cardId]} - so the grid
+// shows "how many different cards do I own" while the detail modal can still answer "how many COPIES".
+function ownedCardIndexEntries(){
+  const byId = new Map();
+  collection.forEach(entry=>{
+    const card = leveledOwnedCard(entry);
+    if(!card) return;
+    if(!byId.has(card.id)) byId.set(card.id, {card, entries:[]});
+    byId.get(card.id).entries.push(entry);
+  });
+  return [...byId.values()];
+}
+function renderCardIndex(view){
+  const owned = ownedCardIndexEntries();
+  const distinctSorted = (getValue, getLabel)=>{
+    const map = new Map();
+    owned.forEach(x=>{ const v = getValue(x.card); if(v && !map.has(v)) map.set(v, getLabel(x.card)); });
+    return [...map.entries()].sort((a,b)=>a[1].localeCompare(b[1],'de'));
+  };
+  const natOptions = distinctSorted(c=>c.nat, c=>natDE(c.nat));
+  const lgOptions = distinctSorted(c=>c.lg, c=>c.lg);
+  const clubOptions = distinctSorted(c=>c.club, c=>c.club);
+  const variantOptions = distinctSorted(c=>c.variant||'base', c=>c.variantLabel||'Standard');
+  const totalCopies = collection.length;
+  view.innerHTML = `
+    <div class="view-head">
+      <h2>Karten-Index</h2>
+      <p>Nachschlagewerk deiner Sammlung \u2014 nur Karten, die du tats\u00e4chlich besitzt. Rating, Werte, Bio, aktuelle Marktangebote, wie viele Exemplare weltweit im Umlauf sind, wann du sie bekommen hast und wo man sie herbekommt.</p>
+    </div>
+    <div class="cardidx-summary">
+      <div class="cardidx-stat-tile"><div class="v">${owned.length}</div><div class="l">Verschiedene Karten</div></div>
+      <div class="cardidx-stat-tile"><div class="v">${totalCopies}</div><div class="l">Kopien insgesamt</div></div>
+      <div class="cardidx-stat-tile"><div class="v">${formatCoins(owned.reduce((s,x)=>s+computeRAP(x.card),0))}</div><div class="l">Gesamtwert (RAP)</div></div>
+    </div>
+    <div class="toolbar" style="margin-bottom:10px;">
+      <input id="cardidx-search" placeholder="Spieler suchen..." value="${cardIndexFilter.q}">
+      <select id="cardidx-pos">
+        <option value="ALL">Alle Positionen</option>
+        <option value="GK">Torh\u00fcter</option>
+        <option value="DEF">Verteidiger</option>
+        <option value="MID">Mittelfeldspieler</option>
+        <option value="FWD">St\u00fcrmer</option>
+      </select>
+      <select id="cardidx-nat">
+        <option value="ALL">Alle Nationen</option>
+        ${natOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+      <select id="cardidx-lg">
+        <option value="ALL">Alle Ligen</option>
+        ${lgOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+      <select id="cardidx-club">
+        <option value="ALL">Alle Vereine</option>
+        ${clubOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+      <select id="cardidx-variant">
+        <option value="ALL">Alle Varianten</option>
+        ${variantOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+      </select>
+      <select id="cardidx-sort">
+        <option value="ov">Sortierung: Rating (hoch\u2192niedrig)</option>
+        <option value="name">Sortierung: Name (A\u2192Z)</option>
+        <option value="copies">Sortierung: Kopien (meiste zuerst)</option>
+        <option value="newest">Sortierung: Zuletzt erhalten</option>
+        <option value="rap">Sortierung: Marktwert/RAP (hoch\u2192niedrig)</option>
+      </select>
+      <input id="cardidx-min-ov" type="number" min="1" max="115" placeholder="Min. Rating" value="${cardIndexFilter.minOv||''}" style="max-width:110px;">
+      <button class="action-btn secondary" id="cardidx-filters-reset" style="width:auto;padding:8px 12px;font-size:11.5px;">Filter zur\u00fccksetzen</button>
+    </div>
+    <div class="mono hint" id="cardidx-summary-line" style="margin-bottom:10px;"></div>
+    <div class="club-grid" id="cardidx-grid"></div>`;
+  document.getElementById('cardidx-pos').value = cardIndexFilter.pos;
+  document.getElementById('cardidx-nat').value = cardIndexFilter.nat;
+  document.getElementById('cardidx-lg').value = cardIndexFilter.lg;
+  document.getElementById('cardidx-club').value = cardIndexFilter.club;
+  document.getElementById('cardidx-variant').value = cardIndexFilter.variant;
+  document.getElementById('cardidx-sort').value = cardIndexFilter.sort;
+  document.getElementById('cardidx-search').addEventListener('input', e=>{ cardIndexFilter.q=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-pos').addEventListener('change', e=>{ cardIndexFilter.pos=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-nat').addEventListener('change', e=>{ cardIndexFilter.nat=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-lg').addEventListener('change', e=>{ cardIndexFilter.lg=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-club').addEventListener('change', e=>{ cardIndexFilter.club=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-variant').addEventListener('change', e=>{ cardIndexFilter.variant=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-sort').addEventListener('change', e=>{ cardIndexFilter.sort=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-min-ov').addEventListener('input', e=>{ cardIndexFilter.minOv=e.target.value; drawCardIndexGrid(); });
+  document.getElementById('cardidx-filters-reset').addEventListener('click', ()=>{
+    cardIndexFilter = {q:'', pos:'ALL', nat:'ALL', lg:'ALL', club:'ALL', variant:'ALL', minOv:'', sort:'ov'};
+    renderCardIndex(view);
+  });
+  drawCardIndexGrid();
+  loadCardMintCounts(); // fire-and-forget - only the detail modal actually displays this, but starting
+                         // the load as soon as the index opens means it's likely already cached by the
+                         // time someone taps into a card, instead of every first click paying for it.
+}
+function cardIndexOwnedEarliestObtained(entries){
+  const dates = entries.map(e=>e.obtainedAt).filter(Boolean);
+  return dates.length ? Math.min(...dates) : null;
+}
+function drawCardIndexGrid(){
+  const grid = document.getElementById('cardidx-grid');
+  if(!grid) return;
+  let items = ownedCardIndexEntries();
+  if(cardIndexFilter.q) items = items.filter(x=>x.card.n.toLowerCase().includes(cardIndexFilter.q.toLowerCase()));
+  if(cardIndexFilter.pos!=='ALL') items = items.filter(x=>posGroup(x.card.pos)===cardIndexFilter.pos);
+  if(cardIndexFilter.nat!=='ALL') items = items.filter(x=>x.card.nat===cardIndexFilter.nat);
+  if(cardIndexFilter.lg!=='ALL') items = items.filter(x=>x.card.lg===cardIndexFilter.lg);
+  if(cardIndexFilter.club!=='ALL') items = items.filter(x=>x.card.club===cardIndexFilter.club);
+  if(cardIndexFilter.variant!=='ALL') items = items.filter(x=>(x.card.variant||'base')===cardIndexFilter.variant);
+  if(cardIndexFilter.minOv){
+    const minOv = Math.floor(Number(cardIndexFilter.minOv)||0);
+    if(minOv>0) items = items.filter(x=>x.card.ov>=minOv);
+  }
+  items.sort((a,b)=>{
+    if(cardIndexFilter.sort==='name') return a.card.n.localeCompare(b.card.n,'de');
+    if(cardIndexFilter.sort==='copies') return b.entries.length-a.entries.length;
+    if(cardIndexFilter.sort==='rap') return computeRAP(b.card)-computeRAP(a.card);
+    if(cardIndexFilter.sort==='newest') return (cardIndexOwnedEarliestObtained(b.entries)||0)-(cardIndexOwnedEarliestObtained(a.entries)||0);
+    return b.card.ov-a.card.ov;
+  });
+  const summaryEl = document.getElementById('cardidx-summary-line');
+  if(summaryEl) summaryEl.textContent = `${items.length} von ${ownedCardIndexEntries().length} Karten in deiner Sammlung angezeigt`;
+  renderLazyGrid(grid, items, ({card, entries})=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'cardidx-card-wrap';
+    wrap.style.cursor = 'pointer';
+    if(entries.length>1){
+      const badge = document.createElement('div');
+      badge.className = 'cardidx-copies-badge';
+      badge.textContent = `\u00d7${entries.length}`;
+      wrap.appendChild(badge);
+    }
+    wrap.appendChild(cardEl(card, 'mini'));
+    wrap.addEventListener('click', ()=>showCardIndexDetailModal(card, entries));
+    return wrap;
+  }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Karten gefunden</h3><p>Versuche einen anderen Filter, oder \u00f6ffne ein Pack im Kartenladen \u2014 der Index zeigt nur Karten, die du bereits besitzt.</p></div>`});
+}
+// Named, non-Pack sources - checked BEFORE the Monte-Carlo Pack simulation below, since every one of
+// these is a hand-authored one-off reward that either never sits in any PACKS pool at all (quest chain/
+// admin/achievement/Icon-Swap/Ballon d'Or/PRIME grants), or - the 3 unique SBC rewards - is technically
+// reachable only by completing that exact SBC, never a random pull. Detected generically off shared
+// fields/variants those grant paths already stamp onto the card (see each grant site), not hardcoded
+// per-card-id lists, so a newly added card of the same kind is automatically covered too.
+function cardSpecialSource(card){
+  if(card.variant==='admin') return 'Nur pers\u00f6nlich von einem Admin vergeben (Debug-/Easter-Egg-Karte) \u2014 kein regul\u00e4rer Erhalt im Spiel m\u00f6glich.';
+  const sbc = SBC_DEFS.find(s=>s.directCardId===card.id);
+  if(sbc) return `Einmalige Belohnung f\u00fcr den Abschluss der Kader-Herausforderung \u201e${sbc.name}\u201c (Herausforderungen-Tab).`;
+  if(typeof card.swapCost==='number') return `Icon-Swap-Event: gegen ${card.swapCost} Token einl\u00f6sbar, solange das Event l\u00e4uft (Online-spielen-Tab).`;
+  if(typeof BALLONDOR_CARD!=='undefined' && BALLONDOR_CARD && card.id===BALLONDOR_CARD.id) return 'Belohnung f\u00fcr den Sieg in der Ballon d\u2019Or-Herausforderung (einmalig pro Verein).';
+  if(typeof RODRI_BALLONDOR_CARD!=='undefined' && RODRI_BALLONDOR_CARD && card.id===RODRI_BALLONDOR_CARD.id) return 'Belohnung f\u00fcr den Sieg in der zweiten Ballon d\u2019Or-Herausforderung (Rodri).';
+  if(typeof PRIME_CHALLENGES!=='undefined'){
+    const prime = PRIME_CHALLENGES.find(ch=>ch.card.id===card.id);
+    if(prime) return `Belohnung f\u00fcr den Sieg in der PRIME-Herausforderung gegen ${prime.card.n}.`;
+  }
+  if(typeof SIEGE_TROPHY_CARD_ID!=='undefined' && (card.id===SIEGE_TROPHY_CARD_ID || card.id===LIGA_MEISTER_TROPHY_CARD_ID || card.id===WEP_TROPHY_CARD_ID)) return 'Erfolgs-Belohnung (Erfolge-Tab) \u2014 nicht \u00fcber Packs erh\u00e4ltlich.';
+  if(card.variant==='promoquestreward' || card.variant==='wmquestreward' || card.variant==='marcelolegacy') return 'Einmalige Sonderaufgaben-Belohnung (Kartensammler-Quest) \u2014 nicht \u00fcber normale Packs erh\u00e4ltlich.';
+  if(card.variant==='week_mvp') return 'Wochen-Pass-Belohnung (Level 15 oder 30) \u2014 rotiert w\u00f6chentlich, aktuell eventuell nicht mehr im Angebot.';
+  return null;
+}
+// Rather than hand-maintaining which of the ~20 PACKS pools contains a given card (every pool is built
+// from opaque range/variant filters inside each pack's own draw() closure), just run every pack's real
+// draw() function a bunch of times and see whether the card actually comes out - authoritative, and
+// self-updates if a pack's pool ever changes, at the cost of being probabilistic for very rare pulls
+// (a <1%-per-pack card can occasionally be missed). Cached per card id for the rest of the session.
+let cardPackSourceCache = new Map();
+function computeCardPackSources(card, iterations=150){
+  if(cardPackSourceCache.has(card.id)) return cardPackSourceCache.get(card.id);
+  const hits = [];
+  PACKS.forEach(pack=>{
+    let count = 0;
+    for(let i=0;i<iterations;i++){
+      let drawn;
+      try{ drawn = pack.draw({}); }catch(e){ return; }
+      if(Array.isArray(drawn) && drawn.some(c=>c && c.id===card.id)) count++;
+    }
+    if(count>0) hits.push({pack, rate:count/iterations});
+  });
+  hits.sort((a,b)=>b.rate-a.rate);
+  cardPackSourceCache.set(card.id, hits);
+  return hits;
+}
+function cardIndexSourceHTML(card){
+  const special = cardSpecialSource(card);
+  if(special) return `<p class="hint" style="margin:0;">${special}</p>`;
+  const hits = computeCardPackSources(card);
+  if(!hits.length) return `<p class="hint" style="margin:0;">Keine aktuelle Bezugsquelle gefunden \u2014 vermutlich ein alter Event-/Turnier-Gewinn, der inzwischen aus der Rotation ist.</p>`;
+  return hits.map(({pack, rate})=>{
+    const rateLabel = rate>=0.3 ? 'h\u00e4ufig' : (rate>=0.08 ? 'gelegentlich' : 'selten');
+    return `<div class="cardidx-source-row">
+      <span>${pack.name}${pack.hidden?' <span class="hint" style="font-size:10px;">(nicht k\u00e4uflich)</span>':pack.cost?` <span class="hint" style="font-size:10px;">(${formatCoins(pack.cost)} Coins)</span>`:''}</span>
+      <span class="cardidx-source-rate">${rateLabel}</span>
+    </div>`;
+  }).join('');
+}
+function cardIndexOffersHTML(card){
+  if(card.untradable) return `<p class="hint" style="margin:0;">Nicht handelbar \u2014 kein Transfermarkt-Angebot m\u00f6glich.</p>`;
+  const offers = marketListingsCache.filter(l=>l.itemType!=='manager' && l.itemType!=='pack' && l.cardId===card.id)
+    .sort((a,b)=>a.price-b.price);
+  if(!offers.length) return `<p class="hint" style="margin:0;">Gerade kein Angebot am Transfermarkt.</p>`;
+  return offers.slice(0,5).map(l=>`<div class="cardidx-offer-row">
+      <span>${l.sellerUserId||'Unbekannt'}</span>
+      <span class="mono" style="color:var(--gold);">${formatCoins(l.price)}</span>
+    </div>`).join('') + (offers.length>5 ? `<p class="hint" style="margin:6px 0 0;">+${offers.length-5} weitere Angebote am Transfermarkt.</p>` : '');
+}
+function showCardIndexDetailModal(card, entries){
+  const copies = entries.length;
+  const untradableCopies = entries.filter(e=>e.untradable).length;
+  const earliest = cardIndexOwnedEarliestObtained(entries);
+  const obtainedLabel = earliest ? new Date(earliest).toLocaleDateString('de-DE') : 'Unbekannt (vor Karten-Index)';
+  const mintCount = cardMintCache && cardMintCache.has(card.id) ? cardMintCache.get(card.id) : null;
+  openModal(`
+    <h2 style="margin-bottom:2px;">${card.n}</h2>
+    <p class="hint" style="margin:0 0 14px;">${card.variant && card.variant!=='base' ? card.variantLabel+' \u00b7 ' : ''}${card.ov} OVR \u00b7 ${natDE(card.nat)||card.nat||''}${card.club?' \u00b7 '+card.club:''}${card.lg?' \u00b7 '+card.lg:''}</p>
+    <div style="display:flex;justify-content:center;margin-bottom:16px;">${cardEl(card).outerHTML}</div>
+    <div class="card-info-section">
+      <div class="card-info-section-title">\ud83d\udcc7 Deine Sammlung</div>
+      <div class="cardidx-detail-grid">
+        <div class="cardidx-detail-tile"><div class="v">${copies}${untradableCopies?` <span class="hint" style="font-size:10px;font-weight:400;">(${untradableCopies} nicht handelbar)</span>`:''}</div><div class="l">Eigene Kopien</div></div>
+        <div class="cardidx-detail-tile"><div class="v">${obtainedLabel}</div><div class="l">Erhalten am (\u00e4lteste Kopie)</div></div>
+        <div class="cardidx-detail-tile"><div class="v" id="cardidx-mint-count">${mintCount!=null ? mintCount.toLocaleString('de-DE') : 'L\u00e4dt\u2026'}</div><div class="l">Exemplare im Umlauf (alle Spieler)</div></div>
+        <div class="cardidx-detail-tile"><div class="v">${formatCoins(computeRAP(card))}</div><div class="l">Gesch\u00e4tzter Marktwert (RAP)</div></div>
+      </div>
+    </div>
+    <div class="card-info-section">
+      <div class="card-info-section-title">\ud83d\udcb0 Aktuelle Angebote (Transfermarkt)</div>
+      <div id="cardidx-offers-box">${cardIndexOffersHTML(card)}</div>
+    </div>
+    <div class="card-info-section">
+      <div class="card-info-section-title">\ud83d\udce6 Bezugsquelle</div>
+      <div id="cardidx-source-box"><p class="hint" style="margin:0;">Wird berechnet\u2026</p></div>
+    </div>
+    ${bioHTML(card)}
+    ${playstyleListHTML(card)}
+    ${detailedStatsHTML(card)}
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="action-btn secondary" id="cardidx-price-history" style="flex:1;">Preisverlauf ansehen</button>
+      <button class="modal-close" id="cardidx-close" style="flex:1;">Schlie\u00dfen</button>
+    </div>
+  `);
+  document.getElementById('cardidx-close').addEventListener('click', closeModal);
+  document.getElementById('cardidx-price-history').addEventListener('click', ()=>showPriceHistoryModal(card));
+  // source computation (Monte-Carlo over every pack) can take a noticeable moment - render the rest of
+  // the modal instantly, then swap this one section in once ready. Guard every DOM write against the
+  // modal having already been closed/replaced in the meantime.
+  setTimeout(()=>{
+    const box = document.getElementById('cardidx-source-box');
+    if(box) box.innerHTML = cardIndexSourceHTML(card);
+  }, 10);
+  loadCardMintCounts().then(()=>{
+    const el = document.getElementById('cardidx-mint-count');
+    if(el) el.textContent = (cardMintCache.get(card.id)||0).toLocaleString('de-DE');
+  });
+  if(!card.untradable && !marketListingsCache.length){
+    loadMarketListings().then(()=>{
+      const box = document.getElementById('cardidx-offers-box');
+      if(box) box.innerHTML = cardIndexOffersHTML(card);
+    });
+  }
 }
 
 // ===== SQUAD BUILDER =====
@@ -19513,7 +19823,7 @@ async function claimTournamentPrize(id, role='winner'){
         }
       });
       if(claimed && prizeCoins>0){ profile.coins += prizeCoins; updateCoinDisplay(); }
-      if(claimed && prizeCardId){ collection.push({uid:newCardUid, cardId:prizeCardId}); }
+      if(claimed && prizeCardId){ collection.push({uid:newCardUid, cardId:prizeCardId, obtainedAt:Date.now()}); }
     } else {
       // Fallback for a backend without transaction support - same race as before, kept only so
       // claiming still works at all rather than hard-failing.
@@ -19531,7 +19841,7 @@ async function claimTournamentPrize(id, role='winner'){
           if(t.prizeType==='card' && t.prizeCard){
             if(t.winnerUserId!==t.hostUserId){
               try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {collection: fb.arrayRemove({uid:t.prizeCard.stakedUid, cardId:t.prizeCard.cardId})}); }catch(_){}
-              collection.push({uid:newCardUid, cardId:t.prizeCard.cardId});
+              collection.push({uid:newCardUid, cardId:t.prizeCard.cardId, obtainedAt:Date.now()});
               await sSet('collection', collection);
             }
             prizeCardName = t.prizeCard.n;
@@ -22593,7 +22903,7 @@ async function claimAchievementTier(achId, tier){
   let grantedCard = null;
   if(reward.card){
     grantedCard = achievementSpecialCard(reward.card);
-    if(grantedCard) collection.push({uid:genId(), cardId:grantedCard.id});
+    if(grantedCard){ collection.push({uid:genId(), cardId:grantedCard.id, obtainedAt:Date.now()}); bumpCardMintCount(grantedCard.id); }
   }
   await sSet('profile', profile);
   if(grantedCard) await sSet('collection', collection);
@@ -23728,7 +24038,7 @@ async function playBallonDorChallenge(){
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
     if(outcome.result==='WIN'){
-      collection.push({uid:genId(), cardId:BALLONDOR_CARD.id});
+      collection.push({uid:genId(), cardId:BALLONDOR_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(BALLONDOR_CARD.id);
       profile.ballondorClaimed = true;
       await sSet('collection', collection);
       await sSet('profile', profile);
@@ -23780,7 +24090,7 @@ async function playBallonDorRodriChallenge(){
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
     if(outcome.result==='WIN'){
-      collection.push({uid:genId(), cardId:RODRI_BALLONDOR_CARD.id});
+      collection.push({uid:genId(), cardId:RODRI_BALLONDOR_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(RODRI_BALLONDOR_CARD.id);
       profile.ballondorRodriClaimed = true;
       await sSet('collection', collection);
       await sSet('profile', profile);
@@ -23859,7 +24169,7 @@ async function playPrimeChallenge(ch){
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly:true, onComplete: (outcome)=>{
     if(outcome.result==='WIN'){
-      collection.push({uid:genId(), cardId:ch.card.id});
+      collection.push({uid:genId(), cardId:ch.card.id, obtainedAt:Date.now()}); bumpCardMintCount(ch.card.id);
       sSet('collection', collection);
       toast(`\ud83c\udfc6 PRIME ${ch.card.n} gewonnen!`);
       showCutscene(ch.card, ()=>{});
@@ -23932,7 +24242,7 @@ async function playWmQuestMatch(m){
 async function claimWmQuestReward(){
   if(!wmQuestAllDone() || profile.wmQuestMbappeClaimed || !WM_QUEST_MBAPPE_CARD) return;
   profile.wmQuestMbappeClaimed = true;
-  collection.push({uid:genId(), cardId:WM_QUEST_MBAPPE_CARD.id});
+  collection.push({uid:genId(), cardId:WM_QUEST_MBAPPE_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(WM_QUEST_MBAPPE_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${WM_QUEST_MBAPPE_CARD.n} (102 OVR) freigeschaltet!`);
@@ -24068,7 +24378,7 @@ async function playOliseQuestMatch(m){
 async function claimOliseQuestReward(){
   if(!oliseQuestAllDone() || profile.oliseQuestCardClaimed || !OLISE_QUEST_CARD) return;
   profile.oliseQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:OLISE_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:OLISE_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(OLISE_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${OLISE_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -24185,7 +24495,7 @@ async function playAlissonQuestMatch(m){
 async function claimAlissonQuestReward(){
   if(!alissonQuestAllDone() || profile.alissonQuestCardClaimed || !ALISSON_QUEST_CARD) return;
   profile.alissonQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:ALISSON_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:ALISSON_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(ALISSON_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${ALISSON_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -24303,7 +24613,7 @@ async function playYamalQuestMatch(m){
 async function claimYamalQuestReward(){
   if(!yamalQuestAllDone() || profile.yamalQuestCardClaimed || !YAMAL_QUEST_CARD) return;
   profile.yamalQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:YAMAL_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:YAMAL_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(YAMAL_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${YAMAL_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -24421,7 +24731,7 @@ async function playRudigerQuestMatch(m){
 async function claimRudigerQuestReward(){
   if(!rudigerQuestAllDone() || profile.rudigerQuestCardClaimed || !RUDIGER_QUEST_CARD) return;
   profile.rudigerQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:RUDIGER_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:RUDIGER_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(RUDIGER_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${RUDIGER_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -24539,7 +24849,7 @@ async function playHaalandQuestMatch(m){
 async function claimHaalandQuestReward(){
   if(!haalandQuestAllDone() || profile.haalandQuestCardClaimed || !HAALAND_QUEST_CARD) return;
   profile.haalandQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:HAALAND_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:HAALAND_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(HAALAND_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${HAALAND_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -24657,7 +24967,7 @@ async function playChongQuestMatch(m){
 async function claimChongQuestReward(){
   if(!chongQuestAllDone() || profile.chongQuestCardClaimed || !CHONG_QUEST_CARD) return;
   profile.chongQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:CHONG_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:CHONG_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(CHONG_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${CHONG_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -24775,7 +25085,7 @@ async function playPinaQuestMatch(m){
 async function claimPinaQuestReward(){
   if(!pinaQuestAllDone() || profile.pinaQuestCardClaimed || !PINA_QUEST_CARD) return;
   profile.pinaQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:PINA_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:PINA_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(PINA_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${PINA_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -24902,7 +25212,7 @@ async function playKaneQuestMatch(m){
 async function claimKaneQuestReward(){
   if(!kaneQuestAllDone() || profile.kaneQuestCardClaimed || !KANE_QUEST_CARD) return;
   profile.kaneQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:KANE_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:KANE_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(KANE_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${KANE_QUEST_CARD.n} (102 OVR) freigeschaltet!`);
@@ -25038,7 +25348,7 @@ async function playSyllaQuestMatch(m){
 async function claimSyllaQuestReward(){
   if(!syllaQuestAllDone() || profile.syllaQuestCardClaimed || !SYLLA_QUEST_CARD) return;
   profile.syllaQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:SYLLA_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:SYLLA_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(SYLLA_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${SYLLA_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25155,7 +25465,7 @@ async function playKroosQuestMatch(m){
 async function claimKroosQuestReward(){
   if(!kroosQuestAllDone() || profile.kroosQuestCardClaimed || !KROOS_QUEST_CARD) return;
   profile.kroosQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:KROOS_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:KROOS_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(KROOS_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${KROOS_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25272,7 +25582,7 @@ async function playNeymarQuestMatch(m){
 async function claimNeymarQuestReward(){
   if(!neymarQuestAllDone() || profile.neymarQuestCardClaimed || !NEYMAR_QUEST_CARD) return;
   profile.neymarQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:NEYMAR_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:NEYMAR_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(NEYMAR_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${NEYMAR_QUEST_CARD.n} (101 OVR) freigeschaltet!`);
@@ -25397,7 +25707,7 @@ async function playMarceloQuestMatch(m){
 async function claimMarceloQuestReward(){
   if(!marceloQuestAllDone() || profile.marceloQuestCardClaimed || !MARCELO_QUEST_CARD) return;
   profile.marceloQuestCardClaimed = true;
-  collection.push({uid:genId(), cardId:MARCELO_QUEST_CARD.id});
+  collection.push({uid:genId(), cardId:MARCELO_QUEST_CARD.id, obtainedAt:Date.now()}); bumpCardMintCount(MARCELO_QUEST_CARD.id);
   await sSet('collection', collection);
   await sSet('profile', profile);
   toast(`🏆 ${MARCELO_QUEST_CARD.n} (103 OVR) freigeschaltet!`);
@@ -25797,7 +26107,7 @@ function showIconSwapModal(){
       if((profile.iconSwapTokens||0) < card.swapCost){ toast('Nicht genug Token.'); return; }
       profile.iconSwapTokens -= card.swapCost;
       profile.iconSwapRedeemed = [...(profile.iconSwapRedeemed||[]), card.id];
-      collection.push({uid:genId(), cardId:card.id});
+      collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now()}); bumpCardMintCount(card.id);
       await sSet('profile', profile);
       await sSet('collection', collection);
       toast(`${card.n} eingelöst!`);
