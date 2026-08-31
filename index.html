@@ -15937,25 +15937,19 @@ function showCutscene(card, onDone){
   const overlay = document.createElement('div');
   overlay.className = 'cutscene-overlay' + (mythic?' cs-mythic':'');
   overlay.style.setProperty('--cs-acc', acc);
-  // No rarity/variant label in the banner anymore (just the OVR) - for a mythic (100+) reveal,
-  // stageMythicCardReveal counts the OVR up from blank on the card itself as the big dramatic moment,
-  // so the banner stays empty until that sequence actually finishes, then fills in (see the callback
-  // below). Non-mythic reveals show it immediately - cardEl() already displays it on the card itself,
-  // so there's no suspense to protect there.
+  // No banner at all anymore - it used to print the OVR (and, before that, a rarity/variant label too)
+  // right behind the card the instant the overlay was created, well before stageMythicCardReveal's own
+  // dramatic count-up on the card itself even started for a 100+ pull. The card face is the only place
+  // the OVR shows now, exactly when the card itself reveals it - nothing spoils it from behind anymore.
   overlay.innerHTML = `
     <div class="cs-burst"></div>
-    <div class="cs-banner${mythic?' cs-mythic-banner':''}" id="cs-banner-text">${mythic?'':`${card.ov} OVR`}</div>
     <div class="cs-card-wrap"></div>
     <div class="cs-hint">Zum Fortfahren irgendwo tippen</div>`;
   const cardWrap = overlay.querySelector('.cs-card-wrap');
   let sequenceDone = true, skipReveal = null;
   if(mythic){
     sequenceDone = false;
-    skipReveal = stageMythicCardReveal(card, cardWrap, ()=>{
-      sequenceDone = true;
-      const bannerEl = overlay.querySelector('#cs-banner-text');
-      if(bannerEl) bannerEl.textContent = `${card.ov} OVR`;
-    });
+    skipReveal = stageMythicCardReveal(card, cardWrap, ()=>{ sequenceDone = true; });
   } else {
     cardWrap.appendChild(cardEl(card));
   }
