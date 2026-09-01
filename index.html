@@ -18121,9 +18121,14 @@ function openAdminSendCardModal(targetId, data){
       wrap.style.cursor='pointer';
       wrap.appendChild(cardEl(card,'mini'));
       wrap.addEventListener('click', async ()=>{
-        const targetCollection = (data.collection || []).slice();
-        targetCollection.push({uid:genId(), cardId:card.id});
-        await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection:targetCollection}, {merge:true});
+        // fb.arrayUnion instead of reading data.collection (a snapshot taken once when the admin panel
+        // was first opened) and writing the whole array back - if the target played a match, opened a
+        // pack, or otherwise changed their own collection in the meantime (easily minutes, since the
+        // admin panel can sit open while searching for a card), that stale snapshot would silently
+        // overwrite everything they'd done since with the old state plus this one card. arrayUnion is
+        // atomic server-side and needs no read at all, so it can never lose a concurrent change - safe
+        // here because every entry carries its own genId(), so it's never mistaken for a duplicate.
+        await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion({uid:genId(), cardId:card.id})}, {merge:true});
         toast(`${card.n} an ${targetId} geschickt.`);
         closeModal();
       });
@@ -18225,9 +18230,9 @@ function openAdminSendPackModal(targetId, data){
     btn.textContent = pack.name;
     btn.addEventListener('click', async ()=>{
       const drawn = pack.draw();
-      const targetCollection = (data.collection || []).slice();
-      drawn.forEach(card=>targetCollection.push({uid:genId(), cardId:card.id}));
-      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection:targetCollection}, {merge:true});
+      // fb.arrayUnion, not a read-modify-write off the admin panel's (possibly minutes-stale) data
+      // snapshot - see openAdminSendCardModal's comment for why that silently loses concurrent changes.
+      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion(...drawn.map(card=>({uid:genId(), cardId:card.id})))}, {merge:true});
       toast(`${pack.name} f\u00fcr ${targetId} ge\u00f6ffnet: ${drawn.map(c=>c.n).join(', ')}`);
       closeModal();
     });
@@ -18248,9 +18253,9 @@ function openAdminSendUnopenedPackModal(targetId, data){
     btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
     btn.textContent = pack.name;
     btn.addEventListener('click', async ()=>{
-      const targetPackCollection = (data.packCollection || []).slice();
-      targetPackCollection.push({uid:genId(), packId:pack.id});
-      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {packCollection:targetPackCollection}, {merge:true});
+      // fb.arrayUnion, not a read-modify-write off the admin panel's (possibly minutes-stale) data
+      // snapshot - see openAdminSendCardModal's comment for why that silently loses concurrent changes.
+      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {packCollection: fb.arrayUnion({uid:genId(), packId:pack.id})}, {merge:true});
       toast(`${pack.name} (unge\u00f6ffnet) an ${targetId} geschickt.`);
       closeModal();
     });
