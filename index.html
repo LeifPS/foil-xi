@@ -440,6 +440,33 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #39e6ff;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 44px 1px #ff3df0;}
 }
+/* Legacy (World Cup-winning squads, see LEGACY_SQUADS): a muted vintage bronze/sepia foil for the 77
+   base roster cards - deliberately calmer than any rare-pull theme since EVERY card in a Legacy Pack
+   gets this, not just a lucky few. Legacy Star (the 1-4 named standouts per squad, further-boosted) gets
+   its own brighter antique-gold treatment layered on top so it still reads as the rarer pull within an
+   already-premium pack. */
+.pcard.theme-legacy{--acc:#c9a15a;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#241c10 0%,#171207 45%,#1c1509 100%) padding-box,
+    linear-gradient(160deg,#5c4720,#c9a15a,#f0dba0,#c9a15a,#5c4720) border-box !important;
+  animation: legacyGlow 3s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-legacy::before{animation:autoShine 1.8s ease-in-out infinite;}
+.pcard.theme-legacy .name{color:#f2e3bf;text-shadow:0 0 8px rgba(201,161,90,.55);}
+@keyframes legacyGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 18px -3px #c9a15a;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 36px 1px #f0dba0;}
+}
+.pcard.theme-legacystar{--acc:#ffd76a;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#241a05 0%,#170f02 45%,#1f1503 100%) padding-box,
+    linear-gradient(160deg,#8a5a10,#ffd76a,#fff3cf,#ff8a3d,#8a5a10) border-box !important;
+  animation: legacystarGlow 2.2s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-legacystar::before{animation:autoShine 1.2s ease-in-out infinite;}
+.pcard.theme-legacystar .name{color:#fff3d6;text-shadow:0 0 9px rgba(255,215,106,.7);}
+@keyframes legacystarGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ffd76a;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 46px 1px #ff8a3d;}
+}
 /* GOAT (ov>99, hand-picked real-world superstars - the single rarest pull in the whole game, only via
    the GOAT-Quest): previously just inherited the generic .r-ultimate look (same violet card any other
    95+ base card without its own theme gets), so the single best card in the game was visually
@@ -9736,8 +9763,173 @@ function breakoutSpecials(){
   return BREAKOUT_SPECIALS_CACHE;
 }
 
+// ===== Legacy Packs: 7 hand-authored legendary World Cup squads, none of whose 77 players exist in the
+// auto-generated real-player database at all (players_data.js only tracks currently/recently active
+// pros, not 1950s-90s legends) - every single one is authored here from scratch, same approach
+// PLAYERS_LIGAPACK_BASE/POETEN_CARDS/OGICON_CARDS already use elsewhere for historical greats. Every
+// roster player sits at 95-99 OV (not just the standout names) - deliberately far higher than a normal
+// "themed real-roster" pack like Breakout, since this is meant to read as an all-legend elite pack, not
+// a mix of stars and squad depth. The 1-4 named "Legacy Stars" per squad get a FURTHER +6/+7/+8 boost on
+// top of their own already-elite 95-99 base (landing at 101-107) - see the `stars` list per squad below.
+// NOT YET PURCHASABLE (hidden:true on every generated pack entry) - admin-only via "Beliebiges Pack
+// kostenlos öffnen" (openAdminPackPicker, which iterates ALL of PACKS with no hidden-check) until the
+// roster/art is fully signed off. No real photos yet either (none supplied for these, unlike Breakout) -
+// cardEl's existing not-found-face fallback handles that until photos are added via an img override map,
+// same pattern as BREAKOUT_IMG_OVERRIDE/WM26_KAPITAEN_IMG_OVERRIDE.
+const LEGACY_SQUADS = [
+  {packId:'legacy_bra1970', flag:'🇧🇷', natLabel:'Brasilien', year:1970, nat:'Brazil', club:'Brasilien 1970',
+    roster:[
+      {n:'Félix', pos:'GK', ov:95, pac:60,sho:20,pas:58,dri:55,defn:90,phy:85, foot:'Right', gk:true},
+      {n:'Carlos Alberto', pos:'RB', ov:96, pac:90,sho:72,pas:85,dri:84,defn:82,phy:80, foot:'Right'},
+      {n:'Brito', pos:'CB', ov:95, pac:72,sho:35,pas:68,dri:58,defn:92,phy:88, foot:'Right'},
+      {n:'Piazza', pos:'CB, CDM', ov:95, pac:70,sho:40,pas:72,dri:62,defn:90,phy:87, foot:'Right'},
+      {n:'Everaldo', pos:'LB', ov:95, pac:88,sho:50,pas:78,dri:80,defn:83,phy:80, foot:'Left'},
+      {n:'Clodoaldo', pos:'CM, CDM', ov:96, pac:78,sho:62,pas:88,dri:85,defn:80,phy:82, foot:'Right'},
+      {n:'Gerson', pos:'CM', ov:97, pac:72,sho:78,pas:94,dri:88,defn:55,phy:78, foot:'Left'},
+      {n:'Rivelino', pos:'LM, CM', ov:97, pac:82,sho:88,pas:92,dri:95,defn:35,phy:76, foot:'Left'},
+      {n:'Jairzinho', pos:'RW, RM', ov:98, pac:93,sho:88,pas:80,dri:92,defn:30,phy:80, foot:'Right'},
+      {n:'Tostão', pos:'ST, CF', ov:97, pac:84,sho:90,pas:82,dri:90,defn:25,phy:72, foot:'Right'},
+      {n:'Pelé', pos:'ST, CF, CAM', ov:99, pac:90,sho:96,pas:88,dri:97,defn:40,phy:82, foot:'Right'},
+    ],
+    stars:[{n:'Pelé',bonus:8},{n:'Jairzinho',bonus:8},{n:'Gerson',bonus:7},{n:'Tostão',bonus:7}]},
+  {packId:'legacy_esp2010', flag:'🇪🇸', natLabel:'Spanien', year:2010, nat:'Spain', club:'Spanien 2010',
+    roster:[
+      {n:'Iker Casillas', pos:'GK', ov:97, pac:62,sho:20,pas:62,dri:58,defn:95,phy:85, foot:'Right', gk:true},
+      {n:'Sergio Ramos', pos:'CB, RB', ov:97, pac:85,sho:70,pas:78,dri:78,defn:92,phy:88, foot:'Right'},
+      {n:'Carles Puyol', pos:'CB', ov:96, pac:78,sho:40,pas:68,dri:62,defn:95,phy:90, foot:'Right'},
+      {n:'Gerard Piqué', pos:'CB', ov:95, pac:74,sho:45,pas:78,dri:72,defn:92,phy:85, foot:'Right'},
+      {n:'Joan Capdevila', pos:'LB', ov:95, pac:82,sho:48,pas:75,dri:76,defn:82,phy:80, foot:'Left'},
+      {n:'Sergio Busquets', pos:'CDM', ov:95, pac:62,sho:55,pas:90,dri:82,defn:85,phy:80, foot:'Right'},
+      {n:'Xabi Alonso', pos:'CM, CDM', ov:96, pac:68,sho:78,pas:94,dri:82,defn:78,phy:80, foot:'Right'},
+      {n:'Xavi', pos:'CM, CAM', ov:98, pac:68,sho:72,pas:97,dri:92,defn:60,phy:70, foot:'Right'},
+      {n:'Andrés Iniesta', pos:'CAM, LM', ov:99, pac:78,sho:82,pas:94,dri:97,defn:50,phy:68, foot:'Right'},
+      {n:'Pedro', pos:'RW, ST', ov:95, pac:90,sho:82,pas:78,dri:88,defn:35,phy:72, foot:'Right'},
+      {n:'David Villa', pos:'ST, LW', ov:98, pac:88,sho:93,pas:80,dri:90,defn:28,phy:75, foot:'Left'},
+    ],
+    stars:[{n:'Andrés Iniesta',bonus:8},{n:'David Villa',bonus:8},{n:'Xavi',bonus:7},{n:'Sergio Ramos',bonus:6}]},
+  {packId:'legacy_ger2014', flag:'🇩🇪', natLabel:'Deutschland', year:2014, nat:'Germany', club:'Deutschland 2014',
+    roster:[
+      {n:'Manuel Neuer', pos:'GK', ov:98, pac:70,sho:25,pas:75,dri:70,defn:96,phy:85, foot:'Right', gk:true},
+      {n:'Philipp Lahm', pos:'RB, CDM', ov:97, pac:86,sho:62,pas:88,dri:85,defn:87,phy:78, foot:'Right'},
+      {n:'Jérôme Boateng', pos:'CB', ov:95, pac:80,sho:42,pas:75,dri:72,defn:90,phy:88, foot:'Right'},
+      {n:'Mats Hummels', pos:'CB', ov:97, pac:76,sho:55,pas:85,dri:76,defn:92,phy:86, foot:'Right'},
+      {n:'Benedikt Höwedes', pos:'LB, CB', ov:95, pac:76,sho:42,pas:70,dri:68,defn:87,phy:85, foot:'Right'},
+      {n:'Bastian Schweinsteiger', pos:'CM', ov:96, pac:68,sho:75,pas:92,dri:85,defn:82,phy:85, foot:'Right'},
+      {n:'Toni Kroos', pos:'CM, CDM', ov:99, pac:68,sho:85,pas:97,dri:88,defn:70,phy:78, foot:'Right'},
+      {n:'Christoph Kramer', pos:'CDM, CM', ov:95, pac:70,sho:60,pas:82,dri:78,defn:82,phy:85, foot:'Right'},
+      {n:'Thomas Müller', pos:'RW, CAM, ST', ov:98, pac:82,sho:88,pas:85,dri:85,defn:45,phy:80, foot:'Right'},
+      {n:'Mesut Özil', pos:'CAM', ov:96, pac:78,sho:72,pas:94,dri:90,defn:35,phy:65, foot:'Right'},
+      {n:'Miroslav Klose', pos:'ST', ov:96, pac:82,sho:92,pas:68,dri:80,defn:25,phy:85, foot:'Right'},
+    ],
+    stars:[{n:'Toni Kroos',bonus:8},{n:'Thomas Müller',bonus:7},{n:'Manuel Neuer',bonus:7},{n:'Mats Hummels',bonus:7}]},
+  {packId:'legacy_fra1998', flag:'🇫🇷', natLabel:'Frankreich', year:1998, nat:'France', club:'Frankreich 1998',
+    roster:[
+      {n:'Fabien Barthez', pos:'GK', ov:96, pac:68,sho:20,pas:62,dri:60,defn:93,phy:82, foot:'Right', gk:true},
+      {n:'Lilian Thuram', pos:'RB, CB', ov:97, pac:92,sho:45,pas:78,dri:80,defn:92,phy:88, foot:'Right'},
+      {n:'Marcel Desailly', pos:'CB, CDM', ov:97, pac:78,sho:45,pas:75,dri:70,defn:94,phy:92, foot:'Right'},
+      {n:'Frank Lebœuf', pos:'CB', ov:95, pac:70,sho:45,pas:75,dri:65,defn:90,phy:85, foot:'Right'},
+      {n:'Bixente Lizarazu', pos:'LB', ov:95, pac:88,sho:55,pas:78,dri:82,defn:84,phy:78, foot:'Left'},
+      {n:'Didier Deschamps', pos:'CDM, CM', ov:96, pac:68,sho:60,pas:85,dri:78,defn:88,phy:82, foot:'Right'},
+      {n:'Christian Karembeu', pos:'RM, CM', ov:95, pac:88,sho:55,pas:75,dri:78,defn:70,phy:82, foot:'Right'},
+      {n:'Emmanuel Petit', pos:'CM, CDM', ov:96, pac:75,sho:72,pas:88,dri:82,defn:85,phy:85, foot:'Left'},
+      {n:'Youri Djorkaeff', pos:'CAM, LM', ov:96, pac:78,sho:82,pas:88,dri:88,defn:40,phy:75, foot:'Right'},
+      {n:'Zinedine Zidane', pos:'CAM, CM', ov:99, pac:75,sho:88,pas:95,dri:97,defn:45,phy:78, foot:'Right'},
+      {n:"Stéphane Guivarc'h", pos:'ST', ov:95, pac:80,sho:85,pas:65,dri:78,defn:25,phy:80, foot:'Right'},
+    ],
+    stars:[{n:'Zinedine Zidane',bonus:8},{n:'Lilian Thuram',bonus:8},{n:'Emmanuel Petit',bonus:7},{n:'Didier Deschamps',bonus:6}]},
+  // Startelf korrigiert auf das echte WM-Finale 1986 gegen Deutschland (Ricardo Giusti statt des
+  // ursprünglich doppelt gelisteten Burruchaga) - siehe Rücksprache zur ursprünglich fehlerhaften Liste.
+  {packId:'legacy_arg1986', flag:'🇦🇷', natLabel:'Argentinien', year:1986, nat:'Argentina', club:'Argentinien 1986',
+    roster:[
+      {n:'Nery Pumpido', pos:'GK', ov:95, pac:60,sho:20,pas:58,dri:55,defn:90,phy:82, foot:'Right', gk:true},
+      {n:'José Luis Cuciuffo', pos:'RB, CB', ov:95, pac:82,sho:40,pas:68,dri:65,defn:86,phy:85, foot:'Right'},
+      {n:'José Luis Brown', pos:'CB', ov:95, pac:70,sho:42,pas:68,dri:60,defn:88,phy:85, foot:'Right'},
+      {n:'Oscar Ruggeri', pos:'CB', ov:96, pac:74,sho:45,pas:70,dri:62,defn:90,phy:88, foot:'Right'},
+      {n:'Julio Olarticoechea', pos:'LB', ov:95, pac:85,sho:50,pas:75,dri:78,defn:80,phy:78, foot:'Left'},
+      {n:'Sergio Batista', pos:'CDM', ov:95, pac:68,sho:50,pas:80,dri:75,defn:82,phy:82, foot:'Right'},
+      {n:'Ricardo Giusti', pos:'CM, CDM', ov:95, pac:70,sho:55,pas:78,dri:76,defn:80,phy:80, foot:'Right'},
+      {n:'Jorge Burruchaga', pos:'CM, RM', ov:96, pac:86,sho:78,pas:84,dri:88,defn:40,phy:75, foot:'Right'},
+      {n:'Héctor Enrique', pos:'CM', ov:95, pac:68,sho:55,pas:80,dri:76,defn:70,phy:78, foot:'Right'},
+      {n:'Jorge Valdano', pos:'ST', ov:96, pac:82,sho:85,pas:75,dri:82,defn:30,phy:80, foot:'Left'},
+      {n:'Diego Maradona', pos:'CAM, LW, ST', ov:99, pac:85,sho:90,pas:92,dri:99,defn:35,phy:70, foot:'Left'},
+    ],
+    stars:[{n:'Diego Maradona',bonus:8},{n:'Jorge Valdano',bonus:7},{n:'Jorge Burruchaga',bonus:7},{n:'José Luis Brown',bonus:6}]},
+  {packId:'legacy_ned1974', flag:'🇳🇱', natLabel:'Niederlande', year:1974, nat:'Netherlands', club:'Niederlande 1974',
+    roster:[
+      {n:'Jan Jongbloed', pos:'GK', ov:95, pac:65,sho:20,pas:65,dri:60,defn:88,phy:80, foot:'Right', gk:true},
+      {n:'Wim Suurbier', pos:'RB', ov:95, pac:86,sho:50,pas:75,dri:78,defn:82,phy:78, foot:'Right'},
+      {n:'Ruud Krol', pos:'CB, LB', ov:96, pac:82,sho:45,pas:78,dri:76,defn:90,phy:85, foot:'Left'},
+      {n:'Wim Rijsbergen', pos:'CB', ov:95, pac:76,sho:40,pas:68,dri:62,defn:87,phy:85, foot:'Right'},
+      {n:'Arie Haan', pos:'CM, CDM', ov:95, pac:72,sho:75,pas:85,dri:80,defn:78,phy:82, foot:'Right'},
+      {n:'Willem van Hanegem', pos:'CM, LM', ov:96, pac:68,sho:78,pas:92,dri:85,defn:60,phy:75, foot:'Left'},
+      {n:'Wim Jansen', pos:'CM, CDM', ov:95, pac:75,sho:58,pas:80,dri:78,defn:80,phy:80, foot:'Right'},
+      {n:'Johan Neeskens', pos:'CM, CDM', ov:98, pac:82,sho:82,pas:88,dri:88,defn:75,phy:85, foot:'Right'},
+      {n:'Rob Rensenbrink', pos:'LW, LM', ov:97, pac:88,sho:85,pas:82,dri:92,defn:30,phy:72, foot:'Left'},
+      {n:'Johan Cruyff', pos:'CF, CAM, ST', ov:99, pac:88,sho:90,pas:92,dri:98,defn:35,phy:70, foot:'Right'},
+      {n:'Johnny Rep', pos:'RW, ST', ov:96, pac:90,sho:85,pas:75,dri:85,defn:28,phy:75, foot:'Right'},
+    ],
+    stars:[{n:'Johan Cruyff',bonus:8},{n:'Johan Neeskens',bonus:8},{n:'Rob Rensenbrink',bonus:7},{n:'Willem van Hanegem',bonus:6}]},
+  {packId:'legacy_hun1954', flag:'🇭🇺', natLabel:'Ungarn', year:1954, nat:'Hungary', club:'Ungarn 1954',
+    roster:[
+      {n:'Gyula Grosics', pos:'GK', ov:96, pac:65,sho:20,pas:68,dri:62,defn:92,phy:80, foot:'Right', gk:true},
+      {n:'Jenő Buzánszky', pos:'RB', ov:95, pac:80,sho:45,pas:72,dri:70,defn:85,phy:80, foot:'Right'},
+      {n:'Gyula Lóránt', pos:'CB', ov:95, pac:70,sho:40,pas:68,dri:60,defn:90,phy:85, foot:'Right'},
+      {n:'Mihály Lantos', pos:'LB, CB', ov:95, pac:76,sho:50,pas:75,dri:70,defn:86,phy:82, foot:'Left'},
+      {n:'József Bozsik', pos:'CM', ov:96, pac:72,sho:72,pas:92,dri:85,defn:70,phy:78, foot:'Right'},
+      {n:'József Zakariás', pos:'CDM, CB', ov:95, pac:68,sho:45,pas:72,dri:65,defn:88,phy:85, foot:'Right'},
+      {n:'Zoltán Czibor', pos:'LW, LM', ov:96, pac:88,sho:82,pas:78,dri:88,defn:35,phy:75, foot:'Left'},
+      {n:'Sándor Kocsis', pos:'ST, CF', ov:98, pac:82,sho:94,pas:70,dri:85,defn:28,phy:82, foot:'Right'},
+      {n:'Nándor Hidegkuti', pos:'CF, CAM, ST', ov:97, pac:78,sho:88,pas:85,dri:88,defn:40,phy:78, foot:'Right'},
+      {n:'Ferenc Puskás', pos:'ST, LW, CF', ov:99, pac:78,sho:97,pas:85,dri:92,defn:30,phy:78, foot:'Left'},
+      {n:'Mihály Tóth', pos:'RW, RM', ov:95, pac:86,sho:75,pas:76,dri:82,defn:32,phy:72, foot:'Right'},
+    ],
+    stars:[{n:'Ferenc Puskás',bonus:8},{n:'Sándor Kocsis',bonus:8},{n:'Nándor Hidegkuti',bonus:7},{n:'József Bozsik',bonus:7}]},
+];
+// Real photos for the ~26 Legacy Star cards (and the 77 roster cards) aren't in yet - filled in here via
+// baseId once supplied, same override pattern as BREAKOUT_IMG_OVERRIDE, applied to BOTH tiers below.
+const LEGACY_IMG_OVERRIDE = {};
+const LEGACY_ID_BASE = 9804000; // roster cards: +squadIndex*20+playerIndex (room for up to 20/squad)
+const LEGACY_STAR_ID_BASE = 9804500; // star cards: +squadIndex*10+starIndex (room for up to 10/squad)
+const LEGACY_ROSTER_CARDS = new Map(); // packId -> built roster card array
+const LEGACY_STAR_CARDS = new Map(); // packId -> built Legacy Star card array
+LEGACY_SQUADS.forEach((squad,si)=>{
+  const rosterCards = squad.roster.map((p,pi)=>{
+    const id = LEGACY_ID_BASE + si*20 + pi;
+    const card = {id, n:p.n, pos:p.pos, ov:p.ov, pot:p.ov, nat:squad.nat, lg:'Legenden', club:squad.club,
+      pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy, foot:p.foot, gk:!!p.gk,
+      variant:'legacy', variantLabel:`Legacy: ${squad.natLabel} ${squad.year}`, theme:'legacy'};
+    if(LEGACY_IMG_OVERRIDE[id]) card.img = LEGACY_IMG_OVERRIDE[id];
+    BY_ID.set(card.id, card);
+    return card;
+  });
+  LEGACY_ROSTER_CARDS.set(squad.packId, rosterCards);
+  const starCards = squad.stars.map((s,sti)=>{
+    const base = rosterCards.find(c=>c.n===s.n);
+    if(!base) return null;
+    const id = LEGACY_STAR_ID_BASE + si*10 + sti;
+    const card = boostBaseToOv(base, base.ov+s.bonus, id, 'legacystar', 'Legacy Star', 'legacystar');
+    if(LEGACY_IMG_OVERRIDE[id]) card.img = LEGACY_IMG_OVERRIDE[id];
+    BY_ID.set(card.id, card);
+    return card;
+  }).filter(Boolean);
+  LEGACY_STAR_CARDS.set(squad.packId, starCards);
+});
+// 6% combined chance per pack of ANY Legacy Star (not per slot - same "roll once" convention as
+// Breakout/World Cup Pack above), uniformly picked among that squad's own 1-4 named stars.
+const LEGACY_STAR_CHANCE = 0.06;
+const LEGACY_PACK_DEFS = LEGACY_SQUADS.map(squad=>({
+  id: squad.packId, name:`Legacy Pack – ${squad.natLabel} ${squad.year}`, cost:50000, tier:'ultimate', count:5, hidden:true,
+  desc:`${squad.flag} 5 Karten aus der legendären ${squad.natLabel}-Elf von ${squad.year} (Rating 95-99), mit einer 6%-Chance pro Pack auf eine geboostete Legacy-Star-Karte: ${squad.stars.map(s=>`${s.n} (+${s.bonus})`).join(', ')}. Noch nicht käuflich — aktuell nur als Admin-Test verfügbar.`,
+  draw(){
+    const roster = LEGACY_ROSTER_CARDS.get(squad.packId), stars = LEGACY_STAR_CARDS.get(squad.packId);
+    const starSlot = Math.random()<LEGACY_STAR_CHANCE ? Math.floor(Math.random()*5) : -1;
+    return Array.from({length:5}, (_,i)=> i===starSlot ? pick(stars) : pick(roster));
+  }
+}));
+
 // ===== pack definitions =====
 const PACKS = [
+  ...LEGACY_PACK_DEFS,
   {id:'breakout',name:'Breakout',cost:23000,tier:'ultimate',count:5,
     desc:'5 Karten aus den aufregendsten jungen Talenten des Weltfußballs (Yamal, Neves, Doué, Estêvão, Endrick, Nusa, Garnacho und viele mehr) zu ihrem echten aktuellen Rating - mit einer 5%-Chance pro Pack auf eine geboostete Breakout-Sonderkarte: Lamine Yamal (108), João Neves (106), Désiré Doué (104), Pau Cubarsí (102), Warren Zaïre-Emery (102) oder Arda Güler (102).',
     draw(){
@@ -14425,6 +14617,8 @@ const VARIANT_ICON = {
   og_mgr:'<path d="M12 3l2.2 4.6 5 .5-3.7 3.4.9 5-4.4-2.5-4.4 2.5.9-5-3.7-3.4 5-.5z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M12 6.5l1.3 2.7 3 .3-2.2 2 .5 3-2.6-1.5-2.6 1.5.5-3-2.2-2 3-.3z" fill="currentColor"/>',
   poet:'<path d="M20 4c-6 0-13 4-15 12l-1 4 4-1C16 17 20 10 20 4z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 15l6-6" stroke="currentColor" stroke-width="1.4"/>',
   breakout:'<path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="currentColor"/>',
+  legacy:'<path d="M6 3h12v4a6 6 0 01-6 6 6 6 0 01-6-6V3z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 4H2v3a4 4 0 004 4M20 4h2v3a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="10" y="13" width="4" height="4" fill="currentColor"/><rect x="7" y="19" width="10" height="2" fill="currentColor"/>',
+  legacystar:'<path d="M12 2l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 15.9l-5.6 3.2 1.4-6.3-4.8-4.3 6.4-.6z" fill="currentColor"/>',
 };
 const PATTERN_FAMILY = {
   fs:'attack', gb:'attack', phenom:'attack', sd:'attack', gal:'attack',
@@ -14454,6 +14648,7 @@ const PATTERN_FAMILY = {
   wm26k:'wm26kpattern',
   iconpromo:'iconpromopattern',
   breakout:'speed',
+  legacy:'legacy', legacystar:'legacy',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
