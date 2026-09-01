@@ -13788,6 +13788,33 @@ function warnStorageOnce(){
   storageWarned = true;
   window.location.href = 'foil-eleven-down.html';
 }
+// Batches several private, per-club sGet() reads into a SINGLE Firestore getDoc() call instead of one
+// round-trip per key - every key already lives in the same 'saves/{clubId}' document, so fetching it
+// once and slicing out each key locally is exactly as correct as N separate reads, just without paying
+// for N-1 extra network round-trips. Boot (see init()) used to do this sequentially for profile,
+// collection, managerCollection, packCollection, squad and squadPresets - six full fetches of the same
+// document, one after another - which is exactly what made a slow/high-latency connection turn "open
+// the app" into a multi-second (occasionally much longer) wait: 6x the round-trip time of a single
+// fetch, compounding badly on top of the Firebase connectivity probe's own up-to-~21s worst case.
+async function sGetMany(keys, shared=false){
+  if(!shared){
+    await fbReady;
+    if(fb && clubId){
+      try{
+        const snap = await fb.getDoc(fb.doc(fb.db,'saves',clubId));
+        const d = snap.exists() ? snap.data() : {};
+        const out = {};
+        keys.forEach(k=>{ out[k] = (k in d) ? d[k] : null; });
+        return out;
+      }catch(e){ console.warn('Firestore private batch read failed, falling back', e); }
+    }
+  }
+  // no Firebase (or a shared/non-club key set) - the fallback stores (window.storage/memoryStore) are
+  // already per-key, so there's no single document to batch; just resolve each key independently.
+  const out = {};
+  for(const k of keys) out[k] = await sGet(k, shared);
+  return out;
+}
 async function sGet(key, shared=false){
   if(!shared){
     await fbReady;
@@ -14358,7 +14385,11 @@ async function init(){
   // (and could equally corrupt that squad's rating in Liga-Matches, resolved by whichever client happens
   // to be online). Force-building both pools once at boot means every session's BY_ID is always complete.
   wm26VarianteSpecials(); wm26KapitaenSpecials();
-  profile = await sGet('profile');
+  // one round-trip instead of six (see sGetMany) - profile/collection/managerCollection/packCollection/
+  // squad/squadPresets all live in the same Firestore doc, and none of them depends on another's value
+  // below, so there's nothing to lose by fetching them together up front.
+  const _boot = await sGetMany(['profile','collection','managerCollection','packCollection','squad','squadPresets']);
+  profile = _boot.profile;
   if(!profile){
     profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false, pendingLigaPacks:[]};
     await sSet('profile', profile);
@@ -14416,7 +14447,7 @@ async function init(){
     return;
   }
   soundEnabled = profile.soundOn;
-  collection = await sGet('collection');
+  collection = _boot.collection;
   if(!collection){
     // starter club so the pitch isn't empty - guaranteed to cover every default-formation position
     collection = buildStarterCollection();
@@ -14434,11 +14465,11 @@ async function init(){
   if(collection.some(c=>c.cardId>=50000000)){ wm26VarianteSpecials(); wm26KapitaenSpecials(); }
   // Same lazy-build problem as WM26 above, for the Breakout Pack's 6 boosted specials (ids 9803100-9803105).
   if(collection.some(c=>c.cardId>=9803100 && c.cardId<9803106)) breakoutSpecials();
-  managerCollection = await sGet('managerCollection');
+  managerCollection = _boot.managerCollection;
   if(!managerCollection) managerCollection = [];
-  packCollection = await sGet('packCollection');
+  packCollection = _boot.packCollection;
   if(!packCollection) packCollection = [];
-  squad = await sGet('squad');
+  squad = _boot.squad;
   if(!squad){ squad = {formation:'433', slots:{}, managerUid:null, tactics:{...DEFAULT_TACTICS}}; await sSet('squad', squad); }
   else {
     if(squad.managerUid===undefined) squad.managerUid = null;
@@ -14493,7 +14524,7 @@ async function init(){
     profile.achievementsBackfilled = true;
     await sSet('profile', profile);
   }
-  squadPresets = await sGet('squadPresets');
+  squadPresets = _boot.squadPresets;
   if(!squadPresets) squadPresets = [];
   currentTab = restoredLastTab();
   renderNav();
