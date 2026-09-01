@@ -339,19 +339,22 @@ const COMMAND_HANDLERS = {
   vergleich: handleVergleich, leaderboard: handleLeaderboard, 'liga-preise': handleLigaPreise,
   'naechster-rollover': handleNaechsterRollover, karte: handleKarte,
 };
-// /verify alone can take up to ~7 sequential Firestore/Discord-API round-trips (find+clear the code,
-// link the account, assign Verified, look up the league, read+patch the member's roles) - combined
-// with a cold Cloud Functions start, that regularly blows past Discord's 3-second window for the
-// INITIAL response, which then shows the user a permanent "The application did not respond" even
-// though the command silently succeeds a moment later in the background. /stats and /liga are single
-// Firestore reads and comfortably fit in 3s even cold. /karte parses the 13 MB players_data.js on its
-// first require() per container instance - measured over 1s just for that on a warm process locally,
-// so a genuinely cold Cloud Run start stacked on top could plausibly cross 3s too.
+// EVERY command defers now, not just the obviously slow ones (/verify's up to 7 sequential Firestore/
+// Discord-API calls, /karte's 13 MB players_data.js parse). A cold Cloud Run start alone was already
+// observed (via `firebase functions:log`) taking multiple seconds just to boot the container - "Starting
+// new instance... Default STARTUP TCP probe succeeded after 1 attempt" - BEFORE any handler code even
+// runs, which blew straight through Discord's 3-second window for even the simplest single-Firestore-
+// read commands (/stats, /liga, ...) and produced the same "hat nicht rechtzeitig reagiert" as /verify
+// did. Deferring uniformly removes this whole class of cold-start-vs-3-second-timeout races instead of
+// trying to guess which commands are "fast enough" - Discord waits up to 15 minutes for the followup.
 // Discord fixes a deferred interaction's visibility (ephemeral or not) at the moment of the initial
-// ACK - the later followup can't override it, so this has to match each command's normal reply style
-// up front: /verify is always ephemeral (it's account-linking chatter, not for the channel), /karte's
-// success case is meant to be public like /stats and /liga.
-const DEFERRED_EPHEMERAL = {verify: true, karte: false};
+// ACK - the later followup can't override it - so this still has to match each command's normal reply
+// style up front: /verify is ephemeral (account-linking chatter, not for the channel), everything else
+// is public like it always was.
+const DEFERRED_EPHEMERAL = {
+  verify: true, stats: false, liga: false, vergleich: false, leaderboard: false,
+  'liga-preise': false, 'naechster-rollover': false, karte: false,
+};
 
 async function sendFollowup(interaction, data) {
   const url = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
@@ -376,24 +379,18 @@ exports.discordInteractions = onRequest(
       const handler = COMMAND_HANDLERS[name];
       if (!handler) { res.json(reply('Unbekannter Command.', {ephemeral: true})); return; }
 
-      if (name in DEFERRED_EPHEMERAL) {
-        // ACK immediately - Discord now waits up to 15 minutes for the real answer via a followup
-        // message instead of the 3-second window on the initial response.
-        res.json({type: CallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE, data: {flags: DEFERRED_EPHEMERAL[name] ? 64 : 0}});
-        try {
-          const result = await handler(interaction);
-          await sendFollowup(interaction, result.data);
-        } catch (e) {
-          console.error(`command ${name} failed`, e);
-          await sendFollowup(interaction, {content: 'Fehler beim Ausführen des Commands.', flags: 64});
-        }
-        return;
-      }
+      // ACK immediately, always - Discord now waits up to 15 minutes for the real answer via a
+      // followup message instead of racing the 3-second window on the initial response. Any future
+      // command not yet listed in DEFERRED_EPHEMERAL still gets deferred (falls back to public/
+      // non-ephemeral) - safer default than silently reverting to the old immediate-response path,
+      // which is exactly the bug this whole mechanism exists to avoid.
+      res.json({type: CallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE, data: {flags: DEFERRED_EPHEMERAL[name] ? 64 : 0}});
       try {
-        res.json(await handler(interaction));
+        const result = await handler(interaction);
+        await sendFollowup(interaction, result.data);
       } catch (e) {
         console.error(`command ${name} failed`, e);
-        res.json(reply('Fehler beim Ausführen des Commands.', {ephemeral: true}));
+        await sendFollowup(interaction, {content: 'Fehler beim Ausführen des Commands.', flags: 64});
       }
       return;
     }
