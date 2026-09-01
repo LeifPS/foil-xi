@@ -21279,7 +21279,7 @@ async function challengeFriend(friend){
   const myPlayers = getMySquadPlayers();
   const duelId = genId();
   const duel = {
-    id: duelId, fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
+    id: duelId, fromUserId: profile.userId, fromName: profile.displayName||profile.userId, fromNametag: profile.nametag||null,
     fromRating: rating, fromPlayers: myPlayers, fromCrest: profile.crest, fromCardRefs: getMySquadCardRefs(), fromFormation: squad.formation,
     toUserId: friend.userId, toName: friend.name,
     status:'pending', createdAt: Date.now()
@@ -21377,8 +21377,8 @@ async function loadIncomingDuels(){
         const matchId = genId();
         const matchDoc = {
           mid: matchId,
-          p1:{userId:duel.fromUserId, name:duel.fromName, rating:duel.fromRating, crest:duel.fromCrest, formation:duel.fromFormation},
-          p2:{userId:profile.userId, name:profile.displayName||profile.userId, rating, crest:profile.crest, formation:squad.formation},
+          p1:{userId:duel.fromUserId, name:duel.fromName, nametag:duel.fromNametag||null, rating:duel.fromRating, crest:duel.fromCrest, formation:duel.fromFormation},
+          p2:{userId:profile.userId, name:profile.displayName||profile.userId, nametag:profile.nametag||null, rating, crest:profile.crest, formation:squad.formation},
           p1CardRefs: duel.fromCardRefs, p2CardRefs: getMySquadCardRefs(),
           p1Goals: md.oppGoals, p2Goals: md.myGoals,
           events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
@@ -29306,14 +29306,14 @@ function showMatchIntroCutscene(container, meSide, oppSide, oppCardRefs){
       <div class="match-intro-vs" id="mi-vs">
         <div class="match-intro-side">
           ${renderCrestSVG(meSide.crest, 72)}
-          <div class="match-intro-name">${meSide.name}</div>
+          <div class="match-intro-name">${nametagHTML(meSide.name, meSide.nametag)}</div>
           ${meSide.managerName ? `<div class="match-intro-manager">Trainer: ${meSide.managerName}</div>` : ''}
           <div class="match-intro-rating">${meSide.rating}</div>
         </div>
         <div class="match-intro-x">VS</div>
         <div class="match-intro-side">
           ${renderCrestSVG(oppSide.crest, 72)}
-          <div class="match-intro-name">${oppSide.name}</div>
+          <div class="match-intro-name">${nametagHTML(oppSide.name, oppSide.nametag)}</div>
           ${oppSide.managerName ? `<div class="match-intro-manager">Trainer: ${oppSide.managerName}</div>` : ''}
           <div class="match-intro-rating">${oppSide.rating}</div>
         </div>
@@ -29407,9 +29407,9 @@ async function enterSyncedMatch(matchDoc){
   await showMatchIntroCutscene(area, meSide, oppSide, oppCardRefs);
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(meSide.rating, meSide.crest, meSide.name)}
+      ${teamBlobHTML(meSide.rating, meSide.crest, nametagHTML(meSide.name, meSide.nametag))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(oppSide.rating, oppSide.crest, oppSide.name)}
+      ${teamBlobHTML(oppSide.rating, oppSide.crest, nametagHTML(oppSide.name, oppSide.nametag))}
     </div>
     <p class="hint" style="text-align:center;">Live-Spiel gegen einen echten Gegner \u2014 ihr seht beide dasselbe Spiel.</p>
     <div id="result-area"></div>`;
@@ -29423,7 +29423,7 @@ async function enterSyncedMatch(matchDoc){
   const md = {events90, eventsET, shootout, wentToET:matchDoc.wentToET, wentToPK:matchDoc.wentToPK, startedAt:matchDoc.startedAt, durationMs:matchDoc.durationMs,
     myProfile: myProfile || {attack:meSide.rating, defense:meSide.rating}, oppProfile: oppProfile || {attack:oppSide.rating, defense:oppSide.rating},
     incidents, myRedMinute, oppRedMinute};
-  const final = await playFullMatch(md, meSide.name, oppSide.name);
+  const final = await playFullMatch(md, meSide.name, oppSide.name, null, oppSide.nametag||null);
   let winnerSide;
   if(matchDoc.wentToPK){
     winnerSide = (matchDoc.shootout.winner==='p1')===amP1 ? 'me' : 'opp';
@@ -29520,7 +29520,7 @@ async function joinQueue(manual=true){
   queueStartTime = startTime;
   try{
     await fb.setDoc(fb.doc(fb.db,'queue',profile.userId), {
-      userId: profile.userId, name: profile.displayName || profile.userId, rating, players: myPlayers,
+      userId: profile.userId, name: profile.displayName || profile.userId, nametag: profile.nametag||null, rating, players: myPlayers,
       crest: profile.crest, cardRefs: getMySquadCardRefs(), formation: squad.formation, joinedAt: startTime
     });
   }catch(e){
@@ -29612,8 +29612,8 @@ async function joinQueue(manual=true){
             } : null;
             const matchDoc = {
               mid,
-              p1:{userId:profile.userId, name:profile.displayName||profile.userId, rating, crest:profile.crest, formation:squad.formation},
-              p2:{userId:other.userId, name:other.name, rating:other.rating, crest:other.crest, formation:other.formation},
+              p1:{userId:profile.userId, name:profile.displayName||profile.userId, nametag:profile.nametag||null, rating, crest:profile.crest, formation:squad.formation},
+              p2:{userId:other.userId, name:other.name, nametag:other.nametag||null, rating:other.rating, crest:other.crest, formation:other.formation},
               p1CardRefs: getMySquadCardRefs(), p2CardRefs: other.cardRefs,
               p1Goals: md.myGoals, p2Goals: md.oppGoals,
               events90, eventsET, wentToET: md.wentToET, wentToPK: md.wentToPK, shootout,
