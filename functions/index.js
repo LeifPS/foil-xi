@@ -72,7 +72,7 @@ async function getLeagueLetterForClub(clubId) {
 }
 
 const InteractionType = {PING: 1, APPLICATION_COMMAND: 2};
-const CallbackType = {PONG: 1, CHANNEL_MESSAGE_WITH_SOURCE: 4};
+const CallbackType = {PONG: 1, CHANNEL_MESSAGE_WITH_SOURCE: 4, DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE: 5};
 
 function reply(content, {ephemeral = false, embeds = null} = {}) {
   const data = {flags: ephemeral ? 64 : 0};
@@ -210,6 +210,19 @@ async function handleLiga(interaction) {
 }
 
 const COMMAND_HANDLERS = {verify: handleVerify, stats: handleStats, liga: handleLiga};
+// /verify alone can take up to ~7 sequential Firestore/Discord-API round-trips (find+clear the code,
+// link the account, assign Verified, look up the league, read+patch the member's roles) - combined
+// with a cold Cloud Functions start, that regularly blows past Discord's 3-second window for the
+// INITIAL response, which then shows the user a permanent "The application did not respond" even
+// though the command silently succeeds a moment later in the background. /stats and /liga are single
+// Firestore reads and comfortably fit in 3s even cold, so only /verify needs to defer.
+const DEFERRED_COMMANDS = new Set(['verify']);
+
+async function sendFollowup(interaction, data) {
+  const url = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
+  const res = await fetch(url, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
+  if (!res.ok) console.error('followup send failed', res.status, await res.text());
+}
 
 exports.discordInteractions = onRequest(
   {secrets: [DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_VERIFIED_ROLE_ID, ...LIGA_ROLE_SECRETS], cpu: 1, memory: '256MiB'},
@@ -224,12 +237,27 @@ exports.discordInteractions = onRequest(
     if (interaction.type === InteractionType.PING) { res.json({type: CallbackType.PONG}); return; }
 
     if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-      const handler = COMMAND_HANDLERS[interaction.data.name];
+      const name = interaction.data.name;
+      const handler = COMMAND_HANDLERS[name];
       if (!handler) { res.json(reply('Unbekannter Command.', {ephemeral: true})); return; }
+
+      if (DEFERRED_COMMANDS.has(name)) {
+        // ACK immediately - Discord now waits up to 15 minutes for the real answer via a followup
+        // message instead of the 3-second window on the initial response.
+        res.json({type: CallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE, data: {flags: 64}});
+        try {
+          const result = await handler(interaction);
+          await sendFollowup(interaction, result.data);
+        } catch (e) {
+          console.error(`command ${name} failed`, e);
+          await sendFollowup(interaction, {content: 'Fehler beim Ausführen des Commands.', flags: 64});
+        }
+        return;
+      }
       try {
         res.json(await handler(interaction));
       } catch (e) {
-        console.error(`command ${interaction.data.name} failed`, e);
+        console.error(`command ${name} failed`, e);
         res.json(reply('Fehler beim Ausführen des Commands.', {ephemeral: true}));
       }
       return;
