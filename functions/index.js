@@ -21,6 +21,55 @@ const DISCORD_BOT_TOKEN = defineSecret('DISCORD_BOT_TOKEN');
 const DISCORD_GUILD_ID = defineSecret('DISCORD_GUILD_ID');
 const DISCORD_VERIFIED_ROLE_ID = defineSecret('DISCORD_VERIFIED_ROLE_ID');
 const DISCORD_ANNOUNCE_WEBHOOK_URL = defineSecret('DISCORD_ANNOUNCE_WEBHOOK_URL');
+// One role per Liga A/B/C, everything D and below (the game supports up to 26 leagues, A-Z, growing
+// at the bottom as the playerbase does - see LIGA_LETTERS) shares a single "Liga D+" role instead of
+// one role per letter, since nobody wants a 26-role picker.
+const DISCORD_ROLE_LIGA_A = defineSecret('DISCORD_ROLE_LIGA_A');
+const DISCORD_ROLE_LIGA_B = defineSecret('DISCORD_ROLE_LIGA_B');
+const DISCORD_ROLE_LIGA_C = defineSecret('DISCORD_ROLE_LIGA_C');
+const DISCORD_ROLE_LIGA_DPLUS = defineSecret('DISCORD_ROLE_LIGA_DPLUS');
+const LIGA_ROLE_SECRETS = [DISCORD_ROLE_LIGA_A, DISCORD_ROLE_LIGA_B, DISCORD_ROLE_LIGA_C, DISCORD_ROLE_LIGA_DPLUS];
+
+function ligaRoleIdForLetter(letter) {
+  if (letter === 'A') return DISCORD_ROLE_LIGA_A.value();
+  if (letter === 'B') return DISCORD_ROLE_LIGA_B.value();
+  if (letter === 'C') return DISCORD_ROLE_LIGA_C.value();
+  return DISCORD_ROLE_LIGA_DPLUS.value();
+}
+function allLigaRoleIds() {
+  return LIGA_ROLE_SECRETS.map(s => s.value()).filter(Boolean);
+}
+
+// Swaps a member's Liga-role for the one matching their CURRENT league - reads their full role list
+// first (PATCHing the whole array in one call) instead of separately DELETEing the old role and PUTting
+// the new one, since a member's actual previous league isn't tracked anywhere the bot could look up
+// directly; comparing against their real current Discord roles is the only reliable source of truth.
+async function syncLigaRole(guildId, discordUserId, letter) {
+  const botToken = DISCORD_BOT_TOKEN.value();
+  const targetRoleId = ligaRoleIdForLetter(letter);
+  const ligaRoleIds = new Set(allLigaRoleIds());
+  const memberRes = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${discordUserId}`, {
+    headers: {Authorization: `Bot ${botToken}`},
+  });
+  if (!memberRes.ok) { console.error('syncLigaRole: member fetch failed', discordUserId, memberRes.status, await memberRes.text()); return; }
+  const member = await memberRes.json();
+  const currentRoles = member.roles || [];
+  if (currentRoles.includes(targetRoleId) && currentRoles.filter(r => ligaRoleIds.has(r)).length === 1) return; // already correct, skip the write
+  const nextRoles = currentRoles.filter(r => !ligaRoleIds.has(r)).concat(targetRoleId ? [targetRoleId] : []);
+  const patchRes = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${discordUserId}`, {
+    method: 'PATCH',
+    headers: {Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json'},
+    body: JSON.stringify({roles: nextRoles}),
+  });
+  if (!patchRes.ok) console.error('syncLigaRole: role patch failed', discordUserId, patchRes.status, await patchRes.text());
+}
+
+// leagueMembership/{letter} = {letter, members:[clubId,...]} - array-contains lets Firestore find the
+// one league doc holding this club directly, instead of fetching all ~26 possible letters and scanning.
+async function getLeagueLetterForClub(clubId) {
+  const snap = await db.collection('leagueMembership').where('members', 'array-contains', clubId).limit(1).get();
+  return snap.empty ? null : snap.docs[0].id;
+}
 
 const InteractionType = {PING: 1, APPLICATION_COMMAND: 2};
 const CallbackType = {PONG: 1, CHANNEL_MESSAGE_WITH_SOURCE: 4};
@@ -82,7 +131,16 @@ async function handleVerify(interaction) {
     if (!res.ok) console.error('role assign failed', res.status, await res.text());
   }
 
-  return reply(`✅ Verknüpft mit Verein **${displayName}**.`, {ephemeral: true});
+  let ligaNote = '';
+  if (guildId) {
+    const letter = await getLeagueLetterForClub(clubId);
+    if (letter) {
+      await syncLigaRole(guildId, discordUserId, letter);
+      ligaNote = ` Liga-Rolle gesetzt: **${letter === 'A' || letter === 'B' || letter === 'C' ? 'Liga ' + letter : 'Liga D+'}**.`;
+    }
+  }
+
+  return reply(`✅ Verknüpft mit Verein **${displayName}**.${ligaNote}`, {ephemeral: true});
 }
 
 // ===== /stats [verein] =====
@@ -154,7 +212,7 @@ async function handleLiga(interaction) {
 const COMMAND_HANDLERS = {verify: handleVerify, stats: handleStats, liga: handleLiga};
 
 exports.discordInteractions = onRequest(
-  {secrets: [DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_VERIFIED_ROLE_ID], cpu: 1, memory: '256MiB'},
+  {secrets: [DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_VERIFIED_ROLE_ID, ...LIGA_ROLE_SECRETS], cpu: 1, memory: '256MiB'},
   async (req, res) => {
     const signature = req.get('X-Signature-Ed25519');
     const timestamp = req.get('X-Signature-Timestamp');
@@ -185,37 +243,56 @@ exports.discordInteractions = onRequest(
 // resolveWeeklyRolloverIfNeeded) - event-driven, not polling, so there's no delay and no wasted
 // invocations the other 6 days and 23-ish hours of the week nothing happens.
 exports.announceLigaRollover = onDocumentCreated(
-  {document: 'leagueHistory/{weekStart}', secrets: [DISCORD_ANNOUNCE_WEBHOOK_URL]},
+  {document: 'leagueHistory/{weekStart}', secrets: [DISCORD_ANNOUNCE_WEBHOOK_URL, DISCORD_GUILD_ID, DISCORD_BOT_TOKEN, ...LIGA_ROLE_SECRETS]},
   async (event) => {
-    const webhookUrl = DISCORD_ANNOUNCE_WEBHOOK_URL.value();
-    if (!webhookUrl) return;
     const history = event.data.data();
     const tables = history.tables || {};
     const letters = Object.keys(tables).sort();
     if (!letters.length) return;
 
-    const fields = letters.map(letter => {
-      const top3 = tables[letter].slice(0, 3)
-        .map((row, i) => `${['🥇', '🥈', '🥉'][i]} ${row.name} (${row.pts} Pkt)`)
-        .join('\n') || 'keine Einträge';
-      return {name: `Liga ${letter}`, value: top3, inline: true};
-    });
+    const webhookUrl = DISCORD_ANNOUNCE_WEBHOOK_URL.value();
+    if (webhookUrl) {
+      const fields = letters.map(letter => {
+        const top3 = tables[letter].slice(0, 3)
+          .map((row, i) => `${['🥇', '🥈', '🥉'][i]} ${row.name} (${row.pts} Pkt)`)
+          .join('\n') || 'keine Einträge';
+        return {name: `Liga ${letter}`, value: top3, inline: true};
+      });
+      const relegationNote = (history.relegationResults || []).length
+        ? `\n${history.relegationResults.length} Relegations-Duell(e) wurden entschieden.`
+        : '';
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          embeds: [{
+            title: '🏆 Die Liga-Woche ist vorbei!',
+            description: `Neue Tabellen, Auf- und Abstiege sind da.${relegationNote}`,
+            color: 0xffd76a,
+            fields,
+          }],
+        }),
+      });
+    }
 
-    const relegationNote = (history.relegationResults || []).length
-      ? `\n${history.relegationResults.length} Relegations-Duell(e) wurden entschieden.`
-      : '';
-
-    await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        embeds: [{
-          title: '🏆 Die Liga-Woche ist vorbei!',
-          description: `Neue Tabellen, Auf- und Abstiege sind da.${relegationNote}`,
-          color: 0xffd76a,
-          fields,
-        }],
-      }),
+    // Liga-Rollen für alle verknüpften Spieler nachziehen - leagueMembership wurde vom Spiel selbst
+    // bereits VOR diesem leagueHistory-Dokument auf den neuen (Nach-Auf-/Abstieg) Stand geschrieben
+    // (siehe resolveWeeklyRolloverIfNeeded/-V2 im Spiel), also spiegelt eine frische Abfrage hier schon
+    // die Liga wider, in der jeder ab jetzt spielt - nicht die, in der er diese Woche gespielt hat.
+    const guildId = DISCORD_GUILD_ID.value();
+    if (!guildId) return;
+    const [membershipSnap, linksSnap] = await Promise.all([
+      db.collection('leagueMembership').get(),
+      db.collection('discordLinks').get(),
+    ]);
+    const letterByClubId = new Map();
+    membershipSnap.docs.forEach(d => {
+      (d.data().members || []).forEach(clubId => letterByClubId.set(clubId, d.id));
     });
+    for (const linkDoc of linksSnap.docs) {
+      const {clubId} = linkDoc.data();
+      const letter = letterByClubId.get(clubId);
+      if (letter) await syncLigaRole(guildId, linkDoc.id, letter);
+    }
   }
 );

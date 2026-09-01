@@ -14,13 +14,16 @@ eigener Server, kein 24/7-Prozess. Slash-Commands laufen über Discords "HTTP In
 4. Unter **OAuth2 → URL Generator**: Scopes `bot` + `applications.commands`, Permission mindestens
    `Manage Roles` (für `/verify`) anhaken, generierten Link öffnen, um den Bot auf deinen Server
    einzuladen.
-5. **Wichtig**: Die Bot-Rolle muss in der Server-Rollenliste ÜBER der `Verifiziert`-Rolle stehen,
-   sonst darf er sie nicht vergeben (Discord-Rollenhierarchie).
+5. **Wichtig**: Die Bot-Rolle muss in der Server-Rollenliste ÜBER `Verifiziert` UND den 4 Liga-
+   Rollen stehen, sonst darf er sie nicht vergeben (Discord-Rollenhierarchie).
 
 ## 2. Server-Rollen/Channels
 
 - Rolle `Verifiziert` anlegen, ihre ID kopieren (Rechtsklick → ID kopieren, braucht
   Entwicklermodus in Discord-Einstellungen) → `DISCORD_VERIFIED_ROLE_ID`.
+- 4 weitere Rollen anlegen: `Liga A`, `Liga B`, `Liga C`, `Liga D+` (D und alle tieferen Ligen
+  teilen sich diese eine Rolle) → IDs kopieren → `DISCORD_ROLE_LIGA_A`/`_B`/`_C`/`_DPLUS`. Der Bot
+  vergibt/wechselt diese Rolle automatisch bei `/verify` und bei jedem Liga-Rollover.
 - Alle Channels außer `#verifizieren` auf "nur für Verifiziert sichtbar" stellen.
 - Einen Webhook für den Ankündigungs-Channel anlegen (Kanal-Einstellungen → Integrationen →
   Webhooks → Neu) → URL kopieren → `DISCORD_ANNOUNCE_WEBHOOK_URL`.
@@ -36,6 +39,10 @@ firebase functions:secrets:set DISCORD_BOT_TOKEN
 firebase functions:secrets:set DISCORD_GUILD_ID
 firebase functions:secrets:set DISCORD_VERIFIED_ROLE_ID
 firebase functions:secrets:set DISCORD_ANNOUNCE_WEBHOOK_URL
+firebase functions:secrets:set DISCORD_ROLE_LIGA_A
+firebase functions:secrets:set DISCORD_ROLE_LIGA_B
+firebase functions:secrets:set DISCORD_ROLE_LIGA_C
+firebase functions:secrets:set DISCORD_ROLE_LIGA_DPLUS
 ```
 
 Jeder Befehl fragt interaktiv nach dem Wert (nicht in der Shell-History sichtbar).
