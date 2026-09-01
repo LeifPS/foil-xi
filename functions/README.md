@@ -80,9 +80,32 @@ der Entwicklung stattdessen an
 
 ## 7. Im Spiel: Verify-Code anzeigen
 
-Noch offen (siehe Hauptaufgabe) — im Spiel selbst muss unter Einstellungen ein Button "Discord
-verknüpfen" einen zufälligen Code erzeugen und in `profile.discordVerifyCode` speichern, den der
-Spieler dann mit `/verify code:...` einträgt.
+Bereits eingebaut — Mein Verein → ⚙ Einstellungen → "Discord verknüpfen" → "Code erzeugen" zeigt
+einen 15 Minuten gültigen 6-stelligen Code, den der Spieler dann mit `/verify code:...` einträgt.
+
+## Befehle
+
+| Command | Was er macht |
+|---|---|
+| `/verify code:XXXXXX` | Discord-Account mit Verein verknüpfen, vergibt Verifiziert- + Liga-Rolle |
+| `/stats [verein]` | Coins, Siege, Karten |
+| `/liga [buchstabe]` | Tabelle der letzten abgeschlossenen Liga-Woche |
+| `/liga-preise [buchstabe]` | Belohnungstabelle für eine Liga |
+| `/naechster-rollover` | Countdown bis Samstag 12:00 Uhr Berlin |
+| `/vergleich verein1 verein2` | Zwei Vereine nebeneinander |
+| `/leaderboard [kategorie]` | Top 10 nach Coins oder Siegen |
+| `/karte name` | Reale Basis-Karte eines Spielers (keine Pack-Sondervarianten - siehe unten) |
+
+`/karte` liest aus `functions/players_data.js`, einer Kopie der echten Spielerdatenbank
+(`players_data.js` im Hauptordner) - sie zeigt nur die REALEN aktuellen Ratings, keine im Spiel
+per Pack/SBC geboosteten Sonderkarten (die werden zur Laufzeit im Browser gebaut und existieren
+nirgends als Datei, auf die der Bot zugreifen könnte). Nach jeder Regenerierung der Haupt-Datei
+neu reinkopieren:
+```
+cp ../players_data.js players_data.js
+echo "" >> players_data.js
+echo "module.exports = PLAYERS_REAL_DB;" >> players_data.js
+```
 
 ## Kosten
 

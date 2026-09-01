@@ -36,6 +36,40 @@ const commands = [
       {name: 'buchstabe', description: 'Liga-Buchstabe, z.B. A', type: 3, required: false},
     ],
   },
+  {
+    name: 'vergleich',
+    description: 'Vergleicht zwei Vereine direkt nebeneinander.',
+    options: [
+      {name: 'verein1', description: 'Erster Verein', type: 3, required: true},
+      {name: 'verein2', description: 'Zweiter Verein', type: 3, required: true},
+    ],
+  },
+  {
+    name: 'leaderboard',
+    description: 'Bestenliste über alle Vereine.',
+    options: [
+      {name: 'kategorie', description: 'Wonach sortiert wird', type: 3, required: false,
+        choices: [{name: 'Coins', value: 'coins'}, {name: 'Siege', value: 'siege'}]},
+    ],
+  },
+  {
+    name: 'liga-preise',
+    description: 'Zeigt die Belohnungstabelle für eine Liga.',
+    options: [
+      {name: 'buchstabe', description: 'Liga-Buchstabe, z.B. A', type: 3, required: false},
+    ],
+  },
+  {
+    name: 'naechster-rollover',
+    description: 'Countdown bis zum nächsten Liga-Rollover (Samstag 12:00 Uhr Berlin).',
+  },
+  {
+    name: 'karte',
+    description: 'Zeigt die reale Basis-Karte eines Spielers (keine Pack-Sondervarianten).',
+    options: [
+      {name: 'name', description: 'Spielername', type: 3, required: true},
+    ],
+  },
 ];
 
 async function main() {

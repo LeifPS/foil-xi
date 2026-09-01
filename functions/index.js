@@ -209,14 +209,149 @@ async function handleLiga(interaction) {
   });
 }
 
-const COMMAND_HANDLERS = {verify: handleVerify, stats: handleStats, liga: handleLiga};
+// ===== /vergleich verein1:X verein2:Y =====
+async function handleVergleich(interaction) {
+  const id1 = optionValue(interaction, 'verein1');
+  const id2 = optionValue(interaction, 'verein2');
+  if (!id1 || !id2) return reply('Bitte beide Vereine angeben: `/vergleich verein1:X verein2:Y`.', {ephemeral: true});
+
+  const [doc1, doc2] = await Promise.all([db.collection('saves').doc(id1).get(), db.collection('saves').doc(id2).get()]);
+  if (!doc1.exists) return reply(`Kein Verein "${id1}" gefunden.`, {ephemeral: true});
+  if (!doc2.exists) return reply(`Kein Verein "${id2}" gefunden.`, {ephemeral: true});
+  const p1 = doc1.data().profile || {}, p2 = doc2.data().profile || {};
+  const c1 = (doc1.data().collection || []).length, c2 = (doc2.data().collection || []).length;
+
+  // compares the RAW numbers (so e.g. 1000 vs 999 sorts correctly) but displays each value already
+  // formatted for its own locale/unit - keeping the two separate avoids the classic bug of comparing
+  // already-formatted strings ("1.000" vs "999") lexicographically instead of numerically.
+  const row = (label, n1, n2, fmt = String) => ({
+    name: label,
+    value: `${fmt(n1)}${n1 > n2 ? ' 🟢' : ''} — ${fmt(n2)}${n2 > n1 ? ' 🟢' : ''}`,
+    inline: false,
+  });
+  const coins = n => n.toLocaleString('de-DE');
+  return reply(null, {
+    embeds: [{
+      title: `${p1.displayName || id1} vs. ${p2.displayName || id2}`,
+      color: 0x3ddc84,
+      fields: [
+        row('Coins', p1.coins || 0, p2.coins || 0, coins),
+        row('Siege', p1.wins || 0, p2.wins || 0),
+        row('Niederlagen', p1.losses || 0, p2.losses || 0),
+        row('Karten', c1, c2),
+      ],
+    }],
+  });
+}
+
+// ===== /leaderboard kategorie:coins|siege =====
+const LEADERBOARD_FIELDS = {coins: {path: 'profile.coins', label: 'Coins'}, siege: {path: 'profile.wins', label: 'Siege'}};
+async function handleLeaderboard(interaction) {
+  const kategorie = optionValue(interaction, 'kategorie') || 'coins';
+  const field = LEADERBOARD_FIELDS[kategorie];
+  if (!field) return reply('Unbekannte Kategorie. Erlaubt: `coins`, `siege`.', {ephemeral: true});
+
+  const snap = await db.collection('saves').orderBy(field.path, 'desc').limit(10).get();
+  if (snap.empty) return reply('Keine Daten gefunden.', {ephemeral: true});
+  const lines = snap.docs.map((d, i) => {
+    const p = d.data().profile || {};
+    const value = kategorie === 'coins' ? (p.coins || 0).toLocaleString('de-DE') : String(p.wins || 0);
+    return `**${i + 1}.** ${p.displayName || d.id} — ${value}`;
+  }).join('\n');
+
+  return reply(null, {embeds: [{title: `Bestenliste — ${field.label}`, description: lines, color: 0xffd76a}]});
+}
+
+// ===== /liga-preise buchstabe:A =====
+// Small, rarely-changing static table copied straight from the game's LIGA_REWARD_TABLE - not worth
+// a Firestore round-trip for data that's effectively a constant.
+const LIGA_REWARD_TABLE = {
+  A: {1: {coins: 75000, packs: '1x Liga-Pack + 2x 27 Ratings Pack'}, 2: {coins: 25000, packs: '2x 27 Ratings Pack'}, 3: {coins: 10000, packs: '1x 27 Ratings Pack'}, rest: {coins: 10000, packs: '—'}},
+  B: {1: {coins: 45000, packs: '2x 27 Ratings Pack'}, 2: {coins: 15000, packs: '1x 27 Ratings Pack'}, 3: {coins: 5000, packs: '—'}, rest: {coins: 5000, packs: '—'}},
+  C: {1: {coins: 15000, packs: '—'}, 2: {coins: 5000, packs: '—'}, 3: {coins: 2000, packs: '—'}, rest: {coins: 2000, packs: '—'}},
+  D: {1: {coins: 10000, packs: '—'}, 2: {coins: 4000, packs: '—'}, 3: {coins: 1000, packs: '—'}, rest: {coins: 1000, packs: '—'}},
+};
+async function handleLigaPreise(interaction) {
+  const letter = (optionValue(interaction, 'buchstabe') || 'A').toUpperCase();
+  const bracket = LIGA_REWARD_TABLE[letter] || LIGA_REWARD_TABLE.D; // D's numbers apply to every league from D downward
+  const rows = [
+    ['🥇 1. Platz', bracket[1]], ['🥈 2. Platz', bracket[2]], ['🥉 3. Platz', bracket[3]], ['4. Platz+', bracket.rest],
+  ].map(([label, r]) => ({name: label, value: `${r.coins.toLocaleString('de-DE')} Coins${r.packs !== '—' ? `, ${r.packs}` : ''}`, inline: false}));
+
+  return reply(null, {embeds: [{title: `Liga ${letter} — Belohnungen`, fields: rows, color: 0xffd76a}]});
+}
+
+// ===== /naechster-rollover =====
+// Both rollover generations (V1 and the current V2) finalize on Samstag, Europe/Berlin - V2 additionally
+// starts its multi-phase promotion playoffs at 12:00 that day (see resolveWeeklyRolloverV2IfNeeded).
+function berlinNow() {
+  const parts = new Intl.DateTimeFormat('en-US', {timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false}).formatToParts(new Date());
+  const get = t => Number(parts.find(p => p.type === t).value);
+  const hour = get('hour');
+  return new Date(get('year'), get('month') - 1, get('day'), hour === 24 ? 0 : hour, get('minute'), get('second'));
+}
+async function handleNaechsterRollover() {
+  const now = berlinNow();
+  const daysUntilSaturday = (6 - now.getDay() + 7) % 7;
+  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSaturday, 12, 0, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 7); // already past 12:00 this Samstag - next week's
+  const diffMs = target.getTime() - now.getTime();
+  const days = Math.floor(diffMs / 86400000), hours = Math.floor((diffMs % 86400000) / 3600000), mins = Math.floor((diffMs % 3600000) / 60000);
+  return reply(`⏳ Nächster Liga-Rollover beginnt in **${days}T ${hours}h ${mins}min** (Samstag, 12:00 Uhr Berlin).`);
+}
+
+// ===== /karte name:X =====
+// Only the REAL current-rating base card (players_data.js, a copy of the game's own real-player
+// database - see functions/players_data.js's header comment for how to refresh it). Boosted/special
+// pack- and SBC-variant cards are built entirely client-side at runtime in the game and aren't stored
+// anywhere the bot could read them from, so this deliberately doesn't try to reproduce those.
+function normalizeName(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+async function handleKarte(interaction) {
+  const query = (optionValue(interaction, 'name') || '').trim();
+  if (!query) return reply('Bitte einen Spielernamen angeben: `/karte name:...`.', {ephemeral: true});
+  const players = require('./players_data.js');
+  const q = normalizeName(query);
+  const matches = players.filter(p => normalizeName(p.n).includes(q));
+  if (!matches.length) return reply(`Kein Spieler gefunden für "${query}".`, {ephemeral: true});
+  const p = matches.sort((a, b) => b.ov - a.ov)[0];
+
+  return reply(null, {
+    embeds: [{
+      title: `${p.n} (${p.ov} OVR)`,
+      description: `${p.club} · ${p.nat} · ${p.pos}`,
+      color: 0x3ddc84,
+      thumbnail: p.img ? {url: p.img} : undefined,
+      fields: [
+        {name: 'PAC', value: String(p.pac), inline: true},
+        {name: 'SHO', value: String(p.sho), inline: true},
+        {name: 'PAS', value: String(p.pas), inline: true},
+        {name: 'DRI', value: String(p.dri), inline: true},
+        {name: 'DEF', value: String(p.defn), inline: true},
+        {name: 'PHY', value: String(p.phy), inline: true},
+      ],
+      footer: {text: matches.length > 1 ? `${matches.length} Treffer, bester gezeigt - reale Basis-Karte, keine Pack-Sondervariante.` : 'Reale Basis-Karte, keine Pack-Sondervariante.'},
+    }],
+  });
+}
+
+const COMMAND_HANDLERS = {
+  verify: handleVerify, stats: handleStats, liga: handleLiga,
+  vergleich: handleVergleich, leaderboard: handleLeaderboard, 'liga-preise': handleLigaPreise,
+  'naechster-rollover': handleNaechsterRollover, karte: handleKarte,
+};
 // /verify alone can take up to ~7 sequential Firestore/Discord-API round-trips (find+clear the code,
 // link the account, assign Verified, look up the league, read+patch the member's roles) - combined
 // with a cold Cloud Functions start, that regularly blows past Discord's 3-second window for the
 // INITIAL response, which then shows the user a permanent "The application did not respond" even
 // though the command silently succeeds a moment later in the background. /stats and /liga are single
-// Firestore reads and comfortably fit in 3s even cold, so only /verify needs to defer.
-const DEFERRED_COMMANDS = new Set(['verify']);
+// Firestore reads and comfortably fit in 3s even cold. /karte parses the 13 MB players_data.js on its
+// first require() per container instance - measured over 1s just for that on a warm process locally,
+// so a genuinely cold Cloud Run start stacked on top could plausibly cross 3s too.
+// Discord fixes a deferred interaction's visibility (ephemeral or not) at the moment of the initial
+// ACK - the later followup can't override it, so this has to match each command's normal reply style
+// up front: /verify is always ephemeral (it's account-linking chatter, not for the channel), /karte's
+// success case is meant to be public like /stats and /liga.
+const DEFERRED_EPHEMERAL = {verify: true, karte: false};
 
 async function sendFollowup(interaction, data) {
   const url = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
@@ -241,10 +376,10 @@ exports.discordInteractions = onRequest(
       const handler = COMMAND_HANDLERS[name];
       if (!handler) { res.json(reply('Unbekannter Command.', {ephemeral: true})); return; }
 
-      if (DEFERRED_COMMANDS.has(name)) {
+      if (name in DEFERRED_EPHEMERAL) {
         // ACK immediately - Discord now waits up to 15 minutes for the real answer via a followup
         // message instead of the 3-second window on the initial response.
-        res.json({type: CallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE, data: {flags: 64}});
+        res.json({type: CallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE, data: {flags: DEFERRED_EPHEMERAL[name] ? 64 : 0}});
         try {
           const result = await handler(interaction);
           await sendFollowup(interaction, result.data);
