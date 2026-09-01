@@ -10278,14 +10278,25 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
   const nameCounts = {};
   pool.forEach(x=>{ nameCounts[x.card.n] = (nameCounts[x.card.n]||0)+1; });
   const target = sbc.reqs.length;
+  // Every score function here (avgOv, floor-OV, count-thresholds, "N+ Sonderkarten", ...) only ever
+  // rewards swapping in a HIGHER-value card, so a card outside the top-value slice of the pool can
+  // never be part of an improving swap - climbing against the full pool bought nothing but cost O(pool
+  // size) per swap-round, and for groupKey SBCs (one full climb PER DISTINCT nation/club/league value
+  // in the player's ENTIRE collection - see below) that multiplied out badly: a large, long-played
+  // collection with e.g. 60 different nations represented turned "open Herausforderungen" into a
+  // multi-second stall. Bounding the climb's candidate pool to a fixed top-OV slice makes every climb
+  // O(1) regardless of collection size while never missing a real solution (group membership itself is
+  // still checked against the full, uncapped pool below - only the swap-search candidates are capped).
+  const SBC_SOLVE_SEARCH_CAP = 200;
+  const searchPool = pool.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, SBC_SOLVE_SEARCH_CAP);
   // always seed the search with the highest-OV crew, regardless of mode - starting 'cheapest'/'duplicates'
   // from the worst-scoring initial pick (the actual cheapest/most-duplicated cards, often far from
   // meeting an avgOv requirement) made the random hill-climb below unreliable for strict SBCs, since it
   // isn't guaranteed to find a feasible combo within its iteration budget. 'highest' reliably finds a
   // feasible combo when one exists; the refinement pass further down then optimizes toward cheaper/more-
   // duplicated cards from that guaranteed-feasible baseline instead.
-  const topOvSeed = pool.slice().sort((a,b)=>b.card.ov-a.card.ov).slice(0, size);
-  let {current, outside, currentScore} = climbSbcFrom(sbc, pool, size, topOvSeed, target);
+  const topOvSeed = searchPool.slice(0, size);
+  let {current, outside, currentScore} = climbSbcFrom(sbc, searchPool, size, topOvSeed, target);
   // an "ALL cards must share property X" requirement (same nation/league) can never be discovered by
   // the single-swap hill-climb above unless the top-OV seed already happens to contain enough matching
   // cards - swapping in matching cards one at a time never improves the score until the very last swap
@@ -10308,7 +10319,11 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
         if(!groups.has(key)) groups.set(key, []);
         groups.get(key).push(x);
       });
-      groups.forEach(members=>extraSeeds.push(members));
+      // a large collection can span dozens of distinct nations/clubs/leagues, each of which would
+      // otherwise trigger its own full climb below - a group with only a couple of members can never
+      // satisfy an 11-card "all must match" SBC anyway, so only the biggest groups are worth trying.
+      const rankedGroups = Array.from(groups.values()).sort((a,b)=>b.length-a.length).slice(0, 20);
+      rankedGroups.forEach(members=>extraSeeds.push(members));
     }
     if(sbc.seedFilter) extraSeeds.push(pool.filter(x=>sbc.seedFilter(x.card)));
     for(const members of extraSeeds){
@@ -10327,18 +10342,24 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
       const memberUids = new Set(takeMembers.map(x=>x.uid));
       const fillCount = size-takeMembers.length;
       const filler = fillCount>0
-        ? pool.filter(x=>!memberUids.has(x.uid)).sort((a,b)=>b.card.ov-a.card.ov).slice(0, fillCount)
+        ? searchPool.filter(x=>!memberUids.has(x.uid)).slice(0, fillCount)
         : [];
       const groupSeed = takeMembers.concat(filler);
       if(groupSeed.length!==size) continue;
-      const attempt = climbSbcFrom(sbc, pool, size, groupSeed, target);
+      const attempt = climbSbcFrom(sbc, searchPool, size, groupSeed, target);
       if(attempt.currentScore>currentScore) ({current, outside, currentScore} = attempt);
     }
   }
   if(currentScore<target) return null;
   // refinement pass: once ANY valid combo is found, try to swap each card for a cheaper/more-duplicate
-  // alternative from outside that still keeps every requirement satisfied - repeat until no more gains
+  // alternative from outside that still keeps every requirement satisfied - repeat until no more gains.
+  // Unlike the feasibility climb above, "cheapest"/"duplicates" specifically wants the LOWEST-value
+  // cards, which are exactly what the top-OV searchPool cap excludes - so this pass re-widens back to
+  // the full original pool. It's only ever reached via one user-triggered Auto-Fill click, not on every
+  // Herausforderungen render, so the full pool size here is not the perf concern the climb above was.
   if(mode!=='highest'){
+    const inCurrentFull = new Set(current.map(x=>x.uid));
+    outside = pool.filter(x=>!inCurrentFull.has(x.uid));
     const valueOf = x => mode==='cheapest' ? rap(x) : -nameCounts[x.card.n];
     let improved = true;
     let guard = 0;
