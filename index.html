@@ -284,6 +284,7 @@ body.gfx-no-fxlayers .pcard .gem-facets,
 body.gfx-no-fxlayers .pcard .refresh-fx,
 body.gfx-no-fxlayers .pcard .legikone-fx,
 body.gfx-no-fxlayers .pcard .wm26k-fx,
+body.gfx-no-fxlayers .pcard .breakout-fx,
 body.gfx-no-fxlayers .pcard .iconpromo-fx{ display:none !important; }
 body.gfx-no-confetti .wm26-trophy-cutscene *{ animation:none !important; }
 body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
@@ -332,6 +333,27 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .wm26k-spark.k8{left:82%;animation-duration:3s;animation-delay:.4s;width:3px;height:3px;}
 .pcard .wm26k-spark.k9{left:92%;animation-duration:3.5s;animation-delay:2.1s;}
 .pcard .wm26k-spark.k10{left:46%;animation-duration:4s;animation-delay:1.1s;width:3px;height:3px;}
+/* Breakout (see .pcard.theme-breakout above): rising shards that also SPIN as they rise, instead of
+   WM-Kapitän's plain round sparks - "breaking apart/through" rather than a trophy's calm glow, and
+   alternating cyan/magenta (the theme's own duotone) instead of one single spark color. */
+.pcard .breakout-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .breakout-halo{position:absolute;top:29%;left:50%;width:145%;height:145%;margin:-72.5% 0 0 -72.5%;
+  background:radial-gradient(circle, rgba(214,250,255,.4) 0%, rgba(57,230,255,.16) 42%, transparent 70%);
+  animation:breakoutHaloPulse 2s ease-in-out infinite;}
+@keyframes breakoutHaloPulse{0%,100%{opacity:.55;transform:scale(1);}50%{opacity:1;transform:scale(1.12);}}
+.pcard .breakout-shard{position:absolute;bottom:-8%;width:3px;height:9px;border-radius:1px;
+  opacity:0;animation:breakoutShardRise linear infinite;}
+@keyframes breakoutShardRise{0%{bottom:-8%;opacity:0;transform:translateX(0) rotate(0deg);}12%{opacity:1;}90%{opacity:.8;}100%{bottom:108%;opacity:0;transform:translateX(8px) rotate(340deg);}}
+.pcard .breakout-shard.b1{left:6%;animation-duration:2.6s;animation-delay:0s;background:#39e6ff;box-shadow:0 0 6px 1px rgba(57,230,255,.8);}
+.pcard .breakout-shard.b2{left:16%;animation-duration:2.1s;animation-delay:.5s;background:#ff3df0;box-shadow:0 0 6px 1px rgba(255,61,240,.8);width:2px;height:7px;}
+.pcard .breakout-shard.b3{left:26%;animation-duration:3s;animation-delay:1s;background:#39e6ff;box-shadow:0 0 6px 1px rgba(57,230,255,.8);}
+.pcard .breakout-shard.b4{left:38%;animation-duration:2.3s;animation-delay:.2s;background:#ff3df0;box-shadow:0 0 6px 1px rgba(255,61,240,.8);width:2px;height:7px;}
+.pcard .breakout-shard.b5{left:50%;animation-duration:2.7s;animation-delay:1.4s;background:#39e6ff;box-shadow:0 0 6px 1px rgba(57,230,255,.8);}
+.pcard .breakout-shard.b6{left:62%;animation-duration:2.2s;animation-delay:.7s;background:#ff3df0;box-shadow:0 0 6px 1px rgba(255,61,240,.8);width:2px;height:7px;}
+.pcard .breakout-shard.b7{left:74%;animation-duration:2.8s;animation-delay:1.1s;background:#39e6ff;box-shadow:0 0 6px 1px rgba(57,230,255,.8);}
+.pcard .breakout-shard.b8{left:84%;animation-duration:2.4s;animation-delay:.3s;background:#ff3df0;box-shadow:0 0 6px 1px rgba(255,61,240,.8);width:2px;height:7px;}
+.pcard .breakout-shard.b9{left:92%;animation-duration:3.1s;animation-delay:1.7s;background:#39e6ff;box-shadow:0 0 6px 1px rgba(57,230,255,.8);}
+.pcard .breakout-shard.b10{left:46%;animation-duration:2.5s;animation-delay:.9s;background:#ff3df0;box-shadow:0 0 6px 1px rgba(255,61,240,.8);width:2px;height:7px;}
 /* WM 2026 Pokal-Cutscene (shown once on actually winning the Finale, before the reward pack opens):
    a big trophy emoji with a pulsing gold halo behind it, plus falling gold/white confetti - reuses the
    same "own modal, not a generic toast" idea as everything else here that deserves to actually FEEL
@@ -403,6 +425,20 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 @keyframes rubGlow{
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ff3d5c;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 44px 1px #ffc2cc;}
+}
+/* Breakout (World Cup Pack-style rare pull, see breakoutSpecials): a fresh electric cyan/magenta duotone
+   instead of any existing gold/crimson/violet palette - these are rising young talents "breaking
+   through", not a legend/trophy tier, so it deliberately reads as more electric/energetic than stately. */
+.pcard.theme-breakout{--acc:#39e6ff;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#0a0f1a 0%,#0d0518 45%,#12081a 100%) padding-box,
+    linear-gradient(160deg,#0d3b46,#39e6ff,#ff3df0,#39e6ff,#0d3b46) border-box !important;
+  animation: breakoutGlow 2.2s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-breakout::before{animation:autoShine 1.2s ease-in-out infinite;}
+.pcard.theme-breakout .name{color:#d6faff;text-shadow:0 0 8px rgba(57,230,255,.65);}
+@keyframes breakoutGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #39e6ff;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 44px 1px #ff3df0;}
 }
 /* GOAT (ov>99, hand-picked real-world superstars - the single rarest pull in the whole game, only via
    the GOAT-Quest): previously just inherited the generic .r-ultimate look (same violet card any other
@@ -9642,8 +9678,63 @@ RATINGS27_RELOAD_CARDS.forEach(c=>BY_ID.set(c.id,c));
 const RATINGS27_RELOAD_HIGH = RATINGS27_RELOAD_CARDS.filter(c=>c.ov>=105);
 const RATINGS27_RELOAD_LOW = RATINGS27_RELOAD_CARDS.filter(c=>c.ov<105);
 
+// ===== Breakout Pack: today's most exciting young talents at their real current rating, plus a rare
+// (5% per pack) chance at one of six of them boosted into a genuine superstar - see breakoutSpecials().
+// Two of the roster (Lennart Karl, Jacobo Ramón) sit below the real-database's OVR>=65 floor (see
+// players_data.js's own header comment) and so were never auto-generated into it at all - hand-authored
+// here from their real FC26 stats instead, same approach PLAYERS_LIGAPACK_BASE already uses elsewhere
+// for cards no existing pool covers. No real photo available for either (Karl doesn't even have one in
+// the actual game yet), so `img` is left unset - cardEl already falls back to a placeholder face for that.
+const PLAYERS_BREAKOUT_MANUAL = [
+  {id:9803001,n:'Lennart Karl',pos:'CAM, RM, CM',ov:63,pot:88,nat:'Germany',lg:'Bundesliga',club:'FC Bayern München',pac:69,sho:58,pas:60,dri:69,defn:34,phy:37,foot:'Left',gk:false,variant:'base'},
+  {id:9803002,n:'Jacobo Ramón',pos:'CB',ov:64,pot:84,nat:'Spain',lg:'Serie A',club:'Como',pac:57,sho:22,pas:45,dri:48,defn:65,phy:62,foot:'Right',gk:false,variant:'base'},
+];
+PLAYERS_BREAKOUT_MANUAL.forEach(c=>BY_ID.set(c.id,c));
+// Real-database ids for the rest of the roster (findBaseCard resolves both pools uniformly below).
+const BREAKOUT_ROSTER_IDS = [
+  277643,272834,271421,278046,270673,264309,277954,278349,78012,76687,72997,279044,271266,71532,275192,
+  262863,251570,272505,279015,71351,80376,72159,266895,277846,256420,277909,278813,258378,257919,276901,
+  276694,273459,268737,272926,275324,275328,272781,268438,268421,270086,263370,274445,263765,
+];
+function breakoutRoster(){
+  return BREAKOUT_ROSTER_IDS.map(id=>findBaseCard(id)).filter(Boolean).concat(PLAYERS_BREAKOUT_MANUAL);
+}
+// The six flagship names get their own boosted "Breakout"-variant card - a genuine superstar leap
+// (+13 to +21 OVR) rather than the modest bumps other rarity tiers use, since these six are explicitly
+// the headline pulls advertised for this pack (see the 'breakout' PACKS entry's desc).
+const BREAKOUT_SPECIAL_TARGETS = [
+  {baseId:277643, ov:108}, // Lamine Yamal
+  {baseId:272834, ov:106}, // João Neves
+  {baseId:271421, ov:104}, // Désiré Doué
+  {baseId:278046, ov:102}, // Pau Cubarsí
+  {baseId:270673, ov:102}, // Warren Zaïre-Emery
+  {baseId:264309, ov:102}, // Arda Güler
+];
+let BREAKOUT_SPECIALS_CACHE = null;
+function breakoutSpecials(){
+  if(BREAKOUT_SPECIALS_CACHE) return BREAKOUT_SPECIALS_CACHE;
+  BREAKOUT_SPECIALS_CACHE = BREAKOUT_SPECIAL_TARGETS.map((r,i)=>{
+    const base = findBaseCard(r.baseId);
+    if(!base) return null;
+    const card = boostBaseToOv(base, r.ov, 9803100+i, 'breakout', 'Breakout', 'breakout');
+    BY_ID.set(card.id, card);
+    return card;
+  }).filter(Boolean);
+  return BREAKOUT_SPECIALS_CACHE;
+}
+
 // ===== pack definitions =====
 const PACKS = [
+  {id:'breakout',name:'Breakout',cost:30000,tier:'ultimate',count:5,
+    desc:'5 Karten aus den aufregendsten jungen Talenten des Weltfußballs (Yamal, Neves, Doué, Estêvão, Endrick, Nusa, Garnacho und viele mehr) zu ihrem echten aktuellen Rating - mit einer 5%-Chance pro Pack auf eine geboostete Breakout-Sonderkarte: Lamine Yamal (108), João Neves (106), Désiré Doué (104), Pau Cubarsí (102), Warren Zaïre-Emery (102) oder Arda Güler (102).',
+    draw(){
+      const roster = breakoutRoster(), specials = breakoutSpecials();
+      // exactly 5% chance PER PACK of containing a Breakout special at all, same "roll once, not per
+      // slot" convention as the World Cup Pack's Kapitän slot above - independent per-slot rolls would
+      // compound to a much higher effective chance across 5 cards.
+      const specialSlot = Math.random()<0.05 ? Math.floor(Math.random()*5) : -1;
+      return Array.from({length:5}, (_,i)=> i===specialSlot ? pick(specials) : pick(roster));
+    }},
   {id:'bronze',name:'Bronze Boots',cost:900,tier:'',count:5,
     desc:'5 Kaderspieler, Rating 70-76.',
     draw(){ const pool=poolByRange(70,76,false); return Array.from({length:5},()=>pick(pool)); }},
@@ -14039,6 +14130,8 @@ async function init(){
   // else (only runs when the player's own saved collection actually contains one of these ids) while
   // guaranteeing an owned World Cup Pack card always resolves, every session, from now on.
   if(collection.some(c=>c.cardId>=50000000)){ wm26VarianteSpecials(); wm26KapitaenSpecials(); }
+  // Same lazy-build problem as WM26 above, for the Breakout Pack's 6 boosted specials (ids 9803100-9803105).
+  if(collection.some(c=>c.cardId>=9803100 && c.cardId<9803106)) breakoutSpecials();
   managerCollection = await sGet('managerCollection');
   if(!managerCollection) managerCollection = [];
   packCollection = await sGet('packCollection');
@@ -14318,6 +14411,7 @@ const VARIANT_ICON = {
   ogicon:'<path d="M12 3l2.2 4.6 5 .5-3.7 3.4.9 5-4.4-2.5-4.4 2.5.9-5-3.7-3.4 5-.5z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M12 6.5l1.3 2.7 3 .3-2.2 2 .5 3-2.6-1.5-2.6 1.5.5-3-2.2-2 3-.3z" fill="currentColor"/>',
   og_mgr:'<path d="M12 3l2.2 4.6 5 .5-3.7 3.4.9 5-4.4-2.5-4.4 2.5.9-5-3.7-3.4 5-.5z" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M12 6.5l1.3 2.7 3 .3-2.2 2 .5 3-2.6-1.5-2.6 1.5.5-3-2.2-2 3-.3z" fill="currentColor"/>',
   poet:'<path d="M20 4c-6 0-13 4-15 12l-1 4 4-1C16 17 20 10 20 4z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 15l6-6" stroke="currentColor" stroke-width="1.4"/>',
+  breakout:'<path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="currentColor"/>',
 };
 const PATTERN_FAMILY = {
   fs:'attack', gb:'attack', phenom:'attack', sd:'attack', gal:'attack',
@@ -14346,6 +14440,7 @@ const PATTERN_FAMILY = {
   ratings27reload:'ratings27reloadpattern',
   wm26k:'wm26kpattern',
   iconpromo:'iconpromopattern',
+  breakout:'speed',
 };
 function proxyImg(url){
   return 'https://wsrv.nl/?url=' + encodeURIComponent(url) + '&w=420&h=396&fit=cover&a=attention&err=404';
@@ -14411,6 +14506,14 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const wm26kFxHTML = isWm26KapitaenTier ? `<div class="wm26k-fx">
       <div class="wm26k-halo"></div>
       ${Array.from({length:10},(_,i)=>`<i class="wm26k-spark k${i+1}"></i>`).join('')}
+    </div>` : '';
+  // Breakout (Breakout Pack, rare pull): pulsing cyan halo + rising, spinning cyan/magenta shards - see
+  // the CSS comment next to .pcard.theme-breakout for why this gets its own fresh duotone instead of
+  // recoloring an existing gold/crimson tier.
+  const isBreakoutTier = card.theme==='breakout';
+  const breakoutFxHTML = isBreakoutTier ? `<div class="breakout-fx">
+      <div class="breakout-halo"></div>
+      ${Array.from({length:10},(_,i)=>`<i class="breakout-shard b${i+1}"></i>`).join('')}
     </div>` : '';
   // GOAT (rarest pull in the game): a slowly-rotating golden/crimson sunburst behind the photo plus a
   // handful of thin molten-gold cracks that individually flicker across the face - own mechanism, not
@@ -14579,6 +14682,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${refreshFxHTML}
     ${legikoneFxHTML}
     ${wm26kFxHTML}
+    ${breakoutFxHTML}
     ${goatFxHTML}
     ${ogiconFxHTML}
     ${iconpromoFxHTML}
@@ -17042,11 +17146,12 @@ function adminFullCardPool(){
   // here so "every card" (Karten-Index included) is actually every card, not just whatever happened to
   // already be touched:
   //  - wm26VarianteSpecials/wm26KapitaenSpecials: the World Cup Pack's WM-Variante/WM-Kapitän cards.
+  //  - breakoutSpecials: the Breakout Pack's 6 boosted flagship cards (5% rare slot).
   //  - siegeTrophyCard/ligaMeisterTrophyCard/wepTrophyCard: the 3 Erfolge-tab trophy reward cards.
   //  - ligaChampionCardForIndex: the weekly-rotating "Liga-Meister"-Ligen-Belohnungskarte - only the
   //    CURRENT week's entry ever gets built by normal play (currentLigaChampionCard), so every other
   //    week's card in LIGA_CHAMPION_ROSTER needs its own explicit force-build call here.
-  wm26VarianteSpecials(); wm26KapitaenSpecials();
+  wm26VarianteSpecials(); wm26KapitaenSpecials(); breakoutSpecials();
   siegeTrophyCard(); ligaMeisterTrophyCard(); wepTrophyCard();
   LIGA_CHAMPION_ROSTER.forEach((_,i)=>ligaChampionCardForIndex(i));
   // Kontrahent-Karten (getKontrahentRoster, id 20000000+base.id*10+ti, ~20-24 Mio.) und "weakened"
@@ -27531,7 +27636,7 @@ function resolveSquadDataPlayers(squadData){
   // in someone else's published squad, silently rendering it as an empty position - force-build both
   // pools here (cheap no-op once already built) so every published squad resolves fully regardless of
   // what the viewing session happens to have touched already.
-  wm26VarianteSpecials(); wm26KapitaenSpecials();
+  wm26VarianteSpecials(); wm26KapitaenSpecials(); breakoutSpecials();
   return (squadData.players||[]).map(p=>{
     const base = p && p.cardId!=null ? BY_ID.get(p.cardId) : null;
     if(!base) return null;
