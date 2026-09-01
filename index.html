@@ -18374,6 +18374,14 @@ function renderClub(view){
       </div>
       <div class="settings-row">
         <div>
+          <div class="settings-label">Discord verknüpfen</div>
+          <div class="hint" style="margin-top:2px;">Erzeugt einen 15 Minuten gültigen Code für <code>/verify</code> im FOIL ELEVEN Discord-Server.</div>
+          <div class="mono hint" id="discord-verify-code-display" style="margin-top:6px;font-size:13px;color:var(--chalk);"></div>
+        </div>
+        <button class="action-btn secondary" id="discord-verify-generate" style="width:auto;">Code erzeugen</button>
+      </div>
+      <div class="settings-row">
+        <div>
           <div class="settings-label">Effektiv-Rating mit Kommazahlen</div>
           <div class="hint" style="margin-top:2px;">Die Rating-Vorschau in Klammern (z.B. "(81)") zeigt eine genaue Kommazahl statt der gerundeten Zahl.</div>
         </div>
@@ -18498,6 +18506,23 @@ function renderClub(view){
       await sSet('profile', profile);
       applyGraphicsPreset();
     });
+  });
+  const discordCodeDisplay = document.getElementById('discord-verify-code-display');
+  const renderDiscordCode = ()=>{
+    const active = profile.discordVerifyCode && profile.discordVerifyCodeExpiresAt > Date.now();
+    discordCodeDisplay.textContent = active
+      ? `Code: ${profile.discordVerifyCode} (gültig bis ${new Date(profile.discordVerifyCodeExpiresAt).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})})`
+      : '';
+  };
+  renderDiscordCode();
+  document.getElementById('discord-verify-generate').addEventListener('click', async ()=>{
+    // 6-digit numeric code, deliberately short-lived (15 min) - it's a plaintext Firestore field
+    // anyone could brute-force-guess given enough time, so the window it's usable in has to stay small.
+    profile.discordVerifyCode = String(Math.floor(100000+Math.random()*900000));
+    profile.discordVerifyCodeExpiresAt = Date.now()+15*60*1000;
+    await sSet('profile', profile);
+    renderDiscordCode();
+    toast('Code erzeugt - jetzt in Discord: /verify code:'+profile.discordVerifyCode);
   });
   const decimalEffOvSelect = document.getElementById('decimal-effov-select');
   decimalEffOvSelect.value = profile.showDecimalEffOv ? 'on' : 'off';
