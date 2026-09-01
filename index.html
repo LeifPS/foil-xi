@@ -1977,6 +1977,7 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .sbc-card.tier-wmquest{border-left-color:#ffcc00;background:radial-gradient(circle at 0% 0%, rgba(170,21,27,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #aa151b;}
 .sbc-card.tier-promoquest{border-left-color:#7ad9ff;background:radial-gradient(circle at 0% 0%, rgba(122,217,255,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #7ad9ff;}
 .sbc-card.tier-marceloquest{border-left-color:#ffdf00;background:radial-gradient(circle at 0% 0%, rgba(0,156,59,.14), var(--panel) 65%);box-shadow:0 0 18px -9px #009c3b;}
+.sbc-card.tier-viniciusquest{border-left-color:#00c8ff;background:radial-gradient(circle at 0% 0%, rgba(255,255,255,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #00c8ff;}
 .sbc-card-head{display:flex;justify-content:space-between;align-items:center;}
 .sbc-tier-pill, .sbc-size-pill{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-family:'JetBrains Mono';}
 .sbc-card .sbc-name{font-family:'Anton';font-size:16px;letter-spacing:.01em;margin:0;font-weight:400;}
@@ -10517,11 +10518,17 @@ const MARCELO_QUEST_BASE = {id:9791213, n:'Marcelo', pos:'LB, CAM, CM, LM, LW', 
 const MARCELO_QUEST_CARD = boostBaseToOv(MARCELO_QUEST_BASE, 103, 9791013, 'marcelolegacy', 'Icon', 'promocard');
 MARCELO_QUEST_CARD.img = 'https://cdn3.futbin.com/content/fifa26/img/players/p134394404.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=e94a438193d4a5941067224cd217fa5b';
 BY_ID.set(MARCELO_QUEST_CARD.id, MARCELO_QUEST_CARD);
-// every PROMO/WM/Marcelo quest reward card (Mbappé, Olise, Alisson, Yamal, Rüdiger, Haaland, Chong,
-// Pina, Kane, Sylla, Kroos, Neymar, Marcelo) is untradable - these only ever exist as the one quest's
-// reward, never obtainable any other way, so letting them be traded/sold away (and RAP-priced as if
-// they were) would undercut the whole point.
-[WM_QUEST_MBAPPE_CARD, OLISE_QUEST_CARD, ALISSON_QUEST_CARD, YAMAL_QUEST_CARD, RUDIGER_QUEST_CARD, HAALAND_QUEST_CARD, CHONG_QUEST_CARD, PINA_QUEST_CARD, KANE_QUEST_CARD, SYLLA_QUEST_CARD, KROOS_QUEST_CARD, NEYMAR_QUEST_CARD, MARCELO_QUEST_CARD].forEach(c=>{ if(c) c.untradable = true; });
+// Vinícius Júnior-Sonderaufgaben limited event (see VINICIUS_QUEST_DEADLINE): unlike Marcelo/Kroos/
+// Neymar, Vinícius is an active player already in the real DB, so sourced via findBaseCard like Kane/
+// Haaland/Rüdiger, then boosted to 103 OV (same cap the user set for this event) for the quest reward.
+const VINICIUS_QUEST_BASE = findBaseCard(238794);
+const VINICIUS_QUEST_CARD = VINICIUS_QUEST_BASE ? boostBaseToOv(VINICIUS_QUEST_BASE, 103, 9791014, 'promoquestreward', 'PROMO', 'promocard') : null;
+if(VINICIUS_QUEST_CARD) BY_ID.set(VINICIUS_QUEST_CARD.id, VINICIUS_QUEST_CARD);
+// every PROMO/WM/Marcelo/Vinícius quest reward card (Mbappé, Olise, Alisson, Yamal, Rüdiger, Haaland,
+// Chong, Pina, Kane, Sylla, Kroos, Neymar, Marcelo, Vinícius) is untradable - these only ever exist as
+// the one quest's reward, never obtainable any other way, so letting them be traded/sold away (and
+// RAP-priced as if they were) would undercut the whole point.
+[WM_QUEST_MBAPPE_CARD, OLISE_QUEST_CARD, ALISSON_QUEST_CARD, YAMAL_QUEST_CARD, RUDIGER_QUEST_CARD, HAALAND_QUEST_CARD, CHONG_QUEST_CARD, PINA_QUEST_CARD, KANE_QUEST_CARD, SYLLA_QUEST_CARD, KROOS_QUEST_CARD, NEYMAR_QUEST_CARD, MARCELO_QUEST_CARD, VINICIUS_QUEST_CARD].forEach(c=>{ if(c) c.untradable = true; });
 // Admin-only easter egg - deliberately absurd (999 OVR, every single stat/substat at 999, every
 // position on the pitch) and NEVER reachable through any pack/SBC/quest/Transfermarkt: it only exists
 // because it's registered directly into BY_ID here, and adminFullCardPool() (the search pool behind
@@ -11069,6 +11076,52 @@ const SBC_DEFS = [
            req('3+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroup(x,'MID')).length>=3, c=>`${c.filter(x=>cardInPosGroup(x,'MID')).length} / 3`),
            req('3+ St\u00fcrmer', c=>c.filter(x=>cardInPosGroup(x,'FWD')).length>=3, c=>`${c.filter(x=>cardInPosGroup(x,'FWD')).length} / 3`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  // --- Vinícius Júnior-Sonderaufgaben limited event (see VINICIUS_QUEST_DEADLINE): 8 SBCs, same exact
+  // difficulty numbers as die Marcelo-Sonderaufgaben oben (Vinícius' Ereignis soll genauso schwer sein),
+  // nur neu thematisiert um Vinícius' echte Karriere (Flügelspiel, Real Madrid, Seleção, Dribbling,
+  // La Liga, Top-Varianten, reine Weltklasse, Balance). Alle sofort verfügbar, gemischt aus
+  // Kapitäne/7×88+/27-Ratings statt immer demselben Pack.
+  {id:'vinicius_quest_fluegel', name:'Flügelspiel-Elite', reward:'kapitaene', size:11, tier:'Vinicius-Quest', maxCompletions:1,
+    seedFilter:c=>cardPositions(c.pos).some(p=>p==='LW'||p==='RW'||p==='LM'||p==='RM'),
+    desc:'11 Spieler, Durchschnittsrating 96+, niemand unter 93 OVR, mindestens 5 waschechte Flügelspieler und 7 Sonderkarten. Belohnung: Kapitäne Pack.',
+    reqs:[ req('Durchschnittsrating 96+', c=>avgOv(c)>=96, c=>`${avgOv(c)} / 96`),
+           req('Kein Spieler unter 93 OVR', c=>c.every(x=>x.ov>=93), c=>`${c.filter(x=>x.ov<93).length} unter 93`),
+           req('5+ Flügelspieler', c=>c.filter(x=>cardPositions(x.pos).some(p=>p==='LW'||p==='RW'||p==='LM'||p==='RM')).length>=5, c=>`${c.filter(x=>cardPositions(x.pos).some(p=>p==='LW'||p==='RW'||p==='LM'||p==='RM')).length} / 5`),
+           req('7+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=7, c=>`${c.filter(x=>x.variant!=='base').length} / 7 Sonderkarten`) ]},
+  {id:'vinicius_quest_real', name:'Real-Madrid-Dynastie', reward:'kapitaene', size:11, tier:'Vinicius-Quest', maxCompletions:1, groupKey:'club',
+    desc:'11 Spieler, alle von Real Madrid (Vinícius’ Verein), Durchschnittsrating 90+. Belohnung: Kapitäne Pack.',
+    reqs:[ req('Alle von Real Madrid', c=>c.every(x=>x.club==='Real Madrid'), c=>`${c.filter(x=>x.club==='Real Madrid').length} / 11 von Real Madrid`),
+           req('Durchschnittsrating 90+', c=>avgOv(c)>=90, c=>`${avgOv(c)} / 90`) ]},
+  {id:'vinicius_quest_selecao', name:'Seleção Suprema', reward:'sevenof88', size:11, tier:'Vinicius-Quest', maxCompletions:1, groupKey:'nat',
+    desc:'11 Spieler, alle aus Brasilien (Vinícius’ Heimatland), Durchschnittsrating 92+. Belohnung: 7× 88+ Pack.',
+    reqs:[ req('Alle aus Brasilien', c=>c.every(x=>x.nat==='Brazil'), c=>`${c.filter(x=>x.nat==='Brazil').length} / 11 aus Brasilien`),
+           req('Durchschnittsrating 92+', c=>avgOv(c)>=92, c=>`${avgOv(c)} / 92`) ]},
+  {id:'vinicius_quest_dribbel', name:'Dribbelkönige', reward:'sevenof88', size:11, tier:'Vinicius-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 96+, niemand unter 94 OVR, mindestens 6 Sonderkarten. Belohnung: 7× 88+ Pack.',
+    reqs:[ req('Durchschnittsrating 96+', c=>avgOv(c)>=96, c=>`${avgOv(c)} / 96`),
+           req('Kein Spieler unter 94 OVR', c=>c.every(x=>x.ov>=94), c=>`${c.filter(x=>x.ov<94).length} unter 94`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
+  {id:'vinicius_quest_laliga', name:'La-Liga-Force', reward:'sevenof88', size:11, tier:'Vinicius-Quest', maxCompletions:1, groupKey:'lg',
+    desc:'11 Spieler, alle aus der La Liga (Vinícius’ Liga), Durchschnittsrating 91+. Belohnung: 7× 88+ Pack.',
+    reqs:[ req('Alle aus der La Liga', c=>c.every(x=>x.lg==='La Liga'), c=>`${c.filter(x=>x.lg==='La Liga').length} / 11 aus der La Liga`),
+           req('Durchschnittsrating 91+', c=>avgOv(c)>=91, c=>`${avgOv(c)} / 91`) ]},
+  {id:'vinicius_quest_ikonen', name:'Champions-League-Format', reward:'ratings27', size:11, tier:'Vinicius-Quest', maxCompletions:1,
+    seedFilter:c=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','wpmvp','goat'].includes(c.theme),
+    desc:'11 Spieler, alle müssen Top-Varianten sein (Icon, Centurion, Hall of Fame, Galactico, Golden Glove, World Cup Moment, Blackout, GOAT, ...), zusätzlich Durchschnittsrating 95+. Belohnung: 27 Ratings Pack.',
+    reqs:[ req('Alle 11 sind Top-Varianten', c=>c.every(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','wpmvp','goat'].includes(x.theme)), c=>`${c.filter(x=>['icon','cent','hof','gal','gg','wc','blk','bh','saph','rub','dia','wpmvp','goat'].includes(x.theme)).length} / 11`),
+           req('Durchschnittsrating 95+', c=>avgOv(c)>=95, c=>`${avgOv(c)} / 95`) ]},
+  {id:'vinicius_quest_weltklasse', name:'Tempo & Technik', reward:'ratings27', size:11, tier:'Vinicius-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 97+, niemand unter 95 OVR, mindestens 5 Spieler mit 97 oder höher. Belohnung: 27 Ratings Pack.',
+    reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
+           req('Kein Spieler unter 95 OVR', c=>c.every(x=>x.ov>=95), c=>`${c.filter(x=>x.ov<95).length} unter 95`),
+           req('5+ Spieler mit 97+', c=>c.filter(x=>x.ov>=97).length>=5, c=>`${c.filter(x=>x.ov>=97).length} / 5`) ]},
+  {id:'vinicius_quest_balance', name:'Ikonen-Finale', reward:'ratings27', size:11, tier:'Vinicius-Quest', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 95+, mindestens 3 Verteidiger, 3 Mittelfeldspieler und 3 Stürmer, mindestens 6 Sonderkarten. Belohnung: 27 Ratings Pack.',
+    reqs:[ req('Durchschnittsrating 95+', c=>avgOv(c)>=95, c=>`${avgOv(c)} / 95`),
+           req('3+ Verteidiger', c=>c.filter(x=>cardInPosGroup(x,'DEF')).length>=3, c=>`${c.filter(x=>cardInPosGroup(x,'DEF')).length} / 3`),
+           req('3+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroup(x,'MID')).length>=3, c=>`${c.filter(x=>cardInPosGroup(x,'MID')).length} / 3`),
+           req('3+ Stürmer', c=>c.filter(x=>cardInPosGroup(x,'FWD')).length>=3, c=>`${c.filter(x=>cardInPosGroup(x,'FWD')).length} / 3`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
 ];
 let activeSBC = null;
 let ogPackTierPools = null;
@@ -11290,12 +11343,12 @@ async function claimDraftReward(maxed){
   draftState = null;
   renderDraftPanel();
 }
-const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest'};
+const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest', 'Vinicius-Quest':'viniciusquest'};
 // every SBC not already folded into a WM/PROMO quest event - each now gets its own tile in the unified
 // Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
 // opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
 function standaloneSbcDefs(){
-  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id) && !KANE_QUEST_SBC_IDS.includes(sbc.id) && !SYLLA_QUEST_SBC_IDS.includes(sbc.id) && !KROOS_QUEST_SBC_IDS.includes(sbc.id) && !NEYMAR_QUEST_SBC_IDS.includes(sbc.id) && !MARCELO_QUEST_SBC_IDS.includes(sbc.id) && (!sbc.activeCheck || sbc.activeCheck()));
+  return SBC_DEFS.filter(sbc=>!WM_QUEST_SBC_IDS.includes(sbc.id) && !OLISE_QUEST_SBC_IDS.includes(sbc.id) && !ALISSON_QUEST_SBC_IDS.includes(sbc.id) && !YAMAL_QUEST_SBC_IDS.includes(sbc.id) && !RUDIGER_QUEST_SBC_IDS.includes(sbc.id) && !HAALAND_QUEST_SBC_IDS.includes(sbc.id) && !CHONG_QUEST_SBC_IDS.includes(sbc.id) && !PINA_QUEST_SBC_IDS.includes(sbc.id) && !KANE_QUEST_SBC_IDS.includes(sbc.id) && !SYLLA_QUEST_SBC_IDS.includes(sbc.id) && !KROOS_QUEST_SBC_IDS.includes(sbc.id) && !NEYMAR_QUEST_SBC_IDS.includes(sbc.id) && !MARCELO_QUEST_SBC_IDS.includes(sbc.id) && !VINICIUS_QUEST_SBC_IDS.includes(sbc.id) && (!sbc.activeCheck || sbc.activeCheck()));
 }
 // 10-minute flash window for the 'breitner_oder_kohler' SBC above - a plain start/end timestamp check,
 // not the full quest-hub machinery (WM_QUEST_DEADLINE etc.) since this is just one ordinary SBC that
@@ -11646,6 +11699,21 @@ async function renderChallengeGrid(){
        ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
     );
     tile.addEventListener('click', openMarceloQuestDetail);
+    grid.appendChild(tile);
+  }
+  if(viniciusQuestActive()){
+    const doneCount = VINICIUS_QUEST_SBC_IDS.filter(id=>sbcCompletions(id)>=1).length + VINICIUS_QUEST_MATCHES.filter(m=>profile[m.flag]).length;
+    const claimed = profile.viniciusQuestCardClaimed;
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card tier-viniciusquest';
+    tile.style.cursor = 'pointer';
+    tile.innerHTML = challengeTileHTML(
+      {id:'viniciusquest', name:'Vinícius-Sonderaufgaben', pill:'PROMO-Event', accent:'#00c8ff',
+        desc:`12 extrem schwere Aufgaben für ${VINICIUS_QUEST_CARD?VINICIUS_QUEST_CARD.n:'Vinícius Júnior'} (103 OVR).`},
+      `<div class="sbc-progress-dots" title="${doneCount} / 12 abgeschlossen">${Array.from({length:12},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
+       ${claimed ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}`
+    );
+    tile.addEventListener('click', openViniciusQuestDetail);
     grid.appendChild(tile);
   }
   CHALLENGE_DEFS.forEach(def=>{
@@ -27328,6 +27396,130 @@ function openMarceloQuestDetail(){
   };
   updateCountdown();
   marceloQuestCountdownTimer = setInterval(updateCountdown, 30000);
+}
+// ===== Vinícius Júnior-Sonderaufgaben: 8 SBCs + 4 match quests, same structure and exact difficulty =====
+// ===== as die Marcelo-Sonderaufgaben (see above), startet direkt im Anschluss an dessen Deadline, =====
+// ===== 1 Woche lang. Jede Aufgabe gibt sofort einen Pack, gemischt aus Kapitäne/7×88+/27 Ratings. =====
+const VINICIUS_QUEST_START = new Date(2026, 8, 3, 12, 0, 0).getTime(); // Thursday 12:00 (direkt nach Marcelo)
+const VINICIUS_QUEST_DEADLINE = new Date(2026, 8, 10, 12, 0, 0).getTime(); // Thursday next week, 12:00
+function viniciusQuestActive(){ const t = Date.now(); return t>=VINICIUS_QUEST_START && t<VINICIUS_QUEST_DEADLINE; }
+const VINICIUS_QUEST_SBC_IDS = ['vinicius_quest_fluegel', 'vinicius_quest_real', 'vinicius_quest_selecao', 'vinicius_quest_dribbel', 'vinicius_quest_laliga', 'vinicius_quest_ikonen', 'vinicius_quest_weltklasse', 'vinicius_quest_balance'];
+const VINICIUS_QUEST_MATCHES = [
+  {id:1, flag:'viniciusQuestMatch1Won', label:'Bernabéu-Debüt', targetOv:115, packId:'kapitaene'},
+  {id:2, flag:'viniciusQuestMatch2Won', label:'Clásico-Nacht', targetOv:120, packId:'sevenof88'},
+  {id:3, flag:'viniciusQuestMatch3Won', label:'Champions-League-Finale', targetOv:125, packId:'sevenof88'},
+  {id:4, flag:'viniciusQuestMatch4Won', label:'Ballon-d’Or-Endspurt', targetOv:130, packId:'ratings27'},
+];
+function viniciusQuestSbcsDone(){ return VINICIUS_QUEST_SBC_IDS.every(id=>sbcCompletions(id)>=1); }
+function viniciusQuestMatchesDone(){ return VINICIUS_QUEST_MATCHES.every(m=>profile[m.flag]); }
+function viniciusQuestAllDone(){ return viniciusQuestSbcsDone() && viniciusQuestMatchesDone(); }
+let viniciusQuestCountdownTimer = null;
+async function playViniciusQuestMatch(m){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  if(profile[m.flag]){ toast('Diese Herausforderung ist bereits gewonnen.'); return; }
+  const {rating, filled} = squadRating();
+  if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
+  const opp = buildFixedRatingOpponent(m.targetOv);
+  const area = document.getElementById(`viniciusquest-match${m.id}-area`);
+  const btn = document.getElementById(`viniciusquest-match${m.id}-btn`);
+  if(btn) btn.style.display = 'none'; // hide the "annehmen" button while the match itself is showing below it
+  if(area) area.innerHTML = `
+    <div class="vs-teams">
+      ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
+      <div class="vs-x">VS</div>
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+    </div>
+    <div id="match-area"></div>
+    <div id="result-area"></div>`;
+  await runLocalMatch(rating, opp, {friendly:true, onComplete: async (outcome)=>{
+    if(outcome.result==='WIN'){
+      profile[m.flag] = true;
+      await sSet('profile', profile);
+      toast(`🏆 ${m.label} gewonnen! Öffne deine Pack-Belohnung…`);
+      const pack = PACKS.find(p=>p.id===m.packId);
+      const drawn = pack.draw();
+      showPackOpening(pack, drawn, {untradable:true});
+    } else {
+      toast('Verloren — versuch es jederzeit erneut.');
+    }
+    renderViniciusQuestSubgrid();
+  }});
+}
+async function claimViniciusQuestReward(){
+  if(!viniciusQuestAllDone() || profile.viniciusQuestCardClaimed || !VINICIUS_QUEST_CARD) return;
+  profile.viniciusQuestCardClaimed = true;
+  collection.push({uid:genId(), cardId:VINICIUS_QUEST_CARD.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(VINICIUS_QUEST_CARD.id, 1, !!VINICIUS_QUEST_CARD.untradable);
+  await sSet('collection', collection);
+  await sSet('profile', profile);
+  toast(`🏆 ${VINICIUS_QUEST_CARD.n} (103 OVR) freigeschaltet!`);
+  showCutscene(VINICIUS_QUEST_CARD, ()=>{});
+  renderViniciusQuestSubgrid();
+}
+async function renderViniciusQuestSubgrid(){
+  const grid = document.getElementById('viniciusquest-subgrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const squadLocked = new Set(Object.values(squad.slots));
+  const externalLocked = await getExternalLockedUids();
+  const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
+  const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
+  VINICIUS_QUEST_SBC_IDS.forEach(id=>{
+    grid.appendChild(buildSbcTile(SBC_DEFS.find(s=>s.id===id), poolFree, allCards));
+  });
+  VINICIUS_QUEST_MATCHES.forEach(m=>{
+    const done = !!profile[m.flag];
+    const tile = document.createElement('div');
+    tile.className = 'sbc-card tier-viniciusquest';
+    tile.style.gridColumn = '1 / -1'; // full width - a live match (teams/score/commentary) doesn't fit the compact SBC tile size
+    const packName = (PACKS.find(p=>p.id===m.packId)||{}).name || '';
+    tile.innerHTML = `
+      <div class="sbc-card-head"><span class="sbc-tier-pill">Match</span></div>
+      <h3 class="sbc-name">${m.label}</h3>
+      <div class="sbc-desc">Gegen einen Fantasie-Gegner mit Rating ${m.targetOv}. Belohnung: ${packName}.</div>
+      ${done ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">✓ Abgeschlossen</div>` : ''}
+      <div id="viniciusquest-match${m.id}-area" style="text-align:center;"></div>
+      <button class="sbc-build-btn" id="viniciusquest-match${m.id}-btn" ${done?'disabled':''}>${done?'Gewonnen':'Herausforderung annehmen'}</button>`;
+    if(!done) tile.querySelector('.sbc-build-btn').addEventListener('click', ()=>playViniciusQuestMatch(m));
+    grid.appendChild(tile);
+  });
+  const claimBtn = document.getElementById('viniciusquest-claim-btn');
+  if(claimBtn){
+    const allDone = viniciusQuestAllDone();
+    const claimed = profile.viniciusQuestCardClaimed;
+    claimBtn.disabled = !allDone || claimed;
+    claimBtn.textContent = claimed ? 'Bereits abgeholt' : 'Vinícius Júnior (103 OVR) abholen';
+    claimBtn.onclick = (allDone && !claimed) ? claimViniciusQuestReward : null;
+  }
+}
+function openViniciusQuestDetail(){
+  if(viniciusQuestCountdownTimer){ clearInterval(viniciusQuestCountdownTimer); viniciusQuestCountdownTimer = null; }
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="view-head"><h2>Vinícius-Sonderaufgaben</h2><p>Schließe alle 12 Aufgaben ab und hol dir <b style="color:#00c8ff;">${VINICIUS_QUEST_CARD?VINICIUS_QUEST_CARD.n:'Vinícius Júnior'}${untradableInlineIcon(VINICIUS_QUEST_CARD)} (103 OVR)</b> — sonst nirgends erhältlich. Genauso schwer wie die Marcelo-Sonderaufgaben.</p></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px;">
+      <div id="viniciusquest-reward-card"></div>
+      ${profile.viniciusQuestCardClaimed ? '' : '<div class="mono" style="font-size:10.5px;color:var(--muted);">Vorschau — erst nach Abschluss aller Aufgaben erhältlich</div>'}
+    </div>
+    <div class="toolbar"><button class="action-btn secondary" id="viniciusquest-back" style="width:auto;padding:9px 16px;">← Zurück zu den Herausforderungen</button></div>
+    <div id="viniciusquest-countdown" class="mono" style="font-size:11px;color:var(--danger);margin-bottom:14px;"></div>
+    <div class="sbc-grid" id="viniciusquest-subgrid" style="margin-bottom:18px;"></div>
+    <button class="action-btn" id="viniciusquest-claim-btn" style="width:260px;"></button>`;
+  document.getElementById('viniciusquest-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  const viniciusRewardBox = document.getElementById('viniciusquest-reward-card');
+  if(viniciusRewardBox && VINICIUS_QUEST_CARD){
+    const cardNode = cardEl(VINICIUS_QUEST_CARD, 'mini');
+    if(!profile.viniciusQuestCardClaimed) cardNode.style.opacity = '.8';
+    viniciusRewardBox.appendChild(cardNode);
+  }
+  renderViniciusQuestSubgrid();
+  const updateCountdown = ()=>{
+    const el = document.getElementById('viniciusquest-countdown');
+    if(!el){ if(viniciusQuestCountdownTimer){ clearInterval(viniciusQuestCountdownTimer); viniciusQuestCountdownTimer=null; } return; }
+    if(!viniciusQuestActive()){ currentTab='sbc'; renderNav(); renderView('sbc'); return; }
+    el.textContent = `⏳ Noch ${formatCountdown(VINICIUS_QUEST_DEADLINE - Date.now())} verfügbar`;
+  };
+  updateCountdown();
+  viniciusQuestCountdownTimer = setInterval(updateCountdown, 30000);
 }
 // ===== O Rei Herausforderung: the ultimate capstone challenge =====
 const OREI_ENTRY = {wins:200, rating:105, netWorth:500000};
