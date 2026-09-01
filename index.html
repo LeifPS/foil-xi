@@ -8781,7 +8781,12 @@ async function initFirebase(){
   try{
     const [appMod, fsMod, authMod] = await withTimeout(Promise.all([
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app.js`),
-      import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore-lite.js`),
+      // full SDK, not -lite: the Lite bundle has no onSnapshot() at all (it's REST/one-shot-query only
+      // by design) - needed for real-time listeners (see ensureMarketListener) so two clients can't
+      // disagree for up to 15s (the old cachedRead TTL) about whether a market listing still exists.
+      // Same exported function names as -lite for every one-shot call already used elsewhere in this
+      // file (collection/doc/getDocs/setDoc/...), so this is a drop-in swap beyond the new export.
+      import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore.js`),
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-auth.js`),
     ]), 6000);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
@@ -8805,7 +8810,7 @@ async function initFirebase(){
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
       getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
       updateDoc:fsMod.updateDoc, increment:fsMod.increment, runTransaction:fsMod.runTransaction,
-      arrayUnion:fsMod.arrayUnion, arrayRemove:fsMod.arrayRemove, writeBatch:fsMod.writeBatch,
+      arrayUnion:fsMod.arrayUnion, arrayRemove:fsMod.arrayRemove, writeBatch:fsMod.writeBatch, onSnapshot:fsMod.onSnapshot,
       auth, createUserWithEmailAndPassword:authMod.createUserWithEmailAndPassword,
       signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signOut:authMod.signOut,
       setPersistence:authMod.setPersistence, browserLocalPersistence:authMod.browserLocalPersistence,
@@ -11834,19 +11839,45 @@ function renderMarketSection(el){
   loadMarketListings();
 }
 let marketListingsCache = [];
+// Live Firestore listener instead of a one-shot getDocs() behind a 15s TTL cache (the old approach) -
+// that TTL was exactly why two clients could disagree for up to 15 seconds about whether a listing was
+// still there ("bei einem steht das ist nicht mehr im Handel, beim anderen noch"). onSnapshot() pushes
+// every change (new listing, sale, withdrawal) to every subscribed client the instant it commits on the
+// server, so marketListingsCache is continuously current with no staleness window at all - including
+// this client's OWN writes, so a buy/sell/withdraw no longer needs a manual re-fetch afterward either.
+// Requires the full Firestore SDK (see initFirebase's fsMod import comment) - firestore-lite has no
+// onSnapshot at all. Attached once per session and left running; there's no teardown because the app
+// never navigates away from Firestore entirely once connected (matches the rest of the fb.* wiring,
+// which also never re-attaches after the initial connectivity probe).
+let _marketListenerReady = null;
+function ensureMarketListener(){
+  if(_marketListenerReady) return _marketListenerReady;
+  _marketListenerReady = new Promise(resolve=>{
+    if(!fb || !fb.onSnapshot){ resolve(); return; }
+    try{
+      fb.onSnapshot(fb.query(fb.collection(fb.db,'market'), fb.orderBy('createdAt','desc'), fb.limit(200)),
+        snap=>{
+          marketListingsCache = snap.docs.map(d=>({id:d.id, ...d.data()}));
+          resolve();
+          drawMarketGrid();
+          checkWishlistAgainstMarket();
+        },
+        err=>{ console.warn('market listener failed', err); resolve(); }
+      );
+    }catch(e){ console.warn('market listener setup failed', e); resolve(); }
+  });
+  return _marketListenerReady;
+}
 // The actual network fetch, split out from loadMarketListings() below so it can also be called from
 // contexts with no #market-grid in the DOM at all (the Wunschlisten-Hintergrundcheck runs regardless of
 // which tab is open, or even with no tab visited yet this session) - loadMarketListings() itself still
-// bails out early without a grid element, this doesn't.
+// bails out early without a grid element, this doesn't. Now just ensures the live listener is attached
+// and awaits its first snapshot - every call after the first returns instantly since the cache is kept
+// current by the listener itself, not re-fetched here.
 async function fetchMarketListingsCache(){
   await fbReady;
   if(!fb) return marketListingsCache;
-  try{
-    marketListingsCache = await cachedRead('market-listings', 15000, async ()=>{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.orderBy('createdAt','desc'), fb.limit(200)));
-      return snap.docs.map(d=>({id:d.id, ...d.data()}));
-    });
-  }catch(e){ console.warn('market read failed', e); marketListingsCache = []; }
+  await ensureMarketListener();
   return marketListingsCache;
 }
 async function loadMarketListings(){
