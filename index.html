@@ -8847,6 +8847,7 @@ async function initFirebase(){
       getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
       updateDoc:fsMod.updateDoc, increment:fsMod.increment, runTransaction:fsMod.runTransaction,
       arrayUnion:fsMod.arrayUnion, arrayRemove:fsMod.arrayRemove, writeBatch:fsMod.writeBatch, onSnapshot:fsMod.onSnapshot,
+      collectionGroup:fsMod.collectionGroup,
       auth, createUserWithEmailAndPassword:authMod.createUserWithEmailAndPassword,
       signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signOut:authMod.signOut,
       setPersistence:authMod.setPersistence, browserLocalPersistence:authMod.browserLocalPersistence,
@@ -9710,6 +9711,17 @@ const BREAKOUT_SPECIAL_TARGETS = [
   {baseId:270673, ov:102}, // Warren Zaïre-Emery
   {baseId:264309, ov:102}, // Arda Güler
 ];
+// Real action photos for the six Breakout specials (same override pattern as WM26_KAPITAEN_IMG_OVERRIDE/
+// KRONJUWELEN_IMG_OVERRIDE elsewhere) - the underlying real-database base cards for these players don't
+// carry a current photo, so without this they'd fall back to the generic not-found face.
+const BREAKOUT_IMG_OVERRIDE = {
+  277643: 'https://cdn3.futbin.com/content/fifa26/img/players/p134495371.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=3dd9c4102a9393cdd6a5f20a9795f19f', // Lamine Yamal
+  272834: 'https://cdn3.futbin.com/content/fifa26/img/players/p50604482.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=524fae279b0473cf1ffa4476bd1a945f', // João Neves
+  271421: 'https://cdn3.futbin.com/content/fifa26/img/players/p134489149.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=cd95af1971bf00a133e4f39551a0d606', // Désiré Doué
+  278046: 'https://cdn3.futbin.com/content/fifa26/img/players/p67386910.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=a62f2ccc8da0f21ae6b9e9db0d0c1a1f', // Pau Cubarsí
+  270673: 'https://cdn3.futbin.com/content/fifa26/img/players/p50602321.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=c84e2b7c6ad4c5b6f2e6e2da7833f73f', // Warren Zaïre-Emery
+  264309: 'https://cdn3.futbin.com/content/fifa26/img/players/p67373173.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=f42fe5a980caa1b125d06dcae0a9de73', // Arda Güler
+};
 let BREAKOUT_SPECIALS_CACHE = null;
 function breakoutSpecials(){
   if(BREAKOUT_SPECIALS_CACHE) return BREAKOUT_SPECIALS_CACHE;
@@ -9717,6 +9729,7 @@ function breakoutSpecials(){
     const base = findBaseCard(r.baseId);
     if(!base) return null;
     const card = boostBaseToOv(base, r.ov, 9803100+i, 'breakout', 'Breakout', 'breakout');
+    if(BREAKOUT_IMG_OVERRIDE[r.baseId]) card.img = BREAKOUT_IMG_OVERRIDE[r.baseId];
     BY_ID.set(card.id, card);
     return card;
   }).filter(Boolean);
@@ -15242,20 +15255,28 @@ async function loadPackOddsCache(){
 // Firestore doesn't support arrays-of-arrays, so variantPct/mgrBoostPct (each an array of [label,...]
 // tuples in simulatePackOdds's in-memory shape) get flattened to arrays of plain objects for storage;
 // deserializePackOddsFromCache converts them straight back so showPackOdds's rendering code never has to
-// know the difference between a cached and a freshly-simulated result. cardPct/sourceProbPct store only
-// cardId (not the full card object) to keep documents small - card.n/card.ov/etc. can change over time
-// (level-ups, stat rebalances) and a real object dump would just go stale; resolving through BY_ID at
-// read time is always current.
+// know the difference between a cached and a freshly-simulated result. cardPct stores only cardId (not
+// the full card object) to keep the document small - card.n/card.ov/etc. can change over time (level-ups,
+// stat rebalances) and a real object dump would just go stale; resolving through BY_ID at read time is
+// always current. sourceProbPct is deliberately NOT in this doc at all - see the sourceShards comment
+// below for why a pack with thousands of real-player cards can't fit that in one document.
+// cardPct itself is capped to the top CARD_PCT_STORE_LIMIT entries (already sorted OV-desc/pct-desc) -
+// showPackOdds only ever displays the top 60 anyway, but an UNCAPPED full real-player pool measured at
+// ~580 KB for JUST this one field (the biggest pool, ~11.700 distinct cards) - safely under Firestore's
+// 1 MiB limit on its own, but with zero margin for its own binary-encoding overhead on top of the JSON
+// byte count, unlike the deliberately-generous sourceShards. cardPctTotalCount preserves the true count
+// so the "+N weitere Karten" line in the UI still shows the real remainder, not the truncated one.
+const CARD_PCT_STORE_LIMIT = 500;
 function serializePackOddsForCache(odds){
   return {
     computedAt: Date.now(), iterations: odds.iterations,
     tierPct: odds.tierPct, ratingAtLeastPct: odds.ratingAtLeastPct, atLeastRatingPackPct: odds.atLeastRatingPackPct,
     variantPct: (odds.variantPct||[]).map(([label,perCard,perPack])=>({label,perCard,perPack})),
     mgrBoostPct: (odds.mgrBoostPct||[]).map(([label,pct])=>({label,pct})),
-    cardPct: odds.cardPct.map(({card,pct,perPickPct})=>({cardId:card.id, pct, perPickPct})),
+    cardPct: odds.cardPct.slice(0,CARD_PCT_STORE_LIMIT).map(({card,pct,perPickPct})=>({cardId:card.id, pct, perPickPct})),
+    cardPctTotalCount: odds.cardPct.length,
     atLeastElitePct: odds.atLeastElitePct, atLeastIconPct: odds.atLeastIconPct, atLeastUltimatePct: odds.atLeastUltimatePct,
     atLeastSpecialPct: odds.atLeastSpecialPct, atLeastManagerPct: odds.atLeastManagerPct,
-    sourceProbPct: odds.sourceProbPct || {},
   };
 }
 function deserializePackOddsFromCache(data){
@@ -15267,11 +15288,51 @@ function deserializePackOddsFromCache(data){
     tierPct: data.tierPct||{}, ratingAtLeastPct: data.ratingAtLeastPct||{}, atLeastRatingPackPct: data.atLeastRatingPackPct||{},
     variantPct: (data.variantPct||[]).map(v=>[v.label, v.perCard, v.perPack]),
     mgrBoostPct: (data.mgrBoostPct||[]).map(v=>[v.label, v.pct]),
+    cardPctTotalCount: data.cardPctTotalCount!=null ? data.cardPctTotalCount : cardPct.length,
     cardPct,
     atLeastElitePct: data.atLeastElitePct||0, atLeastIconPct: data.atLeastIconPct||0, atLeastUltimatePct: data.atLeastUltimatePct||0,
     atLeastSpecialPct: data.atLeastSpecialPct||0, atLeastManagerPct: data.atLeastManagerPct||0,
-    iterations: data.iterations||0, sourceProbPct: data.sourceProbPct||{},
+    iterations: data.iterations||0,
   };
+}
+// A pack drawing from the full real-player database touches 10.000+ distinct cards (e.g. "baseonly" hit
+// 11.700+ at just 3.000 iterations) - storing that many {cardId: probability} entries in ONE Firestore
+// document blows straight through the 1 MiB-per-document limit ("invalid-argument" on setDoc, which is
+// exactly the bug this fixes: the recompute used to die partway through the pack list the moment it hit
+// the first big-pool pack). Sharded instead: packOddsCache/{packId}/sourceShards/{i}, each holding at
+// most SOURCE_SHARD_SIZE entries plus the parent packId (so a single collectionGroup query - see
+// loadAllPackSourceShards - can pull every pack's shards in one go and group them back by pack without
+// needing to know in advance how many shards each pack has).
+const SOURCE_SHARD_SIZE = 2000;
+function chunkSourceProbPct(sourceProbPct){
+  const ids = Object.keys(sourceProbPct||{});
+  const shards = [];
+  for(let i=0;i<ids.length;i+=SOURCE_SHARD_SIZE){
+    const entries = {};
+    ids.slice(i,i+SOURCE_SHARD_SIZE).forEach(id=> entries[id] = sourceProbPct[id]);
+    shards.push(entries);
+  }
+  return shards;
+}
+// Map<packId, Map<cardId, expectedPerPack>> once loaded, null until first load - see
+// computeCardPackSources, the only consumer (showPackOdds/the Store never needed source data at all).
+let packSourceShardsByPack = null;
+async function loadAllPackSourceShards(){
+  if(packSourceShardsByPack) return packSourceShardsByPack;
+  packSourceShardsByPack = new Map();
+  await fbReady;
+  if(!fb || !fb.collectionGroup) return packSourceShardsByPack;
+  try{
+    const snap = await fb.getDocs(fb.collectionGroup(fb.db,'sourceShards'));
+    snap.docs.forEach(d=>{
+      const data = d.data();
+      if(!data || !data.packId || !data.entries) return;
+      let m = packSourceShardsByPack.get(data.packId);
+      if(!m){ m = new Map(); packSourceShardsByPack.set(data.packId, m); }
+      Object.entries(data.entries).forEach(([cardId,prob])=> m.set(Number(cardId), prob));
+    });
+  }catch(e){ console.warn('pack source shards load failed', e); }
+  return packSourceShardsByPack;
 }
 async function loadPackOddsForDisplay(pack){
   const cache = await loadPackOddsCache();
@@ -15305,6 +15366,20 @@ async function recomputeAllPackOddsCache(onProgress){
         onProgress:(i,total)=>{ if(onProgress) onProgress(done, drawablePacks.length, pack.name, i, total); }
       });
       await fb.setDoc(fb.doc(fb.db,'packOddsCache', pack.id), serializePackOddsForCache(odds));
+      // Clear this pack's OLD shards before writing new ones - a repeat run whose card pool shrank
+      // (a card removed from the pool) would otherwise leave stale trailing shard docs behind forever,
+      // since overwriting only ever touches indices the NEW run actually produces.
+      const shardsColl = fb.collection(fb.db,'packOddsCache',pack.id,'sourceShards');
+      const oldShardsSnap = await fb.getDocs(shardsColl);
+      if(oldShardsSnap.docs.length){
+        const delBatch = fb.writeBatch(fb.db);
+        oldShardsSnap.docs.forEach(d=> delBatch.delete(d.ref));
+        await delBatch.commit();
+      }
+      const shards = chunkSourceProbPct(odds.sourceProbPct);
+      for(let i=0;i<shards.length;i++){
+        await fb.setDoc(fb.doc(fb.db,'packOddsCache',pack.id,'sourceShards',String(i)), {packId:pack.id, entries:shards[i]});
+      }
       done++;
       if(onProgress) onProgress(done, drawablePacks.length, pack.name, PACK_ODDS_ITERATIONS, PACK_ODDS_ITERATIONS);
     }
@@ -15312,6 +15387,7 @@ async function recomputeAllPackOddsCache(onProgress){
   // invalidate every in-memory cache derived from the old data so this session's own Store/Index views
   // pick up the fresh numbers immediately instead of only after a reload
   packOddsCacheByPack = null;
+  packSourceShardsByPack = null;
   cardPackSourceCache = new Map();
   return {ok:true, packsComputed:done};
 }
@@ -15383,11 +15459,15 @@ function showPackOdds(pack){
         wrap.appendChild(tag);
         cardGrid.appendChild(wrap);
       });
-      if(odds.cardPct.length>CARD_ODDS_LIMIT){
+      // cardPctTotalCount (see serializePackOddsForCache) reflects the TRUE total even when the cached
+      // doc only stored the top 500 - falls back to the live array's own length for the uncapped
+      // simulatePackOdds() fallback path, which has no such field at all.
+      const totalCardCount = odds.cardPctTotalCount!=null ? odds.cardPctTotalCount : odds.cardPct.length;
+      if(totalCardCount>CARD_ODDS_LIMIT){
         const more = document.createElement('p');
         more.className = 'hint';
         more.style.cssText = 'width:100%;margin-top:8px;';
-        more.textContent = `+ ${odds.cardPct.length-CARD_ODDS_LIMIT} weitere Karten mit jeweils unter ${fmtPct(shown[shown.length-1].pct)} Chance pro Pack-\u00d6ffnung.`;
+        more.textContent = `+ ${totalCardCount-CARD_ODDS_LIMIT} weitere Karten mit jeweils unter ${fmtPct(shown[shown.length-1].pct)} Chance pro Pack-\u00d6ffnung.`;
         cardGrid.appendChild(more);
       }
       const searchInput = document.getElementById('odds-card-search');
@@ -18545,12 +18625,12 @@ function liveCheckSinglePackForCard(pack, card, iterations){
 let cardPackSourceCache = new Map();
 async function computeCardPackSources(card){
   if(cardPackSourceCache.has(card.id)) return cardPackSourceCache.get(card.id);
-  const cache = await loadPackOddsCache();
+  const shardsByPack = await loadAllPackSourceShards();
   const hits = [];
   for(const pack of PACKS){
-    const data = cache.get(pack.id);
-    if(data && data.sourceProbPct){
-      const expectedPerPack = data.sourceProbPct[card.id];
+    const packShards = shardsByPack.get(pack.id);
+    if(packShards){
+      const expectedPerPack = packShards.get(card.id);
       if(expectedPerPack>0) hits.push({pack, expectedPerPack, exact:true});
       continue;
     }
