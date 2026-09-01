@@ -11123,12 +11123,10 @@ const SBC_DEFS = [
            req('3+ Stürmer', c=>c.filter(x=>cardInPosGroup(x,'FWD')).length>=3, c=>`${c.filter(x=>cardInPosGroup(x,'FWD')).length} / 3`),
            req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`) ]},
 ];
-// keine UCLW-Karten (Champions-League-Sieger-Variante) in irgendeiner Quest-Kette einsetzbar - gilt für
-// jede aktuelle und künftige Quest-SBC (GOAT/WM/PROMO/Marcelo/Vinícius, ...), daher zentral hier über
-// den Tier-Namen nachgerüstet statt einzeln in jedem reqs-Array.
-const QUEST_SBC_TIERS = ['QUEST', 'WM-Quest', 'Promo-Quest', 'Marcelo-Quest', 'Vinicius-Quest'];
+// keine UCLW-Karten (Champions-League-Sieger-Variante) in den Vinícius-Sonderaufgaben einsetzbar -
+// nachgerüstet statt einzeln in jedem reqs-Array, gilt aber NUR für dieses eine Quest-Event.
 SBC_DEFS.forEach(sbc=>{
-  if(QUEST_SBC_TIERS.includes(sbc.tier)){
+  if(sbc.tier==='Vinicius-Quest'){
     sbc.reqs.push(req('Keine UCLW-Karten', c=>c.every(x=>x.variant!=='uclw'), c=>`${c.filter(x=>x.variant==='uclw').length} UCLW-Karte(n) enthalten`));
   }
 });
