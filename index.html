@@ -15180,7 +15180,15 @@ async function loadPackOddsForDisplay(pack){
 // One iteration count for both stats: the "VIEL VIEL mehr als 3.000" the admin panel promises, applied
 // uniformly since sourceProbPct-tracking dominates the per-iteration cost anyway (see simulatePackOdds's
 // trackSource comment) - going higher than the win-counting stats alone would need doesn't cost extra.
-const PACK_ODDS_ITERATIONS = 5000;
+// 5.000 turned out barely better than the 3.000-iteration live fallback (only ~22% less statistical
+// noise) - useless for packs with thousands of real-player cards, where any single card's odds are
+// already tiny before you even start sampling. Benchmarked the worst-case pack ("baseonly", ~11.700
+// distinct cards) at 20.000 iterations with trackSource on: ~67s for that one pack alone, scaling
+// slightly SUB-linearly with iteration count (warm caches, see poolByRange's memoization). Extrapolated
+// across all packs, 50.000 iterations lands around 10-15 minutes total - a one-time, admin-triggered,
+// repeatable action, not something any player ever waits on, so that's an easy trade for ~4x less noise
+// than the original 3.000 baseline (relative standard error scales with 1/sqrt(iterations)).
+const PACK_ODDS_ITERATIONS = 50000;
 async function recomputeAllPackOddsCache(onProgress){
   await fbReady;
   if(!fb) return {ok:false, reason:'offline'};
@@ -16910,7 +16918,7 @@ async function renderAdminPanel(view){
     </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Pack-Chancen neu berechnen</h3>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Simuliert jedes Pack mit ${PACK_ODDS_ITERATIONS.toLocaleString('de-DE')} Öffnungen (statt den ${'3.000'} einer Live-Berechnung) und speichert das Ergebnis, inkl. exakter Bezugsquellen-Prozente pro Karte für den Index. Dauert je nach Anzahl Packs ~1-2 Minuten, Tab bleibt bedienbar. <b style="color:#ff5f5f;">Danach erneut ausführen, sobald sich ein Pack-Inhalt/eine Ziehungschance ändert oder ein neues Pack dazukommt</b> — sonst zeigen Kartenladen und Index veraltete Zahlen.</p>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Simuliert jedes Pack mit ${PACK_ODDS_ITERATIONS.toLocaleString('de-DE')} Öffnungen (statt den 3.000 einer Live-Berechnung) und speichert das Ergebnis, inkl. exakter Bezugsquellen-Prozente pro Karte für den Index — auch bei Packs mit tausenden echten Spielerkarten. Dauert dadurch spürbar länger, ca. 10-15 Minuten für alle Packs zusammen, Tab bleibt währenddessen bedienbar (Fortschritt wird unten angezeigt). <b style="color:#ff5f5f;">Danach erneut ausführen, sobald sich ein Pack-Inhalt/eine Ziehungschance ändert oder ein neues Pack dazukommt</b> — sonst zeigen Kartenladen und Index veraltete Zahlen.</p>
       <button class="action-btn secondary" id="admin-recompute-pack-odds" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Jetzt neu berechnen</button>
       <p class="hint" id="admin-recompute-pack-odds-result" style="margin:10px 0 0;"></p>
     </div>
