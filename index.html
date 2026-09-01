@@ -15009,7 +15009,19 @@ function tierKeyForOv(ov){
   if(ov>=80) return 'goldrare';
   return 'gold';
 }
-function simulatePackOdds(pack, iterations=3000){
+// opts.trackSource (only set by the admin batch precompute, see recomputeAllPackOddsCache): also
+// instruments the shared pick() helper, the same technique computeCardPackSources uses for one card at
+// a time, but recording EVERY card seen in any visited pool in one pass instead of just one target card
+// - the per-pick() scan cost is the same either way (checking one card vs. recording all of them is both
+// O(pool.length)), so this produces the Karten-Index's entire per-card Bezugsquelle table for this pack
+// at roughly the SAME total cost as checking a single card would have, instead of that cost PER CARD.
+// Left off by default (undefined sourceProbPct) since it roughly triples the per-iteration cost on the
+// biggest real-player pools - the live 3.000-iteration on-demand fallback (see loadPackOddsForDisplay)
+// only needs the existing win-counting stats, not the source table, and must stay fast.
+// opts.yieldEvery/opts.onProgress: the admin batch run pushes iterations far higher (tens of thousands)
+// across many packs - yielding back to the event loop periodically keeps the tab responsive instead of
+// tripping the browser's "page unresponsive" watchdog on the largest pools.
+async function simulatePackOdds(pack, iterations=3000, opts={}){
   const tierCounts = {gold:0, goldrare:0, elite:0, icon:0, ultimate:0};
   const ratingAtLeastCounts = {r80:0, r85:0, r90:0, r95:0, r100:0, r105:0, r108:0};
   const atLeastRatingPackCounts = {r80:0, r85:0, r90:0, r95:0, r100:0, r105:0, r108:0};
@@ -15017,7 +15029,19 @@ function simulatePackOdds(pack, iterations=3000){
   const atLeastVariantCounts = {};
   const mgrBoostCounts = {};
   const cardCounts = new Map(); // id -> {card, count}
+  const sourceProb = opts.trackSource ? new Map() : null; // cardId -> accumulated 1/pool.length
+  const realPick = pick;
+  if(opts.trackSource){
+    pick = (pool)=>{
+      if(pool && pool.length){
+        const inv = 1/pool.length;
+        for(let i=0;i<pool.length;i++){ const c=pool[i]; if(c && c.id!=null) sourceProb.set(c.id, (sourceProb.get(c.id)||0)+inv); }
+      }
+      return realPick(pool);
+    };
+  }
   let totalCards=0, totalManagers=0, atLeastElite=0, atLeastIcon=0, atLeastUltimate=0, atLeastSpecial=0, atLeastManager=0;
+  try{
   for(let i=0;i<iterations;i++){
     const drawn = pack.draw();
     let hasElite=false, hasIcon=false, hasUltimate=false, hasSpecial=false, hasManager=false;
@@ -15061,7 +15085,12 @@ function simulatePackOdds(pack, iterations=3000){
     if(hasUltimate) atLeastUltimate++;
     if(hasSpecial) atLeastSpecial++;
     if(hasManager) atLeastManager++;
+    if(opts.yieldEvery && (i+1)%opts.yieldEvery===0){
+      if(opts.onProgress) opts.onProgress(i+1, iterations);
+      await new Promise(r=>setTimeout(r,0));
+    }
   }
+  } finally { if(opts.trackSource) pick = realPick; }
   const totalPicks = totalCards + totalManagers;
   const cardPct = Array.from(cardCounts.values())
     .map(({card,count})=>({card, pct: count/iterations*100, perPickPct: totalPicks ? count/totalPicks*100 : 0}))
@@ -15083,20 +15112,109 @@ function simulatePackOdds(pack, iterations=3000){
     atLeastUltimatePct: atLeastUltimate/iterations*100,
     atLeastSpecialPct: atLeastSpecial/iterations*100,
     atLeastManagerPct: atLeastManager/iterations*100,
-    iterations
+    iterations,
+    sourceProbPct: sourceProb ? Object.fromEntries(Array.from(sourceProb, ([id,totalP])=>[id, totalP/iterations])) : null
   };
+}
+// ===== Admin-precomputed Pack-Chancen-Cache (packOddsCache Firestore collection) =====
+// simulatePackOdds() at just 3.000 live iterations is already a bit noisy for rare (<1%) events and,
+// with sourceProbPct tracking on, too slow to run live at all for a large real-player pool - so instead
+// an admin runs it ONCE with far more iterations (see recomputeAllPackOddsCache) and every client just
+// reads the cached result. Falls back to the live 3.000-iteration simulation (no sourceProbPct) whenever
+// a pack has no cache entry yet (brand new pack) or the backend is unreachable - see
+// loadPackOddsForDisplay/computeCardPackSources, the two actual consumers of this cache.
+let packOddsCacheByPack = null; // null = not loaded yet; Map<packId, docData> once loaded (may be empty)
+async function loadPackOddsCache(){
+  if(packOddsCacheByPack) return packOddsCacheByPack;
+  packOddsCacheByPack = new Map();
+  await fbReady;
+  if(!fb) return packOddsCacheByPack;
+  try{
+    const snap = await fb.getDocs(fb.collection(fb.db,'packOddsCache'));
+    snap.docs.forEach(d=> packOddsCacheByPack.set(d.id, d.data()));
+  }catch(e){ console.warn('pack odds cache load failed', e); }
+  return packOddsCacheByPack;
+}
+// Firestore doesn't support arrays-of-arrays, so variantPct/mgrBoostPct (each an array of [label,...]
+// tuples in simulatePackOdds's in-memory shape) get flattened to arrays of plain objects for storage;
+// deserializePackOddsFromCache converts them straight back so showPackOdds's rendering code never has to
+// know the difference between a cached and a freshly-simulated result. cardPct/sourceProbPct store only
+// cardId (not the full card object) to keep documents small - card.n/card.ov/etc. can change over time
+// (level-ups, stat rebalances) and a real object dump would just go stale; resolving through BY_ID at
+// read time is always current.
+function serializePackOddsForCache(odds){
+  return {
+    computedAt: Date.now(), iterations: odds.iterations,
+    tierPct: odds.tierPct, ratingAtLeastPct: odds.ratingAtLeastPct, atLeastRatingPackPct: odds.atLeastRatingPackPct,
+    variantPct: (odds.variantPct||[]).map(([label,perCard,perPack])=>({label,perCard,perPack})),
+    mgrBoostPct: (odds.mgrBoostPct||[]).map(([label,pct])=>({label,pct})),
+    cardPct: odds.cardPct.map(({card,pct,perPickPct})=>({cardId:card.id, pct, perPickPct})),
+    atLeastElitePct: odds.atLeastElitePct, atLeastIconPct: odds.atLeastIconPct, atLeastUltimatePct: odds.atLeastUltimatePct,
+    atLeastSpecialPct: odds.atLeastSpecialPct, atLeastManagerPct: odds.atLeastManagerPct,
+    sourceProbPct: odds.sourceProbPct || {},
+  };
+}
+function deserializePackOddsFromCache(data){
+  const cardPct = (data.cardPct||[]).map(({cardId,pct,perPickPct})=>{
+    const card = MGR_BY_ID.get(cardId) || BY_ID.get(cardId);
+    return card ? {card, pct, perPickPct} : null;
+  }).filter(Boolean);
+  return {
+    tierPct: data.tierPct||{}, ratingAtLeastPct: data.ratingAtLeastPct||{}, atLeastRatingPackPct: data.atLeastRatingPackPct||{},
+    variantPct: (data.variantPct||[]).map(v=>[v.label, v.perCard, v.perPack]),
+    mgrBoostPct: (data.mgrBoostPct||[]).map(v=>[v.label, v.pct]),
+    cardPct,
+    atLeastElitePct: data.atLeastElitePct||0, atLeastIconPct: data.atLeastIconPct||0, atLeastUltimatePct: data.atLeastUltimatePct||0,
+    atLeastSpecialPct: data.atLeastSpecialPct||0, atLeastManagerPct: data.atLeastManagerPct||0,
+    iterations: data.iterations||0, sourceProbPct: data.sourceProbPct||{},
+  };
+}
+async function loadPackOddsForDisplay(pack){
+  const cache = await loadPackOddsCache();
+  const data = cache.get(pack.id);
+  if(data && Array.isArray(data.cardPct) && data.cardPct.length) return deserializePackOddsFromCache(data);
+  // no cache (new pack, or never computed) - fall back to a live simulation, deferred one tick so the
+  // "Berechne\u2026" placeholder actually paints before the loop blocks the thread.
+  return new Promise(resolve=>setTimeout(()=>resolve(simulatePackOdds(pack, 3000)), 30));
+}
+// One iteration count for both stats: the "VIEL VIEL mehr als 3.000" the admin panel promises, applied
+// uniformly since sourceProbPct-tracking dominates the per-iteration cost anyway (see simulatePackOdds's
+// trackSource comment) - going higher than the win-counting stats alone would need doesn't cost extra.
+const PACK_ODDS_ITERATIONS = 5000;
+async function recomputeAllPackOddsCache(onProgress){
+  await fbReady;
+  if(!fb) return {ok:false, reason:'offline'};
+  const drawablePacks = PACKS.filter(p=>typeof p.draw==='function');
+  let done = 0;
+  try{
+    for(const pack of drawablePacks){
+      const odds = await simulatePackOdds(pack, PACK_ODDS_ITERATIONS, {
+        trackSource:true, yieldEvery:250,
+        onProgress:(i,total)=>{ if(onProgress) onProgress(done, drawablePacks.length, pack.name, i, total); }
+      });
+      await fb.setDoc(fb.doc(fb.db,'packOddsCache', pack.id), serializePackOddsForCache(odds));
+      done++;
+      if(onProgress) onProgress(done, drawablePacks.length, pack.name, PACK_ODDS_ITERATIONS, PACK_ODDS_ITERATIONS);
+    }
+  }catch(e){ return {ok:false, reason:'write-failed', detail:(e&&(e.code||e.message))||String(e), done}; }
+  // invalidate every in-memory cache derived from the old data so this session's own Store/Index views
+  // pick up the fresh numbers immediately instead of only after a reload
+  packOddsCacheByPack = null;
+  cardPackSourceCache = new Map();
+  return {ok:true, packsComputed:done};
 }
 function showPackOdds(pack){
   openModal(`
     <h2 style="margin-bottom:2px;">${pack.name}</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Chancen basierend auf einer Simulation von 3.000 Pack-\u00d6ffnungen mit den echten Ziehungsregeln dieses Packs.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;" id="odds-methodology">Chancen basierend auf einer Simulation mit den echten Ziehungsregeln dieses Packs.</p>
     <div id="odds-body"><p class="hint">Berechne\u2026</p></div>
     <button class="modal-close" id="odds-close">Schlie\u00dfen</button>`);
   document.getElementById('odds-close').addEventListener('click', closeModal);
-  setTimeout(()=>{
-    const odds = simulatePackOdds(pack, 3000);
+  loadPackOddsForDisplay(pack).then(odds=>{
     const body = document.getElementById('odds-body');
     if(!body) return;
+    const methodEl = document.getElementById('odds-methodology');
+    if(methodEl) methodEl.textContent = `Chancen basierend auf einer ${packOddsCacheByPack && packOddsCacheByPack.has(pack.id) ? 'vom Admin regelm\u00e4\u00dfig aktualisierten, sehr genauen' : 'schnellen'} Simulation von ${odds.iterations.toLocaleString('de-DE')} Pack-\u00d6ffnungen mit den echten Ziehungsregeln dieses Packs.`;
     const fmtPct = v => v<0.05 && v>0 ? '<0.1%' : `${v.toFixed(1)}%`;
     const oddsBar = (pct, color='var(--gold)') => `<div class="bar" style="height:6px;"><i style="width:${Math.max(0.4, Math.min(100,pct))}%;background:${color};"></i></div>`;
     const tierRows = TIER_ORDER_ODDS.filter(k=>odds.tierPct[k]>0).map(k=>`
@@ -15168,7 +15286,7 @@ function showPackOdds(pack){
         });
       });
     }
-  }, 30);
+  });
 }
 // WM Winners Pack is only available this weekend - hard cutoff at Monday 00:00
 const WM_WINNERS_DEADLINE = new Date(2026, 6, 27, 0, 0, 0).getTime();
@@ -16791,6 +16909,12 @@ async function renderAdminPanel(view){
       <p class="hint" id="admin-recompute-mints-result" style="margin:10px 0 0;"></p>
     </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Pack-Chancen neu berechnen</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Simuliert jedes Pack mit ${PACK_ODDS_ITERATIONS.toLocaleString('de-DE')} Öffnungen (statt den ${'3.000'} einer Live-Berechnung) und speichert das Ergebnis, inkl. exakter Bezugsquellen-Prozente pro Karte für den Index. Dauert je nach Anzahl Packs ~1-2 Minuten, Tab bleibt bedienbar. <b style="color:#ff5f5f;">Danach erneut ausführen, sobald sich ein Pack-Inhalt/eine Ziehungschance ändert oder ein neues Pack dazukommt</b> — sonst zeigen Kartenladen und Index veraltete Zahlen.</p>
+      <button class="action-btn secondary" id="admin-recompute-pack-odds" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Jetzt neu berechnen</button>
+      <p class="hint" id="admin-recompute-pack-odds-result" style="margin:10px 0 0;"></p>
+    </div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Ligen einteilen</h3>
       <p class="hint" style="margin-top:0;margin-bottom:10px;">Einmalige, unumkehrbare Einteilung ALLER Accounts (außer Test-Accounts und Leaderboard-gesperrten) in Ligen à 8, nach Kaderstärke sortiert. Läuft nur, wenn noch nie eingeteilt wurde.</p>
       <button class="action-btn secondary" id="admin-seed-leagues" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Ligen jetzt einmalig einteilen</button>
@@ -16820,6 +16944,22 @@ async function renderAdminPanel(view){
       resultEl.style.color = 'var(--turf-bright)';
     } else {
       resultEl.textContent = `Fehlgeschlagen (${out.reason||'unbekannt'})${out.detail?': '+out.detail:''}.`;
+      resultEl.style.color = 'var(--danger)';
+    }
+    e.target.disabled = false; e.target.textContent = 'Jetzt neu berechnen';
+  });
+  document.getElementById('admin-recompute-pack-odds').addEventListener('click', async (e)=>{
+    e.target.disabled = true; e.target.textContent = 'Läuft…';
+    const resultEl = document.getElementById('admin-recompute-pack-odds-result');
+    const out = await recomputeAllPackOddsCache((done, totalPacks, packName, i, totalIter)=>{
+      resultEl.textContent = `Pack ${done+1}/${totalPacks} (${packName}): ${i.toLocaleString('de-DE')} / ${totalIter.toLocaleString('de-DE')} Öffnungen…`;
+      resultEl.style.color = 'var(--muted)';
+    });
+    if(out.ok){
+      resultEl.textContent = `Fertig: ${out.packsComputed} Packs neu berechnet.`;
+      resultEl.style.color = 'var(--turf-bright)';
+    } else {
+      resultEl.textContent = `Fehlgeschlagen nach ${out.done||0} Packs (${out.reason||'unbekannt'})${out.detail?': '+out.detail:''}.`;
       resultEl.style.color = 'var(--danger)';
     }
     e.target.disabled = false; e.target.textContent = 'Jetzt neu berechnen';
@@ -18265,41 +18405,70 @@ function cardSpecialSource(card){
 // Multiple iterations are still needed only to explore packs with several conditional draw branches
 // (a rare captain slot, a tiered rarity roll, etc.) - each branch just needs to be visited once, so far
 // fewer iterations are needed than the old per-card-win sampling ever did.
-let cardPackSourceCache = new Map();
-function computeCardPackSources(card, iterations=300){
-  if(cardPackSourceCache.has(card.id)) return cardPackSourceCache.get(card.id);
-  const hits = [];
+// Checks ONE pack for ONE card via live pick()-instrumentation, exactly the original per-card method -
+// now only used as a per-pack fallback (see computeCardPackSources) for whichever packs the admin's
+// packOddsCache doesn't have yet (a brand new pack, or before the very first recompute ever ran).
+function liveCheckSinglePackForCard(pack, card, iterations){
   const realPick = pick;
-  PACKS.forEach(pack=>{
-    let found = false, totalP = 0, sampled = 0;
-    try{
-      for(let i=0;i<iterations;i++){
-        pick = (pool)=>{
-          if(pool && pool.length && pool.some(c=>c && c.id===card.id)){ found = true; totalP += 1/pool.length; }
-          return realPick(pool);
-        };
-        try{ pack.draw({}); sampled++; }catch(e){ /* this pack needs args this run didn't supply - skip just this iteration */ }
-      }
-    } finally { pick = realPick; }
-    if(found) hits.push({pack, expectedPerPack: totalP/Math.max(1,sampled)});
-  });
+  let found = false, totalP = 0, sampled = 0;
+  try{
+    for(let i=0;i<iterations;i++){
+      pick = (pool)=>{
+        if(pool && pool.length && pool.some(c=>c && c.id===card.id)){ found = true; totalP += 1/pool.length; }
+        return realPick(pool);
+      };
+      try{ pack.draw({}); sampled++; }catch(e){ /* this pack needs args this run didn't supply - skip just this iteration */ }
+    }
+  } finally { pick = realPick; }
+  return found ? {found:true, expectedPerPack: totalP/Math.max(1,sampled)} : {found:false, expectedPerPack:0};
+}
+// Cache-first: reads each pack's precomputed sourceProbPct (see recomputeAllPackOddsCache, typically
+// 5.000+ iterations, run by an admin) instead of simulating live - this is what makes an EXACT
+// percentage possible at all (see packChanceLabel), since a live per-card check fast enough to run
+// on-demand (300 iterations) is far too noisy for anything below a few percent (150-tries-per-branch
+// noise is exactly the "keine Bezugsquelle gefunden" class of bug this used to have). Only falls back to
+// the live per-pack check for packs the cache doesn't cover yet, so a brand new pack still shows
+// *something* immediately rather than nothing until the next admin recompute.
+let cardPackSourceCache = new Map();
+async function computeCardPackSources(card){
+  if(cardPackSourceCache.has(card.id)) return cardPackSourceCache.get(card.id);
+  const cache = await loadPackOddsCache();
+  const hits = [];
+  for(const pack of PACKS){
+    const data = cache.get(pack.id);
+    if(data && data.sourceProbPct){
+      const expectedPerPack = data.sourceProbPct[card.id];
+      if(expectedPerPack>0) hits.push({pack, expectedPerPack, exact:true});
+      continue;
+    }
+    const live = liveCheckSinglePackForCard(pack, card, 300);
+    if(live.found) hits.push({pack, expectedPerPack:live.expectedPerPack, exact:false});
+  }
   hits.sort((a,b)=>b.expectedPerPack-a.expectedPerPack);
   cardPackSourceCache.set(card.id, hits);
   return hits;
 }
-function packChanceLabel(expectedPerPack){
+// No more "< 1%" bucket - an admin-cached hit (see computeCardPackSources) is precise enough to show a
+// real number even well under 1%, and burying that behind a vague bucket is exactly what made pack
+// odds feel untrustworthy. Only the live-fallback path (uncached packs, 300 iterations) is genuinely too
+// noisy to print past 2 decimals with a straight face, so that one still gets a "ca." qualifier.
+function packChanceLabel(expectedPerPack, exact){
   if(expectedPerPack>=0.995) return 'so gut wie garantiert';
-  if(expectedPerPack>=0.01) return `ca. ${Math.round(expectedPerPack*100)}% pro Pack`;
-  return '< 1% pro Pack';
+  const pct = expectedPerPack*100;
+  const prefix = exact ? '' : 'ca. ';
+  if(pct>=1) return `${prefix}${pct.toFixed(1)}% pro Pack`;
+  if(pct>=0.01) return `${prefix}${pct.toFixed(2)}% pro Pack`;
+  if(pct>=0.0005) return `${prefix}${pct.toFixed(3)}% pro Pack`;
+  return '< 0,001% pro Pack';
 }
-function cardIndexSourceHTML(card){
+async function cardIndexSourceHTML(card){
   const special = cardSpecialSource(card);
   if(special) return `<p class="hint" style="margin:0;">${special}</p>`;
-  const hits = computeCardPackSources(card);
+  const hits = await computeCardPackSources(card);
   if(!hits.length) return `<p class="hint" style="margin:0;">Keine bekannte aktuelle Bezugsquelle \u2014 vermutlich ein vergangener Event-/Turnier-/Community-Gewinn, der nicht mehr im aktiven Pack-Angebot ist.</p>`;
-  return hits.map(({pack, expectedPerPack})=>`<div class="cardidx-source-row">
+  return hits.map(({pack, expectedPerPack, exact})=>`<div class="cardidx-source-row">
       <span>\ud83d\udce6 ${pack.name}${pack.hidden?' <span class="hint" style="font-size:10px;">(nicht k\u00e4uflich)</span>':pack.cost?` <span class="hint" style="font-size:10px;">(${formatCoins(pack.cost)} Coins)</span>`:''}</span>
-      <span class="cardidx-source-rate">${packChanceLabel(expectedPerPack)}</span>
+      <span class="cardidx-source-rate">${packChanceLabel(expectedPerPack, exact)}</span>
     </div>`).join('');
 }
 function cardIndexOffersHTML(card){
@@ -18706,9 +18875,9 @@ function showCardIndexDetailModal(item){
     });
   });
   // Bezugsquelle-/Chemie-Berechnung kann kurz dauern - Rest der Ansicht sofort zeigen, Sektionen danach nachladen.
-  if(!card.isManager) setTimeout(()=>{
+  if(!card.isManager) setTimeout(async ()=>{
     const box = document.getElementById('cardidx-source-box');
-    if(box) box.innerHTML = cardIndexSourceHTML(card);
+    if(box) box.innerHTML = await cardIndexSourceHTML(card);
   }, 10);
   else { const box = document.getElementById('cardidx-source-box'); if(box) box.innerHTML = `<p class="hint" style="margin:0;">Trainer stammen aus eigenen Pack-Pools \u2014 Details siehe Kartenladen-Beschreibung des jeweiligen Packs.</p>`; }
   if(!card.isManager && !(card.lg==='Legenden' || card.lg==='OG Icons')){
