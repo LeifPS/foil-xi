@@ -8909,28 +8909,31 @@ async function initFirebase(){
       // file (collection/doc/getDocs/setDoc/...), so this is a drop-in swap beyond the new export.
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore.js`),
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-auth.js`),
-    ]), 12000);
+    ]), 8000);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
     const db = fsMod.getFirestore(app);
     const auth = authMod.getAuth(app);
     // connectivity probe - if this fails/hangs we fall back to local mode for the rest of the
     // session (there's no later retry, see the user-visible warning this now triggers below on
     // total failure). A mobile connection (cellular, hotel/school wifi, a slow cold start) can
-    // easily need several seconds just to resolve DNS and open the TLS connection before any actual
-    // Firestore traffic even starts - a couple of short attempts back to back were exactly what made
-    // "switching from PC to mobile" intermittently drop a session into offline mode (silently reading
-    // whatever stale local fallback that device happened to have, looking like the account "jumped
-    // back in time") even though the backend was reachable a few seconds later. 3 attempts with a
-    // longer per-try timeout and a growing pause between them absorbs a slow-but-working connection
-    // while still failing within a bounded, reasonable total (worst case ~35s) on a genuine outage.
-    // Firestore's limit() requires a positive integer (limit(0) throws), so this costs at most 3
-    // reads per session.
+    // easily need a couple of seconds just to resolve DNS and open the TLS connection before any
+    // actual Firestore traffic even starts - a single short attempt with no retry at all was exactly
+    // what made "switching from PC to mobile" intermittently drop a session into offline mode
+    // (silently reading whatever stale local fallback that device happened to have, looking like the
+    // account "jumped back in time") even though the backend was reachable a moment later. But this
+    // must stay bounded - an earlier version of this fix used 3 attempts at 10s each (worst case ~35s)
+    // and that made a GENUINE outage feel like the whole app hanging forever instead of falling back
+    // reasonably quickly, which is exactly as bad in the other direction. 2 attempts at 6s each with a
+    // short pause between them (worst case ~13.5s here, ~21.5s including the SDK import above) is the
+    // balance: still absorbs one transient blip, still fails fast enough that a real outage doesn't
+    // read as "everything takes forever to load". Firestore's limit() requires a positive integer
+    // (limit(0) throws), so this costs at most 2 reads per session.
     const probe = ()=> fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1)));
     let probeOk = false, lastProbeErr = null;
-    for(let attempt=0; attempt<3 && !probeOk; attempt++){
-      if(attempt>0) await new Promise(r=>setTimeout(r, 1500*attempt));
-      try{ await withTimeout(probe(), 10000); probeOk = true; }
-      catch(e){ lastProbeErr = e; console.warn(`Firestore connectivity probe failed (attempt ${attempt+1}/3):`, e); }
+    for(let attempt=0; attempt<2 && !probeOk; attempt++){
+      if(attempt>0) await new Promise(r=>setTimeout(r, 1000));
+      try{ await withTimeout(probe(), 6000); probeOk = true; }
+      catch(e){ lastProbeErr = e; console.warn(`Firestore connectivity probe failed (attempt ${attempt+1}/2):`, e); }
     }
     if(!probeOk) throw lastProbeErr;
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
