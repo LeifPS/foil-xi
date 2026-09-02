@@ -12657,6 +12657,10 @@ function renderSellManual(allEligible, usedInSquad){
   const pGrid = document.getElementById('sell-pick-grid');
   const searchInput = document.getElementById('sell-search');
   const posFilter = document.getElementById('sell-pos-filter');
+  // Gro\u00dfe Sammlungen (hunderte/tausende Karten/Trainer/Packs) w\u00fcrden sonst komplett auf
+  // einmal als volle Karten-DOM-Elemente gerendert und die UI einfrieren - deshalb \u00fcberall
+  // in Batches rendern und erst beim Scrollen ans Ende nachladen.
+  const RENDER_BATCH = 48;
   const renderPlayerGrid = ()=>{
     const q = searchInput.value.trim().toLowerCase();
     const pos = posFilter.value;
@@ -12667,7 +12671,8 @@ function renderSellManual(allEligible, usedInSquad){
       return true;
     });
     if(!filtered.length){ pGrid.innerHTML = '<p class="hint">Keine passenden Spieler gefunden.</p>'; return; }
-    filtered.forEach(({uid,card,cardId})=>{
+    let renderedCount = 0;
+    const renderOne = ({uid,card,cardId})=>{
       const locked = usedInSquad.has(uid);
       const wrap = document.createElement('div');
       wrap.className = 'club-card-wrap';
@@ -12685,7 +12690,16 @@ function renderSellManual(allEligible, usedInSquad){
         updateSel();
       });
       pGrid.appendChild(wrap);
-    });
+    };
+    const renderMore = ()=>{
+      filtered.slice(renderedCount, renderedCount+RENDER_BATCH).forEach(renderOne);
+      renderedCount = Math.min(filtered.length, renderedCount+RENDER_BATCH);
+    };
+    renderMore();
+    pGrid.onscroll = ()=>{
+      if(renderedCount>=filtered.length) return;
+      if(pGrid.scrollTop + pGrid.clientHeight >= pGrid.scrollHeight - 80) renderMore();
+    };
   };
   searchInput.addEventListener('input', renderPlayerGrid);
   posFilter.addEventListener('change', renderPlayerGrid);
@@ -12724,7 +12738,7 @@ function renderSellManual(allEligible, usedInSquad){
   const mGrid = document.getElementById('sell-pick-mgr-grid');
   const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId), mgrId:m.mgrId})).filter(x=>x.mgr && !x.mgr.untradable);
   if(!ownedMgrs.length){ mGrid.innerHTML = '<p class="hint">Keine Trainer im Besitz.</p>'; }
-  ownedMgrs.forEach(({uid,mgr,mgrId})=>{
+  const renderMgrOne = ({uid,mgr,mgrId})=>{
     const inSquad = usedInSquad.has(uid) || uid===squad.managerUid;
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap'; wrap.style.cursor= inSquad?'not-allowed':'pointer';
@@ -12739,11 +12753,21 @@ function renderSellManual(allEligible, usedInSquad){
       updateSel();
     });
     mGrid.appendChild(wrap);
-  });
+  };
+  let mgrRendered = 0;
+  const renderMoreMgrs = ()=>{
+    ownedMgrs.slice(mgrRendered, mgrRendered+RENDER_BATCH).forEach(renderMgrOne);
+    mgrRendered = Math.min(ownedMgrs.length, mgrRendered+RENDER_BATCH);
+  };
+  renderMoreMgrs();
+  mGrid.onscroll = ()=>{
+    if(mgrRendered>=ownedMgrs.length) return;
+    if(mGrid.scrollTop + mGrid.clientHeight >= mGrid.scrollHeight - 80) renderMoreMgrs();
+  };
   const pkGrid = document.getElementById('sell-pick-pack-grid');
   const ownedPacks = packCollection.map(p=>({uid:p.uid, pack:PACKS.find(x=>x.id===p.packId), packId:p.packId})).filter(x=>x.pack);
   if(!ownedPacks.length){ pkGrid.innerHTML = '<p class="hint">Keine Packs im Besitz.</p>'; }
-  ownedPacks.forEach(({uid,pack,packId})=>{
+  const renderPackOne = ({uid,pack,packId})=>{
     const locked = usedInSquad.has(uid);
     const wrap = document.createElement('div');
     wrap.className='club-card-wrap'; wrap.style.cursor = locked?'not-allowed':'pointer';
@@ -12758,7 +12782,17 @@ function renderSellManual(allEligible, usedInSquad){
       updateSel();
     });
     pkGrid.appendChild(wrap);
-  });
+  };
+  let packRendered = 0;
+  const renderMorePacks = ()=>{
+    ownedPacks.slice(packRendered, packRendered+RENDER_BATCH).forEach(renderPackOne);
+    packRendered = Math.min(ownedPacks.length, packRendered+RENDER_BATCH);
+  };
+  renderMorePacks();
+  pkGrid.onscroll = ()=>{
+    if(packRendered>=ownedPacks.length) return;
+    if(pkGrid.scrollTop + pkGrid.clientHeight >= pkGrid.scrollHeight - 80) renderMorePacks();
+  };
   document.getElementById('sell-price').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('sell-submit').click(); });
   document.getElementById('sell-submit').addEventListener('click', async (e)=>{
     const startPrice = Math.max(AUCTION_MIN_PRICE, Math.floor(parseCoinInput(document.getElementById('sell-price').value)||0));
