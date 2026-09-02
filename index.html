@@ -22128,7 +22128,7 @@ async function loadOpenTournaments(){
       btns.style.cssText = 'display:flex;gap:8px;margin-top:6px;width:100%;';
       if(!joined && t.status==='registering' && t.participants.length<t.maxSlots){
         const joinBtn = document.createElement('button'); joinBtn.className='action-btn'; joinBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; joinBtn.textContent='Beitreten';
-        joinBtn.addEventListener('click', ()=>{ joinBtn.disabled=true; joinHostedTournament(t.id, t.entryFee||0); });
+        joinBtn.addEventListener('click', ()=>{ joinBtn.disabled=true; joinHostedTournament(t.id, t.entryFee||0).finally(()=>{ if(joinBtn.isConnected) joinBtn.disabled=false; }); });
         btns.appendChild(joinBtn);
       } else if(joined && !isRunning){
         const tag = document.createElement('span'); tag.className='mono'; tag.style.cssText='color:var(--turf-bright);align-self:center;'; tag.textContent='\u2713 Angemeldet';
@@ -22142,10 +22142,10 @@ async function loadOpenTournaments(){
       if(isHost){
         if(t.status==='registering'){
           const startBtn = document.createElement('button'); startBtn.className='action-btn secondary'; startBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; startBtn.textContent='Turnier starten';
-          startBtn.addEventListener('click', ()=>{ startBtn.disabled=true; startHostedTournament(t.id); });
+          startBtn.addEventListener('click', ()=>{ startBtn.disabled=true; startHostedTournament(t.id).finally(()=>{ if(startBtn.isConnected) startBtn.disabled=false; }); });
           btns.appendChild(startBtn);
           const cancelBtn = document.createElement('button'); cancelBtn.className='action-btn secondary'; cancelBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;color:#ff8a8a;border-color:#ff8a8a;'; cancelBtn.textContent='Absagen';
-          cancelBtn.addEventListener('click', ()=>{ cancelBtn.disabled=true; cancelHostedTournament(t.id); });
+          cancelBtn.addEventListener('click', ()=>{ cancelBtn.disabled=true; cancelHostedTournament(t.id).finally(()=>{ if(cancelBtn.isConnected) cancelBtn.disabled=false; }); });
           btns.appendChild(cancelBtn);
         }
       }
@@ -22205,13 +22205,13 @@ async function loadMyTournamentResults(){
         const claimBtn = document.createElement('button');
         claimBtn.className='action-btn'; claimBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;';
         claimBtn.textContent = t.prizeType==='card' && t.prizeCard ? `Karte abholen: ${t.prizeCard.n}` : `Preis abholen (${formatCoins((t.winnerPrizeCoins||0))})`;
-        claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id,'winner'); });
+        claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id,'winner').finally(()=>{ if(claimBtn.isConnected) claimBtn.disabled=false; }); });
         row.appendChild(claimBtn);
       } else if(isRunnerUp && !t.runnerUpPrizeClaimed && t.runnerUpPrizeCoins>0){
         const claimBtn = document.createElement('button');
         claimBtn.className='action-btn'; claimBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;';
         claimBtn.textContent = `Preis abholen (${formatCoins(t.runnerUpPrizeCoins)})`;
-        claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id,'runnerup'); });
+        claimBtn.addEventListener('click', (e)=>{ e.stopPropagation(); claimBtn.disabled=true; claimTournamentPrize(t.id,'runnerup').finally(()=>{ if(claimBtn.isConnected) claimBtn.disabled=false; }); });
         row.appendChild(claimBtn);
       }
       box.appendChild(row);
