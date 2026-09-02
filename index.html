@@ -199,6 +199,29 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .pack-card .buyrow{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:9px;border-top:1px solid rgba(255,255,255,.06);}
 .price-pill{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;color:var(--gold);}
 .price-pill .pdot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px var(--gold);}
+/* ===== Auktions-Chip (Markt-Kachel) + Auktions-Statistik-Karte (Gebots-/Verwalten-Modal) - eine
+   gemeinsame visuelle Sprache für "wie läuft diese Auktion gerade" an beiden Stellen, statt zwei
+   verschiedene Ad-hoc-Layouts. Die Zeitleiste (auction-timebar) läuft immer von 0% (gerade erst
+   gestartet) bis 100% (gleich vorbei) und färbt sich über Grün -> Gold -> Rot ein, je näher das Ende
+   rückt - dieselbe Ampel-Logik wie schon anderswo im Spiel (Chem-Bar etc.), nicht neu erfunden. */
+.auction-chip{position:absolute;bottom:6px;left:6px;right:6px;background:rgba(6,8,12,.85);border-radius:10px;padding:6px 8px 7px;display:flex;flex-direction:column;gap:4px;z-index:2;}
+.auction-chip-top{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.auction-chip-price{font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;color:var(--gold);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.auction-chip-tag{font-size:8px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:rgba(255,255,255,.09);padding:2px 5px;border-radius:5px;white-space:nowrap;flex-shrink:0;}
+.auction-chip-tag.is-bid{color:var(--turf-bright);background:rgba(63,163,77,.18);}
+.auction-timebar{height:3px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;}
+.auction-timebar i{display:block;height:100%;border-radius:3px;transition:width 1s linear,background-color .3s;}
+.auction-chip-time{font-family:'JetBrains Mono';font-size:9px;text-align:center;letter-spacing:.02em;}
+.auction-buynow-corner{position:absolute;top:6px;right:6px;background:rgba(6,8,12,.85);border-radius:7px;padding:3px 7px;font-size:9.5px;font-family:'JetBrains Mono';color:var(--chalk);display:flex;align-items:center;gap:3px;z-index:2;white-space:nowrap;}
+.auction-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.auction-stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;}
+.auction-stat.highlight{border-color:var(--gold);background:rgba(255,215,106,.08);}
+.auction-stat-label{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px;}
+.auction-stat-value{display:block;font-family:'JetBrains Mono';font-weight:700;font-size:14.5px;color:var(--chalk);}
+.auction-stat.highlight .auction-stat-value{color:var(--gold);}
+.auction-timebar-lg{height:6px;margin-bottom:6px;}
+.auction-quickbid-row{display:flex;gap:6px;margin-bottom:8px;}
+.auction-quickbid-row button{flex:1;padding:7px 0;font-size:11px;}
 .token-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22d3ee;box-shadow:0 0 7px #22d3ee;vertical-align:middle;margin-right:5px;}
 .buy-btn{background:var(--turf);color:#eafff2;padding:8px 15px;border-radius:8px;font-weight:700;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;transition:.15s;box-shadow:0 2px 8px rgba(47,157,103,.25);}
 .buy-btn:hover{background:var(--turf-bright);box-shadow:0 3px 12px rgba(63,163,77,.4);}
@@ -12174,6 +12197,21 @@ function auctionMinNextBid(listing){
   return Math.max(AUCTION_MIN_PRICE, min);
 }
 function auctionIsExpiredData(listing){ return !listing.endsAt || listing.endsAt<=Date.now(); }
+// Zeitleisten-Prozentsatz (0 = gerade gestartet, 100 = gleich vorbei) + Ampel-Farbe fürs Countdown-UI -
+// eine gemeinsame Quelle für Markt-Kachel, Gebots-Modal und Verwalten-Modal, damit alle drei exakt
+// dieselbe Dringlichkeits-Logik zeigen statt independent leicht abweichender Schwellenwerte.
+function auctionTimebarPct(listing){
+  const total = listing.durationMs||((listing.endsAt||Date.now())-(listing.createdAt||Date.now()))||1;
+  const left = Math.max(0, (listing.endsAt||0)-Date.now());
+  return Math.max(0, Math.min(100, 100-(left/total*100)));
+}
+function auctionTimebarColor(listing){
+  const left = (listing.endsAt||0)-Date.now();
+  if(left<=0) return 'var(--danger)';
+  if(left<AUCTION_ANTISNIPE_MS) return 'var(--danger)';
+  if(left<60*60*1000) return '#ffd76a';
+  return 'var(--turf-bright)';
+}
 let tradeSubTab = 'market';
 const TRADE_UNLOCK_NET_WORTH = 80000;
 function tradeUnlocked(){ return computeMyNetWorth() >= TRADE_UNLOCK_NET_WORTH; }
@@ -12427,12 +12465,21 @@ function drawMarketGrid(){
       wrap.appendChild(cardEl(card,'mini'));
       wrap.appendChild(rapBadge(card, {style:'position:relative;z-index:2;'}));
     }
+    const buyNowChip = document.createElement('div');
+    buyNowChip.className = 'auction-buynow-corner';
+    buyNowChip.innerHTML = `⚡ ${formatCoins(listing.buyNowPrice)}`;
+    wrap.appendChild(buyNowChip);
     const priceTag = document.createElement('div');
-    priceTag.className = 'price-pill';
-    priceTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;flex-direction:column;gap:2px;';
+    priceTag.className = 'auction-chip';
     const timeLeft = listing.endsAt - Date.now();
-    priceTag.innerHTML = `<div style="display:flex;align-items:center;gap:4px;justify-content:center;"><div class="pdot"></div>${formatCoins(auctionEffectivePrice(listing))}${listing.currentBid>0?' <span style="opacity:.7;font-size:9.5px;">(Gebot)</span>':''}</div>
-      <div class="mono" style="font-size:9px;color:${timeLeft<AUCTION_ANTISNIPE_MS?'var(--danger)':'var(--muted)'};">⏳ ${timeLeft>0?formatCountdown(timeLeft):'beendet'}</div>`;
+    const barColor = auctionTimebarColor(listing);
+    priceTag.innerHTML = `
+      <div class="auction-chip-top">
+        <span class="auction-chip-price">🪙 ${formatCoins(auctionEffectivePrice(listing))}</span>
+        <span class="auction-chip-tag${listing.currentBid>0?' is-bid':''}">${listing.currentBid>0?'Gebot':'Start'}</span>
+      </div>
+      <div class="auction-timebar"><i style="width:${auctionTimebarPct(listing)}%;background:${barColor};"></i></div>
+      <div class="mono auction-chip-time" style="color:${barColor};">⏳ ${timeLeft>0?formatCountdown(timeLeft):'beendet'}</div>`;
     wrap.appendChild(priceTag);
     const item = card || pack;
     if(listing.sellerUserId===profile.userId){
@@ -12575,20 +12622,33 @@ function renderSellManual(allEligible, usedInSquad){
     <div class="club-grid" id="sell-pick-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Packs</div>
     <div class="club-grid" id="sell-pick-pack-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
-    <div class="toolbar" style="margin-bottom:6px;">
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Auktions-Einstellungen</div>
+    <div class="toolbar" style="margin-bottom:8px;">
       <input id="sell-price" type="text" inputmode="decimal" placeholder="Startpreis pro Karte in Coins (z. B. 1.2m)">
       <button class="action-btn secondary" id="sell-price-rap" style="width:auto;padding:9px 14px;font-size:12px;white-space:nowrap;">RAP-Ø vorschlagen</button>
     </div>
-    <div class="toolbar" style="margin-bottom:6px;">
+    <div class="toolbar" style="margin-bottom:8px;">
       <select id="sell-duration">
-        ${AUCTION_DURATIONS.map((d,i)=>`<option value="${i}" ${d.ms===24*60*60*1000?'selected':''}>${d.label}</option>`).join('')}
+        ${AUCTION_DURATIONS.map((d,i)=>`<option value="${i}" ${d.ms===24*60*60*1000?'selected':''}>${d.label} Laufzeit</option>`).join('')}
       </select>
-      <input id="sell-buynow-factor" type="text" inputmode="decimal" placeholder="Sofortkauf-Faktor (Standard 1.5x)" value="1.5">
+      <input id="sell-buynow-factor" type="text" inputmode="decimal" placeholder="Sofortkauf-Faktor" value="1.5">
     </div>
-    <p class="hint" style="margin:0 0 12px;">Sofortkaufpreis = Startpreis × Faktor - muss über dem Startpreis liegen.</p>
+    <div class="auction-stat" style="margin-bottom:14px;">
+      <span class="auction-stat-label">Sofortkaufpreis (Startpreis × Faktor)</span>
+      <span class="auction-stat-value" id="sell-buynow-preview">—</span>
+    </div>
     <div class="mono" id="sell-selected-info" style="color:var(--muted);margin-bottom:12px;">0 Karten ausgewählt</div>
-    <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:260px;">Zum Markt hinzufügen</button>`;
+    <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:260px;">Auktion(en) starten</button>`;
   const selected = new Map(); // uid -> {uid, itemType, cardId}
+  const updateBuyNowPreview = ()=>{
+    const startPrice = Math.max(AUCTION_MIN_PRICE, Math.floor(parseCoinInput(document.getElementById('sell-price').value)||0));
+    const factor = Math.max(1.01, Number(document.getElementById('sell-buynow-factor').value)||AUCTION_BUYNOW_FACTOR_DEFAULT);
+    const previewEl = document.getElementById('sell-buynow-preview');
+    if(previewEl) previewEl.textContent = startPrice ? `⚡ ${formatCoins(Math.max(AUCTION_MIN_PRICE, Math.ceil(startPrice*factor)))}` : '—';
+  };
+  document.getElementById('sell-price').addEventListener('input', updateBuyNowPreview);
+  document.getElementById('sell-buynow-factor').addEventListener('input', updateBuyNowPreview);
+  updateBuyNowPreview();
   const updateSel = ()=>{
     document.getElementById('sell-selected-info').textContent = `${selected.size} Karte${selected.size===1?'':'n'} ausgew\u00e4hlt`;
     const btn = document.getElementById('sell-submit');
@@ -12892,7 +12952,7 @@ function renderSellFilter(allEligible, usedInSquad){
     <p class="hint" style="margin:0 0 10px;">Sofortkaufpreis = Startpreis × Faktor - muss über dem Startpreis liegen.</p>
     <div class="mono" id="filter-preview" style="color:var(--muted);margin-bottom:14px;">Lege Filter fest, um passende Karten zu sehen.</div>
     <div class="club-grid" id="filter-preview-grid" style="max-height:260px;overflow:auto;margin-bottom:16px;"></div>
-    <button class="action-btn" id="filter-submit" disabled style="opacity:.4;width:260px;">Alle auflisten</button>
+    <button class="action-btn" id="filter-submit" disabled style="opacity:.4;width:260px;">Auktionen starten</button>
     <p class="hint" style="margin-top:10px;">Es werden nur Spielerkarten erfasst (keine Trainer), die nicht im Kader stehen und nicht bereits gelistet/im Handel sind. Maximal 40 Karten pro Aktion.</p>`;
   const minInput = document.getElementById('filter-min-ov');
   const maxInput = document.getElementById('filter-max-ov');
@@ -12944,6 +13004,7 @@ function renderSellFilter(allEligible, usedInSquad){
     grid.innerHTML = '';
     errEl.textContent = '';
     let ok = true;
+    const previewBuyNowFactor = Math.max(1.01, Number(document.getElementById('filter-buynow-factor')?.value)||AUCTION_BUYNOW_FACTOR_DEFAULT);
     if(priceMode==='formula' && formulaInput.value.trim()){
       try{
         capped.forEach(({card})=>{
@@ -12957,6 +13018,11 @@ function renderSellFilter(allEligible, usedInSquad){
           tag.style.cssText = 'text-align:center;font-size:10px;color:var(--gold);margin-top:2px;';
           tag.textContent = formatCoins(price);
           wrap.appendChild(tag);
+          const buyNowTag = document.createElement('div');
+          buyNowTag.className = 'mono';
+          buyNowTag.style.cssText = 'text-align:center;font-size:8.5px;color:var(--muted);';
+          buyNowTag.textContent = `⚡ ${formatCoins(Math.max(AUCTION_MIN_PRICE, Math.ceil(price*previewBuyNowFactor)))}`;
+          wrap.appendChild(buyNowTag);
           grid.appendChild(wrap);
         });
       }catch(err){
@@ -12964,11 +13030,19 @@ function renderSellFilter(allEligible, usedInSquad){
         errEl.textContent = 'Formelfehler: ' + err.message;
       }
     } else {
+      const flatStart = Math.max(AUCTION_MIN_PRICE, Math.floor(parseCoinInput(priceInput.value)||0));
       capped.forEach(({card})=>{
         const wrap = document.createElement('div');
         wrap.style.position = 'relative';
         wrap.appendChild(cardEl(card,'xs'));
         wrap.appendChild(rapBadge(card, {style:'font-size:8.5px;padding:1px 4px;'}));
+        if(flatStart){
+          const buyNowTag = document.createElement('div');
+          buyNowTag.className = 'mono';
+          buyNowTag.style.cssText = 'text-align:center;font-size:8.5px;color:var(--muted);';
+          buyNowTag.textContent = `⚡ ${formatCoins(Math.max(AUCTION_MIN_PRICE, Math.ceil(flatStart*previewBuyNowFactor)))}`;
+          wrap.appendChild(buyNowTag);
+        }
         grid.appendChild(wrap);
       });
     }
@@ -12986,6 +13060,7 @@ function renderSellFilter(allEligible, usedInSquad){
     btn.disabled = !enabled; btn.style.opacity = enabled ? '1' : '.4';
   };
   [minInput, maxInput, posSelect, formulaInput, priceInput].forEach(el=>el.addEventListener('input', updatePreview));
+  document.getElementById('filter-buynow-factor').addEventListener('input', updatePreview);
   posSelect.addEventListener('change', updatePreview);
   document.getElementById('filter-submit').addEventListener('click', async (e)=>{
     if(!matches.length){ toast('Keine passenden Karten gefunden.'); return; }
@@ -13054,26 +13129,48 @@ function openAuctionBidModal(listing, item){
   const rap = isPack ? computePackRAP(item) : computeRAP(item);
   const iAmHighBidder = listing.currentBidderId===profile.userId;
   const minBid = auctionMinNextBid(listing);
+  const barColor = auctionTimebarColor(listing);
   openModal(`
-    <h2 style="margin-bottom:4px;">${name}</h2>
-    <div style="display:flex;justify-content:center;margin:10px 0;">${visualHTML}</div>
-    <p class="hint" style="text-align:center;margin:0 0 10px;">Verkäufer: <b>${listing.sellerName||'Unbekannt'}</b> · Geschätzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b></p>
-    <p class="mono" style="text-align:center;margin:0 0 4px;">${listing.currentBid>0 ? `Aktuelles Gebot: <b style="color:var(--gold);">${formatCoins(listing.currentBid)}</b>${iAmHighBidder?' <span style="color:var(--turf-bright);">(du!)</span>':''}` : `Noch keine Gebote — Startpreis: <b style="color:var(--gold);">${formatCoins(listing.startPrice)}</b>`}</p>
-    <p class="mono" id="auction-bid-countdown" style="text-align:center;color:var(--danger);margin:0 0 16px;"></p>
-    <div class="toolbar" style="margin-bottom:8px;">
+    <h2 style="margin-bottom:2px;">${name}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Verkäufer: <b>${listing.sellerName||'Unbekannt'}</b> · Geschätzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b></p>
+    <div style="display:flex;justify-content:center;margin-bottom:12px;">${visualHTML}</div>
+    ${iAmHighBidder ? `<div class="mono" style="text-align:center;color:var(--turf-bright);margin-bottom:10px;">✓ Du bist aktuell Höchstbietender</div>` : ''}
+    <div class="auction-stats-grid">
+      <div class="auction-stat"><span class="auction-stat-label">Startpreis</span><span class="auction-stat-value">${formatCoins(listing.startPrice)}</span></div>
+      <div class="auction-stat highlight"><span class="auction-stat-label">${listing.currentBid>0?'Aktuelles Gebot':'Noch kein Gebot'}</span><span class="auction-stat-value">${listing.currentBid>0?formatCoins(listing.currentBid):'—'}</span></div>
+      <div class="auction-stat"><span class="auction-stat-label">Sofortkauf</span><span class="auction-stat-value">⚡ ${formatCoins(listing.buyNowPrice)}</span></div>
+      <div class="auction-stat"><span class="auction-stat-label">Verbleibend</span><span class="auction-stat-value" id="auction-bid-timeval" style="color:${barColor};font-size:12.5px;"></span></div>
+    </div>
+    <div class="chem-bar auction-timebar-lg"><i id="auction-bid-timebar" style="width:${auctionTimebarPct(listing)}%;background:${barColor};"></i></div>
+    <div class="auction-quickbid-row">
+      <button class="action-btn secondary" id="quickbid-min" type="button">Mindestgebot</button>
+      <button class="action-btn secondary" id="quickbid-25" type="button">+25%</button>
+      <button class="action-btn secondary" id="quickbid-50" type="button">+50%</button>
+    </div>
+    <div class="toolbar" style="margin-bottom:10px;">
       <input id="bid-amount" type="text" inputmode="decimal" placeholder="Mindestens ${formatCoins(minBid)}" value="${minBid}">
       <button class="action-btn" id="bid-submit" style="width:auto;padding:9px 18px;">Bieten</button>
     </div>
-    <button class="action-btn secondary" id="buynow-submit" style="width:100%;margin-bottom:10px;">🪙 Sofortkauf für ${formatCoins(listing.buyNowPrice)} Coins</button>
+    <button class="action-btn secondary" id="buynow-submit" style="width:100%;margin-bottom:10px;">⚡ Sofortkauf für ${formatCoins(listing.buyNowPrice)} Coins</button>
     <button class="action-btn secondary" id="auction-cancel" style="background:none;width:100%;">Schließen</button>`);
   document.getElementById('auction-cancel').addEventListener('click', closeModal);
+  document.getElementById('quickbid-min').addEventListener('click', ()=>{ document.getElementById('bid-amount').value = minBid; });
+  document.getElementById('quickbid-25').addEventListener('click', ()=>{ document.getElementById('bid-amount').value = Math.ceil(minBid*1.25); });
+  document.getElementById('quickbid-50').addEventListener('click', ()=>{ document.getElementById('bid-amount').value = Math.ceil(minBid*1.5); });
   // self-terminating countdown (same pattern as e.g. marceloQuestCountdownTimer) - stops on its own the
-  // instant this modal's own element is gone, no need to track/clear the interval from every exit path
+  // instant this modal's own element is gone, no need to track/clear the interval from every exit path.
+  // Drives both the numeric "Verbleibend" stat and the shared time-bar (same auctionTimebarPct/-Color
+  // helpers the market tile uses, so the urgency color always matches across the whole feature).
   const updateCountdown = ()=>{
-    const el = document.getElementById('auction-bid-countdown');
-    if(!el) return;
+    const valEl = document.getElementById('auction-bid-timeval');
+    const barEl = document.getElementById('auction-bid-timebar');
+    if(!valEl || !barEl) return;
     const left = listing.endsAt - Date.now();
-    el.textContent = left>0 ? `⏳ Noch ${formatCountdown(left)}` : 'Auktion beendet — lädt neu…';
+    const color = auctionTimebarColor(listing);
+    valEl.textContent = left>0 ? formatCountdown(left) : 'beendet';
+    valEl.style.color = color;
+    barEl.style.width = auctionTimebarPct(listing)+'%';
+    barEl.style.background = color;
     if(left<=0){ closeModal(); loadMarketListings(); }
   };
   updateCountdown();
@@ -13095,25 +13192,34 @@ function openManageListingModal(listing, item){
   const visualHTML = isPack ? packTileMiniEl(item).outerHTML : cardEl(item,'mini').outerHTML;
   const rap = isPack ? computePackRAP(item) : computeRAP(item);
   const hasBid = listing.currentBid>0;
+  const barColor = auctionTimebarColor(listing);
   openModal(`
-    <h2 style="margin-bottom:10px;">${name} — dein Angebot</h2>
-    <div style="display:flex;justify-content:center;margin-bottom:14px;">${visualHTML}</div>
-    <p class="mono" style="text-align:center;margin-bottom:4px;">Startpreis: <b style="color:var(--gold);">${formatCoins(listing.startPrice)}</b> · Sofortkauf: <b style="color:var(--gold);">${formatCoins(listing.buyNowPrice)}</b></p>
-    <p class="mono" style="text-align:center;margin-bottom:4px;">${hasBid ? `Aktuelles Gebot: <b style="color:var(--turf-bright);">${formatCoins(listing.currentBid)}</b> von ${listing.currentBidderName||'jemandem'}` : 'Noch keine Gebote.'}</p>
-    <p class="mono" id="manage-listing-countdown" style="text-align:center;color:var(--danger);margin-bottom:4px;"></p>
-    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Geschätzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b></p>
+    <h2 style="margin-bottom:2px;">${name} — dein Angebot</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Geschätzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b></p>
+    <div style="display:flex;justify-content:center;margin-bottom:12px;">${visualHTML}</div>
+    <div class="auction-stats-grid">
+      <div class="auction-stat"><span class="auction-stat-label">Startpreis</span><span class="auction-stat-value">${formatCoins(listing.startPrice)}</span></div>
+      <div class="auction-stat${hasBid?' highlight':''}"><span class="auction-stat-label">${hasBid?'Aktuelles Gebot':'Noch kein Gebot'}</span><span class="auction-stat-value">${hasBid?formatCoins(listing.currentBid):'—'}</span></div>
+      <div class="auction-stat"><span class="auction-stat-label">Sofortkauf</span><span class="auction-stat-value">⚡ ${formatCoins(listing.buyNowPrice)}</span></div>
+      <div class="auction-stat"><span class="auction-stat-label">Verbleibend</span><span class="auction-stat-value" id="manage-listing-timeval" style="color:${barColor};font-size:12.5px;"></span></div>
+    </div>
+    <div class="chem-bar auction-timebar-lg"><i id="manage-listing-timebar" style="width:${auctionTimebarPct(listing)}%;background:${barColor};"></i></div>
+    ${hasBid ? `<p class="hint" style="text-align:center;margin-bottom:14px;">Gebot von <b>${listing.currentBidderName||'jemandem'}</b> — sobald geboten wurde, kann die Auktion nicht mehr zurückgezogen werden. Sie läuft bis zum Ende oder bis zum Sofortkauf.</p>` : ''}
     <div style="display:flex;flex-direction:column;gap:10px;">
-      ${hasBid
-        ? `<p class="hint" style="text-align:center;">Sobald geboten wurde, kann die Auktion nicht mehr zurückgezogen werden — sie läuft bis zum Ende oder bis zum Sofortkauf.</p>`
-        : `<button class="action-btn secondary" id="withdraw-listing-btn" style="background:var(--danger);">Zurückziehen</button>`}
+      ${hasBid ? '' : `<button class="action-btn secondary" id="withdraw-listing-btn" style="background:var(--danger);">Zurückziehen</button>`}
       <button class="action-btn secondary" id="manage-close-btn" style="background:none;">Schließen</button>
     </div>`);
   document.getElementById('manage-close-btn').addEventListener('click', closeModal);
   const updateCountdown = ()=>{
-    const el = document.getElementById('manage-listing-countdown');
-    if(!el) return;
+    const valEl = document.getElementById('manage-listing-timeval');
+    const barEl = document.getElementById('manage-listing-timebar');
+    if(!valEl || !barEl) return;
     const left = listing.endsAt - Date.now();
-    el.textContent = left>0 ? `⏳ Noch ${formatCountdown(left)}` : 'Auktion beendet — wird bald abgewickelt.';
+    const color = auctionTimebarColor(listing);
+    valEl.textContent = left>0 ? formatCountdown(left) : 'beendet';
+    valEl.style.color = color;
+    barEl.style.width = auctionTimebarPct(listing)+'%';
+    barEl.style.background = color;
   };
   updateCountdown();
   setInterval(updateCountdown, 1000);
