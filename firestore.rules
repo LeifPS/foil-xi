@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Vereins-Identität =====
+    // Passwort/E-Mail-Login läuft über ein synthetisches Firebase-Auth-Konto
+    // ({clubId}@foileleven-club.auth) - clubRegistry ist die einzige öffentlich lesbare Stelle, die
+    // verrät, ob ein Verein schon ein Passwort hat, ohne den privaten saves/{clubId}-Dokumentinhalt
+    // preiszugeben. Nur der Verein selbst (per Auth-E-Mail nachgewiesen) darf seinen eigenen Eintrag
+    // schreiben.
+    match /clubRegistry/{clubId} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.token.email == clubId + '@foileleven-club.auth';
+    }
+    match /saves/{clubId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ===== Admin-geschützte Aktionen =====
+    // config/resetEvent (Great Reset) darf NUR von den echten Admin-Accounts geschrieben werden -
+    // request.auth.token.email ist durch Firebase Auth serverseitig verifiziert, kann also nicht
+    // vorgetäuscht werden (anders als der rein clientseitige isAdmin()-Check im Spiel selbst). Jeder
+    // andere config-Eintrag bleibt wie gehabt offen.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if docId != 'resetEvent'
+        || (request.auth != null && request.auth.token.email in ['leifps@foileleven-club.auth', 'test@foileleven-club.auth']);
+    }
+
+    // ===== Auth erforderlich (aber kein Admin) =====
+    match /cardMints/{id} { allow read, write: if request.auth != null; }
+    match /mgrMints/{id} { allow read, write: if request.auth != null; }
+    match /rapOverrides/{id} { allow read, write: if request.auth != null; }
+    match /leagueMeta/{doc} { allow read, write: if request.auth != null; }
+    match /leagueMembership/{doc} { allow read, write: if request.auth != null; }
+    match /leagueJoinRequests/{doc} { allow read, write: if request.auth != null; }
+    match /leagueWeeks/{doc} { allow read, write: if request.auth != null; }
+    match /leagueHistory/{doc} { allow read, write: if request.auth != null; }
+    match /packOddsCache/{packId} {
+      allow read, write: if request.auth != null;
+      match /sourceShards/{shardId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // ===== Offen (kein Auth nötig) =====
+    match /squads/{squadId} { allow read, write: if true; }
+    match /queue/{queueId} { allow read, write: if true; }
+    match /leaderboardBans/{userId} { allow read, write: if true; }
+    match /matches/{matchId} { allow read, write: if true; }
+    match /trades/{tradeId} { allow read, write: if true; }
+    match /market/{listingId} { allow read, write: if true; }
+    match /liveTrades/{tradeId} {
+      allow read, write: if true;
+      match /messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
+    match /duels/{duelId} { allow read, write: if true; }
+    match /sales/{saleId} { allow read, write: if true; }
+    match /networth/{clubId} { allow read, write: if true; }
+    match /legacy/{clubId} { allow read, write: if true; }
+    match /tournaments/{tournamentId} { allow read, write: if true; }
+  }
+}
