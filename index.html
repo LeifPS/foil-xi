@@ -12141,6 +12141,39 @@ function describeWant(want){
   if(want.kind==='manager') return `1 Trainerkarte (mind. Stufe ${want.minTier})`;
   return '';
 }
+// ===== Transfermarkt-Auktionen (statt Festpreis-Verkauf): Dauer/Startpreis/Sofortkauf pro Angebot,
+// Mindestgebot +10% über dem aktuellen Gebot, Anti-Snipe-Verlängerung auf 5 Minuten bei späten
+// Geboten, Sofortkauf jederzeit bis zum Ende möglich. Gebotene Coins werden SOFORT abgezogen (Escrow),
+// nicht erst wenn die Auktion endet - sonst könnte ein Bieter zwischendurch dieselben Coins nochmal
+// ausgeben und am Ende ins Minus rutschen. Wird jemand überboten oder kauft ein anderer per Sofortkauf,
+// werden seine Coins atomar zurückerstattet. Da es keinen echten Server gibt, wird eine abgelaufene
+// Auktion opportunistisch vom Client desjenigen abgewickelt, der als Nächstes den Markt öffnet (siehe
+// resolveExpiredAuctions) - genau wie der wöchentliche Liga-Rollover, per Firestore-Transaktion gegen
+// doppelte Abwicklung abgesichert.
+const AUCTION_DURATIONS = [
+  {label:'15 Minuten', ms:15*60*1000},
+  {label:'30 Minuten', ms:30*60*1000},
+  {label:'1 Stunde', ms:60*60*1000},
+  {label:'3 Stunden', ms:3*60*60*1000},
+  {label:'6 Stunden', ms:6*60*60*1000},
+  {label:'12 Stunden', ms:12*60*60*1000},
+  {label:'24 Stunden', ms:24*60*60*1000},
+  {label:'48 Stunden', ms:48*60*60*1000},
+  {label:'72 Stunden', ms:72*60*60*1000},
+];
+const AUCTION_MIN_PRICE = 100;
+const AUCTION_BID_INCREMENT_PCT = 0.10;
+const AUCTION_ANTISNIPE_MS = 5*60*1000;
+// Vereinfachung ggü. der Wünsche des Nutzers (separate Formel für Sofortkauf wäre möglich, verdoppelt
+// aber die ohnehin schon große Listungs-UI) - Sofortkauf = Startpreis * Faktor, ein Faktor pro Listung,
+// nicht pro Karte. Erfüllt "Sofortkauf muss immer höher sein als Startpreis" automatisch (Faktor > 1).
+const AUCTION_BUYNOW_FACTOR_DEFAULT = 1.5;
+function auctionEffectivePrice(listing){ return listing.currentBid>0 ? listing.currentBid : listing.startPrice; }
+function auctionMinNextBid(listing){
+  const min = listing.currentBid>0 ? Math.ceil(listing.currentBid*(1+AUCTION_BID_INCREMENT_PCT)) : listing.startPrice;
+  return Math.max(AUCTION_MIN_PRICE, min);
+}
+function auctionIsExpiredData(listing){ return !listing.endsAt || listing.endsAt<=Date.now(); }
 let tradeSubTab = 'market';
 const TRADE_UNLOCK_NET_WORTH = 80000;
 function tradeUnlocked(){ return computeMyNetWorth() >= TRADE_UNLOCK_NET_WORTH; }
@@ -12292,10 +12325,13 @@ async function loadMarketListings(){
   await fbReady;
   const grid = document.getElementById('market-grid');
   if(!grid) return;
-  if(!fb){ grid.innerHTML = `<p class="hint">Transfermarkt ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`; return; }
+  if(!fb){ grid.innerHTML = `<p class="hint">Transfermarkt benötigt das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`; return; }
   await fetchMarketListingsCache();
   drawMarketGrid();
   loadSalesHistory().then(()=>drawMarketGrid());
+  // opportunistic auction resolution - see resolveExpiredAuctions's comment. Runs after the grid is
+  // already drawn (never blocks the visible page) and redraws once done if anything actually resolved.
+  resolveExpiredAuctions();
 }
 // ---- Wunschliste: eigene Karten-IDs (profile.wishlist) markieren, die man haben m\u00f6chte - taucht eine
 // davon als NEUES Transfermarkt-Angebot auf, gibt's einen Toast plus einen roten Punkt am Index-Tab
@@ -12327,7 +12363,7 @@ async function checkWishlistAgainstMarket(){
   await sSet('profile', profile);
   newHits.forEach(l=>{
     const card = BY_ID.get(l.cardId);
-    toast(`\u2b50 Wunschlisten-Karte im Angebot: ${card?card.n:'Karte'} f\u00fcr ${formatCoins(l.price)} Coins!`);
+    toast(`\u2b50 Wunschlisten-Karte im Angebot: ${card?card.n:'Karte'} - Startpreis ${formatCoins(l.startPrice)} Coins!`);
   });
   wishlistNotifyCount += newHits.length;
   renderNavBadges();
@@ -12351,14 +12387,14 @@ function drawMarketGrid(){
   else if(marketFilter.pos!=='ALL') items = items.filter(x=>x.card && x.listing.itemType!=='manager' && posGroup(x.card.pos)===marketFilter.pos);
   if(marketFilter.maxPrice){
     const max = parseCoinInput(marketFilter.maxPrice);
-    if(max>0) items = items.filter(x=>x.listing.price<=max);
+    if(max>0) items = items.filter(x=>auctionEffectivePrice(x.listing)<=max);
   }
   if(marketFilter.minOv){
     const minOv = Math.floor(Number(marketFilter.minOv)||0);
     if(minOv>0) items = items.filter(x=>x.card && x.card.ov>=minOv);
   }
-  if(marketFilter.sort==='price_asc') items.sort((a,b)=>a.listing.price-b.listing.price);
-  else if(marketFilter.sort==='price_desc') items.sort((a,b)=>b.listing.price-a.listing.price);
+  if(marketFilter.sort==='price_asc') items.sort((a,b)=>auctionEffectivePrice(a.listing)-auctionEffectivePrice(b.listing));
+  else if(marketFilter.sort==='price_desc') items.sort((a,b)=>auctionEffectivePrice(b.listing)-auctionEffectivePrice(a.listing));
   else if(marketFilter.sort==='rating_desc') items.sort((a,b)=>(b.card?b.card.ov:0)-(a.card?a.card.ov:0));
   else items.sort((a,b)=>b.listing.createdAt-a.listing.createdAt);
   // fairness cap: don't let one seller's bulk-listing crowd everyone else's offers out of view
@@ -12374,7 +12410,7 @@ function drawMarketGrid(){
   }
   const noteEl = document.getElementById('market-note');
   if(noteEl) noteEl.innerHTML = hiddenCount>0
-    ? `<p class="hint" style="width:100%;margin-bottom:10px;">${hiddenCount} weitere Angebote ausgeblendet (max. ${MARKET_PER_SELLER_CAP} pro Verk\u00e4ufer gleichzeitig sichtbar, damit nicht ein einzelner Verk\u00e4ufer die Liste dominiert). Nutze die Suche, um gezielt nach mehr zu suchen.</p>`
+    ? `<p class="hint" style="width:100%;margin-bottom:10px;">${hiddenCount} weitere Angebote ausgeblendet (max. ${MARKET_PER_SELLER_CAP} pro Verkäufer gleichzeitig sichtbar, damit nicht ein einzelner Verkäufer die Liste dominiert). Nutze die Suche, um gezielt nach mehr zu suchen.</p>`
     : '';
   renderLazyGrid(grid, items, ({listing,card,pack})=>{
     const wrap = document.createElement('div');
@@ -12393,8 +12429,10 @@ function drawMarketGrid(){
     }
     const priceTag = document.createElement('div');
     priceTag.className = 'price-pill';
-    priceTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;';
-    priceTag.innerHTML = `<div class="pdot"></div>${formatCoins(listing.price)}`;
+    priceTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;flex-direction:column;gap:2px;';
+    const timeLeft = listing.endsAt - Date.now();
+    priceTag.innerHTML = `<div style="display:flex;align-items:center;gap:4px;justify-content:center;"><div class="pdot"></div>${formatCoins(auctionEffectivePrice(listing))}${listing.currentBid>0?' <span style="opacity:.7;font-size:9.5px;">(Gebot)</span>':''}</div>
+      <div class="mono" style="font-size:9px;color:${timeLeft<AUCTION_ANTISNIPE_MS?'var(--danger)':'var(--muted)'};">⏳ ${timeLeft>0?formatCountdown(timeLeft):'beendet'}</div>`;
     wrap.appendChild(priceTag);
     const item = card || pack;
     if(listing.sellerUserId===profile.userId){
@@ -12407,13 +12445,19 @@ function drawMarketGrid(){
       wrap.appendChild(ownTag);
       wrap.addEventListener('click', ()=>openManageListingModal(listing, item));
     } else {
-      wrap.title = `Verkäufer: ${listing.sellerName||listing.sellerUserId} — Klicken zum Kaufen`;
-      wrap.addEventListener('click', ()=>confirmBuyListing(listing, item));
+      if(listing.currentBidderId===profile.userId){
+        const bidTag = document.createElement('div');
+        bidTag.className = 'sbc-inuse-badge';
+        bidTag.style.cssText = 'background:var(--turf-bright);color:#04140a;';
+        bidTag.textContent = 'DEIN GEBOT';
+        wrap.appendChild(bidTag);
+      }
+      wrap.title = `Verkäufer: ${listing.sellerName||listing.sellerUserId} — Klicken zum Bieten/Sofortkauf`;
+      wrap.addEventListener('click', ()=>openAuctionBidModal(listing, item));
     }
     return wrap;
   }, {emptyHtml: `<div class="empty-state" style="width:100%;"><h3>Keine Angebote</h3><p>Versuche einen anderen Filter oder verkaufe selbst eine Karte.</p></div>`});
-}
-async function getExternalLockedUids(){
+}async function getExternalLockedUids(){
   await fbReady;
   if(!fb) return new Set();
   return cachedRead('external-locks:'+profile.userId, 8000, async ()=>{
@@ -12474,6 +12518,11 @@ async function withdrawMarketListingByCardUid(uid){
   if(!fb) return false;
   try{
     const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.where('sellerUserId','==',profile.userId), fb.where('cardUid','==',uid)));
+    // a listing with an active bid can't just be silently deleted - the current bidder's coins are
+    // already escrowed against it (see placeBid) and deleting the doc without refunding them would
+    // strand that money forever. Block the auto-withdraw here exactly like the manual "Zurückziehen"
+    // button already does (see openManageListingModal) instead of quietly losing someone's coins.
+    if(snap.docs.some(d=>(d.data().currentBid||0)>0)) return false;
     for(const d of snap.docs){ await fb.deleteDoc(fb.doc(fb.db,'market', d.id)); }
     invalidateReadCache('market-listings');
     invalidateReadCache('external-locks:'+profile.userId);
@@ -12527,11 +12576,18 @@ function renderSellManual(allEligible, usedInSquad){
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Packs</div>
     <div class="club-grid" id="sell-pick-pack-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
     <div class="toolbar" style="margin-bottom:6px;">
-      <input id="sell-price" type="text" inputmode="decimal" placeholder="Preis pro Karte in Coins (z. B. 1.2m)">
-      <button class="action-btn secondary" id="sell-price-rap" style="width:auto;padding:9px 14px;font-size:12px;white-space:nowrap;">RAP-\u00d8 vorschlagen</button>
+      <input id="sell-price" type="text" inputmode="decimal" placeholder="Startpreis pro Karte in Coins (z. B. 1.2m)">
+      <button class="action-btn secondary" id="sell-price-rap" style="width:auto;padding:9px 14px;font-size:12px;white-space:nowrap;">RAP-Ø vorschlagen</button>
     </div>
-    <div class="mono" id="sell-selected-info" style="color:var(--muted);margin-bottom:12px;">0 Karten ausgew\u00e4hlt</div>
-    <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:260px;">Zum Markt hinzuf\u00fcgen</button>`;
+    <div class="toolbar" style="margin-bottom:6px;">
+      <select id="sell-duration">
+        ${AUCTION_DURATIONS.map((d,i)=>`<option value="${i}" ${d.ms===24*60*60*1000?'selected':''}>${d.label}</option>`).join('')}
+      </select>
+      <input id="sell-buynow-factor" type="text" inputmode="decimal" placeholder="Sofortkauf-Faktor (Standard 1.5x)" value="1.5">
+    </div>
+    <p class="hint" style="margin:0 0 12px;">Sofortkaufpreis = Startpreis × Faktor - muss über dem Startpreis liegen.</p>
+    <div class="mono" id="sell-selected-info" style="color:var(--muted);margin-bottom:12px;">0 Karten ausgewählt</div>
+    <button class="action-btn" id="sell-submit" disabled style="opacity:.4;width:260px;">Zum Markt hinzufügen</button>`;
   const selected = new Map(); // uid -> {uid, itemType, cardId}
   const updateSel = ()=>{
     document.getElementById('sell-selected-info').textContent = `${selected.size} Karte${selected.size===1?'':'n'} ausgew\u00e4hlt`;
@@ -12645,12 +12701,15 @@ function renderSellManual(allEligible, usedInSquad){
   });
   document.getElementById('sell-price').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('sell-submit').click(); });
   document.getElementById('sell-submit').addEventListener('click', async (e)=>{
-    const price = Math.max(1, Math.floor(parseCoinInput(document.getElementById('sell-price').value)||0));
-    if(!price){ toast('Bitte einen Preis angeben.'); return; }
-    if(!selected.size){ toast('Bitte mindestens eine Karte ausw\u00e4hlen.'); return; }
+    const startPrice = Math.max(AUCTION_MIN_PRICE, Math.floor(parseCoinInput(document.getElementById('sell-price').value)||0));
+    if(!startPrice){ toast(`Bitte einen Startpreis von mindestens ${formatCoins(AUCTION_MIN_PRICE)} Coins angeben.`); return; }
+    const buyNowFactor = Math.max(1.01, Number(document.getElementById('sell-buynow-factor').value)||AUCTION_BUYNOW_FACTOR_DEFAULT);
+    const buyNowPrice = Math.max(AUCTION_MIN_PRICE, Math.ceil(startPrice*buyNowFactor));
+    const durationMs = AUCTION_DURATIONS[Number(document.getElementById('sell-duration').value)||0].ms;
+    if(!selected.size){ toast('Bitte mindestens eine Karte auswählen.'); return; }
     e.target.disabled = true;
     await fbReady;
-    if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); e.target.disabled=false; return; }
+    if(!fb){ toast('Transfermarkt benötigt das Online-Backend.'); e.target.disabled=false; return; }
     const squadValues = new Set(Object.values(squad.slots));
     let created = 0, skipped = 0;
     for(const item of selected.values()){
@@ -12660,13 +12719,14 @@ function renderSellManual(allEligible, usedInSquad){
         await fb.setDoc(fb.doc(fb.db,'market', genId()), {
           sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
           itemType: item.itemType, cardUid: item.uid, cardId: item.cardId, xp: item.xp||0,
-          price, createdAt: Date.now()
+          startPrice, buyNowPrice, currentBid:0, currentBidderId:null, currentBidderName:null,
+          durationMs, endsAt: Date.now()+durationMs, createdAt: Date.now()
         });
         created++;
       }catch(err){ console.warn('bulk market list failed for item', err); skipped++; }
     }
     closeModal();
-    toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen (nicht mehr verf\u00fcgbar).` : `${created} Karte(n) zum Transfermarkt hinzugef\u00fcgt!`);
+    toast(skipped ? `${created} Auktion(en) gestartet, ${skipped} übersprungen (nicht mehr verfügbar).` : `${created} Auktion(en) gestartet!`);
     invalidateReadCache('market-listings');
     invalidateReadCache('external-locks:'+profile.userId);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
@@ -12822,6 +12882,14 @@ function renderSellFilter(allEligible, usedInSquad){
         Vergleiche: <code>= != &gt; &lt; &gt;= &lt;=</code>.<br>Beispiel: <code>1000 + max(0,{ovr}-88)*500</code> oder <code>if({pos}="TW", 300, 100 + {ovr}*10)</code></p>
       <div class="mono" id="formula-error" style="color:var(--danger);margin-bottom:8px;"></div>
     </div>
+    
+    <div class="toolbar" style="margin-bottom:6px;">
+      <select id="filter-duration">
+        ${AUCTION_DURATIONS.map((d,i)=>`<option value="${i}" ${d.ms===24*60*60*1000?'selected':''}>${d.label}</option>`).join('')}
+      </select>
+      <input id="filter-buynow-factor" type="text" inputmode="decimal" placeholder="Sofortkauf-Faktor (Standard 1.5x)" value="1.5">
+    </div>
+    <p class="hint" style="margin:0 0 10px;">Sofortkaufpreis = Startpreis × Faktor - muss über dem Startpreis liegen.</p>
     <div class="mono" id="filter-preview" style="color:var(--muted);margin-bottom:14px;">Lege Filter fest, um passende Karten zu sehen.</div>
     <div class="club-grid" id="filter-preview-grid" style="max-height:260px;overflow:auto;margin-bottom:16px;"></div>
     <button class="action-btn" id="filter-submit" disabled style="opacity:.4;width:260px;">Alle auflisten</button>
@@ -12924,29 +12992,33 @@ function renderSellFilter(allEligible, usedInSquad){
     const toList = matches.slice(0,40);
     let prices;
     try{
-      prices = toList.map(({card})=>({card, price: priceMode==='flat' ? Math.max(1, Math.floor(parseCoinInput(priceInput.value)||0)) : evalPriceFormula(formulaInput.value.trim(), card)}));
+      prices = toList.map(({card})=>({card, startPrice: Math.max(AUCTION_MIN_PRICE, priceMode==='flat' ? Math.floor(parseCoinInput(priceInput.value)||0) : evalPriceFormula(formulaInput.value.trim(), card))}));
     }catch(err){ toast('Formelfehler: ' + err.message); return; }
-    if(priceMode==='flat' && !prices[0].price){ toast('Bitte einen Preis angeben.'); return; }
+    if(priceMode==='flat' && !prices[0].startPrice){ toast(`Bitte einen Startpreis von mindestens ${formatCoins(AUCTION_MIN_PRICE)} Coins angeben.`); return; }
+    const buyNowFactor = Math.max(1.01, Number(document.getElementById('filter-buynow-factor').value)||AUCTION_BUYNOW_FACTOR_DEFAULT);
+    const durationMs = AUCTION_DURATIONS[Number(document.getElementById('filter-duration').value)||0].ms;
     e.target.disabled = true;
     await fbReady;
-    if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); e.target.disabled=false; return; }
+    if(!fb){ toast('Transfermarkt benötigt das Online-Backend.'); e.target.disabled=false; return; }
     const squadValues = new Set(Object.values(squad.slots));
     let created = 0, skipped = 0;
     for(let i=0;i<toList.length;i++){
       const {uid,cardId,card} = toList[i];
-      const price = prices[i].price;
+      const startPrice = prices[i].startPrice;
+      const buyNowPrice = Math.max(AUCTION_MIN_PRICE, Math.ceil(startPrice*buyNowFactor));
       if(squadValues.has(uid)){ skipped++; continue; }
       try{
         await fb.setDoc(fb.doc(fb.db,'market', genId()), {
           sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
           itemType:'player', cardUid: uid, cardId, xp: card.xp||0,
-          price, createdAt: Date.now()
+          startPrice, buyNowPrice, currentBid:0, currentBidderId:null, currentBidderName:null,
+          durationMs, endsAt: Date.now()+durationMs, createdAt: Date.now()
         });
         created++;
       }catch(err){ console.warn('bulk filter list failed for item', err); skipped++; }
     }
     closeModal();
-    toast(skipped ? `${created} Karte(n) gelistet, ${skipped} \u00fcbersprungen.` : `${created} Karte(n) gelistet!`);
+    toast(skipped ? `${created} Auktion(en) gestartet, ${skipped} übersprungen.` : `${created} Auktion(en) gestartet!`);
     invalidateReadCache('market-listings');
     invalidateReadCache('external-locks:'+profile.userId);
     if(currentTab==='trade') renderTrade(document.getElementById('view'));
@@ -12955,6 +13027,15 @@ function renderSellFilter(allEligible, usedInSquad){
 }
 async function withdrawMarketListing(listing){
   try{
+    // defensive re-check: a bid could have landed after this modal was rendered (the button is only
+    // shown pre-bid, but the underlying listing might have changed in the meantime) - never delete a
+    // listing with an active bid, that would strand the bidder's already-escrowed coins.
+    const fresh = await fb.getDoc(fb.doc(fb.db,'market', listing.id));
+    if(fresh.exists() && (fresh.data().currentBid||0)>0){
+      toast('Es liegt inzwischen ein Gebot vor \u2014 die Auktion kann nicht mehr zur\u00fcckgezogen werden.');
+      loadMarketListings();
+      return;
+    }
     await fb.deleteDoc(fb.doc(fb.db,'market', listing.id));
     toast('Angebot zur\u00fcckgezogen.');
   }catch(e){
@@ -12965,24 +13046,47 @@ async function withdrawMarketListing(listing){
   invalidateReadCache('external-locks:'+profile.userId);
   loadMarketListings();
 }
-function confirmBuyListing(listing, item){
+function openAuctionBidModal(listing, item){
   const isPack = listing.itemType==='pack';
+  const isManager = listing.itemType==='manager';
   const name = isPack ? item.name : item.n;
   const visualHTML = isPack ? packTileMiniEl(item).outerHTML : cardEl(item,'mini').outerHTML;
   const rap = isPack ? computePackRAP(item) : computeRAP(item);
+  const iAmHighBidder = listing.currentBidderId===profile.userId;
+  const minBid = auctionMinNextBid(listing);
   openModal(`
-    <h2 style="margin-bottom:10px;">${name} kaufen?</h2>
-    <div style="display:flex;justify-content:center;margin-bottom:14px;">${visualHTML}</div>
-    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:4px;">${formatCoins(listing.price)} Coins</p>
-    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b> \u00b7 Verk\u00e4ufer: <b>${listing.sellerName||'Unbekannt'}</b></p>
-    <div style="display:flex;gap:10px;justify-content:center;">
-      <button class="action-btn secondary" id="cancel-buy" style="width:120px;">Abbrechen</button>
-      <button class="action-btn" id="do-buy" style="width:120px;">Kaufen</button>
-    </div>`);
-  document.getElementById('cancel-buy').addEventListener('click', closeModal);
-  document.getElementById('do-buy').addEventListener('click', (e)=>{
-    e.target.disabled = true; e.target.textContent = 'Kaufe\u2026';
-    buyMarketListing(listing);
+    <h2 style="margin-bottom:4px;">${name}</h2>
+    <div style="display:flex;justify-content:center;margin:10px 0;">${visualHTML}</div>
+    <p class="hint" style="text-align:center;margin:0 0 10px;">Verkäufer: <b>${listing.sellerName||'Unbekannt'}</b> · Geschätzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b></p>
+    <p class="mono" style="text-align:center;margin:0 0 4px;">${listing.currentBid>0 ? `Aktuelles Gebot: <b style="color:var(--gold);">${formatCoins(listing.currentBid)}</b>${iAmHighBidder?' <span style="color:var(--turf-bright);">(du!)</span>':''}` : `Noch keine Gebote — Startpreis: <b style="color:var(--gold);">${formatCoins(listing.startPrice)}</b>`}</p>
+    <p class="mono" id="auction-bid-countdown" style="text-align:center;color:var(--danger);margin:0 0 16px;"></p>
+    <div class="toolbar" style="margin-bottom:8px;">
+      <input id="bid-amount" type="text" inputmode="decimal" placeholder="Mindestens ${formatCoins(minBid)}" value="${minBid}">
+      <button class="action-btn" id="bid-submit" style="width:auto;padding:9px 18px;">Bieten</button>
+    </div>
+    <button class="action-btn secondary" id="buynow-submit" style="width:100%;margin-bottom:10px;">🪙 Sofortkauf für ${formatCoins(listing.buyNowPrice)} Coins</button>
+    <button class="action-btn secondary" id="auction-cancel" style="background:none;width:100%;">Schließen</button>`);
+  document.getElementById('auction-cancel').addEventListener('click', closeModal);
+  // self-terminating countdown (same pattern as e.g. marceloQuestCountdownTimer) - stops on its own the
+  // instant this modal's own element is gone, no need to track/clear the interval from every exit path
+  const updateCountdown = ()=>{
+    const el = document.getElementById('auction-bid-countdown');
+    if(!el) return;
+    const left = listing.endsAt - Date.now();
+    el.textContent = left>0 ? `⏳ Noch ${formatCountdown(left)}` : 'Auktion beendet — lädt neu…';
+    if(left<=0){ closeModal(); loadMarketListings(); }
+  };
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+  document.getElementById('bid-submit').addEventListener('click', async (e)=>{
+    e.target.disabled = true;
+    const amount = Math.floor(parseCoinInput(document.getElementById('bid-amount').value)||0);
+    await placeBid(listing, amount);
+    e.target.disabled = false;
+  });
+  document.getElementById('buynow-submit').addEventListener('click', async (e)=>{
+    e.target.disabled = true;
+    await buyNowListing(listing);
   });
 }
 function openManageListingModal(listing, item){
@@ -12990,114 +13094,165 @@ function openManageListingModal(listing, item){
   const name = isPack ? item.name : item.n;
   const visualHTML = isPack ? packTileMiniEl(item).outerHTML : cardEl(item,'mini').outerHTML;
   const rap = isPack ? computePackRAP(item) : computeRAP(item);
+  const hasBid = listing.currentBid>0;
   openModal(`
-    <h2 style="margin-bottom:10px;">${name} \u2014 dein Angebot</h2>
+    <h2 style="margin-bottom:10px;">${name} — dein Angebot</h2>
     <div style="display:flex;justify-content:center;margin-bottom:14px;">${visualHTML}</div>
-    <p style="text-align:center;font-family:'JetBrains Mono';color:var(--gold);font-size:16px;margin-bottom:4px;">${formatCoins(listing.price)} Coins</p>
-    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Gesch\u00e4tzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b></p>
+    <p class="mono" style="text-align:center;margin-bottom:4px;">Startpreis: <b style="color:var(--gold);">${formatCoins(listing.startPrice)}</b> · Sofortkauf: <b style="color:var(--gold);">${formatCoins(listing.buyNowPrice)}</b></p>
+    <p class="mono" style="text-align:center;margin-bottom:4px;">${hasBid ? `Aktuelles Gebot: <b style="color:var(--turf-bright);">${formatCoins(listing.currentBid)}</b> von ${listing.currentBidderName||'jemandem'}` : 'Noch keine Gebote.'}</p>
+    <p class="mono" id="manage-listing-countdown" style="text-align:center;color:var(--danger);margin-bottom:4px;"></p>
+    <p class="hint" style="text-align:center;margin-top:0;margin-bottom:18px;">Geschätzter RAP-Wert: <b style="color:var(--gold);">${formatCoins(rap)}</b></p>
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <button class="action-btn" id="change-price-btn">Preis \u00e4ndern</button>
-      <button class="action-btn secondary" id="withdraw-listing-btn" style="background:var(--danger);">Zur\u00fcckziehen</button>
-      <button class="action-btn secondary" id="manage-close-btn" style="background:none;">Schlie\u00dfen</button>
+      ${hasBid
+        ? `<p class="hint" style="text-align:center;">Sobald geboten wurde, kann die Auktion nicht mehr zurückgezogen werden — sie läuft bis zum Ende oder bis zum Sofortkauf.</p>`
+        : `<button class="action-btn secondary" id="withdraw-listing-btn" style="background:var(--danger);">Zurückziehen</button>`}
+      <button class="action-btn secondary" id="manage-close-btn" style="background:none;">Schließen</button>
     </div>`);
   document.getElementById('manage-close-btn').addEventListener('click', closeModal);
-  document.getElementById('withdraw-listing-btn').addEventListener('click', (e)=>{
+  const updateCountdown = ()=>{
+    const el = document.getElementById('manage-listing-countdown');
+    if(!el) return;
+    const left = listing.endsAt - Date.now();
+    el.textContent = left>0 ? `⏳ Noch ${formatCountdown(left)}` : 'Auktion beendet — wird bald abgewickelt.';
+  };
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+  const withdrawBtn = document.getElementById('withdraw-listing-btn');
+  if(withdrawBtn) withdrawBtn.addEventListener('click', (e)=>{
     e.target.disabled = true;
     closeModal();
     withdrawMarketListing(listing);
   });
-  document.getElementById('change-price-btn').addEventListener('click', ()=>{
-    askTextModal('Neuer Preis in Coins', String(listing.price), async (val)=>{
-      if(val===null || val===undefined) return;
-      const newPrice = Math.max(1, Math.floor(Number(val)||0));
-      if(!newPrice){ toast('Ung\u00fcltiger Preis.'); return; }
-      await fbReady;
-      if(!fb) return;
-      try{
-        const fresh = await fb.getDoc(fb.doc(fb.db,'market', listing.id));
-        if(!fresh.exists()){ toast('Dieses Angebot existiert nicht mehr.'); loadMarketListings(); return; }
-        await fb.setDoc(fb.doc(fb.db,'market', listing.id), {...fresh.data(), price:newPrice});
-        toast('Preis aktualisiert.');
-        invalidateReadCache('market-listings');
-        loadMarketListings();
-      }catch(e){ console.warn('price change failed', e); toast('Preis\u00e4nderung fehlgeschlagen.'); }
-    });
-  });
 }
-async function buyMarketListing(listing){
-  if(listing.sellerUserId===profile.userId){ toast('Du kannst dein eigenes Angebot nicht kaufen.'); closeModal(); return; }
-  if(profile.coins < listing.price){ toast('Nicht genug Coins.'); closeModal(); return; }
+// ===== Gebot abgeben: Coins werden SOFORT per fb.increment(-amount) escrowt (siehe Kommentar oben bei
+// den Auktions-Konstanten), der vorherige Höchstbietende (falls vorhanden) wird im selben Zug atomar
+// zurückerstattet - alles in EINER Firestore-Transaktion, damit zwei gleichzeitige Gebote auf dieselbe
+// Auktion sich nicht gegenseitig überholen oder eine Rückerstattung verloren geht. =====
+async function placeBid(listing, amount){
+  if(listing.sellerUserId===profile.userId){ toast('Du kannst auf dein eigenes Angebot nicht bieten.'); return; }
   await fbReady;
-  if(!fb){ toast('Backend nicht erreichbar.'); closeModal(); return; }
+  if(!fb){ toast('Backend nicht erreichbar.'); return; }
+  if(listing.currentBidderId===profile.userId){ toast('Du bist bereits Höchstbietender.'); return; }
+  const minBid = auctionMinNextBid(listing);
+  if(amount<minBid){ toast(`Mindestgebot: ${formatCoins(minBid)} Coins.`); return; }
+  if(amount>profile.coins){ toast('Nicht genug Coins.'); return; }
+  let result = null;
   try{
-    // re-fetch the listing itself fresh - it may have already been bought or withdrawn by someone else
-    const freshListingSnap = await fb.getDoc(fb.doc(fb.db,'market', listing.id));
-    if(!freshListingSnap.exists()){
-      toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.');
-      invalidateReadCache('market-listings');
-      closeModal(); loadMarketListings(); return;
-    }
-    const sellerSnap = await fb.getDoc(fb.doc(fb.db,'saves', listing.sellerUserId));
-    if(!sellerSnap.exists()){ toast('Verk\u00e4ufer-Daten nicht gefunden.'); await withdrawMarketListing(listing); closeModal(); return; }
-    const sellerData = sellerSnap.data();
-    const sellerCollection = sellerData.collection || [];
-    const sellerManagerCollection = sellerData.managerCollection || [];
-    const sellerPackCollection = sellerData.packCollection || [];
-    const isManager = listing.itemType==='manager';
-    const isPack = listing.itemType==='pack';
-    // the exact stored entry (not a reconstructed copy) - fb.arrayRemove below only removes a value
-    // that deep-equals what's actually stored in the array
-    const soldEntry = isManager ? sellerManagerCollection.find(m=>m.uid===listing.cardUid)
-      : isPack ? sellerPackCollection.find(p=>p.uid===listing.cardUid)
-      : sellerCollection.find(c=>c.uid===listing.cardUid);
-    if(!soldEntry){ toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
-    // player leveling: carry the sold card's XP/level over to the buyer, same as direct trades. The
-    // ORIGINAL obtainedFrom/obtainedAt provenance stamp carries over unchanged too - a market sale
-    // moves an already-existing card, it never resets who first actually got it (see the comment on
-    // cardIndexProvenanceHTML).
-    const soldEntryXp = soldEntry.xp||0;
-    // Pay the seller AND remove the sold item in ONE atomic updateDoc via increment()/arrayRemove() -
-    // NOT the old read-the-collection-filter-it-write-the-whole-array-back approach. That silently lost
-    // the sale (seller got neither coins nor lost the card) whenever the seller's own session happened
-    // to write ITS OWN (locally stale, still-containing-the-sold-item) copy of collection/profile back
-    // around the same time - e.g. leveling an unrelated card, or any other action that calls
-    // sSet('collection', ...)/sSet('profile', ...) - since neither write knew about the other, the one
-    // that landed last on the server silently won and erased this sale's effect. increment/arrayRemove
-    // are applied server-side against whatever the field's current value is at write time, so they can
-    // never be clobbered by (or clobber) a concurrent write to the same document.
-    const removeField = isManager ? 'managerCollection' : isPack ? 'packCollection' : 'collection';
-    if(fb.updateDoc && fb.increment && fb.arrayRemove){
-      // Händler-Erfolg zählt Coins aus dem Transfermarkt/Handel statt der Anzahl Handelsgeschäfte -
-      // gleicher updateDoc-Schreibvorgang wie die Coin-Zahlung selbst, in EINEM Round-Trip.
-      await fb.updateDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {
-        'profile.coins': fb.increment(listing.price),
-        'profile.achievementStats.marketCoinsEarned': fb.increment(listing.price),
-        [removeField]: fb.arrayRemove(soldEntry),
-      });
-    } else {
-      let sellerProfile = sellerData.profile || {coins:0};
-      sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
-      if(!sellerProfile.achievementStats) sellerProfile.achievementStats = {};
-      sellerProfile.achievementStats.marketCoinsEarned = (sellerProfile.achievementStats.marketCoinsEarned||0) + listing.price;
-      const filteredField = (isManager ? sellerManagerCollection : isPack ? sellerPackCollection : sellerCollection).filter(x=>x.uid!==listing.cardUid);
-      await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile, [removeField]:filteredField}, {merge:true});
-    }
-    try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
-
-    if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
-    else if(isPack){ packCollection.push({uid:genId(), packId:listing.cardId}); await sSet('packCollection', packCollection); }
-    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp, obtainedAt:soldEntry.obtainedAt||Date.now(), obtainedFrom:soldEntry.obtainedFrom||listing.sellerUserId}); await sSet('collection', collection); }
-    await atomicCoinChange(-listing.price);
-    if(!isPack) recordSale(listing.cardId, listing.price);
-    closeModal();
-    toast('Kauf erfolgreich!');
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const snap = await tx.get(fb.doc(fb.db,'market', listing.id));
+      if(!snap.exists()){ result = {ok:false, reason:'gone'}; return; }
+      const fresh = snap.data();
+      if(auctionIsExpiredData(fresh)){ result = {ok:false, reason:'expired'}; return; }
+      const freshMin = auctionMinNextBid(fresh);
+      if(amount<freshMin){ result = {ok:false, reason:'outbid', minBid:freshMin}; return; }
+      if(fresh.currentBidderId) tx.update(fb.doc(fb.db,'saves', fresh.currentBidderId), {'profile.coins': fb.increment(fresh.currentBid)});
+      tx.update(fb.doc(fb.db,'saves', profile.userId), {'profile.coins': fb.increment(-amount)});
+      let endsAt = fresh.endsAt;
+      if(endsAt-Date.now()<AUCTION_ANTISNIPE_MS) endsAt = Date.now()+AUCTION_ANTISNIPE_MS;
+      tx.update(fb.doc(fb.db,'market', listing.id), {currentBid:amount, currentBidderId:profile.userId, currentBidderName:profile.displayName||profile.userId, endsAt});
+      result = {ok:true};
+    });
+  }catch(e){ console.warn('bid failed', e); toast('Gebot fehlgeschlagen — bitte erneut versuchen.'); return; }
+  if(!result || !result.ok){
+    const msgs = {gone:'Dieses Angebot existiert nicht mehr.', expired:'Die Auktion ist bereits beendet.', outbid:`Ein anderer Spieler war schneller. Neues Mindestgebot: ${formatCoins((result&&result.minBid)||0)} Coins.`};
+    toast(msgs[result&&result.reason] || 'Gebot fehlgeschlagen.');
     invalidateReadCache('market-listings');
     loadMarketListings();
-  }catch(e){
-    console.warn('buy market listing failed', e);
-    toast('Kauf fehlgeschlagen \u2014 bitte erneut versuchen.');
-    closeModal();
+    return;
   }
+  profile.coins -= amount; // mirrors the exact delta the transaction already committed server-side
+  updateCoinDisplay();
+  toast(`Gebot abgegeben: ${formatCoins(amount)} Coins.`);
+  closeModal();
+}
+// ===== Sofortkauf: läuft komplett in EINER Transaktion (anders als der frühere Festpreis-Kauf, der
+// Verkäufer-Auszahlung und eigene Bezahlung in getrennten Schritten machte) - Verkäufer-Ware entfernen,
+// Verkäufer bezahlen, mich selbst belasten und einen etwaigen Höchstbietenden zurückerstatten passieren
+// gemeinsam atomar, damit kein Zwischenzustand (bezahlt, aber Karte weg o.ä.) je sichtbar wird. =====
+async function buyNowListing(listing){
+  if(listing.sellerUserId===profile.userId){ toast('Du kannst dein eigenes Angebot nicht kaufen.'); closeModal(); return; }
+  await fbReady;
+  if(!fb){ toast('Backend nicht erreichbar.'); closeModal(); return; }
+  if(profile.coins<listing.buyNowPrice){ toast('Nicht genug Coins.'); closeModal(); return; }
+  let result = null, soldInfo = null;
+  try{
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const listingSnap = await tx.get(fb.doc(fb.db,'market', listing.id));
+      if(!listingSnap.exists()){ result = {ok:false, reason:'gone'}; return; }
+      const fresh = listingSnap.data();
+      if(auctionIsExpiredData(fresh)){ result = {ok:false, reason:'expired'}; return; }
+      const sellerRef = fb.doc(fb.db,'saves', fresh.sellerUserId);
+      const sellerSnap = await tx.get(sellerRef);
+      if(!sellerSnap.exists()){ result = {ok:false, reason:'sellergone'}; return; }
+      const isManager = fresh.itemType==='manager', isPack = fresh.itemType==='pack';
+      const arrField = isManager?'managerCollection':isPack?'packCollection':'collection';
+      const arr = sellerSnap.data()[arrField]||[];
+      const entry = arr.find(x=>x.uid===fresh.cardUid);
+      if(!entry){ result = {ok:false, reason:'itemgone'}; return; }
+      if(fresh.currentBidderId) tx.update(fb.doc(fb.db,'saves', fresh.currentBidderId), {'profile.coins': fb.increment(fresh.currentBid)});
+      tx.update(sellerRef, {'profile.coins': fb.increment(fresh.buyNowPrice), 'profile.achievementStats.marketCoinsEarned': fb.increment(fresh.buyNowPrice), [arrField]: fb.arrayRemove(entry)});
+      tx.update(fb.doc(fb.db,'saves', profile.userId), {'profile.coins': fb.increment(-fresh.buyNowPrice)});
+      tx.delete(fb.doc(fb.db,'market', listing.id));
+      soldInfo = {entry, arrField, fresh};
+      result = {ok:true};
+    });
+  }catch(e){ console.warn('buy now failed', e); toast('Kauf fehlgeschlagen — bitte erneut versuchen.'); closeModal(); return; }
+  if(!result || !result.ok){
+    const msgs = {gone:'Dieses Angebot ist nicht mehr verfügbar.', expired:'Die Auktion ist bereits beendet.', sellergone:'Verkäufer-Daten nicht gefunden.', itemgone:'Dieses Angebot ist nicht mehr verfügbar.'};
+    toast(msgs[result&&result.reason] || 'Kauf fehlgeschlagen.');
+    invalidateReadCache('market-listings');
+    closeModal();
+    loadMarketListings();
+    return;
+  }
+  const {entry, arrField, fresh} = soldInfo;
+  profile.coins -= fresh.buyNowPrice;
+  updateCoinDisplay();
+  if(arrField==='managerCollection'){ managerCollection.push({uid:genId(), mgrId:entry.mgrId}); await sSet('managerCollection', managerCollection); }
+  else if(arrField==='packCollection'){ packCollection.push({uid:genId(), packId:entry.packId}); await sSet('packCollection', packCollection); }
+  else { collection.push({uid:genId(), cardId:entry.cardId, xp:entry.xp||0, obtainedAt:entry.obtainedAt||Date.now(), obtainedFrom:entry.obtainedFrom||fresh.sellerUserId}); await sSet('collection', collection); recordSale(fresh.cardId, fresh.buyNowPrice); }
+  toast('Sofortkauf erfolgreich!');
+  invalidateReadCache('market-listings');
+  closeModal();
+}
+// ===== Abgelaufene Auktionen abwickeln: opportunistisch vom Client desjenigen, der als Nächstes den
+// Markt öffnet (siehe loadMarketListings) - jede Abwicklung läuft in einer eigenen Transaktion, die
+// zuerst nochmal frisch prüft, ob die Auktion wirklich noch abgelaufen UND noch nicht abgewickelt ist
+// (re-bid/Sofortkauf durch einen anderen Client in der Zwischenzeit gewinnt), damit niemals zwei Clients
+// dieselbe Auktion doppelt abwickeln. Ohne Gebot verfällt die Auktion einfach (Karte bleibt beim
+// Verkäufer). Mit Gebot: Verkäufer wird bezahlt, Höchstbietender bekommt die Karte - beides atomar. =====
+async function resolveExpiredAuctions(){
+  await fbReady;
+  if(!fb) return;
+  const now = Date.now();
+  const expired = marketListingsCache.filter(l=>l.endsAt && l.endsAt<=now);
+  if(!expired.length) return;
+  let resolvedAny = false;
+  for(const listing of expired.slice(0,10)){
+    try{
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const snap = await tx.get(fb.doc(fb.db,'market', listing.id));
+        if(!snap.exists()) return;
+        const fresh = snap.data();
+        if(fresh.endsAt>Date.now()) return; // re-bid extended it since our snapshot - not actually expired anymore
+        if(!fresh.currentBidderId){ tx.delete(fb.doc(fb.db,'market', listing.id)); return; }
+        const sellerRef = fb.doc(fb.db,'saves', fresh.sellerUserId);
+        const sellerSnap = await tx.get(sellerRef);
+        const isManager = fresh.itemType==='manager', isPack = fresh.itemType==='pack';
+        const arrField = isManager?'managerCollection':isPack?'packCollection':'collection';
+        tx.delete(fb.doc(fb.db,'market', listing.id));
+        if(!sellerSnap.exists()) return;
+        const arr = sellerSnap.data()[arrField]||[];
+        const entry = arr.find(x=>x.uid===fresh.cardUid);
+        if(!entry) return; // seller no longer has it somehow - nothing left to hand over
+        tx.update(sellerRef, {'profile.coins': fb.increment(fresh.currentBid), 'profile.achievementStats.marketCoinsEarned': fb.increment(fresh.currentBid), [arrField]: fb.arrayRemove(entry)});
+        const newEntry = isManager ? {uid:genId(), mgrId:entry.mgrId} : isPack ? {uid:genId(), packId:entry.packId} : {uid:genId(), cardId:entry.cardId, xp:entry.xp||0, obtainedAt:entry.obtainedAt||Date.now(), obtainedFrom:entry.obtainedFrom||fresh.sellerUserId};
+        tx.update(fb.doc(fb.db,'saves', fresh.currentBidderId), {[arrField]: fb.arrayUnion(newEntry)});
+      });
+      resolvedAny = true;
+    }catch(e){ console.warn('resolve auction failed', listing.id, e); }
+  }
+  if(resolvedAny){ invalidateReadCache('market-listings'); loadMarketListings(); }
 }
 async function loadTrades(){
   const inBox = document.getElementById('trade-incoming');
@@ -19068,13 +19223,13 @@ async function cardIndexSourceHTML(card){
     </div>`).join('');
 }
 function cardIndexOffersHTML(card){
-  if(card.untradable) return `<p class="hint" style="margin:0;">\ud83d\udd12 Nicht handelbar \u2014 kein Transfermarkt-Angebot m\u00f6glich.</p>`;
+  if(card.untradable) return `<p class="hint" style="margin:0;">🔒 Nicht handelbar — kein Transfermarkt-Angebot möglich.</p>`;
   const offers = marketListingsCache.filter(l=>l.itemType===(card.isManager?'manager':undefined) || (!card.isManager && l.itemType!=='manager' && l.itemType!=='pack'))
-    .filter(l=>l.cardId===card.id).sort((a,b)=>a.price-b.price);
+    .filter(l=>l.cardId===card.id).sort((a,b)=>auctionEffectivePrice(a)-auctionEffectivePrice(b));
   if(!offers.length) return `<p class="hint" style="margin:0;">Gerade kein Angebot am Transfermarkt.</p>`;
   return offers.slice(0,5).map(l=>`<div class="cardidx-offer-row">
-      <span>\ud83d\udc64 ${l.sellerUserId||'Unbekannt'}</span>
-      <span class="mono" style="color:var(--gold);">\ud83e\ude99 ${formatCoins(l.price)}</span>
+      <span>👤 ${l.sellerUserId||'Unbekannt'}</span>
+      <span class="mono" style="color:var(--gold);">🪙 ${formatCoins(auctionEffectivePrice(l))}${l.currentBid>0?' (Gebot)':' (Start)'}</span>
     </div>`).join('') + (offers.length>5 ? `<p class="hint" style="margin:6px 0 0;">+${offers.length-5} weitere Angebote am Transfermarkt.</p>` : '');
 }
 // ---- "denk sie aus": deterministic per-id filler for bio/detailed-substats on cards that never had
