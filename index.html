@@ -13040,44 +13040,53 @@ async function buyMarketListing(listing){
     const sellerSnap = await fb.getDoc(fb.doc(fb.db,'saves', listing.sellerUserId));
     if(!sellerSnap.exists()){ toast('Verk\u00e4ufer-Daten nicht gefunden.'); await withdrawMarketListing(listing); closeModal(); return; }
     const sellerData = sellerSnap.data();
-    let sellerCollection = sellerData.collection || [];
-    let sellerManagerCollection = sellerData.managerCollection || [];
-    let sellerPackCollection = sellerData.packCollection || [];
+    const sellerCollection = sellerData.collection || [];
+    const sellerManagerCollection = sellerData.managerCollection || [];
+    const sellerPackCollection = sellerData.packCollection || [];
     const isManager = listing.itemType==='manager';
     const isPack = listing.itemType==='pack';
-    const stillThere = isManager ? sellerManagerCollection.some(m=>m.uid===listing.cardUid)
-      : isPack ? sellerPackCollection.some(p=>p.uid===listing.cardUid)
-      : sellerCollection.some(c=>c.uid===listing.cardUid);
-    if(!stillThere){ toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
+    // the exact stored entry (not a reconstructed copy) - fb.arrayRemove below only removes a value
+    // that deep-equals what's actually stored in the array
+    const soldEntry = isManager ? sellerManagerCollection.find(m=>m.uid===listing.cardUid)
+      : isPack ? sellerPackCollection.find(p=>p.uid===listing.cardUid)
+      : sellerCollection.find(c=>c.uid===listing.cardUid);
+    if(!soldEntry){ toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
     // player leveling: carry the sold card's XP/level over to the buyer, same as direct trades. The
     // ORIGINAL obtainedFrom/obtainedAt provenance stamp carries over unchanged too - a market sale
     // moves an already-existing card, it never resets who first actually got it (see the comment on
     // cardIndexProvenanceHTML).
-    const soldEntrySnapshot = (isManager || isPack) ? {} : (sellerCollection.find(c=>c.uid===listing.cardUid)||{});
-    const soldEntryXp = soldEntrySnapshot.xp||0;
-    if(isManager) sellerManagerCollection = sellerManagerCollection.filter(m=>m.uid!==listing.cardUid);
-    else if(isPack) sellerPackCollection = sellerPackCollection.filter(p=>p.uid!==listing.cardUid);
-    else sellerCollection = sellerCollection.filter(c=>c.uid!==listing.cardUid);
-    // pay the seller via an ATOMIC increment (not a snapshot-based overwrite) - this guarantees the
-    // payment lands correctly even if the seller is doing something else concurrently (e.g. another
-    // sale, opening a pack) that would otherwise risk clobbering/losing this credit
-    if(fb.updateDoc && fb.increment){
+    const soldEntryXp = soldEntry.xp||0;
+    // Pay the seller AND remove the sold item in ONE atomic updateDoc via increment()/arrayRemove() -
+    // NOT the old read-the-collection-filter-it-write-the-whole-array-back approach. That silently lost
+    // the sale (seller got neither coins nor lost the card) whenever the seller's own session happened
+    // to write ITS OWN (locally stale, still-containing-the-sold-item) copy of collection/profile back
+    // around the same time - e.g. leveling an unrelated card, or any other action that calls
+    // sSet('collection', ...)/sSet('profile', ...) - since neither write knew about the other, the one
+    // that landed last on the server silently won and erased this sale's effect. increment/arrayRemove
+    // are applied server-side against whatever the field's current value is at write time, so they can
+    // never be clobbered by (or clobber) a concurrent write to the same document.
+    const removeField = isManager ? 'managerCollection' : isPack ? 'packCollection' : 'collection';
+    if(fb.updateDoc && fb.increment && fb.arrayRemove){
       // Händler-Erfolg zählt Coins aus dem Transfermarkt/Handel statt der Anzahl Handelsgeschäfte -
-      // gleicher fb.increment-Schreibvorgang wie die Coin-Zahlung selbst, in EINEM Round-Trip.
-      await fb.updateDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {'profile.coins': fb.increment(listing.price), 'profile.achievementStats.marketCoinsEarned': fb.increment(listing.price)});
+      // gleicher updateDoc-Schreibvorgang wie die Coin-Zahlung selbst, in EINEM Round-Trip.
+      await fb.updateDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {
+        'profile.coins': fb.increment(listing.price),
+        'profile.achievementStats.marketCoinsEarned': fb.increment(listing.price),
+        [removeField]: fb.arrayRemove(soldEntry),
+      });
     } else {
       let sellerProfile = sellerData.profile || {coins:0};
       sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
       if(!sellerProfile.achievementStats) sellerProfile.achievementStats = {};
       sellerProfile.achievementStats.marketCoinsEarned = (sellerProfile.achievementStats.marketCoinsEarned||0) + listing.price;
-      await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile}, {merge:true});
+      const filteredField = (isManager ? sellerManagerCollection : isPack ? sellerPackCollection : sellerCollection).filter(x=>x.uid!==listing.cardUid);
+      await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile, [removeField]:filteredField}, {merge:true});
     }
-    await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {collection:sellerCollection, managerCollection:sellerManagerCollection, packCollection:sellerPackCollection}, {merge:true});
     try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
 
     if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
     else if(isPack){ packCollection.push({uid:genId(), packId:listing.cardId}); await sSet('packCollection', packCollection); }
-    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp, obtainedAt:soldEntrySnapshot.obtainedAt||Date.now(), obtainedFrom:soldEntrySnapshot.obtainedFrom||listing.sellerUserId}); await sSet('collection', collection); }
+    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp, obtainedAt:soldEntry.obtainedAt||Date.now(), obtainedFrom:soldEntry.obtainedFrom||listing.sellerUserId}); await sSet('collection', collection); }
     await atomicCoinChange(-listing.price);
     if(!isPack) recordSale(listing.cardId, listing.price);
     closeModal();
