@@ -12144,7 +12144,22 @@ function describeWant(want){
 let tradeSubTab = 'market';
 const TRADE_UNLOCK_NET_WORTH = 80000;
 function tradeUnlocked(){ return computeMyNetWorth() >= TRADE_UNLOCK_NET_WORTH; }
+// Kill-switch for the ENTIRE Handel tab (Transfermarkt UND Direkt-Angebote), not just the narrower
+// DIRECT_OFFERS_DISABLED below - see the user's explicit "Deaktiviere Handel bis auf ungestimmte Zeit
+// für alle Leute" request (an exploit was found, see their message for context). Client-side only, same
+// pattern as DIRECT_OFFERS_DISABLED: hides the whole tab's UI for every player instantly on next deploy,
+// no server-side component needed since nothing about this feature works without going through this UI.
+const TRADE_DISABLED = true;
 function renderTrade(view){
+  if(TRADE_DISABLED){
+    view.innerHTML = `
+      <div class="view-head"><h2>Handel 🔒</h2><p>Verkaufe Karten öffentlich über den Transfermarkt, oder mache einem bestimmten Verein ein direktes Angebot — auch Karte-gegen-Karte oder Trainer-gegen-Trainer.</p></div>
+      <div class="empty-state">
+        <h3>Vorübergehend deaktiviert</h3>
+        <p>Der Handel (Transfermarkt und Direkt-Angebote) ist gerade komplett deaktiviert. Schau später wieder vorbei.</p>
+      </div>`;
+    return;
+  }
   if(!tradeUnlocked()){
     const netWorth = computeMyNetWorth();
     const pct = Math.min(100, Math.round(netWorth/TRADE_UNLOCK_NET_WORTH*100));
