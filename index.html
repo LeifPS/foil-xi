@@ -13466,21 +13466,38 @@ function renderLiveTradeRoom(el, trade){
 }
 function setupLiveTradeAcceptHold(btn, trade, side, alreadyAccepted){
   if(!btn) return;
-  let holdStart=0, raf=null;
   const fill = document.getElementById('lt-accept-fill');
-  const cancelHold = ()=>{ if(raf) cancelAnimationFrame(raf); raf=null; if(fill) fill.style.width='0%'; };
-  const tick = ()=>{
+  let holdStart = 0;
+  // Bumped on every start/stop so a stale rAF loop from an earlier press (or a leftover event that
+  // fires late) can never affect the CURRENT hold - avoids the two symptoms this replaced: the fill
+  // silently resetting mid-hold (a stray old "stop" landing on the new cycle) and the confirm firing
+  // from a hold that looked like it had already stopped (a stale tick loop nobody canceled in time).
+  let activeToken = 0;
+  const setFillPct = (pct)=>{ if(fill) fill.style.width = pct+'%'; };
+  const tick = (token)=>{
+    if(token!==activeToken) return; // superseded/stopped - let this stale loop die quietly
     const pct = Math.min(100, ((Date.now()-holdStart)/LIVETRADE_ACCEPT_HOLD_MS)*100);
-    if(fill) fill.style.width = pct+'%';
-    if(pct>=100){ cancelHold(); confirmLiveTradeAcceptToggle(trade, side, !alreadyAccepted); return; }
-    raf = requestAnimationFrame(tick);
+    setFillPct(pct);
+    if(pct>=100){ activeToken++; confirmLiveTradeAcceptToggle(trade, side, !alreadyAccepted); return; }
+    requestAnimationFrame(()=>tick(token));
   };
-  const start = (e)=>{ e.preventDefault(); holdStart=Date.now(); tick(); };
-  const stop = ()=>cancelHold();
+  const start = (e)=>{
+    e.preventDefault();
+    // Pointer capture keeps this button receiving pointerup/pointercancel for this exact pointer no
+    // matter how far it drifts during the 3s hold - without it, ordinary mouse jitter or a slightly
+    // moving finger fires pointerleave and silently cancels the hold, which is exactly what "hört
+    // manchmal einfach auf" was: the fill resetting well before 3 seconds even though the button was
+    // never actually released.
+    try{ btn.setPointerCapture(e.pointerId); }catch(err){}
+    activeToken++;
+    holdStart = Date.now();
+    tick(activeToken);
+  };
+  const stop = ()=>{ activeToken++; setFillPct(0); };
   btn.addEventListener('pointerdown', start);
   btn.addEventListener('pointerup', stop);
-  btn.addEventListener('pointerleave', stop);
   btn.addEventListener('pointercancel', stop);
+  btn.addEventListener('lostpointercapture', stop);
 }
 function confirmLiveTradeAcceptToggle(trade, side, newVal){
   if(!newVal){ setLiveTradeAccepted(trade, side, false); return; }
