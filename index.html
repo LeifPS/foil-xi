@@ -13425,9 +13425,9 @@ async function finalizeTradeAccept(t, payment){
     if(!senderSnap.exists()){ toast('Absender-Daten nicht gefunden \u2014 Angebot eventuell veraltet.'); closeModal(); return; }
     const senderData = senderSnap.data();
     let senderProfile = senderData.profile || {coins:0};
-    let senderCollection = senderData.collection || [];
-    let senderManagerCollection = senderData.managerCollection || [];
-    let senderPackCollection = senderData.packCollection || [];
+    const senderCollection = senderData.collection || [];
+    const senderManagerCollection = senderData.managerCollection || [];
+    const senderPackCollection = senderData.packCollection || [];
 
     const offerCardUids = new Set((t.offerCards||[]).map(c=>c.uid));
     const offerMgrUids = new Set((t.offerManagers||[]).map(m=>m.uid));
@@ -13445,6 +13445,11 @@ async function finalizeTradeAccept(t, payment){
       offerCardXpByUid[c.uid] = c.xp||0;
       offerCardProvenanceByUid[c.uid] = {obtainedAt:c.obtainedAt, obtainedFrom:c.obtainedFrom};
     });
+    // the EXACT stored entries (not reconstructed copies) - fb.arrayRemove below only removes a value
+    // that deep-equals what's actually stored in the array
+    const offeredCardEntries = senderCollection.filter(c=>offerCardUids.has(c.uid));
+    const offeredMgrEntries = senderManagerCollection.filter(m=>offerMgrUids.has(m.uid));
+    const offeredPackEntries = senderPackCollection.filter(p=>offerPackUids.has(p.uid));
     // verify the sender still actually owns every offered card/manager/pack - if any are gone
     // (already traded, sold, or used elsewhere), refuse rather than silently granting them for free
     const missingCards = [...offerCardUids].filter(uid=>!senderCollection.some(c=>c.uid===uid));
@@ -13463,34 +13468,52 @@ async function finalizeTradeAccept(t, payment){
       closeModal(); return;
     }
 
-    senderCollection = senderCollection.filter(c=>!offerCardUids.has(c.uid));
-    senderManagerCollection = senderManagerCollection.filter(m=>!offerMgrUids.has(m.uid));
-    senderPackCollection = senderPackCollection.filter(p=>!offerPackUids.has(p.uid));
     const senderCoinDelta = (payment.coins||0) - (t.offerCoins||0);
-
-    payment.cardUids.forEach(uid=>{
+    const paymentCardEntries = payment.cardUids.map(uid=>{
       const entry = collection.find(c=>c.uid===uid);
-      if(entry) senderCollection.push({uid:genId(), cardId:entry.cardId, xp:entry.xp||0});
-    });
+      return entry ? {uid:genId(), cardId:entry.cardId, xp:entry.xp||0} : null;
+    }).filter(Boolean);
+    let paymentMgrEntry = null;
     if(payment.managerUid){
       const entry = managerCollection.find(m=>m.uid===payment.managerUid);
-      if(entry) senderManagerCollection.push({uid:genId(), mgrId:entry.mgrId});
+      if(entry) paymentMgrEntry = {uid:genId(), mgrId:entry.mgrId};
     }
-    // pay/charge the sender via an ATOMIC increment (not a snapshot-based overwrite) - guarantees the
-    // coin change lands correctly even if the sender is doing something else concurrently (another
-    // trade, a market sale, opening a pack) that would otherwise risk clobbering/losing this change
-    if(fb.updateDoc && fb.increment && senderCoinDelta!==0){
-      await fb.updateDoc(fb.doc(fb.db,'saves', t.fromUserId), {'profile.coins': fb.increment(senderCoinDelta)});
-    } else if(senderCoinDelta!==0){
-      senderProfile.coins = (senderProfile.coins||0) + senderCoinDelta;
-      await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile}, {merge:true});
+    // Move items in/out of the sender's collections via atomic arrayRemove()/arrayUnion() instead of
+    // reading the whole array, filtering/pushing in memory, then writing the entire array back with
+    // setDoc. That read-modify-write silently DUPLICATED cards whenever the sender's own session
+    // concurrently wrote its OWN (locally stale, still-containing-the-traded-card) copy of collection
+    // back in the meantime - e.g. leveling a different card, or any other unrelated sSet('collection',
+    // ...) - since that write has no idea a trade is in flight, it would restore the just-traded-away
+    // card to the sender's array right after this function removed it, while the recipient had ALREADY
+    // independently received their own copy a few lines below: the same card now exists on BOTH sides.
+    // Firestore only allows one FieldValue transform per field per update() call, so removing offered
+    // items and adding payment items to the SAME field (e.g. both sides trade cards) needs two separate
+    // atomic calls rather than one - each one is still fully atomic and immune to being clobbered by (or
+    // clobbering) any other concurrent write to this document.
+    if(fb.updateDoc && fb.increment && fb.arrayRemove && fb.arrayUnion){
+      const removePayload = {};
+      if(senderCoinDelta!==0) removePayload['profile.coins'] = fb.increment(senderCoinDelta);
+      if(senderCoinDelta>0) removePayload['profile.achievementStats.marketCoinsEarned'] = fb.increment(senderCoinDelta);
+      if(offeredCardEntries.length) removePayload.collection = fb.arrayRemove(...offeredCardEntries);
+      if(offeredMgrEntries.length) removePayload.managerCollection = fb.arrayRemove(...offeredMgrEntries);
+      if(offeredPackEntries.length) removePayload.packCollection = fb.arrayRemove(...offeredPackEntries);
+      if(Object.keys(removePayload).length) await fb.updateDoc(fb.doc(fb.db,'saves', t.fromUserId), removePayload);
+      const addPayload = {};
+      if(paymentCardEntries.length) addPayload.collection = fb.arrayUnion(...paymentCardEntries);
+      if(paymentMgrEntry) addPayload.managerCollection = fb.arrayUnion(paymentMgrEntry);
+      if(Object.keys(addPayload).length) await fb.updateDoc(fb.doc(fb.db,'saves', t.fromUserId), addPayload);
+    } else {
+      // no full SDK available - fall back to the old snapshot-based approach (same residual race as
+      // before, but only reachable when arrayRemove/arrayUnion/increment genuinely aren't present)
+      let fallbackCollection = senderCollection.filter(c=>!offerCardUids.has(c.uid)).concat(paymentCardEntries);
+      let fallbackManagerCollection = senderManagerCollection.filter(m=>!offerMgrUids.has(m.uid));
+      if(paymentMgrEntry) fallbackManagerCollection.push(paymentMgrEntry);
+      let fallbackPackCollection = senderPackCollection.filter(p=>!offerPackUids.has(p.uid));
+      if(senderCoinDelta!==0) senderProfile.coins = (senderProfile.coins||0) + senderCoinDelta;
+      if(!senderProfile.achievementStats) senderProfile.achievementStats = {};
+      if(senderCoinDelta>0) senderProfile.achievementStats.marketCoinsEarned = (senderProfile.achievementStats.marketCoinsEarned||0) + senderCoinDelta;
+      await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile, collection:fallbackCollection, managerCollection:fallbackManagerCollection, packCollection:fallbackPackCollection}, {merge:true});
     }
-    // Händler-Erfolg zählt Coins statt Handels-Anzahl - nur wenn der Absender hier tatsächlich netto
-    // Coins bekommen hat (sein Handelsangebot also effektiv "gekauft" wurde), nicht wenn er selbst
-    // draufgezahlt hat.
-    const senderTradeUpdate = {collection:senderCollection, managerCollection:senderManagerCollection, packCollection:senderPackCollection};
-    if(senderCoinDelta>0) senderTradeUpdate['profile.achievementStats.marketCoinsEarned'] = fb.increment(senderCoinDelta);
-    await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), senderTradeUpdate, {merge:true});
     // trade doc is already gone - claimed (read-and-deleted) atomically at the very top of this function
 
     collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
