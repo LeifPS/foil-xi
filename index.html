@@ -2320,6 +2320,18 @@ body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
 @keyframes maintDotPulse{0%,80%,100%{opacity:.25;transform:scale(1);}40%{opacity:1;transform:scale(1.3);}}
 .maint-foot{margin-top:24px;padding-top:18px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);}
 #boot-loader{transition:opacity .35s ease;}
+/* Persistent "you're not actually connected" warning - see showOfflineBanner(). Unlike toast(), this
+   never auto-hides, because the whole point is that the player must not keep playing/trusting what's
+   on screen without noticing: silently falling back to a local/offline save (see initFirebase's
+   connectivity probe) is exactly what made switching devices look like "jumping back in time" - the
+   OTHER device's real cloud save was never touched, this device just couldn't reach it and is showing
+   a stale local fallback instead. */
+#offline-banner{position:fixed;top:0;left:0;right:0;z-index:1002;display:flex;align-items:center;justify-content:center;
+  gap:14px;flex-wrap:wrap;background:var(--danger);color:#fff;padding:10px 16px;font-size:12.5px;font-weight:600;
+  box-shadow:0 4px 16px rgba(0,0,0,.35);}
+#offline-banner button{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);color:#fff;
+  padding:5px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;}
+#offline-banner button:hover{background:rgba(255,255,255,.28);}
 </style>
 </head>
 <body>
@@ -8897,25 +8909,30 @@ async function initFirebase(){
       // file (collection/doc/getDocs/setDoc/...), so this is a drop-in swap beyond the new export.
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore.js`),
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-auth.js`),
-    ]), 6000);
+    ]), 12000);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
     const db = fsMod.getFirestore(app);
     const auth = authMod.getAuth(app);
     // connectivity probe - if this fails/hangs we fall back to local mode for the rest of the
-    // session (there's no later retry). A single 6s attempt meant one transient blip (a slow cold
-    // connection, a brief network hiccup) was enough to drop the whole session into offline mode
-    // even though the backend was actually fine a moment later - "goes down for no reason". One
-    // retry after a short pause absorbs exactly that kind of one-off flakiness while still failing
-    // fast on a genuine outage. Firestore's limit() requires a positive integer (limit(0) throws),
-    // so this costs at most 2 reads per session.
+    // session (there's no later retry, see the user-visible warning this now triggers below on
+    // total failure). A mobile connection (cellular, hotel/school wifi, a slow cold start) can
+    // easily need several seconds just to resolve DNS and open the TLS connection before any actual
+    // Firestore traffic even starts - a couple of short attempts back to back were exactly what made
+    // "switching from PC to mobile" intermittently drop a session into offline mode (silently reading
+    // whatever stale local fallback that device happened to have, looking like the account "jumped
+    // back in time") even though the backend was reachable a few seconds later. 3 attempts with a
+    // longer per-try timeout and a growing pause between them absorbs a slow-but-working connection
+    // while still failing within a bounded, reasonable total (worst case ~35s) on a genuine outage.
+    // Firestore's limit() requires a positive integer (limit(0) throws), so this costs at most 3
+    // reads per session.
     const probe = ()=> fsMod.getDocs(fsMod.query(fsMod.collection(db,'squads'), fsMod.limit(1)));
-    try{
-      await withTimeout(probe(), 7000);
-    }catch(e){
-      console.warn('Firestore connectivity probe failed once, retrying:', e);
-      await new Promise(r=>setTimeout(r, 1200));
-      await withTimeout(probe(), 7000);
+    let probeOk = false, lastProbeErr = null;
+    for(let attempt=0; attempt<3 && !probeOk; attempt++){
+      if(attempt>0) await new Promise(r=>setTimeout(r, 1500*attempt));
+      try{ await withTimeout(probe(), 10000); probeOk = true; }
+      catch(e){ lastProbeErr = e; console.warn(`Firestore connectivity probe failed (attempt ${attempt+1}/3):`, e); }
     }
+    if(!probeOk) throw lastProbeErr;
     fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
       getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
       updateDoc:fsMod.updateDoc, increment:fsMod.increment, runTransaction:fsMod.runTransaction,
@@ -9514,20 +9531,41 @@ async function applyGreatReset(resetId){
   renderView(currentTab||'club');
   updateCoinDisplay();
 }
+// Requires typing an exact confirmation phrase before the trigger button even becomes clickable -
+// this is IRREVERSIBLE and affects every single player, so a stray/accidental click (fat-fingering the
+// wrong admin-panel button, a double-click, muscle memory from clicking through a different confirm
+// dialog) must not be enough on its own. This only guards against an ACCIDENTAL click by someone who
+// already has the admin panel open - it does NOT stop a write straight to config/resetEvent from
+// outside the app entirely (a raw Firestore call bypassing this UI). That half of the risk can only be
+// closed server-side, by restricting who may write config/resetEvent in the Firestore security rules
+// to just the real admin accounts' authenticated identity (the same request.auth.token.email check
+// already used for clubRegistry) - ask Claude to hand you that rule snippet if it isn't already applied.
+const GREAT_RESET_CONFIRM_PHRASE = 'RESET ALLE';
 async function triggerGreatReset(){
   openModal(`
     <h2 style="margin-bottom:10px;color:#ff5f5f;">⚠ Great Reset auslösen</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Jeder Spieler bekommt beim nächsten Öffnen des Spiels einen dauerhaften Prestige-Rang und startet danach komplett neu (Coins, Karten, Kader, Statistiken). Das betrifft ALLE Spieler, nicht nur dich — dein eigener Account wird sofort zurückgesetzt, ohne auf den nächsten Login zu warten.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Jeder Spieler bekommt beim nächsten Öffnen des Spiels einen dauerhaften Prestige-Rang und startet danach komplett neu (Coins, Karten, Kader, Statistiken). Das betrifft ALLE Spieler, nicht nur dich — dein eigener Account wird sofort zurückgesetzt, ohne auf den nächsten Login zu warten. Das kann NICHT rückgängig gemacht werden.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:8px;">Tippe zur Bestätigung genau <b style="color:#ff5f5f;font-family:'JetBrains Mono';">${GREAT_RESET_CONFIRM_PHRASE}</b> ein:</p>
+    <input id="great-reset-confirm-input" placeholder="${GREAT_RESET_CONFIRM_PHRASE}" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin-bottom:16px;">
     <div style="display:flex;gap:10px;">
       <button class="action-btn secondary" id="great-reset-cancel" style="flex:1;">Abbrechen</button>
-      <button class="action-btn" id="great-reset-trigger" style="flex:1;background:#ff5f5f;">Auslösen</button>
+      <button class="action-btn" id="great-reset-trigger" disabled style="flex:1;background:#ff5f5f;opacity:.4;">Auslösen</button>
     </div>`);
   document.getElementById('great-reset-cancel').addEventListener('click', closeModal);
-  document.getElementById('great-reset-trigger').addEventListener('click', async ()=>{
+  const input = document.getElementById('great-reset-confirm-input');
+  const triggerBtn = document.getElementById('great-reset-trigger');
+  input.addEventListener('input', ()=>{
+    const ok = input.value.trim()===GREAT_RESET_CONFIRM_PHRASE;
+    triggerBtn.disabled = !ok; triggerBtn.style.opacity = ok ? '1' : '.4';
+  });
+  triggerBtn.addEventListener('click', async ()=>{
+    if(input.value.trim()!==GREAT_RESET_CONFIRM_PHRASE) return; // defensive - button should already be disabled
+    triggerBtn.disabled = true;
     await fbReady;
     if(!fb){ toast('Benötigt das Online-Backend.'); closeModal(); return; }
     const resetId = 'reset-'+Date.now();
-    await fb.setDoc(fb.doc(fb.db,'config','resetEvent'), {resetId, triggeredBy:clubId, triggeredAt:Date.now()});
+    try{ await fb.setDoc(fb.doc(fb.db,'config','resetEvent'), {resetId, triggeredBy:clubId, triggeredAt:Date.now()}); }
+    catch(e){ console.warn('great reset trigger write failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); triggerBtn.disabled = false; return; }
     // the admin doesn't have to wait for their own next login like everyone else - apply it to
     // their own account right away, same end state applyGreatReset() gives every other player
     // (applyGreatReset shows its own "★ Prestige erreicht" toast, so nothing further needed here)
@@ -13903,6 +13941,21 @@ window.addEventListener('pagehide', ()=>{ if(sessionHeartbeatTimer) releaseSessi
 let clubId = null; // Firestore doc id for this player's save, chosen via the entry gate
 const memoryStore = {}; // last-resort in-memory fallback (session only)
 let storageWarned = false;
+// Shown once, right after boot, whenever the session ends up with fb===null (Firestore unreachable -
+// see initFirebase's connectivity probe). Never auto-hides like toast() does: the whole risk this
+// guards against is a player not noticing they're on a local/offline fallback and continuing to play,
+// which on a device that's never successfully synced looks like a fresh/reset account, and on a device
+// that HAS synced before looks like the account "jumped back" to that older local snapshot - neither
+// is real data loss (the actual cloud save is untouched), but nothing they do this session reliably
+// reaches it either. A reload is the correct fix in the common case (transient network hiccup).
+function showOfflineBanner(){
+  if(document.getElementById('offline-banner')) return;
+  const el = document.createElement('div');
+  el.id = 'offline-banner';
+  el.innerHTML = `<span>⚠ Keine Verbindung zum Server — das hier ist möglicherweise NICHT dein aktueller Spielstand. Änderungen werden eventuell nicht gespeichert.</span><button id="offline-banner-reload">Neu laden</button>`;
+  document.body.appendChild(el);
+  document.getElementById('offline-banner-reload').addEventListener('click', ()=>location.reload());
+}
 function warnStorageOnce(){
   if(NOSAVE_MODE) return; // this mode exists precisely because saving is expected to fail - don't loop back to the down page
   if(storageWarned) return;
@@ -14652,6 +14705,7 @@ async function init(){
   renderView(currentTab);
   updateCoinDisplay();
   hideBootLoader();
+  if(!fb) showOfflineBanner();
   refreshLigaPendingBadge();
   refreshTradeIncomingBadge();
   checkWishlistAgainstMarket();
@@ -18094,14 +18148,16 @@ async function loadAdminUserPanel(targetId){
       const amount = parseInt(val,10);
       if(!Number.isFinite(amount)) return;
       const newProfile = {...p, coins:(p.coins||0)+amount};
-      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      catch(e){ console.warn('admin give coins failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`${amount>=0?'+':''}${formatCoins(amount)} Coins f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
     }, 12);
   });
   const clearSessionBtn = document.getElementById('admin-clear-session');
   if(clearSessionBtn && activeSession) clearSessionBtn.addEventListener('click', async ()=>{
-    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {session:{id:null, ts:0}}, {merge:true});
+    try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {session:{id:null, ts:0}}, {merge:true}); }
+    catch(e){ console.warn('admin clear session failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
     toast(`Sitzungssperre für ${targetId} aufgehoben - Login von einem anderen Gerät ist jetzt sofort möglich.`);
     loadAdminUserPanel(targetId);
   });
@@ -18114,13 +18170,15 @@ async function loadAdminUserPanel(targetId){
     askTextModal('Verwarnungstext', 'z. B. Bitte fair spielen...', async (msg)=>{
       if(!msg) return;
       const newProfile = {...p, pendingWarning:msg};
-      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      catch(e){ console.warn('admin send warning failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`Verwarnung an ${targetId} gesendet.`);
     }, 200);
   });
   document.getElementById('admin-toggle-ban').addEventListener('click', async ()=>{
     const newProfile = {...p, banned: !p.banned};
-    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+    try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+    catch(e){ console.warn('admin toggle ban failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
     toast(p.banned ? `${targetId} entsperrt.` : `${targetId} gesperrt.`);
     loadAdminUserPanel(targetId);
   });
@@ -18249,7 +18307,8 @@ function openAdminSendCardModal(targetId, data){
         // overwrite everything they'd done since with the old state plus this one card. arrayUnion is
         // atomic server-side and needs no read at all, so it can never lose a concurrent change - safe
         // here because every entry carries its own genId(), so it's never mistaken for a duplicate.
-        await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion({uid:genId(), cardId:card.id})}, {merge:true});
+        try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion({uid:genId(), cardId:card.id})}, {merge:true}); }
+        catch(e){ console.warn('admin send card failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
         toast(`${card.n} an ${targetId} geschickt.`);
         closeModal();
       });
@@ -18290,7 +18349,8 @@ function openAdminMakeUntradableModal(targetId, data){
       wrap.addEventListener('click', async ()=>{
         entry.untradable = !entry.untradable;
         targetCollection[idx] = entry;
-        await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection:targetCollection}, {merge:true});
+        try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection:targetCollection}, {merge:true}); }
+        catch(e){ console.warn('admin toggle untradable failed', e); entry.untradable = !entry.untradable; targetCollection[idx] = entry; toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
         toast(`${base.n} ${entry.untradable?'ist jetzt untauschbar':'ist wieder handelbar'} für ${targetId}.`);
         renderList();
       });
@@ -18353,7 +18413,8 @@ function openAdminSendPackModal(targetId, data){
       const drawn = pack.draw();
       // fb.arrayUnion, not a read-modify-write off the admin panel's (possibly minutes-stale) data
       // snapshot - see openAdminSendCardModal's comment for why that silently loses concurrent changes.
-      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion(...drawn.map(card=>({uid:genId(), cardId:card.id})))}, {merge:true});
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion(...drawn.map(card=>({uid:genId(), cardId:card.id})))}, {merge:true}) }
+      catch(e){ console.warn('admin send pack failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`${pack.name} f\u00fcr ${targetId} ge\u00f6ffnet: ${drawn.map(c=>c.n).join(', ')}`);
       closeModal();
     });
@@ -18376,7 +18437,8 @@ function openAdminSendUnopenedPackModal(targetId, data){
     btn.addEventListener('click', async ()=>{
       // fb.arrayUnion, not a read-modify-write off the admin panel's (possibly minutes-stale) data
       // snapshot - see openAdminSendCardModal's comment for why that silently loses concurrent changes.
-      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {packCollection: fb.arrayUnion({uid:genId(), packId:pack.id})}, {merge:true});
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {packCollection: fb.arrayUnion({uid:genId(), packId:pack.id})}, {merge:true}) }
+      catch(e){ console.warn('admin send unopened pack failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`${pack.name} (unge\u00f6ffnet) an ${targetId} geschickt.`);
       closeModal();
     });
