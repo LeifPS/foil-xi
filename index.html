@@ -12146,10 +12146,10 @@ const TRADE_UNLOCK_NET_WORTH = 80000;
 function tradeUnlocked(){ return computeMyNetWorth() >= TRADE_UNLOCK_NET_WORTH; }
 // Kill-switch for the ENTIRE Handel tab (Transfermarkt UND Direkt-Angebote), not just the narrower
 // DIRECT_OFFERS_DISABLED below - see the user's explicit "Deaktiviere Handel bis auf ungestimmte Zeit
-// für alle Leute" request (an exploit was found, see their message for context). Client-side only, same
-// pattern as DIRECT_OFFERS_DISABLED: hides the whole tab's UI for every player instantly on next deploy,
-// no server-side component needed since nothing about this feature works without going through this UI.
-const TRADE_DISABLED = true;
+// für alle Leute" request (an exploit was found, see their message for context). Re-enabled here (this
+// branch only, not main) after fixing the market-buy overwrite bug the exploit likely relied on - see
+// the arrayRemove fix in buyMarketListing(). Client-side only, same pattern as DIRECT_OFFERS_DISABLED.
+const TRADE_DISABLED = false;
 function renderTrade(view){
   if(TRADE_DISABLED){
     view.innerHTML = `
