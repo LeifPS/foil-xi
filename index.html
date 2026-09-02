@@ -212,6 +212,38 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .market-stat.highlight{border-color:var(--gold);}
 .market-stat-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
 .market-stat-value{font-family:'JetBrains Mono';font-weight:700;font-size:14px;color:var(--chalk);}
+/* Live-Verhandlungs-Tausch (Direkt-Angebote) */
+.livetrade-layout{display:flex;flex-direction:column;gap:14px;}
+.livetrade-invite-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:22px;max-width:520px;margin:0 auto;text-align:center;}
+.livetrade-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;}
+.livetrade-stat{display:flex;flex-direction:column;gap:2px;text-align:center;}
+.livetrade-stat-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
+.livetrade-stat-value{font-family:'JetBrains Mono';font-weight:700;font-size:14px;color:var(--chalk);}
+.livetrade-sides{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:760px){ .livetrade-sides{grid-template-columns:1fr;} }
+.livetrade-side{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;}
+.livetrade-side.mine{border-color:var(--turf-bright);}
+.livetrade-side-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.livetrade-side-title{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);}
+.livetrade-side-title.mine{color:var(--turf-bright);}
+.livetrade-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;max-height:340px;overflow:auto;}
+.livetrade-item-wrap{position:relative;cursor:pointer;}
+.livetrade-add-tile{display:flex;align-items:center;justify-content:center;min-height:110px;border:2px dashed var(--line);border-radius:10px;color:var(--muted);font-size:28px;cursor:pointer;transition:.15s;}
+.livetrade-add-tile:hover{border-color:var(--turf-bright);color:var(--turf-bright);}
+.livetrade-coinbox{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;}
+.livetrade-coinbox input{flex:1;min-width:0;background:none;border:none;color:var(--gold);font-family:'JetBrains Mono';font-weight:700;font-size:13px;}
+.livetrade-actionbar{display:flex;gap:10px;align-items:stretch;}
+.livetrade-btn-cancel{flex:0 0 auto;width:64px;background:var(--danger);border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:#fff;}
+.livetrade-btn-chat{flex:0 0 auto;width:64px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;}
+.livetrade-btn-accept{flex:1;position:relative;overflow:hidden;background:var(--panel2);border:2px solid var(--turf-bright);border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:13px;color:var(--turf-bright);user-select:none;touch-action:none;}
+.livetrade-btn-accept .fill{position:absolute;top:0;left:0;bottom:0;width:0%;background:var(--turf-bright);opacity:.35;}
+.livetrade-btn-accept .lbl{position:relative;z-index:1;}
+.livetrade-btn-accept.accepted{background:rgba(47,157,103,.18);}
+.livetrade-chat-messages{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.livetrade-chat-msg{max-width:80%;padding:8px 12px;border-radius:12px;font-size:12.5px;line-height:1.4;}
+.livetrade-chat-msg.mine{align-self:flex-end;background:var(--turf-bright);color:#eafff2;}
+.livetrade-chat-msg.theirs{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);}
+.livetrade-chat-msg.system{align-self:center;background:none;color:var(--muted);font-style:italic;font-size:11px;}
 .token-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22d3ee;box-shadow:0 0 7px #22d3ee;vertical-align:middle;margin-right:5px;}
 .buy-btn{background:var(--turf);color:#eafff2;padding:8px 15px;border-radius:8px;font-weight:700;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;transition:.15s;box-shadow:0 2px 8px rgba(47,157,103,.25);}
 .buy-btn:hover{background:var(--turf-bright);box-shadow:0 3px 12px rgba(63,163,77,.4);}
@@ -12134,26 +12166,7 @@ async function submitSBC(){
 
 
 // ===== TRADING =====
-const POS_GROUP_DE = {ANY:'Beliebig', GK:'Torh\u00fcter', DEF:'Verteidiger', MID:'Mittelfeld', FWD:'Sturm'};
-const MGR_TIER_LIST = ['Bronze','Silber','Gold','Elite','Legend\u00e4r'];
-let tradeOfferCards = new Set();
-let tradeOfferManagers = new Set();
-let tradeOfferPacks = new Set();
-function describeOffer(t){
-  const parts = [];
-  if(t.offerCards.length) parts.push(`${t.offerCards.length} Karte${t.offerCards.length>1?'n':''}`);
-  if(t.offerManagers && t.offerManagers.length) parts.push(`${t.offerManagers.length} Trainer`);
-  if(t.offerPacks && t.offerPacks.length) parts.push(`${t.offerPacks.length} Pack${t.offerPacks.length>1?'s':''}`);
-  if(t.offerCoins) parts.push(`${formatCoins(t.offerCoins)} Coins`);
-  return parts.join(' + ') || 'nichts';
-}
-function describeWant(want){
-  if(want.kind==='coins') return `${formatCoins(want.amount)} Coins`;
-  if(want.kind==='nothing') return 'nichts (Geschenk)';
-  if(want.kind==='cards') return `${want.count} Karte${want.count>1?'n':''} (mind. ${want.minOvr} Rating${want.pos&&want.pos!=='ANY'?', '+POS_GROUP_DE[want.pos]:''})`;
-  if(want.kind==='manager') return `1 Trainerkarte (mind. Stufe ${want.minTier})`;
-  return '';
-}
+let myLiveTrade = null; // the one active liveTrades doc I'm currently a participant in, if any
 let tradeSubTab = 'market';
 const TRADE_UNLOCK_NET_WORTH = 80000;
 function tradeUnlocked(){ return computeMyNetWorth() >= TRADE_UNLOCK_NET_WORTH; }
@@ -12200,25 +12213,18 @@ function renderTrade(view){
   if(tradeSubTab==='market') renderMarketSection(document.getElementById('trade-content'));
   else renderDirectOffersSection(document.getElementById('trade-content'));
 }
-// Temporarily switched off (see the user's explicit "deaktiviere Direkt-Angebote" request) - the
-// Transfermarkt (renderMarketSection) is a completely separate flow and stays fully available.
-const DIRECT_OFFERS_DISABLED = true;
+// Live-Verhandlungs-Tausch (statt des alten Einmal-Angebots): eine Einladung wird angenommen, dann
+// bauen BEIDE Seiten live gemeinsam ihr Angebot zusammen (Karten/Trainer/Coins), können im Chat
+// verhandeln, und müssen beide "Akzeptieren" halten, damit der Tausch tatsächlich stattfindet - siehe
+// renderLiveTradeRoom weiter unten für die eigentliche UI.
+const DIRECT_OFFERS_DISABLED = false;
 function renderDirectOffersSection(el){
   if(DIRECT_OFFERS_DISABLED){
     el.innerHTML = `<div class="empty-state"><h3>Vorübergehend deaktiviert</h3><p>Direkt-Angebote sind aktuell nicht verfügbar. Nutze in der Zwischenzeit den Transfermarkt.</p></div>`;
     return;
   }
-  el.innerHTML = `
-    <div class="toolbar" style="margin-bottom:18px;">
-      <button class="action-btn" id="trade-new" style="width:auto;padding:9px 18px;">+ Neues Angebot erstellen</button>
-    </div>
-    <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Eingehende Angebote</h3>
-    <div class="leader-list" id="trade-incoming" style="margin-bottom:24px;"><p class="hint">L\u00e4dt...</p></div>
-    <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine gesendeten Angebote</h3>
-    <div class="leader-list" id="trade-outgoing"><p class="hint">L\u00e4dt...</p></div>
-  `;
-  document.getElementById('trade-new').addEventListener('click', openTradeBuilder);
-  loadTrades();
+  el.innerHTML = `<p class="hint">Lädt…</p>`;
+  loadMyLiveTrade(el);
 }
 let marketFilter = {q:'', pos:'ALL', sort:'newest', maxPrice:'', minOv:''};
 function renderMarketSection(el){
@@ -12446,16 +12452,13 @@ async function getExternalLockedUids(){
       marketSnap.docs.forEach(d=>locked.add(d.data().cardUid));
     }catch(e){ console.warn('market lock check failed', e); }
     try{
-      const tradeSnap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('fromUserId','==',profile.userId)));
-      tradeSnap.docs.forEach(d=>{
+      const liveTradeSnap = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains',profile.userId)));
+      liveTradeSnap.docs.forEach(d=>{
         const t = d.data();
-        if(t.status==='pending'){
-          (t.offerCards||[]).forEach(c=>locked.add(c.uid));
-          (t.offerManagers||[]).forEach(m=>locked.add(m.uid));
-          (t.offerPacks||[]).forEach(p=>locked.add(p.uid));
-        }
+        const mySide = t.userAId===profile.userId ? 'A' : 'B';
+        ((t['offer'+mySide]||{}).items||[]).forEach(it=>locked.add(it.uid));
       });
-    }catch(e){ console.warn('trade lock check failed', e); }
+    }catch(e){ console.warn('live trade lock check failed', e); }
     try{
       // a card staked as a tournament prize stays visible in the collection (see hostTournamentPrompt)
       // but must not be sellable/tradeable/squaddable while the tournament is still open - this must
@@ -13131,539 +13134,561 @@ async function buyMarketListing(listing){
     closeModal();
   }
 }
-async function loadTrades(){
-  const inBox = document.getElementById('trade-incoming');
-  const outBox = document.getElementById('trade-outgoing');
-  if(!inBox || !outBox) return;
+const LIVETRADE_MAX_ITEMS = 30;
+const LIVETRADE_ACCEPT_HOLD_MS = 3000;
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function liveTradeSideKey(trade){ return trade.userAId===profile.userId ? 'A' : 'B'; }
+function liveTradeOpponentInfo(trade){
+  const mine = liveTradeSideKey(trade);
+  return mine==='A' ? {id:trade.userBId, name:trade.userBName} : {id:trade.userAId, name:trade.userAName};
+}
+function liveTradeItemValue(item){
+  if(item.itemType==='manager'){ const mgr = MGR_BY_ID.get(item.cardId); return mgr ? computeRAP(mgr) : 0; }
+  const base = BY_ID.get(item.cardId);
+  if(!base) return 0;
+  return computeRAP(applyCardLevel(base, item.xp||0, item.uid));
+}
+function liveTradeSideValue(offer){ return (offer.items||[]).reduce((sum,it)=>sum+liveTradeItemValue(it), 0) + (offer.coins||0); }
+async function loadMyLiveTrade(el){
   await fbReady;
-  if(!fb){
-    inBox.innerHTML = `<p class="hint">Handel ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`;
-    outBox.innerHTML = '';
+  if(!fb){ el.innerHTML = `<p class="hint">Direkt-Angebote benötigen das Online-Backend (Firebase). Gerade nicht erreichbar.</p>`; return; }
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains', profile.userId), fb.limit(1)));
+    myLiveTrade = snap.empty ? null : {id:snap.docs[0].id, ...snap.docs[0].data()};
+  }catch(e){ console.warn('live trade load failed', e); myLiveTrade = null; }
+  if(!document.getElementById('trade-content') || tradeSubTab!=='direct') return; // navigated away meanwhile
+  if(myLiveTrade && myLiveTrade.status==='active') await reconcileMyLiveTradeOffer(myLiveTrade);
+  renderLiveTradeScreen(el);
+}
+function renderLiveTradeScreen(el){
+  if(!myLiveTrade){ renderLiveTradeInviteForm(el); startLiveTradePolling(el); return; }
+  const opp = liveTradeOpponentInfo(myLiveTrade);
+  if(myLiveTrade.status==='invited'){
+    if(myLiveTrade.invitedBy===profile.userId){
+      el.innerHTML = `
+        <div class="livetrade-invite-card">
+          <h3 style="margin-bottom:8px;">Warte auf Antwort von ${escapeHtml(opp.name)}…</h3>
+          <p class="hint" style="margin-bottom:16px;">Sobald ${escapeHtml(opp.name)} deine Tausch-Einladung annimmt, könnt ihr gemeinsam euer Angebot zusammenstellen.</p>
+          <button class="action-btn secondary" id="lt-cancel-invite" style="background:var(--danger);width:auto;padding:9px 22px;">Einladung zurückziehen</button>
+        </div>`;
+      document.getElementById('lt-cancel-invite').addEventListener('click', ()=>endLiveTrade(myLiveTrade, 'Einladung zurückgezogen.'));
+    } else {
+      el.innerHTML = `
+        <div class="livetrade-invite-card">
+          <h3 style="margin-bottom:8px;">${escapeHtml(opp.name)} möchte mit dir handeln</h3>
+          <p class="hint" style="margin-bottom:16px;">Nimm an, um gemeinsam ein Tauschangebot zusammenzustellen — ihr könnt danach beide Karten, Trainer und Coins hinzufügen und im Chat verhandeln.</p>
+          <div style="display:flex;gap:10px;justify-content:center;">
+            <button class="action-btn secondary" id="lt-decline-invite" style="background:var(--danger);width:140px;">Ablehnen</button>
+            <button class="action-btn" id="lt-accept-invite" style="width:140px;">Annehmen</button>
+          </div>
+        </div>`;
+      document.getElementById('lt-decline-invite').addEventListener('click', ()=>endLiveTrade(myLiveTrade, 'Einladung abgelehnt.'));
+      document.getElementById('lt-accept-invite').addEventListener('click', (e)=>{ e.target.disabled=true; acceptLiveTradeInvite(myLiveTrade); });
+    }
+    startLiveTradePolling(el);
     return;
   }
-  let incoming = [], outgoing = [];
-  try{
-    incoming = await cachedRead('trades-incoming:'+profile.userId, 10000, async ()=>{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('toUserId','==',profile.userId), fb.limit(30)));
-      return snap.docs.map(d=>({id:d.id, ...d.data()}));
-    });
-  }catch(e){ console.warn('incoming trades read failed', e); }
-  try{
-    outgoing = await cachedRead('trades-outgoing:'+profile.userId, 10000, async ()=>{
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('fromUserId','==',profile.userId), fb.limit(30)));
-      return snap.docs.map(d=>({id:d.id, ...d.data()}));
-    });
-  }catch(e){ console.warn('outgoing trades read failed', e); }
-  incoming = incoming.filter(t=>t.status==='pending');
-  outgoing = outgoing.filter(t=>t.status==='pending');
-
-  inBox.innerHTML = incoming.length ? '' : `<p class="hint">Keine eingehenden Angebote.</p>`;
-  incoming.forEach(t=>{
-    const row = document.createElement('div');
-    row.className = 'leader-row';
-    row.style.flexWrap = 'wrap';
-    row.innerHTML = `<span style="flex:1;"><b>${t.fromName}</b> bietet ${describeOffer(t)} f\u00fcr: <b style="color:var(--gold);">${describeWant(t.want)}</b></span>`;
-    const btns = document.createElement('div');
-    btns.style.display = 'flex'; btns.style.gap = '8px'; btns.style.marginTop='6px'; btns.style.width='100%';
-    const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Ansehen';
-    viewBtn.addEventListener('click', ()=>showTradeCardsModal(t));
-    const acceptBtn = document.createElement('button'); acceptBtn.className='action-btn'; acceptBtn.style.width='auto'; acceptBtn.style.padding='6px 12px'; acceptBtn.textContent='Annehmen';
-    acceptBtn.addEventListener('click', ()=>{ acceptBtn.disabled=true; declineBtnRef.disabled=true; acceptTrade(t); });
-    const declineBtn = document.createElement('button'); declineBtn.className='action-btn secondary'; declineBtn.style.width='auto'; declineBtn.style.padding='6px 12px'; declineBtn.style.background='var(--danger)'; declineBtn.textContent='Ablehnen';
-    const declineBtnRef = declineBtn;
-    declineBtn.addEventListener('click', ()=>{ acceptBtn.disabled=true; declineBtn.disabled=true; declineTrade(t); });
-    btns.append(viewBtn, acceptBtn, declineBtn);
-    row.appendChild(btns);
-    inBox.appendChild(row);
-  });
-
-  outBox.innerHTML = outgoing.length ? '' : `<p class="hint">Keine gesendeten Angebote.</p>`;
-  outgoing.forEach(t=>{
-    const row = document.createElement('div');
-    row.className = 'leader-row';
-    row.style.flexWrap = 'wrap';
-    row.innerHTML = `<span style="flex:1;">An <b>${t.toName}</b>: ${describeOffer(t)} f\u00fcr ${describeWant(t.want)}</span>`;
-    const btns = document.createElement('div');
-    btns.style.display='flex'; btns.style.gap='8px'; btns.style.marginTop='6px'; btns.style.width='100%';
-    const viewBtn = document.createElement('button'); viewBtn.className='action-btn secondary'; viewBtn.style.width='auto'; viewBtn.style.padding='6px 12px'; viewBtn.textContent='Ansehen';
-    viewBtn.addEventListener('click', ()=>showTradeCardsModal(t));
-    const withdrawBtn = document.createElement('button'); withdrawBtn.className='action-btn secondary'; withdrawBtn.style.width='auto'; withdrawBtn.style.padding='6px 12px'; withdrawBtn.textContent='Zur\u00fcckziehen';
-    withdrawBtn.addEventListener('click', ()=>{ withdrawBtn.disabled=true; withdrawTrade(t); });
-    btns.append(viewBtn, withdrawBtn);
-    row.appendChild(btns);
-    outBox.appendChild(row);
-  });
-  tradeIncomingCount = incoming.length;
-  renderNavBadges();
+  renderLiveTradeRoom(el, myLiveTrade);
+  startLiveTradePolling(el);
 }
-function showTradeCardsModal(t){
-  openModal(`
-    <h2 style="margin-bottom:2px;">Angebot</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">Im Tausch gegen: ${describeWant(t.want)}</p>
-    <div class="reveal-strip" id="trade-cards-grid"></div>
-    <button class="modal-close" id="trade-cards-close">Schlie\u00dfen</button>`);
-  const grid = document.getElementById('trade-cards-grid');
-  (t.offerCards||[]).forEach(c=>{
-    const card = leveledOwnedCard(c);
-    if(card){ const wrap=document.createElement('div'); wrap.style.position='relative'; wrap.appendChild(cardEl(card,'mini')); wrap.appendChild(rapBadge(card)); grid.appendChild(wrap); }
-  });
-  (t.offerManagers||[]).forEach(m=>{
-    const mgr = MGR_BY_ID.get(m.mgrId);
-    if(mgr){ const wrap=document.createElement('div'); wrap.style.position='relative'; wrap.appendChild(cardEl(mgr,'mini')); wrap.appendChild(rapBadge(mgr)); grid.appendChild(wrap); }
-  });
-  (t.offerPacks||[]).forEach(p=>{
-    const pack = PACKS.find(x=>x.id===p.packId);
-    if(pack){ const wrap=document.createElement('div'); wrap.style.position='relative'; wrap.appendChild(packTileMiniEl(pack)); grid.appendChild(wrap); }
-  });
-  document.getElementById('trade-cards-close').addEventListener('click', closeModal);
+function renderLiveTradeInviteForm(el){
+  el.innerHTML = `
+    <div class="livetrade-invite-card" style="text-align:left;">
+      <h3 style="margin-bottom:8px;text-align:center;">Neues Direktangebot</h3>
+      <p class="hint" style="margin-bottom:14px;text-align:center;">Lade einen anderen Verein zu einem Tausch ein. Ihr könnt danach live gemeinsam euer Angebot zusammenstellen und im Chat verhandeln.</p>
+      <div class="toolbar" style="margin-bottom:10px;">
+        <input id="lt-invite-target" placeholder="Vereinsname des Empfängers">
+        <button class="action-btn" id="lt-invite-send" style="width:auto;padding:9px 18px;">Einladen</button>
+      </div>
+    </div>`;
+  document.getElementById('lt-invite-send').addEventListener('click', (e)=>{ e.target.disabled=true; sendLiveTradeInvite(el).finally(()=>{ if(e.target) e.target.disabled=false; }); });
+  document.getElementById('lt-invite-target').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('lt-invite-send').click(); });
 }
-async function openTradeBuilder(){
-  tradeOfferCards = new Set(); tradeOfferManagers = new Set(); tradeOfferPacks = new Set();
-  openModal(`<h2 style="margin-bottom:10px;">Neues Handelsangebot</h2><p class="hint" style="margin-top:0;">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p>`);
-  const usedInSquad = await getLockedUids();
-  openModal(`
-    <h2 style="margin-bottom:4px;">Neues Handelsangebot</h2>
-    <p class="hint" style="margin-top:0;">W\u00e4hle, was du anbietest, was du daf\u00fcr willst, und wer es bekommen soll.</p>
-    <div class="lbl" style="margin:14px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Spieler</div>
-    <div class="mono" style="color:var(--muted);margin-bottom:8px;" id="trade-sel-count">0 Karten ausgew\u00e4hlt</div>
-    <input id="trade-pick-search" placeholder="Spielername filtern..." style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 14px;border-radius:9px;margin-bottom:10px;">
-    <div class="club-grid" id="trade-pick-grid" style="max-height:260px;overflow:auto;margin-bottom:14px;"></div>
-    <div class="lbl" style="margin:6px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Trainer (optional)</div>
-    <div class="club-grid" id="trade-mgr-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
-    <div class="lbl" style="margin:6px 0 6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Angebotene Packs (optional)</div>
-    <div class="club-grid" id="trade-pack-grid" style="max-height:200px;overflow:auto;margin-bottom:16px;"></div>
-    <div class="toolbar" style="margin-bottom:14px;">
-      <input id="trade-coins" type="text" inputmode="decimal" placeholder="Coins zus\u00e4tzlich anbieten (optional, z. B. 1.2m)">
-    </div>
-    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Das willst du daf\u00fcr</div>
-    <div class="toolbar" style="margin-bottom:10px;">
-      <select id="trade-want-kind">
-        <option value="coins">Coins</option>
-        <option value="cards">Karte(n) mit Mindest-Rating</option>
-        <option value="manager">Trainerkarte (Mindeststufe)</option>
-        <option value="nothing">Nichts (Geschenk)</option>
-      </select>
-    </div>
-    <div class="toolbar" id="trade-want-coins" style="margin-bottom:14px;">
-      <input id="want-coins-amount" type="text" inputmode="decimal" placeholder="Gew\u00fcnschte Coins (z. B. 1.2m)">
-    </div>
-    <div class="toolbar" id="trade-want-cards" style="margin-bottom:14px;display:none;">
-      <input id="want-cards-count" type="number" min="1" value="1" placeholder="Anzahl Karten" style="max-width:110px;">
-      <input id="want-cards-minovr" type="number" min="1" max="115" value="80" placeholder="Mindest-Rating" style="max-width:130px;">
-      <select id="want-cards-pos">
-        <option value="ANY">Beliebige Position</option>
-        <option value="GK">Torh\u00fcter</option>
-        <option value="DEF">Verteidiger</option>
-        <option value="MID">Mittelfeld</option>
-        <option value="FWD">Sturm</option>
-      </select>
-    </div>
-    <div class="toolbar" id="trade-want-manager" style="margin-bottom:14px;display:none;">
-      <select id="want-mgr-tier">
-        ${MGR_TIER_LIST.map(t=>`<option value="${t}">${t}+</option>`).join('')}
-      </select>
-    </div>
-    <div class="toolbar" style="margin-bottom:14px;">
-      <input id="trade-target" placeholder="Vereinsname des Empf\u00e4ngers">
-    </div>
-    <button class="action-btn" id="trade-submit" style="width:220px;">Angebot senden</button>
-  `);
-  const grid = document.getElementById('trade-pick-grid');
-  const tradeSearchableWraps = [];
-  collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.untradable && !x.card.favorited).sort((a,b)=>b.card.ov-a.card.ov).forEach(({uid,card})=>{
-    const inSquad = usedInSquad.has(uid);
-    const wrap = document.createElement('div');
-    wrap.className = 'club-card-wrap';
-    wrap.style.cursor = inSquad ? 'not-allowed' : 'pointer';
-    wrap.style.opacity = inSquad ? '.45' : '1';
-    const el = cardEl(card,'mini');
-    wrap.appendChild(el);
-    wrap.appendChild(rapBadge(card));
-    tradeSearchableWraps.push({wrap, name:card.n.toLowerCase()});
-    if(inSquad){
-      const badge = document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='NICHT VERF\u00dcGBAR';
-      wrap.appendChild(badge);
+async function sendLiveTradeInvite(el){
+  const raw = document.getElementById('lt-invite-target').value;
+  const targetId = sanitizeClubId(raw||'');
+  if(!targetId){ toast('Bitte einen gültigen Vereinsnamen eingeben.'); return; }
+  if(targetId===profile.userId){ toast('Du kannst dir selbst kein Angebot senden.'); return; }
+  await fbReady;
+  if(!fb){ toast('Direkt-Angebote benötigen das Online-Backend (Firebase).'); return; }
+  try{
+    const existingMine = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains', profile.userId), fb.limit(1)));
+    if(!existingMine.empty){ toast('Du hast bereits einen aktiven Tausch.'); loadMyLiveTrade(el); return; }
+    const targetSnap = await fb.getDoc(fb.doc(fb.db,'saves', targetId));
+    if(!targetSnap.exists()){ toast('Diesen Verein gibt es nicht.'); return; }
+    const existingTheirs = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains', targetId), fb.limit(1)));
+    if(!existingTheirs.empty){ toast(`${raw.trim()} hat bereits einen aktiven Tausch.`); return; }
+    const targetProfile = (targetSnap.data()||{}).profile || {};
+    const tradeDoc = {
+      players: [profile.userId, targetId],
+      userAId: profile.userId, userAName: profile.displayName||profile.userId,
+      userBId: targetId, userBName: targetProfile.displayName||raw.trim(),
+      status:'invited', invitedBy: profile.userId,
+      offerA:{items:[], coins:0}, offerB:{items:[], coins:0},
+      acceptedA:false, acceptedB:false,
+      createdAt: Date.now(), updatedAt: Date.now(),
+    };
+    await fb.setDoc(fb.doc(fb.db,'liveTrades', genId()), tradeDoc);
+    toast('Einladung gesendet!');
+    loadMyLiveTrade(el);
+  }catch(e){ console.warn('live trade invite failed', e); toast('Einladung konnte nicht gesendet werden.'); }
+}
+async function acceptLiveTradeInvite(trade){
+  await fbReady;
+  if(!fb) return;
+  try{
+    const existing = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains', profile.userId)));
+    const otherActive = existing.docs.find(d=>d.id!==trade.id);
+    if(otherActive){ toast('Du hast bereits einen aktiven Tausch.'); myLiveTrade=null; renderDirectOffersSection(document.getElementById('trade-content')); return; }
+    let ok = false;
+    await fb.runTransaction(fb.db, async (tx)=>{
+      const snap = await tx.get(fb.doc(fb.db,'liveTrades', trade.id));
+      if(!snap.exists() || snap.data().status!=='invited' || snap.data().userBId!==profile.userId) return;
+      ok = true;
+      tx.update(fb.doc(fb.db,'liveTrades', trade.id), {status:'active', activatedAt:Date.now(), updatedAt:Date.now()});
+    });
+    toast(ok ? 'Tausch gestartet!' : 'Diese Einladung ist nicht mehr gültig.');
+  }catch(e){ console.warn('accept invite failed', e); toast('Einladung konnte nicht angenommen werden.'); }
+  loadMyLiveTrade(document.getElementById('trade-content'));
+}
+async function endLiveTrade(trade, toastMsg, opts={}){
+  const doIt = async ()=>{
+    await fbReady;
+    if(fb){
+      try{
+        await fb.deleteDoc(fb.doc(fb.db,'liveTrades', trade.id));
+        await cleanupLiveTradeMessages(trade.id);
+        toast(toastMsg);
+      }catch(e){ console.warn('end live trade failed', e); toast('Aktion fehlgeschlagen — bitte erneut versuchen.'); }
     }
-    wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Diese Karte ist gerade nicht verf\u00fcgbar (im Kader, bereits gelistet oder in einem Angebot).'); return; }
-      if(tradeOfferCards.has(uid)){ tradeOfferCards.delete(uid); el.style.outline=''; el.style.transform=''; }
-      else{ tradeOfferCards.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
-      document.getElementById('trade-sel-count').textContent = `${tradeOfferCards.size} Karte${tradeOfferCards.size===1?'':'n'} ausgew\u00e4hlt`;
+    myLiveTrade = null;
+    const el = document.getElementById('trade-content');
+    if(el && tradeSubTab==='direct') renderDirectOffersSection(el);
+  };
+  if(opts.confirm){
+    openModal(`
+      <h2 style="margin-bottom:10px;">Tausch wirklich abbrechen?</h2>
+      <p class="hint" style="margin-bottom:18px;">Der Tausch wird sofort für beide Seiten beendet. Bereits hinzugefügte Karten/Coins werden nicht übertragen.</p>
+      <div style="display:flex;gap:10px;">
+        <button class="action-btn secondary" id="lt-cancel-back" style="flex:1;">Zurück</button>
+        <button class="action-btn" id="lt-cancel-confirm" style="flex:1;background:var(--danger);">Ja, abbrechen</button>
+      </div>`);
+    document.getElementById('lt-cancel-back').addEventListener('click', closeModal);
+    document.getElementById('lt-cancel-confirm').addEventListener('click', ()=>{ closeModal(); doIt(); });
+  } else {
+    doIt();
+  }
+}
+async function cleanupLiveTradeMessages(tradeId){
+  await fbReady;
+  if(!fb) return;
+  try{
+    const snap = await fb.getDocs(fb.collection(fb.db,'liveTrades', tradeId, 'messages'));
+    for(const d of snap.docs){ await fb.deleteDoc(d.ref); }
+  }catch(e){ console.warn('chat cleanup failed', e); }
+}
+// Self-heals MY OWN side of an active trade against items I lost through any other flow while the
+// trade sat open (sold, used in an SBC, given away, etc.) - a plain field overwrite is safe here
+// (unlike collection/managerCollection themselves) because only I ever write to my own offerX.items.
+async function reconcileMyLiveTradeOffer(trade){
+  const side = liveTradeSideKey(trade);
+  const offer = trade['offer'+side];
+  const stillOwned = (offer.items||[]).filter(it=>{
+    if(it.itemType==='manager') return managerCollection.some(m=>m.uid===it.uid);
+    return collection.some(c=>c.uid===it.uid);
+  });
+  if(stillOwned.length===(offer.items||[]).length) return;
+  const lostCount = (offer.items||[]).length - stillOwned.length;
+  await fbReady;
+  if(!fb) return;
+  try{
+    await fb.updateDoc(fb.doc(fb.db,'liveTrades', trade.id), {
+      ['offer'+side+'.items']: stillOwned, acceptedA:false, acceptedB:false, updatedAt:Date.now(),
     });
+    trade['offer'+side].items = stillOwned; trade.acceptedA=false; trade.acceptedB=false;
+    await pushLiveTradeSystemMessage(trade, `${lostCount} Item(s) wurden automatisch aus dem Tausch entfernt (nicht mehr verfügbar).`);
+    toast('Ein Item aus deinem Tauschangebot ist nicht mehr verfügbar und wurde entfernt.');
+  }catch(e){ console.warn('reconcile trade offer failed', e); }
+}
+function renderLiveTradeGrid(container, offer, isMine, trade, side){
+  container.innerHTML = '';
+  (offer.items||[]).forEach(item=>{
+    const isMgr = item.itemType==='manager';
+    const base = isMgr ? MGR_BY_ID.get(item.cardId) : BY_ID.get(item.cardId);
+    if(!base) return;
+    const card = isMgr ? base : applyCardLevel(base, item.xp||0, item.uid);
+    const wrap = document.createElement('div');
+    wrap.className = 'livetrade-item-wrap';
+    wrap.appendChild(cardEl(card,'mini'));
+    wrap.appendChild(rapBadge(card));
+    if(isMine){
+      wrap.title = 'Klicken zum Entfernen';
+      wrap.addEventListener('click', ()=>removeLiveTradeItem(trade, side, item));
+    }
+    container.appendChild(wrap);
+  });
+  if(isMine && (offer.items||[]).length < LIVETRADE_MAX_ITEMS){
+    const addTile = document.createElement('div');
+    addTile.className = 'livetrade-add-tile';
+    addTile.textContent = '+';
+    addTile.title = 'Karte oder Trainer hinzufügen';
+    addTile.addEventListener('click', ()=>openLiveTradeItemPicker(trade, side));
+    container.appendChild(addTile);
+  }
+}
+async function removeLiveTradeItem(trade, side, item){
+  await fbReady;
+  if(!fb) return;
+  try{
+    await fb.updateDoc(fb.doc(fb.db,'liveTrades', trade.id), {
+      ['offer'+side+'.items']: fb.arrayRemove(item), acceptedA:false, acceptedB:false, updatedAt:Date.now(),
+    });
+    invalidateReadCache('external-locks:'+profile.userId);
+    trade['offer'+side].items = (trade['offer'+side].items||[]).filter(x=>x.uid!==item.uid);
+    trade.acceptedA=false; trade.acceptedB=false;
+    myLiveTrade = trade;
+    renderLiveTradeRoom(document.getElementById('trade-content'), trade);
+  }catch(e){ console.warn('remove trade item failed', e); toast('Entfernen fehlgeschlagen.'); }
+}
+async function setLiveTradeCoins(trade, side, amount){
+  await fbReady;
+  if(!fb) return;
+  try{
+    await fb.updateDoc(fb.doc(fb.db,'liveTrades', trade.id), {
+      ['offer'+side+'.coins']: amount, acceptedA:false, acceptedB:false, updatedAt:Date.now(),
+    });
+    trade['offer'+side].coins = amount; trade.acceptedA=false; trade.acceptedB=false;
+    myLiveTrade = trade;
+    renderLiveTradeRoom(document.getElementById('trade-content'), trade);
+  }catch(e){ console.warn('set trade coins failed', e); toast('Coins konnten nicht aktualisiert werden.'); }
+}
+async function openLiveTradeItemPicker(trade, side){
+  openModal(`<h2 style="margin-bottom:10px;">Zum Tausch hinzufügen</h2><p class="hint" style="margin-top:0;">Verfügbarkeit wird geprüft…</p>`);
+  const usedInSquad = await getLockedUids();
+  const offeredUids = new Set((trade['offer'+side].items||[]).map(x=>x.uid));
+  const eligiblePlayers = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c), cardId:c.cardId}))
+    .filter(x=>x.card && !x.card.untradable && !x.card.favorited && !usedInSquad.has(x.uid) && !offeredUids.has(x.uid));
+  const eligibleMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId), mgrId:m.mgrId}))
+    .filter(x=>x.mgr && !x.mgr.untradable && !usedInSquad.has(x.uid) && x.uid!==squad.managerUid && !offeredUids.has(x.uid));
+  openModal(`
+    <h2 style="margin-bottom:4px;">Zum Tausch hinzufügen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Klicke eine Karte oder einen Trainer an, um sie/ihn sofort zu deiner Tauschseite hinzuzufügen.</p>
+    <input id="lt-picker-search" placeholder="Suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:9px 14px;border-radius:9px;margin-bottom:10px;">
+    <div class="club-grid" id="lt-picker-grid" style="max-height:400px;overflow:auto;margin-bottom:14px;"></div>
+    <button class="action-btn secondary" id="lt-picker-close" style="width:100%;">Fertig</button>`);
+  document.getElementById('lt-picker-close').addEventListener('click', closeModal);
+  const grid = document.getElementById('lt-picker-grid');
+  const searchable = [];
+  const addItem = async (entry)=>{
+    if((trade['offer'+side].items||[]).length>=LIVETRADE_MAX_ITEMS){ toast(`Maximal ${LIVETRADE_MAX_ITEMS} Items pro Seite.`); return; }
+    await fbReady;
+    if(!fb) return;
+    try{
+      await fb.updateDoc(fb.doc(fb.db,'liveTrades', trade.id), {
+        ['offer'+side+'.items']: fb.arrayUnion(entry), acceptedA:false, acceptedB:false, updatedAt:Date.now(),
+      });
+      trade['offer'+side].items = (trade['offer'+side].items||[]).concat([entry]);
+      trade.acceptedA=false; trade.acceptedB=false;
+      myLiveTrade = trade;
+      closeModal();
+      renderLiveTradeRoom(document.getElementById('trade-content'), trade);
+    }catch(e){ console.warn('add trade item failed', e); toast('Hinzufügen fehlgeschlagen.'); }
+  };
+  eligiblePlayers.forEach(({uid,card,cardId})=>{
+    const wrap = document.createElement('div'); wrap.className='club-card-wrap'; wrap.style.cursor='pointer';
+    wrap.appendChild(cardEl(card,'mini')); wrap.appendChild(rapBadge(card));
+    searchable.push({wrap, name:(card.n||'').toLowerCase()});
+    wrap.addEventListener('click', ()=>addItem({uid, itemType:'player', cardId, xp:card.xp||0}));
     grid.appendChild(wrap);
   });
-  document.getElementById('trade-pick-search').addEventListener('input', e=>{
+  eligibleMgrs.forEach(({uid,mgr,mgrId})=>{
+    const wrap = document.createElement('div'); wrap.className='club-card-wrap'; wrap.style.cursor='pointer';
+    wrap.appendChild(cardEl(mgr,'mini')); wrap.appendChild(rapBadge(mgr));
+    searchable.push({wrap, name:(mgr.n||'').toLowerCase()});
+    wrap.addEventListener('click', ()=>addItem({uid, itemType:'manager', cardId:mgrId, xp:0}));
+    grid.appendChild(wrap);
+  });
+  if(!searchable.length) grid.innerHTML = '<p class="hint">Keine passenden Karten/Trainer verfügbar.</p>';
+  document.getElementById('lt-picker-search').addEventListener('input', e=>{
     const q = e.target.value.trim().toLowerCase();
-    tradeSearchableWraps.forEach(({wrap,name})=>{ wrap.style.display = (!q || name.includes(q)) ? '' : 'none'; });
-  });
-  const mgrGrid = document.getElementById('trade-mgr-grid');
-  const ownedMgrs = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr && !x.mgr.untradable);
-  if(!ownedMgrs.length){ mgrGrid.innerHTML = `<p class="hint">Noch keine Trainer im Besitz.</p>`; }
-  ownedMgrs.forEach(({uid,mgr})=>{
-    const inSquad = usedInSquad.has(uid) || uid===squad.managerUid;
-    const wrap = document.createElement('div');
-    wrap.className = 'club-card-wrap';
-    wrap.style.cursor = inSquad ? 'not-allowed' : 'pointer';
-    wrap.style.opacity = inSquad ? '.45' : '1';
-    const el = cardEl(mgr,'mini');
-    wrap.appendChild(el);
-    wrap.appendChild(rapBadge(mgr));
-    if(inSquad){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERF\u00dcGBAR'; wrap.appendChild(b); }
-    wrap.addEventListener('click', ()=>{
-      if(inSquad){ toast('Dieser Trainer ist gerade nicht verf\u00fcgbar (zugewiesen, bereits gelistet oder in einem Angebot).'); return; }
-      if(tradeOfferManagers.has(uid)){ tradeOfferManagers.delete(uid); el.style.outline=''; el.style.transform=''; }
-      else{ tradeOfferManagers.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
-    });
-    mgrGrid.appendChild(wrap);
-  });
-  const packGrid = document.getElementById('trade-pack-grid');
-  const ownedPacks = packCollection.map(p=>({uid:p.uid, pack:PACKS.find(x=>x.id===p.packId), packId:p.packId})).filter(x=>x.pack);
-  if(!ownedPacks.length){ packGrid.innerHTML = `<p class="hint">Noch keine Packs im Besitz.</p>`; }
-  ownedPacks.forEach(({uid,pack})=>{
-    const locked = usedInSquad.has(uid);
-    const wrap = document.createElement('div');
-    wrap.className = 'club-card-wrap';
-    wrap.style.cursor = locked ? 'not-allowed' : 'pointer';
-    wrap.style.opacity = locked ? '.45' : '1';
-    const el = packTileMiniEl(pack);
-    wrap.appendChild(el);
-    if(locked){ const b=document.createElement('div'); b.className='sbc-inuse-badge'; b.textContent='NICHT VERFÜGBAR'; wrap.appendChild(b); }
-    wrap.addEventListener('click', ()=>{
-      if(locked){ toast('Dieses Pack ist gerade nicht verfügbar (bereits gelistet oder in einem Angebot).'); return; }
-      if(tradeOfferPacks.has(uid)){ tradeOfferPacks.delete(uid); el.style.outline=''; el.style.transform=''; }
-      else{ tradeOfferPacks.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)'; }
-    });
-    packGrid.appendChild(wrap);
-  });
-  const kindSelect = document.getElementById('trade-want-kind');
-  kindSelect.addEventListener('change', ()=>{
-    document.getElementById('trade-want-coins').style.display = kindSelect.value==='coins' ? 'flex':'none';
-    document.getElementById('trade-want-cards').style.display = kindSelect.value==='cards' ? 'flex':'none';
-    document.getElementById('trade-want-manager').style.display = kindSelect.value==='manager' ? 'flex':'none';
-  });
-  document.getElementById('trade-submit').addEventListener('click', (e)=>{ e.target.disabled=true; submitTradeOffer().finally(()=>{ if(e.target) e.target.disabled=false; }); });
-  ['trade-coins','trade-target','want-coins-amount','want-cards-count','want-cards-minovr'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('trade-submit').click(); });
+    searchable.forEach(({wrap,name})=>{ wrap.style.display = (!q||name.includes(q)) ? '' : 'none'; });
   });
 }
-async function submitTradeOffer(){
-  if(!tradeOfferCards.size && !tradeOfferManagers.size && !tradeOfferPacks.size){ toast('W\u00e4hle mindestens eine Karte, einen Trainer oder ein Pack zum Anbieten aus.'); return; }
-  const targetRaw = document.getElementById('trade-target').value;
-  const targetId = sanitizeClubId(targetRaw || '');
-  if(!targetId){ toast('Bitte einen g\u00fcltigen Vereinsnamen eingeben.'); return; }
-  if(targetId===profile.userId){ toast('Du kannst dir selbst kein Angebot senden.'); return; }
-  const offerCoins = Math.max(0, Math.floor(parseCoinInput(document.getElementById('trade-coins').value)||0));
-  if(offerCoins > profile.coins){ toast('Du bietest mehr Coins an, als du besitzt.'); return; }
-  // final safety re-check: none of the offered items should now be squad-assigned
-  const squadValues = new Set(Object.values(squad.slots));
-  if([...tradeOfferCards].some(uid=>squadValues.has(uid))){ toast('Eine ausgew\u00e4hlte Karte ist jetzt deinem Kader zugewiesen. Bitte Auswahl pr\u00fcfen.'); return; }
-  if([...tradeOfferManagers].some(uid=>uid===squad.managerUid)){ toast('Der ausgew\u00e4hlte Trainer ist jetzt deinem Kader zugewiesen. Bitte Auswahl pr\u00fcfen.'); return; }
-  const kind = document.getElementById('trade-want-kind').value;
-  let want;
-  if(kind==='coins'){
-    want = {kind:'coins', amount: Math.max(0, Math.floor(parseCoinInput(document.getElementById('want-coins-amount').value)||0))};
-  } else if(kind==='cards'){
-    want = {kind:'cards',
-      count: Math.max(1, Math.floor(Number(document.getElementById('want-cards-count').value)||1)),
-      minOvr: Math.max(1, Math.min(99, Math.floor(Number(document.getElementById('want-cards-minovr').value)||1))),
-      pos: document.getElementById('want-cards-pos').value};
-  } else if(kind==='manager'){
-    want = {kind:'manager', minTier: document.getElementById('want-mgr-tier').value};
-  } else {
-    want = {kind:'nothing'};
-  }
-  await fbReady;
-  if(!fb){ toast('Handel ben\u00f6tigt das Online-Backend (Firebase). Gerade nicht erreichbar.'); return; }
-  const offerCards = [...tradeOfferCards].map(uid=>{
-    const entry = collection.find(c=>c.uid===uid);
-    return entry ? {uid, cardId: entry.cardId} : null;
-  }).filter(Boolean);
-  const offerManagers = [...tradeOfferManagers].map(uid=>{
-    const entry = managerCollection.find(m=>m.uid===uid);
-    return entry ? {uid, mgrId: entry.mgrId} : null;
-  }).filter(Boolean);
-  const offerPacks = [...tradeOfferPacks].map(uid=>{
-    const entry = packCollection.find(p=>p.uid===uid);
-    return entry ? {uid, packId: entry.packId} : null;
-  }).filter(Boolean);
-  if(!offerCards.length && !offerManagers.length && !offerPacks.length){ toast('Deine Auswahl ist nicht mehr g\u00fcltig. Bitte erneut ausw\u00e4hlen.'); return; }
-  const tradeDoc = {
-    fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
-    toUserId: targetId, toName: targetRaw.trim(),
-    offerCards, offerManagers, offerPacks, offerCoins, want, status:'pending', createdAt: Date.now()
+function renderLiveTradeRoom(el, trade){
+  const mySide = liveTradeSideKey(trade);
+  const oppSide = mySide==='A' ? 'B' : 'A';
+  const myOffer = trade['offer'+mySide];
+  const oppOffer = trade['offer'+oppSide];
+  const oppName = mySide==='A' ? trade.userBName : trade.userAName;
+  const myAccepted = mySide==='A' ? trade.acceptedA : trade.acceptedB;
+  const oppAccepted = mySide==='A' ? trade.acceptedB : trade.acceptedA;
+  const startedAgo = Math.max(0, Math.floor((Date.now()-(trade.activatedAt||trade.createdAt))/60000));
+  el.innerHTML = `
+    <div class="livetrade-layout">
+      <div class="livetrade-stats-row">
+        <div class="livetrade-stat"><span class="livetrade-stat-label">Dein Wert</span><span class="livetrade-stat-value">${formatCoins(liveTradeSideValue(myOffer))}</span></div>
+        <div class="livetrade-stat"><span class="livetrade-stat-label">${escapeHtml(oppName)}s Wert</span><span class="livetrade-stat-value">${formatCoins(liveTradeSideValue(oppOffer))}</span></div>
+        <div class="livetrade-stat"><span class="livetrade-stat-label">Karten gesamt</span><span class="livetrade-stat-value">${(myOffer.items||[]).length + (oppOffer.items||[]).length}</span></div>
+        <div class="livetrade-stat"><span class="livetrade-stat-label">Gestartet vor</span><span class="livetrade-stat-value">${startedAgo<1?'<1':startedAgo} Min.</span></div>
+      </div>
+      <div class="livetrade-sides">
+        <div class="livetrade-side mine">
+          <div class="livetrade-side-head"><span class="livetrade-side-title mine">Dein Angebot</span>${myAccepted?'<span class="mono" style="color:var(--turf-bright);font-size:11px;">✓ Akzeptiert</span>':''}</div>
+          <div class="livetrade-grid" id="lt-my-grid"></div>
+          <div class="livetrade-coinbox">🪙 <input id="lt-coin-input" type="text" inputmode="decimal" placeholder="0" value="${myOffer.coins||''}"></div>
+        </div>
+        <div class="livetrade-side">
+          <div class="livetrade-side-head"><span class="livetrade-side-title">${escapeHtml(oppName)}s Angebot</span>${oppAccepted?'<span class="mono" style="color:var(--turf-bright);font-size:11px;">✓ Akzeptiert</span>':''}</div>
+          <div class="livetrade-grid" id="lt-opp-grid"></div>
+          <div class="livetrade-coinbox">🪙 <span class="mono" style="color:var(--gold);font-weight:700;">${formatCoins(oppOffer.coins||0)}</span></div>
+        </div>
+      </div>
+      <div class="livetrade-actionbar">
+        <div class="livetrade-btn-cancel" id="lt-cancel-btn" title="Tausch abbrechen">✕</div>
+        <div class="livetrade-btn-chat" id="lt-chat-btn" title="Chat öffnen">💬</div>
+        <div class="livetrade-btn-accept ${myAccepted?'accepted':''}" id="lt-accept-btn"><div class="fill" id="lt-accept-fill"></div><span class="lbl" id="lt-accept-lbl">${myAccepted?'Akzeptiert — halten zum Zurücknehmen':'Halten zum Akzeptieren'}</span></div>
+      </div>
+    </div>`;
+  renderLiveTradeGrid(document.getElementById('lt-my-grid'), myOffer, true, trade, mySide);
+  renderLiveTradeGrid(document.getElementById('lt-opp-grid'), oppOffer, false, trade, oppSide);
+  const coinInput = document.getElementById('lt-coin-input');
+  const commitCoins = ()=>{
+    const val = Math.max(0, Math.floor(parseCoinInput(coinInput.value)||0));
+    if(val===(myOffer.coins||0)) return;
+    if(val>profile.coins){ toast('Du hast nicht so viele Coins.'); coinInput.value = myOffer.coins||''; return; }
+    setLiveTradeCoins(trade, mySide, val);
   };
-  try{
-    await fb.setDoc(fb.doc(fb.db,'trades', genId()), tradeDoc);
-    closeModal();
-    toast('Handelsangebot gesendet!');
-    invalidateReadCache('external-locks:'+profile.userId);
-    invalidateReadCache('trades-outgoing:'+profile.userId);
-    if(currentTab==='trade') renderView('trade');
-  }catch(e){
-    console.warn('trade submit failed', e);
-    toast('Angebot konnte nicht gesendet werden.');
-  }
+  coinInput.addEventListener('blur', commitCoins);
+  coinInput.addEventListener('keydown', e=>{ if(e.key==='Enter') coinInput.blur(); });
+  document.getElementById('lt-cancel-btn').addEventListener('click', ()=>endLiveTrade(trade, 'Tausch abgebrochen.', {confirm:true}));
+  document.getElementById('lt-chat-btn').addEventListener('click', ()=>openLiveTradeChat(trade, mySide));
+  setupLiveTradeAcceptHold(document.getElementById('lt-accept-btn'), trade, mySide, myAccepted);
 }
-async function withdrawTrade(t){
-  try{
-    await fb.deleteDoc(fb.doc(fb.db,'trades', t.id));
-    toast('Angebot zur\u00fcckgezogen.');
-    invalidateReadCache('external-locks:'+profile.userId);
-    invalidateReadCache('trades-outgoing:'+profile.userId);
-  }catch(e){
-    console.warn('withdraw trade failed', e);
-    toast('Zur\u00fccknehmen fehlgeschlagen \u2014 bitte erneut versuchen.');
-  }
-  loadTrades();
+function setupLiveTradeAcceptHold(btn, trade, side, alreadyAccepted){
+  if(!btn) return;
+  let holdStart=0, raf=null;
+  const fill = document.getElementById('lt-accept-fill');
+  const cancelHold = ()=>{ if(raf) cancelAnimationFrame(raf); raf=null; if(fill) fill.style.width='0%'; };
+  const tick = ()=>{
+    const pct = Math.min(100, ((Date.now()-holdStart)/LIVETRADE_ACCEPT_HOLD_MS)*100);
+    if(fill) fill.style.width = pct+'%';
+    if(pct>=100){ cancelHold(); confirmLiveTradeAcceptToggle(trade, side, !alreadyAccepted); return; }
+    raf = requestAnimationFrame(tick);
+  };
+  const start = (e)=>{ e.preventDefault(); holdStart=Date.now(); tick(); };
+  const stop = ()=>cancelHold();
+  btn.addEventListener('pointerdown', start);
+  btn.addEventListener('pointerup', stop);
+  btn.addEventListener('pointerleave', stop);
+  btn.addEventListener('pointercancel', stop);
 }
-async function declineTrade(t){
-  try{
-    await fb.deleteDoc(fb.doc(fb.db,'trades', t.id));
-    toast('Angebot abgelehnt.');
-  }catch(e){
-    console.warn('decline trade failed', e);
-    toast('Ablehnen fehlgeschlagen \u2014 bitte erneut versuchen.');
-  }
-  loadTrades();
+function confirmLiveTradeAcceptToggle(trade, side, newVal){
+  if(!newVal){ setLiveTradeAccepted(trade, side, false); return; }
+  openModal(`
+    <h2 style="margin-bottom:10px;">Tausch wirklich akzeptieren?</h2>
+    <p class="hint" style="margin-bottom:18px;">Sobald auch die Gegenseite akzeptiert hat, werden die Angebote sofort ausgetauscht. Das kann nicht rückgängig gemacht werden.</p>
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="lt-accept-back" style="flex:1;">Zurück</button>
+      <button class="action-btn" id="lt-accept-confirm" style="flex:1;">Ja, akzeptieren</button>
+    </div>`);
+  document.getElementById('lt-accept-back').addEventListener('click', closeModal);
+  document.getElementById('lt-accept-confirm').addEventListener('click', ()=>{ closeModal(); setLiveTradeAccepted(trade, side, true); });
 }
-async function finalizeTradeAccept(t, payment){
-  // payment = {coins, cardUids:[], managerUid:null} -- what I (recipient) send back to the sender
+async function setLiveTradeAccepted(trade, side, val){
   await fbReady;
-  if(!fb){ toast('Backend nicht erreichbar.'); return; }
-  // Atomic claim FIRST, before touching any collection: a plain read-then-much-later-delete left a
-  // window where the SAME accept could run twice (a slow first attempt still in flight while the user,
-  // seeing no response yet, re-opens the trades tab and taps Accept again on a freshly-rendered, not-
-  // yet-disabled button; or two tabs open on the same account) - both calls would pass the old "still
-  // pending" check, and BOTH would push the offered card into `collection` a second time, duplicating
-  // it. Claiming (read-and-delete) inside one transaction means only the call that actually commits
-  // gets to proceed; every other concurrent call sees the trade already gone and backs off immediately,
-  // before it ever mutates a collection.
-  let claimedTrade = null;
+  if(!fb) return;
+  try{
+    await fb.updateDoc(fb.doc(fb.db,'liveTrades', trade.id), { ['accepted'+side]: val, updatedAt:Date.now() });
+    trade['accepted'+side] = val;
+    myLiveTrade = trade;
+    renderLiveTradeRoom(document.getElementById('trade-content'), trade);
+    if(val && trade.acceptedA && trade.acceptedB) tryFinalizeLiveTrade(trade.id);
+  }catch(e){ console.warn('set accepted failed', e); toast('Aktion fehlgeschlagen.'); }
+}
+let _finalizeInFlight = new Set();
+async function tryFinalizeLiveTrade(tradeId){
+  if(_finalizeInFlight.has(tradeId)) return;
+  _finalizeInFlight.add(tradeId);
+  try{ await finalizeLiveTrade(tradeId); }
+  finally{ _finalizeInFlight.delete(tradeId); }
+}
+async function finalizeLiveTrade(tradeId){
+  await fbReady;
+  if(!fb) return;
+  // Atomic claim FIRST (read-and-delete in one transaction) - the exact same idiom as the old
+  // finalizeTradeAccept's claim, so only ONE caller (whichever client's poll/action notices "both
+  // accepted" first, or a retry from the same client) ever proceeds past this point, even if both
+  // sides' clients notice at nearly the same moment.
+  let claimed = null;
   try{
     await fb.runTransaction(fb.db, async (tx)=>{
-      const snap = await tx.get(fb.doc(fb.db,'trades', t.id));
-      if(!snap.exists() || snap.data().status!=='pending') return;
-      claimedTrade = snap.data();
-      tx.delete(fb.doc(fb.db,'trades', t.id));
+      const snap = await tx.get(fb.doc(fb.db,'liveTrades', tradeId));
+      if(!snap.exists() || snap.data().status!=='active' || !snap.data().acceptedA || !snap.data().acceptedB) return;
+      claimed = {id:tradeId, ...snap.data()};
+      tx.delete(fb.doc(fb.db,'liveTrades', tradeId));
     });
-  }catch(e){ console.warn('trade claim failed', e); toast('Handel konnte nicht abgeschlossen werden \u2014 bitte erneut versuchen.'); return; }
-  if(!claimedTrade){
-    toast('Dieses Angebot ist nicht mehr g\u00fcltig.'); closeModal(); loadTrades(); return;
-  }
-  t = {...t, ...claimedTrade, id:t.id};
+  }catch(e){ console.warn('finalize claim failed', e); return; }
+  if(!claimed) return; // not ready yet, or already claimed by the other side's client
+  const mySide = claimed.userAId===profile.userId ? 'A' : (claimed.userBId===profile.userId ? 'B' : null);
+  if(!mySide) return; // I'm always one of the two participants of my own liveTrades doc
+  const oppSide = mySide==='A' ? 'B' : 'A';
+  const oppId = claimed['user'+oppSide+'Id'];
+  const myOffer = claimed['offer'+mySide];
+  const oppOffer = claimed['offer'+oppSide];
   try{
-    const senderSnap = await fb.getDoc(fb.doc(fb.db,'saves', t.fromUserId));
-    if(!senderSnap.exists()){ toast('Absender-Daten nicht gefunden \u2014 Angebot eventuell veraltet.'); closeModal(); return; }
-    const senderData = senderSnap.data();
-    let senderProfile = senderData.profile || {coins:0};
-    const senderCollection = senderData.collection || [];
-    const senderManagerCollection = senderData.managerCollection || [];
-    const senderPackCollection = senderData.packCollection || [];
-
-    const offerCardUids = new Set((t.offerCards||[]).map(c=>c.uid));
-    const offerMgrUids = new Set((t.offerManagers||[]).map(m=>m.uid));
-    const offerPackUids = new Set((t.offerPacks||[]).map(p=>p.uid));
-    // player leveling: XP/level must travel with a card through trading. Look up each offered card's
-    // live XP from the sender's own collection (not from `t.offerCards`, which is just a snapshot from
-    // when the offer was created) so XP earned after the offer went out still carries over correctly.
-    const offerCardXpByUid = {};
-    // same live-lookup idea for the obtainedFrom/obtainedAt provenance stamp - it must carry over
-    // unchanged from whoever originally got the card, never reset to "now"/the sender (see
-    // cardIndexProvenanceHTML's comment).
-    const offerCardProvenanceByUid = {};
-    senderCollection.forEach(c=>{
-      if(!offerCardUids.has(c.uid)) return;
-      offerCardXpByUid[c.uid] = c.xp||0;
-      offerCardProvenanceByUid[c.uid] = {obtainedAt:c.obtainedAt, obtainedFrom:c.obtainedFrom};
-    });
-    // the EXACT stored entries (not reconstructed copies) - fb.arrayRemove below only removes a value
-    // that deep-equals what's actually stored in the array
-    const offeredCardEntries = senderCollection.filter(c=>offerCardUids.has(c.uid));
-    const offeredMgrEntries = senderManagerCollection.filter(m=>offerMgrUids.has(m.uid));
-    const offeredPackEntries = senderPackCollection.filter(p=>offerPackUids.has(p.uid));
-    // verify the sender still actually owns every offered card/manager/pack - if any are gone
-    // (already traded, sold, or used elsewhere), refuse rather than silently granting them for free
-    const missingCards = [...offerCardUids].filter(uid=>!senderCollection.some(c=>c.uid===uid));
-    const missingMgrs = [...offerMgrUids].filter(uid=>!senderManagerCollection.some(m=>m.uid===uid));
-    const missingPacks = [...offerPackUids].filter(uid=>!senderPackCollection.some(p=>p.uid===uid));
-    if(missingCards.length || missingMgrs.length || missingPacks.length){
-      // trade was already claimed (deleted) above - nothing left to clean up here, the offer is just void
-      toast('Der Absender besitzt nicht mehr alle angebotenen Karten \u2014 Angebot wurde ung\u00fcltig.');
-      closeModal(); loadTrades(); return;
-    }
-    // verify my own payment cards are still actually mine (defensive; should normally always hold)
-    const myMissingCards = payment.cardUids.filter(uid=>!collection.some(c=>c.uid===uid));
-    const myMissingMgr = payment.managerUid && !managerCollection.some(m=>m.uid===payment.managerUid);
-    if(myMissingCards.length || myMissingMgr){
-      toast('Eine deiner ausgew\u00e4hlten Karten ist nicht mehr verf\u00fcgbar. Bitte erneut ausw\u00e4hlen.');
-      closeModal(); return;
-    }
-
-    const senderCoinDelta = (payment.coins||0) - (t.offerCoins||0);
-    const paymentCardEntries = payment.cardUids.map(uid=>{
-      const entry = collection.find(c=>c.uid===uid);
-      return entry ? {uid:genId(), cardId:entry.cardId, xp:entry.xp||0} : null;
-    }).filter(Boolean);
-    let paymentMgrEntry = null;
-    if(payment.managerUid){
-      const entry = managerCollection.find(m=>m.uid===payment.managerUid);
-      if(entry) paymentMgrEntry = {uid:genId(), mgrId:entry.mgrId};
-    }
-    // Move items in/out of the sender's collections via atomic arrayRemove()/arrayUnion() instead of
-    // reading the whole array, filtering/pushing in memory, then writing the entire array back with
-    // setDoc. That read-modify-write silently DUPLICATED cards whenever the sender's own session
-    // concurrently wrote its OWN (locally stale, still-containing-the-traded-card) copy of collection
-    // back in the meantime - e.g. leveling a different card, or any other unrelated sSet('collection',
-    // ...) - since that write has no idea a trade is in flight, it would restore the just-traded-away
-    // card to the sender's array right after this function removed it, while the recipient had ALREADY
-    // independently received their own copy a few lines below: the same card now exists on BOTH sides.
-    // Firestore only allows one FieldValue transform per field per update() call, so removing offered
-    // items and adding payment items to the SAME field (e.g. both sides trade cards) needs two separate
-    // atomic calls rather than one - each one is still fully atomic and immune to being clobbered by (or
-    // clobbering) any other concurrent write to this document.
-    if(fb.updateDoc && fb.increment && fb.arrayRemove && fb.arrayUnion){
-      const removePayload = {};
-      if(senderCoinDelta!==0) removePayload['profile.coins'] = fb.increment(senderCoinDelta);
-      if(senderCoinDelta>0) removePayload['profile.achievementStats.marketCoinsEarned'] = fb.increment(senderCoinDelta);
-      if(offeredCardEntries.length) removePayload.collection = fb.arrayRemove(...offeredCardEntries);
-      if(offeredMgrEntries.length) removePayload.managerCollection = fb.arrayRemove(...offeredMgrEntries);
-      if(offeredPackEntries.length) removePayload.packCollection = fb.arrayRemove(...offeredPackEntries);
-      if(Object.keys(removePayload).length) await fb.updateDoc(fb.doc(fb.db,'saves', t.fromUserId), removePayload);
-      const addPayload = {};
-      if(paymentCardEntries.length) addPayload.collection = fb.arrayUnion(...paymentCardEntries);
-      if(paymentMgrEntry) addPayload.managerCollection = fb.arrayUnion(paymentMgrEntry);
-      if(Object.keys(addPayload).length) await fb.updateDoc(fb.doc(fb.db,'saves', t.fromUserId), addPayload);
-    } else {
-      // no full SDK available - fall back to the old snapshot-based approach (same residual race as
-      // before, but only reachable when arrayRemove/arrayUnion/increment genuinely aren't present)
-      let fallbackCollection = senderCollection.filter(c=>!offerCardUids.has(c.uid)).concat(paymentCardEntries);
-      let fallbackManagerCollection = senderManagerCollection.filter(m=>!offerMgrUids.has(m.uid));
-      if(paymentMgrEntry) fallbackManagerCollection.push(paymentMgrEntry);
-      let fallbackPackCollection = senderPackCollection.filter(p=>!offerPackUids.has(p.uid));
-      if(senderCoinDelta!==0) senderProfile.coins = (senderProfile.coins||0) + senderCoinDelta;
-      if(!senderProfile.achievementStats) senderProfile.achievementStats = {};
-      if(senderCoinDelta>0) senderProfile.achievementStats.marketCoinsEarned = (senderProfile.achievementStats.marketCoinsEarned||0) + senderCoinDelta;
-      await fb.setDoc(fb.doc(fb.db,'saves', t.fromUserId), {profile:senderProfile, collection:fallbackCollection, managerCollection:fallbackManagerCollection, packCollection:fallbackPackCollection}, {merge:true});
-    }
-    // trade doc is already gone - claimed (read-and-deleted) atomically at the very top of this function
-
-    collection = collection.filter(c=>!payment.cardUids.includes(c.uid));
-    if(payment.managerUid) managerCollection = managerCollection.filter(m=>m.uid!==payment.managerUid);
-    (t.offerCards||[]).forEach(c=>{
-      const prov = offerCardProvenanceByUid[c.uid]||{};
-      collection.push({uid:genId(), cardId:c.cardId, xp:offerCardXpByUid[c.uid]||0, obtainedAt:prov.obtainedAt||Date.now(), obtainedFrom:prov.obtainedFrom||t.fromUserId});
-    });
-    (t.offerManagers||[]).forEach(m=>managerCollection.push({uid:genId(), mgrId:m.mgrId}));
-    (t.offerPacks||[]).forEach(p=>packCollection.push({uid:genId(), packId:p.packId}));
-    await sSet('collection', collection);
-    await sSet('managerCollection', managerCollection);
-    await sSet('packCollection', packCollection);
-    await atomicCoinChange((t.offerCoins||0) - (payment.coins||0));
-    // an unambiguous single-card-for-coins trade is a clean price signal - feed it into RAP too
-    if(t.want && t.want.kind==='coins' && (t.offerCoins||0)===0 && (t.offerCards||[]).length===1 && !(t.offerManagers||[]).length){
-      recordSale(t.offerCards[0].cardId, payment.coins);
-    }
-    // my own net coin gain from this trade (mirror of senderCoinDelta from the other side) - only
-    // counts towards Händler when positive, i.e. I effectively sold into this Handelsangebot.
-    const myTradeCoinGain = (t.offerCoins||0) - (payment.coins||0);
-    if(myTradeCoinGain>0) applyAchievementDeltas({marketCoinsEarned: myTradeCoinGain});
-    await sSet('profile', profile);
-
-    toast('Handel abgeschlossen!');
-    invalidateReadCache('external-locks:'+profile.userId);
-    invalidateReadCache('trades-incoming:'+profile.userId);
-    closeModal();
-    loadTrades();
-  }catch(e){
-    console.warn('accept trade failed', e);
-    toast('Handel konnte nicht abgeschlossen werden \u2014 bitte erneut versuchen.');
-  }
-}
-async function acceptTrade(t){
-  const want = t.want || {kind:'coins', amount:0};
-  if(want.kind==='coins'){
-    if(profile.coins < want.amount){ toast('Nicht genug Coins f\u00fcr dieses Angebot.'); return; }
-    await finalizeTradeAccept(t, {coins:want.amount, cardUids:[], managerUid:null});
-  } else if(want.kind==='nothing'){
-    await finalizeTradeAccept(t, {coins:0, cardUids:[], managerUid:null});
-  } else if(want.kind==='cards'){
-    openAcceptCardsModal(t, want);
-  } else if(want.kind==='manager'){
-    openAcceptManagerModal(t, want);
-  }
-}
-function openAcceptCardsModal(t, want){
-  const usedInSquad = new Set(Object.values(squad.slots));
-  const eligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)}))
-    .filter(x=>x.card && !x.card.untradable && !x.card.favorited && !usedInSquad.has(x.uid) && x.card.ov>=want.minOvr && (want.pos==='ANY' || posGroup(x.card.pos)===want.pos))
-    .sort((a,b)=>b.card.ov-a.card.ov);
-  const picked = new Set();
-  openModal(`
-    <h2 style="margin-bottom:4px;">Karten ausw\u00e4hlen</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle genau ${want.count} Karte${want.count>1?'n':''} (mind. ${want.minOvr} Rating${want.pos!=='ANY'?', '+POS_GROUP_DE[want.pos]:''}) zum Abgeben.</p>
-    <div class="mono" style="color:var(--muted);margin-bottom:10px;" id="accept-sel-count">0 / ${want.count} ausgew\u00e4hlt</div>
-    <div class="club-grid" id="accept-cards-grid" style="max-height:320px;overflow:auto;margin-bottom:16px;"></div>
-    ${!eligible.length?'<p class="hint">Du besitzt keine passenden Karten daf\u00fcr.</p>':''}
-    <div style="display:flex;gap:10px;">
-      <button class="action-btn secondary" id="accept-cards-cancel" style="width:120px;">Abbrechen</button>
-      <button class="action-btn" id="accept-cards-confirm" disabled style="opacity:.4;flex:1;">Best\u00e4tigen</button>
-    </div>`);
-  document.getElementById('accept-cards-cancel').addEventListener('click', closeModal);
-  const grid = document.getElementById('accept-cards-grid');
-  eligible.forEach(({uid,card})=>{
-    const wrap = document.createElement('div');
-    wrap.style.cursor = 'pointer';
-    wrap.style.position = 'relative';
-    const el = cardEl(card,'mini');
-    wrap.appendChild(el);
-    wrap.appendChild(rapBadge(card));
-    wrap.addEventListener('click', ()=>{
-      if(picked.has(uid)){ picked.delete(uid); el.style.outline=''; el.style.transform=''; }
-      else{
-        if(picked.size>=want.count) return;
-        picked.add(uid); el.style.outline='3px solid var(--turf-bright)'; el.style.transform='translateY(-4px)';
+    const oppSnap = await fb.getDoc(fb.doc(fb.db,'saves', oppId));
+    if(!oppSnap.exists()){ toast('Tausch ungültig geworden — Gegner-Daten nicht gefunden.'); await cleanupLiveTradeMessages(tradeId); }
+    else{
+      const oppData = oppSnap.data();
+      const oppCollection = oppData.collection || [];
+      const oppManagerCollection = oppData.managerCollection || [];
+      // the EXACT stored entries (fb.arrayRemove needs deep equality against what's actually stored)
+      const oppOfferedCardEntries = (oppOffer.items||[]).filter(it=>it.itemType!=='manager').map(it=>oppCollection.find(c=>c.uid===it.uid)).filter(Boolean);
+      const oppOfferedMgrEntries = (oppOffer.items||[]).filter(it=>it.itemType==='manager').map(it=>oppManagerCollection.find(m=>m.uid===it.uid)).filter(Boolean);
+      const myOfferedCardEntries = (myOffer.items||[]).filter(it=>it.itemType!=='manager').map(it=>collection.find(c=>c.uid===it.uid)).filter(Boolean);
+      const myOfferedMgrEntries = (myOffer.items||[]).filter(it=>it.itemType==='manager').map(it=>managerCollection.find(m=>m.uid===it.uid)).filter(Boolean);
+      // verify BOTH sides still actually own everything offered - if anything vanished in the tiny
+      // window between the last self-heal pass and this finalize (very rare - see
+      // reconcileMyLiveTradeOffer), abort cleanly rather than trade away/grant the wrong set of items.
+      // Nothing has moved yet at this point, the only thing "spent" is the liveTrades doc itself.
+      const oppMissing = (oppOffer.items||[]).length !== (oppOfferedCardEntries.length + oppOfferedMgrEntries.length);
+      const myMissing = (myOffer.items||[]).length !== (myOfferedCardEntries.length + myOfferedMgrEntries.length);
+      if(oppMissing || myMissing){
+        toast('Tausch ungültig geworden — mindestens ein Item ist nicht mehr verfügbar.');
+        await cleanupLiveTradeMessages(tradeId);
+      } else {
+        const buildPaymentEntries = (entries)=>entries.map(c=>({uid:genId(), cardId:c.cardId, xp:c.xp||0, obtainedAt:c.obtainedAt, obtainedFrom:c.obtainedFrom}));
+        const myCoinDelta = (oppOffer.coins||0) - (myOffer.coins||0);
+        const oppCoinGain = -myCoinDelta;
+        if(fb.updateDoc && fb.increment && fb.arrayRemove && fb.arrayUnion){
+          const removePayload = {};
+          if(oppOfferedCardEntries.length) removePayload.collection = fb.arrayRemove(...oppOfferedCardEntries);
+          if(oppOfferedMgrEntries.length) removePayload.managerCollection = fb.arrayRemove(...oppOfferedMgrEntries);
+          if((oppOffer.coins||0)>0) removePayload['profile.coins'] = fb.increment(-(oppOffer.coins||0));
+          if(oppCoinGain>0) Object.assign(removePayload, achievementDeltaPayload({marketCoinsEarned: oppCoinGain}));
+          if(Object.keys(removePayload).length) await fb.updateDoc(fb.doc(fb.db,'saves', oppId), removePayload);
+          const addPayload = {};
+          if(myOfferedCardEntries.length) addPayload.collection = fb.arrayUnion(...buildPaymentEntries(myOfferedCardEntries));
+          if(myOfferedMgrEntries.length) addPayload.managerCollection = fb.arrayUnion(...myOfferedMgrEntries.map(m=>({uid:genId(), mgrId:m.mgrId})));
+          if((myOffer.coins||0)>0) addPayload['profile.coins'] = fb.increment(myOffer.coins||0);
+          if(Object.keys(addPayload).length) await fb.updateDoc(fb.doc(fb.db,'saves', oppId), addPayload);
+        }
+        // my own side: local collection is the source of truth, mirror the exact same remove+add shape
+        collection = collection.filter(c=>!myOfferedCardEntries.some(e=>e.uid===c.uid));
+        managerCollection = managerCollection.filter(m=>!myOfferedMgrEntries.some(e=>e.uid===m.uid));
+        buildPaymentEntries(oppOfferedCardEntries).forEach(e=>collection.push(e));
+        oppOfferedMgrEntries.forEach(m=>managerCollection.push({uid:genId(), mgrId:m.mgrId}));
+        await sSet('collection', collection);
+        await sSet('managerCollection', managerCollection);
+        await atomicCoinChange(myCoinDelta);
+        if(myCoinDelta>0) applyAchievementDeltas({marketCoinsEarned: myCoinDelta});
+        toast('Tausch abgeschlossen!');
+        await cleanupLiveTradeMessages(tradeId);
       }
-      document.getElementById('accept-sel-count').textContent = `${picked.size} / ${want.count} ausgew\u00e4hlt`;
-      const btn = document.getElementById('accept-cards-confirm');
-      const ok = picked.size===want.count;
-      btn.disabled = !ok; btn.style.opacity = ok?'1':'.4';
-    });
-    grid.appendChild(wrap);
-  });
-  document.getElementById('accept-cards-confirm').addEventListener('click', (e)=>{
-    e.target.disabled = true;
-    finalizeTradeAccept(t, {coins:0, cardUids:[...picked], managerUid:null});
-  });
+    }
+  }catch(e){
+    console.warn('finalize live trade failed', e);
+    toast('Tausch konnte nicht abgeschlossen werden — bitte melden, falls Items fehlen.');
+  }
+  myLiveTrade = null;
+  const el = document.getElementById('trade-content');
+  if(el && tradeSubTab==='direct') renderDirectOffersSection(el);
 }
-function openAcceptManagerModal(t, want){
-  const minRank = MGR_TIER_ORDER[want.minTier] ?? 0;
-  const eligible = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)}))
-    .filter(x=>x.mgr && !x.mgr.untradable && (MGR_TIER_ORDER[x.mgr.tier]??0) >= minRank && x.uid!==squad.managerUid);
+async function pushLiveTradeSystemMessage(trade, text){
+  await fbReady;
+  if(!fb) return;
+  try{ await fb.setDoc(fb.doc(fb.db,'liveTrades', trade.id, 'messages', genId()), {senderId:'system', senderName:'System', text, system:true, ts:Date.now()}); }
+  catch(e){ console.warn('system message failed', e); }
+}
+async function sendLiveTradeMessage(trade, text){
+  const trimmed = text.trim().slice(0,300);
+  if(!trimmed) return;
+  await fbReady;
+  if(!fb) return;
+  try{ await fb.setDoc(fb.doc(fb.db,'liveTrades', trade.id, 'messages', genId()), {senderId:profile.userId, senderName:profile.displayName||profile.userId, text:trimmed, system:false, ts:Date.now()}); }
+  catch(e){ console.warn('send message failed', e); toast('Nachricht konnte nicht gesendet werden.'); }
+}
+let _lastChatRenderKey = '';
+let _chatPollTimer = null;
+function openLiveTradeChat(trade, mySide){
+  _lastChatRenderKey = '';
   openModal(`
-    <h2 style="margin-bottom:4px;">Trainer ausw\u00e4hlen</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">W\u00e4hle einen Trainer der Stufe ${want.minTier} oder h\u00f6her zum Abgeben. Dein aktuell zugewiesener Trainer wird nicht angezeigt.</p>
-    <div class="picker-list" id="accept-mgr-list"></div>
-    ${!eligible.length?'<p class="hint">Du besitzt keinen passenden Trainer daf\u00fcr.</p>':''}
-    <button class="action-btn secondary" id="accept-mgr-cancel" style="margin-top:14px;width:120px;">Abbrechen</button>`);
-  document.getElementById('accept-mgr-cancel').addEventListener('click', closeModal);
-  const list = document.getElementById('accept-mgr-list');
-  let clicked = false;
-  eligible.forEach(({uid,mgr})=>{
-    const wrap = document.createElement('div');
-    wrap.style.cursor = 'pointer';
-    wrap.style.position = 'relative';
-    wrap.appendChild(cardEl(mgr,'mini'));
-    wrap.appendChild(rapBadge(mgr));
-    wrap.addEventListener('click', ()=>{
-      if(clicked) return;
-      clicked = true;
-      finalizeTradeAccept(t, {coins:0, cardUids:[], managerUid:uid});
-    });
-    list.appendChild(wrap);
-  });
+    <h2 style="margin-bottom:10px;">Chat</h2>
+    <div class="livetrade-chat-messages" id="lt-chat-messages"><p class="hint">Lädt…</p></div>
+    <div class="toolbar">
+      <input id="lt-chat-input" placeholder="Nachricht..." maxlength="300">
+      <button class="action-btn" id="lt-chat-send" style="width:auto;padding:9px 16px;">Senden</button>
+    </div>`);
+  const send = ()=>{
+    const input = document.getElementById('lt-chat-input');
+    const text = input.value;
+    input.value = '';
+    sendLiveTradeMessage(trade, text).then(()=>pollLiveTradeChatOnce(trade, true));
+  };
+  document.getElementById('lt-chat-send').addEventListener('click', send);
+  document.getElementById('lt-chat-input').addEventListener('keydown', e=>{ if(e.key==='Enter') send(); });
+  pollLiveTradeChatOnce(trade, true);
+  if(_chatPollTimer) clearInterval(_chatPollTimer);
+  _chatPollTimer = setInterval(()=>{
+    const box = document.getElementById('lt-chat-messages');
+    if(!box){ clearInterval(_chatPollTimer); _chatPollTimer=null; return; }
+    pollLiveTradeChatOnce(trade, false);
+  }, 2000);
 }
-
+async function pollLiveTradeChatOnce(trade, forceScroll){
+  const box = document.getElementById('lt-chat-messages');
+  if(!box) return;
+  await fbReady;
+  if(!fb) return;
+  try{
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades', trade.id, 'messages'), fb.orderBy('ts','asc'), fb.limit(200)));
+    const msgs = snap.docs.map(d=>d.data());
+    const key = msgs.map(m=>m.ts).join(',');
+    if(key===_lastChatRenderKey && !forceScroll) return;
+    _lastChatRenderKey = key;
+    box.innerHTML = msgs.length ? '' : '<p class="hint">Noch keine Nachrichten. Schreib etwas!</p>';
+    msgs.forEach(m=>{
+      const div = document.createElement('div');
+      div.className = 'livetrade-chat-msg ' + (m.system ? 'system' : (m.senderId===profile.userId ? 'mine':'theirs'));
+      div.textContent = m.system ? m.text : `${m.senderName}: ${m.text}`;
+      box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+  }catch(e){ console.warn('chat poll failed', e); }
+}
+let _liveTradePollTimer = null;
+function startLiveTradePolling(el){
+  if(_liveTradePollTimer) return;
+  _liveTradePollTimer = setInterval(async ()=>{
+    const container = document.getElementById('trade-content');
+    if(!container || tradeSubTab!=='direct'){ clearInterval(_liveTradePollTimer); _liveTradePollTimer=null; return; }
+    await pollLiveTradeOnce(container);
+  }, 2500);
+}
+async function pollLiveTradeOnce(el){
+  await fbReady;
+  if(!fb) return;
+  try{
+    let fresh = null;
+    if(myLiveTrade){
+      const snap = await fb.getDoc(fb.doc(fb.db,'liveTrades', myLiveTrade.id));
+      fresh = snap.exists() ? {id:snap.id, ...snap.data()} : null;
+    } else {
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains', profile.userId), fb.limit(1)));
+      fresh = snap.empty ? null : {id:snap.docs[0].id, ...snap.docs[0].data()};
+    }
+    const changed = JSON.stringify(fresh) !== JSON.stringify(myLiveTrade);
+    myLiveTrade = fresh;
+    if(!changed) return;
+    const activeId = document.activeElement && document.activeElement.id;
+    if(activeId==='lt-coin-input' || activeId==='lt-invite-target') return; // don't yank focus mid-typing
+    if(myLiveTrade && myLiveTrade.status==='active'){
+      await reconcileMyLiveTradeOffer(myLiveTrade);
+      if(myLiveTrade.acceptedA && myLiveTrade.acceptedB) tryFinalizeLiveTrade(myLiveTrade.id);
+    }
+    renderLiveTradeScreen(el);
+  }catch(e){ console.warn('live trade poll failed', e); }
+}
 
 const FORMATIONS = {
  '433': {label:'4-3-3', slots:[
@@ -15330,8 +15355,8 @@ async function refreshTradeIncomingBadge(){
   try{
     await fbReady;
     if(!fb || !tradeUnlocked()){ tradeIncomingCount = 0; renderNavBadges(); return; }
-    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'trades'), fb.where('toUserId','==',profile.userId), fb.limit(30)));
-    tradeIncomingCount = snap.docs.map(d=>d.data()).filter(t=>t.status==='pending').length;
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains',profile.userId), fb.limit(1)));
+    tradeIncomingCount = (!snap.empty && snap.docs[0].data().status==='invited' && snap.docs[0].data().invitedBy!==profile.userId) ? 1 : 0;
   }catch(e){ console.warn('trade incoming badge refresh failed', e); }
   renderNavBadges();
 }
