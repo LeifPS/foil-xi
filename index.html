@@ -9158,7 +9158,8 @@ async function setRapOverride(cardId, value){
   await fbReady;
   if(!fb) return;
   await loadRapOverrides();
-  await fb.setDoc(fb.doc(fb.db,'rapOverrides', String(cardId)), {value}, {});
+  try{ await fb.setDoc(fb.doc(fb.db,'rapOverrides', String(cardId)), {value}, {}); }
+  catch(e){ console.warn('rap override set failed', e); }
   rapOverrideCache.set(cardId, value);
 }
 async function clearRapOverride(cardId){
@@ -18399,7 +18400,8 @@ function openAdminSetLigaBadgeModal(targetId, p){
     btn.addEventListener('click', async ()=>{
       const newUnlocked = unlocked.includes(id) ? unlocked : [...unlocked, id];
       const newProfile = {...p, nametag:id, unlockedNametags:newUnlocked};
-      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      catch(e){ console.warn('admin nametag set failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`Nametag "${nt.label}" für ${targetId} gesetzt.`);
       closeModal();
       loadAdminUserPanel(targetId);
@@ -18408,7 +18410,8 @@ function openAdminSetLigaBadgeModal(targetId, p){
   });
   document.getElementById('admin-badge-clear').addEventListener('click', async ()=>{
     const newProfile = {...p, nametag:null};
-    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+    try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+    catch(e){ console.warn('admin nametag clear failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
     toast(`Nametag für ${targetId} deaktiviert (bleibt freigeschaltet).`);
     closeModal();
     loadAdminUserPanel(targetId);
