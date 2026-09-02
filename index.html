@@ -23099,7 +23099,14 @@ function ligaComputeStandings(teams, matches, uptoDay, seed, revealWeekStart, vi
 // resolveWeeklyRolloverIfNeeded's own size thresholds: table.length>=5 for the challenging side,
 // upperTable.length>=2 for the defending side) - mirrors that function's exact conditions so the
 // colors shown here never promise a movement that the actual rollover wouldn't perform.
-function ligaZonesFor(letter, sortedLetters, sizeOfFn){
+// weekStartForRules picks which ruleset's thresholds apply to the week actually being displayed - V1
+// (cross-league challenger/defender relegation tie, both promo AND releg gated on a >=5-member/
+// >=2-member neighbor check) for anything before LIGA_RULES_V2_WEEK_START, V2 (automatic 7th+8th
+// relegation with no playoff at all, a 3-way 2nd/3rd/4th promotion bracket gated only on table.length
+// >=4) from that week on - see resolveWeeklyRolloverIfNeeded vs. resolveWeeklyRolloverV2IfNeeded for
+// the actual rules each zone here is supposed to preview. Passing null keeps the old V1 zoning
+// (used for the one pre-season preview table, where no week/ruleset is decided yet either way).
+function ligaZonesFor(letter, sortedLetters, sizeOfFn, weekStartForRules){
   const idx = sortedLetters.indexOf(letter);
   if(idx<0) return {};
   return {
@@ -23107,18 +23114,29 @@ function ligaZonesFor(letter, sortedLetters, sizeOfFn){
     isBottom: idx===sortedLetters.length-1,
     upperSize: idx>0 ? sizeOfFn(sortedLetters[idx-1]) : 0,
     lowerSize: idx<sortedLetters.length-1 ? sizeOfFn(sortedLetters[idx+1]) : 0,
+    isV2: weekStartForRules!=null && weekStartForRules>=LIGA_RULES_V2_WEEK_START,
   };
 }
 function ligaStandingsTableHTML(table, zones){
   const z = zones || {};
   const n = table.length;
-  const zoneOf = i=>{
+  // V2: 1st always promotes automatically; 2nd/3rd/4th all sit in the single promotion PLAYOFF bracket
+  // for the league's 2nd spot (no upperSize threshold - ligaPromoSemiLeg1 only checks table.length>=4);
+  // 7th AND 8th both relegate automatically, no relegation playoff exists at all under V2.
+  const zoneOfV2 = i=>{
+    if(i===0 && !z.isTop) return 'promo';
+    if((i===1||i===2||i===3) && !z.isTop && n>=4) return 'promo-playoff';
+    if((i===n-1||i===n-2) && !z.isBottom && n>=2) return 'releg';
+    return '';
+  };
+  const zoneOfV1 = i=>{
     if(i===0 && !z.isTop) return 'promo';
     if(i===1 && !z.isTop && n>=5 && z.upperSize>=2) return 'promo-playoff';
     if(i===n-1 && !z.isBottom) return 'releg';
     if(i===n-2 && !z.isBottom && z.lowerSize>=5) return 'releg-playoff';
     return '';
   };
+  const zoneOf = z.isV2 ? zoneOfV2 : zoneOfV1;
   const ZONE_STYLE = {
     'promo': 'background:rgba(61,196,130,.15);border-left:3px solid #3dc482;',
     'promo-playoff': 'background:rgba(230,195,67,.13);border-left:3px solid #e6c343;',
@@ -24923,7 +24941,7 @@ async function renderAllLigenOverview(box){
     if(week && !isUpcoming) week = await resolveLigaMatchIfNeeded(letter, targetWeekStart, week);
     if(week){
       week.teams = await ligaRefreshTeamDisplay(week.teams);
-      const zones = ligaZonesFor(letter, sortedLetters, sizeOf);
+      const zones = ligaZonesFor(letter, sortedLetters, sizeOf, targetWeekStart);
       // An upcoming (not-yet-started) week has nothing to reveal at all (uptoDay 0); an ongoing
       // Montag-Samstag week counts every match whose own per-round reveal time has already passed.
       const tbl = isUpcoming
@@ -25136,7 +25154,7 @@ function renderLigenPanel(view){
               const freshOldTable = (hist.tables[oldLetter]||[]).map(row=>({...row, name: nameByUserId.get(row.userId) ?? row.name}));
               const oldSortedLetters = Object.keys(hist.tables||{}).sort();
               const oldSizeOf = l => (hist.tables[l]||[]).length;
-              const oldZones = ligaZonesFor(oldLetter, oldSortedLetters, oldSizeOf);
+              const oldZones = ligaZonesFor(oldLetter, oldSortedLetters, oldSizeOf, weekStartBefore);
               oldSectionHtml += `<div style="display:flex;align-items:center;gap:10px;margin:16px 0 8px;">${ligaBadgeHTML(oldLetter,28)}<div style="font-family:'Anton';font-size:15px;">Abgeschlossene Woche · Liga ${oldLetter}</div></div>`;
               oldSectionHtml += ligaStandingsTableHTML(freshOldTable, oldZones);
               for(let d=1; d<=5; d++){
@@ -25207,7 +25225,7 @@ function renderLigenPanel(view){
         }
       }
     }
-    html += ligaStandingsTableHTML(standings, myZones);
+    html += ligaStandingsTableHTML(standings, {...myZones, isV2: targetWeekStart>=LIGA_RULES_V2_WEEK_START});
     if(isWeekendRecap) html += `<p class="hint">Neue Ligaphase startet Montag 00:00 Uhr.</p>`;
     // The whole week's fixtures (who plays whom, which day) exist up front, all 5 days at once - Sonntag
     // through Freitag - but by default only matches still upcoming OR revealed within the last 6 hours
