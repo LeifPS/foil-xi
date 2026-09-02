@@ -8936,9 +8936,22 @@ async function initFirebase(){
       catch(e){ lastProbeErr = e; console.warn(`Firestore connectivity probe failed (attempt ${attempt+1}/2):`, e); }
     }
     if(!probeOk) throw lastProbeErr;
-    fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:fsMod.setDoc, getDoc:fsMod.getDoc,
-      getDocs:fsMod.getDocs, query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:fsMod.deleteDoc, where:fsMod.where,
-      updateDoc:fsMod.updateDoc, increment:fsMod.increment, runTransaction:fsMod.runTransaction,
+    // Every ONE-SHOT Firestore call (not onSnapshot, which is meant to stay open) gets a shared 15s
+    // timeout wrapped around it right here, once, instead of at each of the dozens of call sites
+    // scattered across the app - a single rare hung request (sent but never resolving/rejecting on
+    // its own; a server-side hiccup, not the kind of connectivity failure the probe above already
+    // caught) used to leave whichever await was on it stuck forever with no fallback ever kicking in.
+    // That's exactly what made "sometimes the boot screen, sometimes Herausforderungen, sometimes
+    // Ligen, sometimes everything" hang indefinitely until a manual reload - the reload only helped
+    // because it threw away the one stuck promise and started fresh, not because anything was
+    // actually fixed. Wrapping here means every existing try/catch around an fb.* call (there are
+    // dozens) now also catches a hang as a normal, recoverable failure, with zero changes needed at
+    // any of those call sites.
+    const FS_CALL_TIMEOUT_MS = 15000;
+    const withCallTimeout = (fn)=> (...args)=> withTimeout(fn(...args), FS_CALL_TIMEOUT_MS);
+    fb = {db, collection:fsMod.collection, doc:fsMod.doc, setDoc:withCallTimeout(fsMod.setDoc), getDoc:withCallTimeout(fsMod.getDoc),
+      getDocs:withCallTimeout(fsMod.getDocs), query:fsMod.query, orderBy:fsMod.orderBy, limit:fsMod.limit, deleteDoc:withCallTimeout(fsMod.deleteDoc), where:fsMod.where,
+      updateDoc:withCallTimeout(fsMod.updateDoc), increment:fsMod.increment, runTransaction:withCallTimeout(fsMod.runTransaction),
       arrayUnion:fsMod.arrayUnion, arrayRemove:fsMod.arrayRemove, writeBatch:fsMod.writeBatch, onSnapshot:fsMod.onSnapshot,
       collectionGroup:fsMod.collectionGroup,
       auth, createUserWithEmailAndPassword:authMod.createUserWithEmailAndPassword,
