@@ -23207,7 +23207,12 @@ function ligaStandingsTableHTML(table, zones){
   const zoneOfV2 = i=>{
     if(i===0 && !z.isTop) return 'promo';
     if((i===1||i===2||i===3) && !z.isTop && n>=4) return 'promo-playoff';
-    if((i===n-1||i===n-2) && !z.isBottom && n>=2) return 'releg';
+    // relegateCount mirrors ligaPromoFinalize's own scaling exactly (1 always, 2 only once the league
+    // is big enough to run the promo-playoff, n>=4) - a shrunk league previously always showed its
+    // bottom TWO rows as "steigt ab" even though only one relegation slot was actually ever filled
+    // back in by promotion from below, which is what produced the Liga C/D mismatch this mirrors.
+    const relegateCount = n>=4 ? 2 : 1;
+    if(i>=n-relegateCount && !z.isBottom && n>=2) return 'releg';
     return '';
   };
   const zoneOfV1 = i=>{
@@ -23909,8 +23914,19 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
     if(lettersInUse.includes(upperLetter)) nextLeagueOf[table[0].userId] = upperLetter; // 1st place always promotes
     const lowerLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)+1];
     if(lettersInUse.includes(lowerLetter) && table.length>=2){
-      nextLeagueOf[table[table.length-1].userId] = lowerLetter; // last place ("8th") always relegates
-      nextLeagueOf[table[table.length-2].userId] = lowerLetter; // 2nd-to-last ("7th") always relegates
+      // Number of relegators mirrors the promotion side's own scaling across this exact boundary
+      // (1 automatic promotion, +1 more only once the league is big enough to run the 2nd-spot
+      // playoff, table.length>=4 - see ligaPromoSemiLeg1) instead of ALWAYS sending the bottom 2
+      // down regardless of league size. A hard-coded "always 2 relegate" caused a real, non-cosmetic
+      // bug: a shrunk league (e.g. down to 3 members) would still lose 2 to the league below every
+      // single week while only ever getting 1 back via automatic promotion - a structural population
+      // drain, not just a display mismatch. Worse, in an exactly-2-member league "2nd-to-last" IS
+      // index 0 - the same team just marked to promote two lines above - so relegation would silently
+      // overwrite that promotion, sending BOTH members down and promoting nobody at all.
+      const relegateCount = table.length>=4 ? 2 : 1;
+      for(let i=0;i<relegateCount;i++){
+        nextLeagueOf[table[table.length-1-i].userId] = lowerLetter;
+      }
     }
   });
   const nextMembers = {};
