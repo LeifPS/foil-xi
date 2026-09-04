@@ -1209,48 +1209,51 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
    Gold ones - a slow shimmer sweeps across the icy-blue gradient plus a soft pulsing glow, so it reads
    as the standout top tier at a glance. Covered by the existing `.pcard *{animation:none}` perf-lite
    rule automatically, same as every other card animation. */
+/* Diamant is noticeably BIGGER than Bronze/Silber/Gold (not just re-colored) - the badge itself is
+   the whole focal point now, no card-wide frame competing for attention, so it has to visibly earn
+   that focus on its own. */
 .pcard .level-badge.lvl4{background:linear-gradient(160deg,#eafcff,#8fe0ff,#4fb8e8);background-size:220% 220%;
-  border-color:#c8f4ff;overflow:visible;
-  animation:lvl4BadgeShimmer 3s ease-in-out infinite, lvl4BadgeGlow 2.2s ease-in-out infinite;}
-.pcard .level-badge.lvl4 svg{color:#0b3a52;}
+  border-color:#c8f4ff;border-width:2px;overflow:visible;
+  width:26px;height:26px;bottom:-12px;
+  animation:lvl4BadgeShimmer 3s ease-in-out infinite, lvl4BadgeGlow 2.2s ease-in-out infinite, lvl4BadgeBreathe 2.2s ease-in-out infinite;}
+.pcard .level-badge.lvl4 svg{color:#0b3a52;width:14px;height:14px;}
 /* a bright comet chasing around the badge's own rim - a second, independent motion on top of the
    shimmer+glow so Diamant reads as visibly more "alive" than just a bigger pulse would. */
 .pcard .level-badge.lvl4::before{
-  content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;
-  background:conic-gradient(from 0deg, transparent 0 55%, #fff 72%, transparent 88%);
-  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
-  mask:radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  content:'';position:absolute;inset:-5px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from 0deg, transparent 0 50%, #fff 68%, transparent 86%);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
   animation:lvl4BadgeRingSpin 2.6s linear infinite;
+}
+/* wide, soft radiant halo sitting BEHIND the badge (box-shadow always paints under the element's own
+   background) - this is what actually reads as "spotlight" from normal card-grid viewing distance,
+   the tight rim glow above only reads up close. */
+.pcard .level-badge.lvl4::after{
+  content:'';position:absolute;inset:-9px;border-radius:50%;pointer-events:none;z-index:-1;
+  background:radial-gradient(circle, rgba(180,236,255,.55) 0%, rgba(143,224,255,.22) 55%, transparent 75%);
+  animation:lvl4HaloPulse 2.2s ease-in-out infinite;
 }
 .pcard.mini .level-badge{width:15px;height:15px;bottom:-6px;}
 .pcard.mini .level-badge svg{width:8px;height:8px;}
+.pcard.mini .level-badge.lvl4{width:19px;height:19px;bottom:-8px;}
+.pcard.mini .level-badge.lvl4 svg{width:10px;height:10px;}
 .pcard.xs .level-badge{width:12px;height:12px;bottom:-5px;border-width:1px;}
 .pcard.xs .level-badge svg{width:6.5px;height:6.5px;}
+.pcard.xs .level-badge.lvl4{width:15px;height:15px;bottom:-6px;}
+.pcard.xs .level-badge.lvl4 svg{width:8px;height:8px;}
 @keyframes lvl4BadgeShimmer{0%,100%{background-position:0% 0%;}50%{background-position:100% 100%;}}
-@keyframes lvl4BadgeGlow{0%,100%{box-shadow:0 2px 6px rgba(0,0,0,.5);}50%{box-shadow:0 2px 6px rgba(0,0,0,.5), 0 0 10px 2px rgba(143,224,255,.8);}}
+@keyframes lvl4BadgeGlow{0%,100%{box-shadow:0 2px 6px rgba(0,0,0,.5);}50%{box-shadow:0 2px 6px rgba(0,0,0,.5), 0 0 14px 3px rgba(143,224,255,.9);}}
+@keyframes lvl4BadgeBreathe{0%,100%{transform:translateX(-50%) scale(1);}50%{transform:translateX(-50%) scale(1.08);}}
 @keyframes lvl4BadgeRingSpin{to{transform:rotate(360deg);}}
-/* Diamant (Level 4) card frame: the level badge alone used to be the only tell - now the whole card
-   gets a slow-shifting icy-blue gradient ring just outside its own border (its own layer, doesn't
-   touch the card's rarity border/background underneath) plus two small lightning bolts flanking the
-   badge that crackle in sequence. A level is an achievement earned by XP, not a rarity, so this reads
-   as an extra frame layered on top rather than replacing whatever the card's own theme already looks
-   like - a Diamant-leveled Icon card still looks like an Icon card, just with this added on top. */
-.pcard.diamond-level::after{
-  content:'';position:absolute;inset:-4px;z-index:3;pointer-events:none;
-  border-radius:calc(var(--radius) + 4px);padding:2px;
-  background:linear-gradient(115deg,#eafcff,#4fb8e8,#8fe0ff,#ffffff,#eafcff);
-  background-size:300% 300%;
-  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;mask-composite:exclude;
-  animation:diamondRingShift 3.6s ease-in-out infinite, diamondRingPulse 2.2s ease-in-out infinite;
-}
-@keyframes diamondRingShift{0%,100%{background-position:0% 50%;}50%{background-position:100% 50%;}}
-@keyframes diamondRingPulse{0%,100%{opacity:.7;filter:drop-shadow(0 0 3px rgba(143,224,255,.55));}50%{opacity:1;filter:drop-shadow(0 0 8px rgba(143,224,255,.9));}}
+@keyframes lvl4HaloPulse{0%,100%{opacity:.55;transform:scale(1);}50%{opacity:1;transform:scale(1.15);}}
+/* two small lightning bolts flanking the badge, crackling in sequence (never both at once) - own FX
+   layer, same "own overlay, gated by fxlayers" pattern as admin-hack-fx/iconpromo-fx elsewhere. */
 .pcard .lvl4-fx{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:visible;}
-.pcard .lvl4-bolt{position:absolute;bottom:-7px;width:13px;height:13px;color:#d8f6ff;
+.pcard .lvl4-bolt{position:absolute;bottom:-9px;width:15px;height:15px;color:#d8f6ff;
   filter:drop-shadow(0 0 4px #8fe0ff) drop-shadow(0 0 2px #fff);opacity:0;}
-.pcard .lvl4-bolt-l{left:calc(50% - 24px);transform:rotate(-16deg);animation:lvl4BoltFlash 3.6s ease-in-out infinite;}
-.pcard .lvl4-bolt-r{left:calc(50% + 11px);transform:rotate(16deg) scaleX(-1);animation:lvl4BoltFlash 3.6s ease-in-out infinite 1.8s;}
+.pcard .lvl4-bolt-l{left:calc(50% - 28px);transform:rotate(-16deg);animation:lvl4BoltFlash 3.6s ease-in-out infinite;}
+.pcard .lvl4-bolt-r{left:calc(50% + 13px);transform:rotate(16deg) scaleX(-1);animation:lvl4BoltFlash 3.6s ease-in-out infinite 1.8s;}
 @keyframes lvl4BoltFlash{
   0%,82%,100%{opacity:0;}
   85%{opacity:1;}
@@ -1260,7 +1263,6 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 }
 .pcard.mini .lvl4-fx, .pcard.xs .lvl4-fx{display:none;}
 body.gfx-no-fxlayers .pcard .lvl4-fx{display:none;}
-body.gfx-no-cardshine .pcard.diamond-level::after{animation:none !important;}
 
 /* Liga-Abzeichen (Platz 1-3 in Liga A, gültig 1 Woche - see profile.ligaBadge): a small pill shown
    next to the Ligen-tab header (.liga-my-badge) and next to a name in the Kader-Rangliste
@@ -15166,7 +15168,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   })() : '';
   const div = document.createElement('div');
   const isDiamondLevel = !card.isManager && card.level===4;
-  div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${isDiamondLevel?'diamond-level':''} ${size}`.trim();
+  div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
   const boostText = card.isManager ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue}`) : '';
   const nameClass = (hasVariant || card.isManager) ? ' name-variant' : '';
@@ -15182,10 +15184,9 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     : '';
   // Diamant (Level 4) also gets its own dedicated FX layer, same "own overlay, gated by fxlayers"
   // pattern as admin-hack-fx/iconpromo-fx above: two small lightning bolts flanking the level badge
-  // that flash in sequence (never both at once - reads as an electric crackle, not a strobe), plus the
-  // animated icy-blue border ring wired up via the .diamond-level class on the card root itself (see
-  // .pcard.diamond-level::after below) - a level achievement earns the card its own frame, not just a
-  // bigger badge.
+  // that flash in sequence (never both at once - reads as an electric crackle, not a strobe). No
+  // card-wide frame - the focus stays entirely on the badge itself (bigger, its own radiant halo,
+  // spinning rim comet - see .level-badge.lvl4 below), which is also what earns it that framing.
   const lvl4BoltSvg = 'M13 2 3 14h7l-1 8 10-12h-7z';
   const lvl4FxHTML = isDiamondLevel
     ? `<div class="lvl4-fx">
