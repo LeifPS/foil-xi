@@ -23207,10 +23207,14 @@ function ligaStandingsTableHTML(table, zones){
   const zoneOfV2 = i=>{
     if(i===0 && !z.isTop) return 'promo';
     if((i===1||i===2||i===3) && !z.isTop && n>=4) return 'promo-playoff';
-    // relegateCount mirrors ligaPromoFinalize's own scaling exactly (1 always, 2 only once the league
-    // is big enough to run the promo-playoff, n>=4) - a shrunk league previously always showed its
-    // bottom TWO rows as "steigt ab" even though only one relegation slot was actually ever filled
-    // back in by promotion from below, which is what produced the Liga C/D mismatch this mirrors.
+    // Every league except the very bottom one must always end up with exactly 8 members again - so
+    // the league ABOVE a shrunk one (fewer than 4 members) still needs its full 2 promotions from
+    // below every single week, even though a proper Halbfinale/Finale-Bracket needs table.length>=4
+    // (ligaPromoSemiLeg1) to run. ligaPromoFinalize covers this with an instant decider for the 2nd
+    // spot instead: both remaining members at n===2 (nobody left to contest it, so both go up), or a
+    // direct 2nd-vs-3rd duel at n===3 - mirrored here so the shown zones match what actually happens.
+    if(n===2 && i===1 && !z.isTop) return 'promo';
+    if(n===3 && (i===1||i===2) && !z.isTop) return 'promo-playoff';
     const relegateCount = n>=4 ? 2 : 1;
     if(i>=n-relegateCount && !z.isBottom && n>=2) return 'releg';
     return '';
@@ -23907,28 +23911,54 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
     nextLeagueOf[winnerId] = upperLetter;
     relegationResults.push({letter:leg.letter, upperLetter, semiWinner:teamSemiWinner.name, second:teamSecond.name, ...tie, winnerId});
   }
+  // Every league except the very bottom one (no lowerLetter below it) must always end up with exactly
+  // 8 members again - a league that never runs the real Halbfinale/Finale-Bracket for its 2nd promotion
+  // spot (that needs table.length>=4, see ligaPromoSemiLeg1) would otherwise only ever send 1 member up
+  // while the league above it keeps losing 2 to relegation every week - draining the chain and leaving
+  // upper leagues permanently understaffed. Collected here, resolved as instant deciders right below.
+  const smallLeagueSecondSpots = [];
   lettersInUse.forEach(letter=>{
     const table = tables[letter];
     if(!table.length) return;
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)-1];
-    if(lettersInUse.includes(upperLetter)) nextLeagueOf[table[0].userId] = upperLetter; // 1st place always promotes
+    if(lettersInUse.includes(upperLetter)){
+      nextLeagueOf[table[0].userId] = upperLetter; // 1st place always promotes
+      if(table.length===2){
+        // nobody left to contest the 2nd spot against - both members promote
+        nextLeagueOf[table[1].userId] = upperLetter;
+      } else if(table.length===3){
+        smallLeagueSecondSpots.push({letter, upperLetter, secondRow:table[1], thirdRow:table[2]});
+      }
+    }
     const lowerLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)+1];
     if(lettersInUse.includes(lowerLetter) && table.length>=2){
       // Number of relegators mirrors the promotion side's own scaling across this exact boundary
       // (1 automatic promotion, +1 more only once the league is big enough to run the 2nd-spot
       // playoff, table.length>=4 - see ligaPromoSemiLeg1) instead of ALWAYS sending the bottom 2
-      // down regardless of league size. A hard-coded "always 2 relegate" caused a real, non-cosmetic
-      // bug: a shrunk league (e.g. down to 3 members) would still lose 2 to the league below every
-      // single week while only ever getting 1 back via automatic promotion - a structural population
-      // drain, not just a display mismatch. Worse, in an exactly-2-member league "2nd-to-last" IS
-      // index 0 - the same team just marked to promote two lines above - so relegation would silently
-      // overwrite that promotion, sending BOTH members down and promoting nobody at all.
+      // down regardless of league size. This only ever matters for a league OTHER than the designated
+      // shrink-absorbing bottom league ending up undersized by mistake - real 8-member leagues always
+      // take this branch's table.length>=4 path and relegate exactly 2 as before. Without this cap, an
+      // exactly-2-member league's "2nd-to-last" IS index 0 - the same team just marked to promote two
+      // lines above - so relegation would silently overwrite that promotion, sending BOTH members down
+      // and promoting nobody at all.
       const relegateCount = table.length>=4 ? 2 : 1;
       for(let i=0;i<relegateCount;i++){
         nextLeagueOf[table[table.length-1-i].userId] = lowerLetter;
       }
     }
   });
+  // Instant decider for the 2nd promotion spot in any 3-member league that skipped the real bracket -
+  // a single two-legged tie between 2nd and 3rd place, same aggregate-goals logic as the real Finale.
+  for(const s of smallLeagueSecondSpots){
+    const teamSecond = await ligaFreshTeam(s.secondRow.userId, s.secondRow.name);
+    const teamThird = await ligaFreshTeam(s.thirdRow.userId, s.thirdRow.name);
+    const leg1 = ligaTwoLegLeg1(teamSecond, teamThird);
+    const leg2Raw = ligaTwoLegLeg2(teamSecond, teamThird);
+    const tie = ligaTwoLegAggregate(teamSecond, teamThird, {aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const winnerId = tie.winner==='A' ? teamSecond.userId : teamThird.userId;
+    nextLeagueOf[winnerId] = s.upperLetter;
+    relegationResults.push({letter:s.letter, upperLetter:s.upperLetter, semiWinner:teamSecond.name, second:teamThird.name, ...tie, winnerId});
+  }
   const nextMembers = {};
   lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
   Object.entries(nextLeagueOf).forEach(([userId,letter])=>{ nextMembers[letter].push(userId); });
