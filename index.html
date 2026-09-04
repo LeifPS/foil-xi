@@ -22588,6 +22588,21 @@ function ligaWeekIndex(weekStart){ return Math.round((weekStart-LIGA_SEASON_EPOC
 // 26 possible leagues (A-Z), enough for 208 clubs (26*8) per the design brief - in practice only as
 // many as currently have members will ever be shown/used.
 const LIGA_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+// How many players a league of size n sends UP to the league above it (V2 rules) - used for BOTH the
+// actual promotion selection (ligaPromoFinalize) and the relegation count the league ABOVE it sends
+// down to match (also ligaPromoFinalize) and the zone-highlighting preview (ligaStandingsTableHTML) -
+// one shared source of truth so displayed and real movement can never drift apart again. A full league
+// (>=4) always sends 2 (1 direct + 1 via the real Halbfinale/Finale-Bracket); a shrunk league still
+// sends 2 if it has enough members to hold an instant decider for the 2nd spot (n===2: nobody left to
+// contest it, both go up; n===3: direct 2nd-vs-3rd duel); with only 1 member left, only that 1 can
+// possibly go up; with 0, nobody does. Only the single bottom-most league is ever allowed to end up
+// off of 8 as a result - every league above it relegates exactly ligaFlowCapacity(the league below it's
+// OWN size), not a count based on its own size, so it always nets back to whatever it already had.
+function ligaFlowCapacity(n){
+  if(n<=0) return 0;
+  if(n===1) return 1;
+  return 2;
+}
 // A: violet-to-magenta gradient with an animated shimmer sweep (the flagship league gets the flashiest
 // treatment); B-D: their own linear gradient (not a flat color) for a bit of depth/shape without the
 // shimmer; E onward: the same neutral grey repeated - by then it's just "one of many mid/lower leagues"
@@ -23215,8 +23230,13 @@ function ligaStandingsTableHTML(table, zones){
     // direct 2nd-vs-3rd duel at n===3 - mirrored here so the shown zones match what actually happens.
     if(n===2 && i===1 && !z.isTop) return 'promo';
     if(n===3 && (i===1||i===2) && !z.isTop) return 'promo-playoff';
-    const relegateCount = n>=4 ? 2 : 1;
-    if(i>=n-relegateCount && !z.isBottom && n>=2) return 'releg';
+    // How many actually relegate here mirrors ligaPromoFinalize exactly: as many as the league BELOW
+    // (z.lowerSize) can send back up to match, capped at this table's own size - not a count based on
+    // this league's own size. That's what keeps every non-bottom league's member count stable long-
+    // term, and is also what makes "Liga D fällt auf 1 Mitglied -> nur 1 steigt ab" correctly show up
+    // here instead of still highlighting 2 rows.
+    const relegateCount = z.isBottom ? 0 : Math.min(n, ligaFlowCapacity(z.lowerSize));
+    if(relegateCount>0 && i>=n-relegateCount) return 'releg';
     return '';
   };
   const zoneOfV1 = i=>{
@@ -23931,17 +23951,18 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
       }
     }
     const lowerLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(letter)+1];
-    if(lettersInUse.includes(lowerLetter) && table.length>=2){
-      // Number of relegators mirrors the promotion side's own scaling across this exact boundary
-      // (1 automatic promotion, +1 more only once the league is big enough to run the 2nd-spot
-      // playoff, table.length>=4 - see ligaPromoSemiLeg1) instead of ALWAYS sending the bottom 2
-      // down regardless of league size. This only ever matters for a league OTHER than the designated
-      // shrink-absorbing bottom league ending up undersized by mistake - real 8-member leagues always
-      // take this branch's table.length>=4 path and relegate exactly 2 as before. Without this cap, an
-      // exactly-2-member league's "2nd-to-last" IS index 0 - the same team just marked to promote two
-      // lines above - so relegation would silently overwrite that promotion, sending BOTH members down
-      // and promoting nobody at all.
-      const relegateCount = table.length>=4 ? 2 : 1;
+    if(lettersInUse.includes(lowerLetter)){
+      // Number of relegators mirrors exactly how many the league BELOW (lowerLetter) can send back UP
+      // this same boundary this same week (ligaFlowCapacity of ITS OWN size) - NOT a count based on
+      // `letter`'s own size. That's what keeps every league except the single bottom-most one exactly
+      // at its existing member count long-term: whatever moves down across a boundary always equals
+      // what moves back up across that same boundary, so this league (properly seeded at 8) always
+      // nets to zero. If the bottom league shrinks to just 1 member, only 1 relegates to match - not
+      // 2 - since that lone member is the only one who could possibly promote back next week. Capped
+      // at this table's own size so a genuinely tiny league (an anomaly - only the designated bottom
+      // league is meant to ever be this small) can't be asked to relegate more members than it has.
+      const lowerTable = tables[lowerLetter];
+      const relegateCount = Math.min(table.length, ligaFlowCapacity(lowerTable.length));
       for(let i=0;i<relegateCount;i++){
         nextLeagueOf[table[table.length-1-i].userId] = lowerLetter;
       }
