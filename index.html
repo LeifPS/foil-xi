@@ -12395,6 +12395,55 @@ function ensureMarketListener(){
   });
   return _marketListenerReady;
 }
+// Reconciles this account's OWN in-memory collection/managerCollection/packCollection/profile.coins
+// with whatever is actually on the server - called the moment one of my own market listings vanishes
+// (see ensureOwnListingsWatcher below). buyMarketListing() removes the sold card from MY saves doc via
+// a targeted fb.arrayRemove(), specifically so it can never race with some OTHER concurrent write of
+// mine - but that atomicity only protects that ONE write. My own open tab has no idea the sale even
+// happened, so its in-memory `collection` array still contains the already-sold card. The very next
+// totally unrelated action of mine that persists collection/managerCollection/packCollection (leveling
+// a card, opening a pack, finishing an SBC, a direct trade, ...) does so via a plain field overwrite
+// (sSet -> setDoc {merge:true}) built from that stale array - silently restoring the sold card into my
+// own saves doc even though the buyer already has their own separate copy too. Real bug report: "Karten
+// werden getauscht, aber der Besitzer und der Käufer erhalten sie (Duplizierung)". Re-fetching truth the
+// instant a sale is detected closes this without having to rewrite every collection-touching write in
+// the app to arrayUnion/arrayRemove diffs.
+async function resyncOwnCollectionFromServer(){
+  await fbReady;
+  if(!fb || !clubId) return;
+  try{
+    const snap = await fb.getDoc(fb.doc(fb.db,'saves', clubId));
+    if(!snap.exists()) return;
+    const data = snap.data();
+    if(data.collection) collection = data.collection;
+    if(data.managerCollection) managerCollection = data.managerCollection;
+    if(data.packCollection) packCollection = data.packCollection;
+    if(data.profile && typeof data.profile.coins==='number'){ profile.coins = data.profile.coins; updateCoinDisplay(); }
+  }catch(e){ console.warn('own-collection resync after market sale failed', e); }
+}
+// Dedicated listener scoped to ONLY my own active listings (not the full market like
+// ensureMarketListener, which only ever attaches once the player visits the Handel-Tab or has a
+// non-empty Wunschliste) - attached unconditionally at boot (see init()) so the fix above actually
+// covers every seller with the game open, not just the ones who happen to also be browsing the market.
+// Tracks which of my own listing IDs existed at the last snapshot; any that drop out between one
+// snapshot and the next were either bought or withdrawn - withdrawing never touched my collection in
+// the first place (a listed card stays in `collection` the whole time it's listed, see the bulk-list
+// flow), so re-syncing in that case is simply a harmless no-op, not something worth telling apart here.
+let _myListingIds = new Set();
+function ensureOwnListingsWatcher(){
+  if(!fb || !fb.onSnapshot || !clubId) return;
+  try{
+    fb.onSnapshot(fb.query(fb.collection(fb.db,'market'), fb.where('sellerUserId','==',clubId)),
+      snap=>{
+        const freshIds = new Set(snap.docs.map(d=>d.id));
+        const soldOrWithdrawn = [..._myListingIds].some(id=>!freshIds.has(id));
+        _myListingIds = freshIds;
+        if(soldOrWithdrawn) resyncOwnCollectionFromServer();
+      },
+      err=>{ console.warn('own listings watcher failed', err); }
+    );
+  }catch(e){ console.warn('own listings watcher setup failed', e); }
+}
 // The actual network fetch, split out from loadMarketListings() below so it can also be called from
 // contexts with no #market-grid in the DOM at all (the Wunschlisten-Hintergrundcheck runs regardless of
 // which tab is open, or even with no tab visited yet this session) - loadMarketListings() itself still
@@ -14772,6 +14821,7 @@ async function init(){
   refreshTradeIncomingBadge();
   checkWishlistAgainstMarket();
   setInterval(checkWishlistAgainstMarket, 90000);
+  ensureOwnListingsWatcher();
   if(profile.pendingWarning){
     const warningMsg = profile.pendingWarning;
     profile.pendingWarning = null;
