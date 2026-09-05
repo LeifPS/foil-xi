@@ -18326,6 +18326,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-reset-orei" style="width:auto;border-color:#c98a3e;color:#c98a3e;">O Rei zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-reset-account" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Account zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-patch-missed-fields" style="width:auto;">Nur nachtr\u00e4glich hinzugef\u00fcgte Reset-Felder nachholen</button>
+      ${targetId==='felixfc' ? `<button class="action-btn secondary" id="admin-restore-felixfc" style="width:auto;border-color:#3dc482;color:#3dc482;" ${p.felixfcRestoreApplied?'disabled':''}>${p.felixfcRestoreApplied?'Wiederherstellung bereits durchgef\u00fchrt':'Einmalige Wiederherstellung (Startelf + 40x UCL-Pack + Bronze)'}</button>` : ''}
     </div>`;
   document.getElementById('admin-give-coins').addEventListener('click', ()=>{
     askTextModal('Coins hinzuf\u00fcgen (negativ zum Abziehen)', '0', async (val)=>{
@@ -18429,6 +18430,82 @@ async function loadAdminUserPanel(targetId){
     toast(`${targetId}: SBCs und OG-Pack-Freischaltung nachträglich zurückgesetzt (Coins/Karten/Prestige unverändert).`);
     loadAdminUserPanel(targetId);
   });
+  const restoreFelixBtn = document.getElementById('admin-restore-felixfc');
+  if(restoreFelixBtn && !p.felixfcRestoreApplied) restoreFelixBtn.addEventListener('click', ()=>{
+    openModal(`
+      <h2 style="margin-bottom:10px;color:#3dc482;">Wiederherstellung für felixfc</h2>
+      <p class="hint" style="margin-top:0;margin-bottom:16px;">Einmalige, manuell abgesprochene Entschädigung nach dem Datenverlust durch den Great-Reset-Bug: Startelf (11 Karten, exakt wie vor dem Verlust, Kaderbewertung bleibt dadurch unverändert), zugewiesener Trainer, Vereinswappen, 40x nachsimulierte UCL-Sieger-Pack-Öffnungen (3 Karten je Pack) und das Bronze-Nametag. Kann danach nicht erneut ausgeführt werden.</p>
+      <div style="display:flex;gap:10px;">
+        <button class="action-btn secondary" id="restore-felix-cancel" style="flex:1;">Abbrechen</button>
+        <button class="action-btn" id="restore-felix-confirm" style="flex:1;background:#3dc482;">Durchführen</button>
+      </div>`);
+    document.getElementById('restore-felix-cancel').addEventListener('click', closeModal);
+    document.getElementById('restore-felix-confirm').addEventListener('click', async ()=>{
+      closeModal();
+      await adminRestoreFelixFC(targetId, data);
+    });
+  });
+}
+// Einmalige, per Hand mit felixfc abgesprochene Wiederherstellung nach dem Great-Reset-Bug (siehe
+// checkGreatReset/GREAT_RESET_ROLLOUT_WINDOW_MS) - stellt exakt das wieder her, was im Gespräch
+// vereinbart wurde: die Startelf (dieselben uids/cardIds/xp wie vor dem Verlust, aus dem zuletzt
+// veröffentlichten squads/{felixfc}-Snapshot - Kaderbewertung ändert sich dadurch nicht), den damals
+// zugewiesenen Trainer, das Vereinswappen, 40x nachsimulierte Öffnungen des UCL-Sieger-Packs (er hatte
+// davon durch häufige Turniersiege überdurchschnittlich viele) und das Bronze-Nametag. Alles andere
+// (Coins, Erfolge, ...) läuft separat über die bereits vorhandenen Admin-Werkzeuge. profile.
+// felixfcRestoreApplied macht diese Aktion einmalig - ein zweiter Klick (z.B. Doppelklick, zwei offene
+// Admin-Tabs) kann dieselben Karten/Packs nicht noch einmal vergeben.
+async function adminRestoreFelixFC(targetId, data){
+  await fbReady;
+  if(!fb) return;
+  const p = data.profile || {};
+  if(p.felixfcRestoreApplied){ toast('Wiederherstellung wurde für diesen Account bereits durchgeführt.'); return; }
+  try{
+    // Reihenfolge entspricht exakt den 442d-Slots (gk, lb, cb1, cb2, rb, cdm, cm1, cm2, cam, st1, st2) -
+    // uid/cardId/xp 1:1 aus dem zuletzt veröffentlichten Bestenlisten-Snapshot seines Kaders.
+    const restoredPlayers = [
+      {slot:'gk',  cardId:9970006,  uid:'cmtd9vecjcd28x9', xp:10775},
+      {slot:'lb',  cardId:9970023,  uid:'cmtdd9ummbckom4', xp:13561},
+      {slot:'cb1', cardId:9791005,  uid:'cmsyrb44znglnfk', xp:34046},
+      {slot:'cb2', cardId:9800305,  uid:'cmszzf2qrogk2vr', xp:31188},
+      {slot:'rb',  cardId:60212622, uid:'cmt7kl5lkhmnnvd', xp:26067},
+      {slot:'cdm', cardId:9970004,  uid:'cmsyjiik72jmmgf', xp:42101},
+      {slot:'cm1', cardId:9970011,  uid:'cmsyhce0nhi64y8', xp:21026},
+      {slot:'cm2', cardId:9800302,  uid:'cmtetl8ib7veje9', xp:4380},
+      {slot:'cam', cardId:9800304,  uid:'cmt8r86n3peu2sv', xp:22210},
+      {slot:'st1', cardId:9800200,  uid:'cmsxbxcmxyu51ll', xp:39512},
+      {slot:'st2', cardId:9970003,  uid:'cmsypv00z9o78cz', xp:42780},
+    ];
+    const now = Date.now();
+    const restoredCollectionEntries = restoredPlayers.map(rp=>({uid:rp.uid, cardId:rp.cardId, xp:rp.xp, obtainedAt:now, obtainedFrom:'Admin-Wiederherstellung'}));
+    const managerUid = genId();
+    const restoredManagerEntry = {uid:managerUid, mgrId:9800110}; // Zinedine Zidane, wie zuvor zugewiesen
+    const slots = {};
+    restoredPlayers.forEach(rp=>{ slots[rp.slot] = rp.uid; });
+    const restoredSquad = {formation:'442d', slots, managerUid, tactics:{...DEFAULT_TACTICS}};
+    const restoredCrest = {club:'Borussia Dortmund', letter:'?', primary:'#3ddc84', secondary:'#0a0d12', shape:'shield'};
+
+    // 40x UCL-Sieger-Pack nachsimuliert - dieselbe draw()-Logik wie ein echter Pokalsieg im Turnier-
+    // Modus, nur nachträglich statt live erspielt.
+    const uclwPack = PACKS.find(pk=>pk.id==='uclwinners');
+    const packDrawn = [];
+    for(let i=0;i<40;i++) packDrawn.push(...uclwPack.draw());
+    const packPlayerEntries = packDrawn.filter(c=>!c.isManager)
+      .map(c=>({uid:genId(), cardId:c.id, xp:0, obtainedAt:now, obtainedFrom:'Admin-Wiederherstellung (40x UCL-Sieger-Pack)'}));
+    const packManagerEntries = packDrawn.filter(c=>c.isManager)
+      .map(c=>({uid:genId(), mgrId:c.id}));
+
+    const newCollection = [...(data.collection||[]), ...restoredCollectionEntries, ...packPlayerEntries];
+    const newManagerCollection = [...(data.managerCollection||[]), restoredManagerEntry, ...packManagerEntries];
+    const unlockedNametags = p.unlockedNametags && p.unlockedNametags.includes('bronze') ? p.unlockedNametags : [...(p.unlockedNametags||[]), 'bronze'];
+    const newProfile = {...p, crest:restoredCrest, nametag:'bronze', unlockedNametags, felixfcRestoreApplied:true};
+
+    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {
+      profile:newProfile, collection:newCollection, managerCollection:newManagerCollection, squad:restoredSquad,
+    }, {merge:true});
+  }catch(e){ console.warn('felixfc restore failed', e); toast('Wiederherstellung fehlgeschlagen — bitte erneut versuchen.'); return; }
+  toast(`${targetId}: Startelf, Trainer, Wappen, 40x UCL-Sieger-Pack und Bronze-Nametag wiederhergestellt.`);
+  loadAdminUserPanel(targetId);
 }
 // admin's O-Rei-only reset: touches ONLY the 4 fields the O Rei challenge itself owns (streak, the
 // 2 one-time intermediate-win reward flags, and the Fußballgötter Pack store-unlock flag it grants
