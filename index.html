@@ -25286,7 +25286,19 @@ function renderLigenPanel(view){
     // visitor immediately sees their own possibly-just-changed league.
     await resolveWeeklyRolloverIfNeeded();
     const weekStart = ligaCurrentWeekStart();
-    const membership = await loadMyLeagueMembership();
+    // Single fetch of the whole leagueMembership collection, reused for BOTH finding my own league AND
+    // the zone-coloring context below (sortedLetters/sizeOf) - this used to be two separate, sequential
+    // getDocs() round-trips fetching the exact same collection (loadMyLeagueMembership() had its own
+    // internal fetch, then a second one right below for allLeaguesSnap). On a slow/high-latency
+    // connection (mobile networks especially) that doubled the one part of this tab's load time that
+    // was actually redundant rather than genuinely separate data - real contributor to the reported
+    // "Liga tab lädt sehr langsam" complaints.
+    let allLeaguesSnap = null;
+    try{ allLeaguesSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
+    catch(e){ console.warn('load all leagues failed', e); }
+    const membership = allLeaguesSnap
+      ? (()=>{ const d = allLeaguesSnap.docs.find(x=>(x.data().members||[]).includes(clubId)); return d ? {letter:d.data().letter, members:d.data().members} : null; })()
+      : null;
     if(!membership){
       const {filled} = squadRating();
       if(filled<11){
@@ -25306,12 +25318,10 @@ function renderLigenPanel(view){
       }
       return;
     }
-    // Fetched once here and reused for zone-coloring both the upcoming/current table below and (on
-    // Sonntag) the just-finished week's table, so the promotion/relegation rows shown always match
-    // resolveWeeklyRolloverIfNeeded's actual neighbor-based rules instead of a fixed guess.
-    let allLeaguesSnap = null;
-    try{ allLeaguesSnap = await fb.getDocs(fb.collection(fb.db,'leagueMembership')); }
-    catch(e){ console.warn('load all leagues for zone context failed', e); }
+    // allLeaguesSnap (fetched once above, alongside finding my own membership) is reused here for
+    // zone-coloring both the upcoming/current table below and (on Sonntag) the just-finished week's
+    // table, so the promotion/relegation rows shown always match resolveWeeklyRolloverIfNeeded's actual
+    // neighbor-based rules instead of a fixed guess.
     const sortedLetters = allLeaguesSnap ? allLeaguesSnap.docs.map(d=>d.id).sort() : [];
     const sizeOf = l => { if(!allLeaguesSnap) return 0; const d=allLeaguesSnap.docs.find(x=>x.id===l); return d ? (d.data().members||[]).length : 0; };
     const myZones = ligaZonesFor(membership.letter, sortedLetters, sizeOf);
