@@ -7459,6 +7459,24 @@ const PLAYERS_OGICONS = [
   }
 ];
 // ===== data prep =====
+// PLAYERS_REAL_DB ships full first+last names ("Lionel Messi") straight from its real-world source,
+// while every hand-curated pool in this file (PLAYERS_BASE, PLAYERS_SPECIAL, KRONJUWELEN_ROSTER, ...)
+// has always used the abbreviated "F. Lastname" FIFA/FC convention ("L. Messi") - the exact same player
+// showing up under two different name formats depending on which card of theirs you happened to pull
+// was a real, visible inconsistency ("manchmal L. Messi, manchmal Lionel Messi"). Normalizing here, once,
+// right where PLAYERS_REAL_DB feeds into ALL_BASE, fixes every card built from it everywhere at once -
+// no save-data migration needed anywhere, since a card's name is never stored on the owned-card entry
+// itself (just {uid, cardId, xp, ...} - see ownedCard()), only ever resolved live from BY_ID/ALL_BASE by
+// cardId. An already-completed match's frozen lineup snapshot keeps whatever name was live when it was
+// played, same as any other historical record - not something a naming-convention fix is meant to alter.
+function abbreviateFullName(fullName){
+  const parts = fullName.trim().split(/\s+/);
+  if(parts.length<2) return fullName; // single-word nickname (Ronaldinho, Neymar, ...) - nothing to split
+  const lastToken = parts[parts.length-1].replace(/\.$/,'').toLowerCase();
+  if(lastToken==='jr' || lastToken==='junior') return fullName; // "Vini Jr." etc. IS the nickname, not a real First+Last split
+  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+}
+PLAYERS_REAL_DB.forEach(p=>{ if(p.n) p.n = abbreviateFullName(p.n); });
 // PLAYERS_REAL_DB (11,333 real players incl. women's football, from players_data.js - see the <script
 // src> comment near the top of <body>) is the primary base pool; PLAYERS_BASE is now just the ~378
 // players from the old hand-picked roster that don't have a match in the new database (different data
