@@ -9569,6 +9569,19 @@ function greatResetProfilePatch(base, resetId){
 function missedResetFieldsPatch(){
   return { completedSBCs: {}, ogPackUnlocked: false };
 }
+// config/resetEvent is deliberately never deleted after being triggered (see triggerGreatReset) - a
+// reset has to stay visible for as long as it takes for every player to eventually log back in and
+// confirm it, not just whoever happens to be online at the exact moment it fires. But that same
+// permanence turned into a real, confirmed incident: an account whose profile.lastResetId never
+// matched the event (a brand-new account created after it, or a profile field that reverted to null
+// for any other reason) got the "Great Reset" modal shown to them automatically on a completely
+// ordinary login, with no trigger fired and no admin action taken that day - the event itself was
+// ancient history by then, long past the point where it was ever meant to still be catching anyone.
+// GREAT_RESET_ROLLOUT_WINDOW_MS bounds how long a reset event stays "live" for this automatic check -
+// generous enough (1 week) that a genuine, freshly-triggered reset still reaches everyone who logs in
+// at least once in that time, but short enough that a resetId nobody ever cleans up can't silently
+// keep firing on unrelated accounts months or years later.
+const GREAT_RESET_ROLLOUT_WINDOW_MS = 7*24*60*60*1000;
 async function checkGreatReset(){
   await fbReady;
   if(!fb) return;
@@ -9577,6 +9590,7 @@ async function checkGreatReset(){
     if(!snap.exists()) return;
     const data = snap.data();
     if(!data.resetId || data.resetId===profile.lastResetId) return;
+    if(!data.triggeredAt || Date.now()-data.triggeredAt>GREAT_RESET_ROLLOUT_WINDOW_MS) return;
     showGreatResetModal(data.resetId);
   }catch(e){ console.warn('great reset check failed', e); }
 }
