@@ -15408,6 +15408,29 @@ document.addEventListener('visibilitychange', ()=>{
     loadOpenTournaments();
   }
 });
+// iOS Safari (and some other mobile browsers) suspend both JS timers AND the underlying network
+// connection while a tab sits backgrounded for a while - resuming after that can leave Firestore's
+// connection stale, so the very FIRST request made after coming back can silently hang for the full
+// FS_CALL_TIMEOUT_MS (see initFirebase) before falling back. That reads as "the whole game/a tab
+// suddenly loads super slowly" even over a perfectly good WiFi/mobile connection, since the hang is on
+// the path to Firestore's servers, not the local radio signal - full WLAN bars don't help. Rather than
+// let the player discover that the hard way on whatever they happen to tap next, fire a quick,
+// short-timeout canary read right on resume from a genuinely long background (not just a brief app-
+// switcher glance) - invisible if the connection is actually fine, and surfaces the same actionable
+// "Neu laden" banner used everywhere else if it isn't, instead of an unexplained crawl.
+let _hiddenSinceTs = null;
+const RESUME_CANARY_THRESHOLD_MS = 30000;
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ _hiddenSinceTs = Date.now(); return; }
+  if(_hiddenSinceTs==null) return;
+  const hiddenMs = Date.now()-_hiddenSinceTs;
+  _hiddenSinceTs = null;
+  if(hiddenMs>RESUME_CANARY_THRESHOLD_MS && fb) runResumeConnectivityCanary();
+});
+async function runResumeConnectivityCanary(){
+  try{ await withTimeout(fb.getDocs(fb.query(fb.collection(fb.db,'squads'), fb.limit(1))), 4000); }
+  catch(e){ console.warn('resume connectivity canary failed', e); showOfflineBanner(); }
+}
 
 // ===== nav & routing =====
 const TABS = [['store','Kartenladen'],['club','Mein Verein'],['squad','Kader-Editor'],['index','Index'],['sbc','Herausforderungen'],['trade','Handel'],['play','Online spielen'],['ligen','Ligen'],['week','Wochen Pass'],['achievements','Erfolge']];
