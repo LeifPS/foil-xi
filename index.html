@@ -8774,7 +8774,14 @@ KAPITAENE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 // Adjust freely before shipping if a different start date is wanted.
 const ICONSWAP2_START = new Date('2026-09-08T00:00:00').getTime();
 const ICONSWAP2_END = ICONSWAP2_START + 14*24*60*60*1000;
-function iconSwap2Active(){ return Date.now()>=ICONSWAP2_START && Date.now()<ICONSWAP2_END; }
+// Admins can already open/test the whole event before ICONSWAP2_START (see the admin/test accounts
+// this always resolves true for) - everyone else only sees it activate exactly on schedule. This is
+// what lets the real launch date stay Monday while still allowing hands-on testing today, without
+// needing a second temporary "testing" constant that could get forgotten and shipped by accident.
+function iconSwap2Active(){
+  if(Date.now()<ICONSWAP2_START && isAdmin()) return true;
+  return Date.now()>=ICONSWAP2_START && Date.now()<ICONSWAP2_END;
+}
 // OVR -> token payout when giving a card away: exponential, so a handful of low-rated cards are worth
 // pocket change but a single very high-OVR card meaningfully dents even the priciest shop item - tuned
 // so the top tier (450 tokens, see ICONSWAP2_TIERS.legendary) is reachable by giving up roughly 4-5 of
