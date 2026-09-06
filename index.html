@@ -14113,6 +14113,23 @@ window.addEventListener('pagehide', ()=>{ if(sessionHeartbeatTimer) releaseSessi
 let clubId = null; // Firestore doc id for this player's save, chosen via the entry gate
 const memoryStore = {}; // last-resort in-memory fallback (session only)
 let storageWarned = false;
+// Shown when the boot read of saves/{clubId} fails while Firebase IS connected (transient network
+// error, not "no cloud save exists yet"). Blocks fully - never falls through to account creation/
+// rendering - so a flaky reconnect can never again get misread as a brand new account and overwrite
+// the real save. Only a manual reload can pass this, deliberately: no auto-retry loop that could end
+// up hammering Firestore, and no way to click past it into a half-loaded game.
+function showBootLoadFailedScreen(){
+  hideBootLoader();
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:380px;text-align:center;">
+        <h2 style="margin-bottom:8px;color:var(--danger);">Laden fehlgeschlagen</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Dein Spielstand konnte gerade nicht geladen werden (vermutlich eine kurze Verbindungsstörung). Er ist NICHT verloren - bitte lade die Seite einfach neu.</p>
+        <button class="action-btn" id="boot-fail-retry" style="width:100%;">Erneut versuchen</button>
+      </div>
+    </div>`;
+  document.getElementById('boot-fail-retry').addEventListener('click', ()=>location.reload());
+}
 // Shown once, right after boot, whenever the session ends up with fb===null (Firestore unreachable -
 // see initFirebase's connectivity probe). Never auto-hides like toast() does: the whole risk this
 // guards against is a player not noticing they're on a local/offline fallback and continuing to play,
@@ -14152,7 +14169,16 @@ async function sGetMany(keys, shared=false){
         const out = {};
         keys.forEach(k=>{ out[k] = (k in d) ? d[k] : null; });
         return out;
-      }catch(e){ console.warn('Firestore private batch read failed, falling back', e); }
+      }catch(e){
+        // Do NOT fall through to the local fallback here (window.storage/memoryStore, both empty on a
+        // fresh page load): fb is connected, so a failure at this exact call is a transient read error
+        // (e.g. a flaky mobile reconnect), not "this account has no cloud save yet". Falling through used
+        // to make every key resolve to null, which init() then read as "brand new account" and immediately
+        // wrote a blank profile back over the real one - silently destroying it. Rethrowing lets the boot
+        // caller block and ask for a retry instead of ever fabricating a new account from a read failure.
+        console.warn('Firestore private batch read failed', e);
+        throw e;
+      }
     }
   }
   // no Firebase (or a shared/non-club key set) - the fallback stores (window.storage/memoryStore) are
@@ -14223,11 +14249,42 @@ async function atomicCoinChange(delta, extraSets={}, opts={}){
   }
   await sSet('profile', profile);
 }
+// Tracks the size of the player's OWN collection across successful writes, purely so sSet() can spot
+// an implausible sudden collapse (see the guard below) - every real sSet('collection', collection) call
+// site in this file mutates the SAME global collection array (push/splice/filter), so by the time sSet()
+// runs, comparing its incoming value against itself would tell us nothing; this separately-tracked "last
+// known good" size is what actually lets the guard tell "collapsed in one step" apart from "was already
+// this size".
+let _lastKnownCollectionLen = null;
+// Deliberately an absolute floor, not just a percentage: a single big multi-card trade can legitimately
+// give away more than half a large collection in one sSet() call (see setLiveTradeAccepted) and must NOT
+// trip this, so a relative-only threshold would either miss the real incident or false-positive on that.
+// The real incident collapsed a collection in the thousands down to a small double-digit starter-sized
+// one - collapsing to AT MOST this many cards from a meaningfully larger collection is what's actually
+// implausible for any real single action (trade, sale, ...) in this game, which is the only combination
+// this guard blocks.
+const COLLECTION_COLLAPSE_FLOOR = 20;
+const COLLECTION_COLLAPSE_MIN_PRIOR = 50;
 async function sSet(key, value, shared=false){
   if(!shared){
     await fbReady;
+    // Refuse to persist a collapse of the player's own card collection down to near-nothing in a single
+    // write. This is deliberately blunt (no per-call-site "is this shrink legitimate" allowlist) rather
+    // than clever, because the exact failure mode it exists to stop is a silent one: a bug elsewhere in a
+    // 2.7M-character file constructing the wrong array and calling sSet with it. Failing this write is
+    // always safe - the real collection is untouched on the server, the game just won't reflect this one
+    // broken write until whatever caused it is fixed.
+    if(key==='collection' && Array.isArray(value) && _lastKnownCollectionLen!==null && _lastKnownCollectionLen>=COLLECTION_COLLAPSE_MIN_PRIOR && value.length<=COLLECTION_COLLAPSE_FLOOR){
+      console.error(`sSet('collection', ...) blocked: refusing to collapse the collection from ${_lastKnownCollectionLen} to ${value.length} cards in one write - this looks like the exact pattern that caused real data loss, not a normal trade/sale. Nothing was written; the real collection on the server is untouched.`);
+      toast('Speichern übersprungen: verdächtig große Änderung an deiner Kartensammlung wurde blockiert. Bitte lade die Seite neu.');
+      return null;
+    }
     if(fb && clubId){
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',clubId), {[key]:value}, {merge:true}); return true; }
+      try{
+        await fb.setDoc(fb.doc(fb.db,'saves',clubId), {[key]:value}, {merge:true});
+        if(key==='collection' && Array.isArray(value)) _lastKnownCollectionLen = value.length;
+        return true;
+      }
       catch(e){ console.warn('Firestore private write failed, falling back', e); }
     }
     try{
@@ -14260,6 +14317,26 @@ async function sList(prefix, shared=false){
 }
 function sanitizeClubId(raw){
   return raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60);
+}
+// Automatic per-account version history (saveHistory/{clubId}/versions/{versionId}), written once per
+// successful boot of an EXISTING account (see init()'s _bootWasExistingAccount gate - a brand new
+// account has nothing worth a history entry yet). Exists so that any future incident where a save gets
+// wiped or overwritten (transient read failures, a stale tab, an admin mistake, ...) can be fixed by an
+// admin picking a recent snapshot in seconds, instead of the hours-long gcloud/Cloud-Console PITR
+// recovery a real incident just required. Deliberately NOT run on every sSet() - once per boot keeps
+// the write volume tiny while still giving a snapshot for essentially every session.
+const SAVE_HISTORY_KEEP = 10;
+async function recordSaveSnapshot(){
+  if(!fb || !clubId) return;
+  try{
+    const versionId = String(Date.now());
+    await fb.setDoc(fb.doc(fb.db,'saveHistory',clubId,'versions',versionId), {
+      savedAt: Date.now(), profile, collection, managerCollection, packCollection, squad, squadPresets,
+    });
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'saveHistory',clubId,'versions'), fb.orderBy('savedAt','desc')));
+    const extra = snap.docs.slice(SAVE_HISTORY_KEEP);
+    if(extra.length) await Promise.all(extra.map(d=>fb.deleteDoc(d.ref)));
+  }catch(e){ console.warn('save history snapshot failed', e); }
 }
 // Set when arriving via the "Fortfahren ohne Speicherung" button on the down page
 // (foil-eleven-down.html?...&nosave=1 -> index.html?nosave=1). While active, only the
@@ -14650,6 +14727,11 @@ function showSignInModal(id){
 async function switchClub(){
   await releaseSession();
   profile = null; collection = []; squad = null; clubId = null;
+  // Without this, the NEXT club's very first collection write (its starter collection, or just normal
+  // early gameplay) would be compared against the PREVIOUS club's collection size (see sSet's collapse
+  // guard) - a large account switching to a small/brand-new one would then get its own legitimate save
+  // blocked as a false "collapse".
+  _lastKnownCollectionLen = null;
   try{ if(fb && fb.auth) fb.signOut(fb.auth); }catch(e){}
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
   showEntryGate();
@@ -14657,7 +14739,7 @@ async function switchClub(){
 // Hard kill-switch for planned maintenance (e.g. the real-player-database migration): flipped to true
 // right before risky work starts, blocks literally every entry path (resumed session, ?club= URL,
 // fresh entry gate) before any of them even run, and flipped back once the work is verified safe.
-const MAINTENANCE_MODE = true;
+const MAINTENANCE_MODE = false;
 function showMaintenanceScreen(){
   hideBootLoader();
   const el = document.createElement('div');
@@ -14734,7 +14816,17 @@ async function init(){
   // one round-trip instead of six (see sGetMany) - profile/collection/managerCollection/packCollection/
   // squad/squadPresets all live in the same Firestore doc, and none of them depends on another's value
   // below, so there's nothing to lose by fetching them together up front.
-  const _boot = await sGetMany(['profile','collection','managerCollection','packCollection','squad','squadPresets']);
+  let _boot;
+  try{
+    _boot = await sGetMany(['profile','collection','managerCollection','packCollection','squad','squadPresets']);
+  }catch(e){
+    // A connected-but-failed boot read must never be treated as "new account" (see sGetMany) - block
+    // here instead of falling through to the account-creation code below, which would otherwise write
+    // a blank profile over a real one on nothing worse than a flaky reconnect.
+    showBootLoadFailedScreen();
+    return;
+  }
+  const _bootWasExistingAccount = !!_boot.profile; // gates recordSaveSnapshot() below - a brand new account has nothing worth a history entry yet
   profile = _boot.profile;
   if(!profile){
     profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false, pendingLigaPacks:[]};
@@ -14799,6 +14891,11 @@ async function init(){
     collection = buildStarterCollection();
     await sSet('collection', collection);
   }
+  // Baseline for sSet()'s shrink guard, set from the just-loaded real server value (or the starter
+  // collection just above for a genuinely brand new account) - not left null until the first later
+  // write, so the guard is armed from this session's very first collection write onward, not just from
+  // its second.
+  _lastKnownCollectionLen = collection.length;
   // WM26_VARIANTE_SPECIALS/WM26_KAPITAEN_SPECIALS (World Cup Pack cards, ids 50000000+/60000000+) are
   // built LAZILY on first use (opening that pack, or the admin card tools) to avoid thousands of
   // wasted boostBaseToOv calls at every single page load for the vast majority of players who never
@@ -14883,6 +14980,8 @@ async function init(){
   checkWishlistAgainstMarket();
   setInterval(checkWishlistAgainstMarket, 90000);
   ensureOwnListingsWatcher();
+  // Fire-and-forget: never let a history write's own failure block or delay boot itself.
+  if(_bootWasExistingAccount) recordSaveSnapshot();
   if(profile.pendingWarning){
     const warningMsg = profile.pendingWarning;
     profile.pendingWarning = null;
@@ -15481,11 +15580,20 @@ document.addEventListener('visibilitychange', ()=>{
 // "Neu laden" banner used everywhere else if it isn't, instead of an unexplained crawl.
 let _hiddenSinceTs = null;
 const RESUME_CANARY_THRESHOLD_MS = 30000;
+// A tab backgrounded this long is force-reloaded on resume rather than allowed to keep running with
+// whatever profile/collection/squad it last had in memory. This exists because a stale-but-still-alive
+// tab is exactly how a live admin restore got silently clobbered: the tab had a real, still-open
+// connection (so none of the "fb unreachable" guards fired), and simply autosaved its old in-memory
+// state back over the freshly restored data the moment it did anything. No amount of "was this read
+// fresh" checking on a single call fixes that - the only guarantee that a resumed tab's entire in-memory
+// state (not just its next read) reflects the current server data is to re-run boot from scratch.
+const RESUME_FORCE_RELOAD_MS = 10*60*1000;
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ _hiddenSinceTs = Date.now(); return; }
   if(_hiddenSinceTs==null) return;
   const hiddenMs = Date.now()-_hiddenSinceTs;
   _hiddenSinceTs = null;
+  if(hiddenMs>RESUME_FORCE_RELOAD_MS){ location.reload(); return; }
   if(hiddenMs>RESUME_CANARY_THRESHOLD_MS && fb) runResumeConnectivityCanary();
 });
 async function runResumeConnectivityCanary(){
@@ -18353,6 +18461,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-reset-orei" style="width:auto;border-color:#c98a3e;color:#c98a3e;">O Rei zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-reset-account" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Account zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-patch-missed-fields" style="width:auto;">Nur nachtr\u00e4glich hinzugef\u00fcgte Reset-Felder nachholen</button>
+      <button class="action-btn secondary" id="admin-save-history" style="width:auto;border-color:#4a9eff;color:#4a9eff;">Versionshistorie / Wiederherstellen</button>
       ${targetId==='felixfc' ? `<button class="action-btn secondary" id="admin-restore-felixfc" style="width:auto;border-color:#3dc482;color:#3dc482;" ${p.felixfcRestoreApplied?'disabled':''}>${p.felixfcRestoreApplied?'Wiederherstellung bereits durchgef\u00fchrt':'Einmalige Wiederherstellung (Startelf + 40x UCL-Pack + Bronze)'}</button>` : ''}
     </div>`;
   document.getElementById('admin-give-coins').addEventListener('click', ()=>{
@@ -18387,6 +18496,7 @@ async function loadAdminUserPanel(targetId){
     toast(`Sitzungssperre für ${targetId} aufgehoben - Login von einem anderen Gerät ist jetzt sofort möglich.`);
     loadAdminUserPanel(targetId);
   });
+  document.getElementById('admin-save-history').addEventListener('click', ()=>openAdminSaveHistoryModal(targetId));
   document.getElementById('admin-give-card').addEventListener('click', ()=>openAdminSendCardModal(targetId, data));
   document.getElementById('admin-give-pack').addEventListener('click', ()=>openAdminSendPackModal(targetId, data));
   document.getElementById('admin-give-pack-unopened').addEventListener('click', ()=>openAdminSendUnopenedPackModal(targetId, data));
@@ -18584,6 +18694,66 @@ async function adminResetAccount(targetId, p){
   invalidateReadCache('legacy-board');
   toast(`${targetId} wurde zurückgesetzt — ★ Prestige ${newProfile.prestige}.`);
   loadAdminUserPanel(targetId);
+}
+// Lists the last few auto-recorded boot snapshots (see recordSaveSnapshot) for targetId and lets an
+// admin restore one with two clicks - this is the whole point of the version history: turning a future
+// "someone's save got wiped/overwritten" incident from an hours-long gcloud/Cloud-Console PITR recovery
+// into something fixable in seconds, without needing terminal access at all.
+async function openAdminSaveHistoryModal(targetId){
+  openModal(`<h2 style="margin-bottom:4px;">Versionshistorie: ${targetId}</h2><p class="hint" style="margin-top:0;">Lädt…</p>`);
+  let snap;
+  try{
+    snap = await fb.getDocs(fb.query(fb.collection(fb.db,'saveHistory',targetId,'versions'), fb.orderBy('savedAt','desc'), fb.limit(SAVE_HISTORY_KEEP)));
+  }catch(e){
+    console.warn('load save history failed', e);
+    openModal(`<h2 style="margin-bottom:4px;">Versionshistorie: ${targetId}</h2><p class="hint" style="margin-top:0;">Fehler beim Laden.</p>`);
+    return;
+  }
+  if(snap.empty){
+    openModal(`<h2 style="margin-bottom:4px;">Versionshistorie: ${targetId}</h2><p class="hint" style="margin-top:0;">Noch keine Versionen aufgezeichnet (wird bei jedem Login dieses Accounts automatisch angelegt).</p>`);
+    return;
+  }
+  const rows = snap.docs.map(d=>{
+    const v = d.data();
+    return `<div class="picker-list-item" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;">
+      <div>
+        <div style="font-weight:600;">${new Date(v.savedAt).toLocaleString('de-DE')}</div>
+        <div class="hint" style="margin:0;">${formatCoins((v.profile&&v.profile.coins)||0)} Coins · ${(v.collection||[]).length} Karten</div>
+      </div>
+      <button class="action-btn secondary" data-restore-version="${d.id}" style="width:auto;">Wiederherstellen</button>
+    </div>`;
+  }).join('');
+  openModal(`
+    <h2 style="margin-bottom:4px;">Versionshistorie: ${targetId}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:10px;">Automatisch bei jedem Login gespeichert, letzte ${SAVE_HISTORY_KEEP} Versionen.</p>
+    <div class="picker-list" style="max-height:400px;overflow-y:auto;">${rows}</div>`);
+  document.querySelectorAll('[data-restore-version]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const versionId = btn.getAttribute('data-restore-version');
+      openModal(`
+        <h2 style="margin-bottom:10px;color:#ff5f5f;">⚠ ${targetId} auf diese Version zurücksetzen?</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Überschreibt den AKTUELLEN Spielstand von ${targetId} vollständig mit dieser gespeicherten Version. Nicht rückgängig zu machen (außer über eine andere Version aus der Historie).</p>
+        <div style="display:flex;gap:10px;">
+          <button class="action-btn secondary" id="restore-version-cancel" style="flex:1;">Abbrechen</button>
+          <button class="action-btn" id="restore-version-confirm" style="flex:1;background:#ff5f5f;">Wiederherstellen</button>
+        </div>`);
+      document.getElementById('restore-version-cancel').addEventListener('click', closeModal);
+      document.getElementById('restore-version-confirm').addEventListener('click', async ()=>{
+        try{
+          const versionSnap = await fb.getDoc(fb.doc(fb.db,'saveHistory',targetId,'versions',versionId));
+          if(!versionSnap.exists()){ toast('Version nicht mehr vorhanden.'); closeModal(); return; }
+          const v = versionSnap.data();
+          await fb.setDoc(fb.doc(fb.db,'saves',targetId), {
+            profile: v.profile, collection: v.collection, managerCollection: v.managerCollection,
+            packCollection: v.packCollection, squad: v.squad, squadPresets: v.squadPresets,
+          }, {merge:true});
+        }catch(e){ console.warn('restore save version failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
+        toast(`${targetId} wurde auf die gewählte Version zurückgesetzt.`);
+        closeModal();
+        loadAdminUserPanel(targetId);
+      });
+    });
+  });
 }
 function openAdminSendCardModal(targetId, data){
   openModal(`
