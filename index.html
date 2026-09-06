@@ -8294,9 +8294,16 @@ const WEEK_PASS_CHOICE_ALT_PACK = {
   18:'poeten', 21:'poeten',
   24:'zeitgeist', 27:'zeitgeist',
 };
+// Feature rollout gate: choice levels only apply from the week starting Mon 2026-09-07 onward, not
+// retroactively to whichever week is already live when this ships - a player mid-way through the
+// current week's pass shouldn't see stages they already claimed suddenly "become" choice levels, or
+// have the ones they haven't reached yet change shape under them mid-week. WEEK_PASS_START (this
+// session's current pass) being before this cutoff means we're still in a pre-rollout week.
+const WEEK_PASS_CHOICE_FEATURE_START = new Date(2026,8,7,0,0,0,0).getTime(); // Mon 2026-09-07, local time
 // Returns null for a normal, fixed-reward level (weekPassReward(level) is the one and only reward), or
 // an array of exactly 3 reward objects [original pack, alternative pack, coins] for a choice level.
 function weekPassChoiceOptions(level){
+  if(WEEK_PASS_START < WEEK_PASS_CHOICE_FEATURE_START) return null;
   const altPackId = WEEK_PASS_CHOICE_ALT_PACK[level];
   if(!altPackId) return null;
   return [weekPassReward(level), {type:'pack', packId:altPackId}, {type:'coins', amount: 900 + level*80}];
