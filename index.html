@@ -15516,11 +15516,20 @@ document.addEventListener('visibilitychange', ()=>{
 // "Neu laden" banner used everywhere else if it isn't, instead of an unexplained crawl.
 let _hiddenSinceTs = null;
 const RESUME_CANARY_THRESHOLD_MS = 30000;
+// A tab backgrounded this long is force-reloaded on resume rather than allowed to keep running with
+// whatever profile/collection/squad it last had in memory. This exists because a stale-but-still-alive
+// tab is exactly how a live admin restore got silently clobbered: the tab had a real, still-open
+// connection (so none of the "fb unreachable" guards fired), and simply autosaved its old in-memory
+// state back over the freshly restored data the moment it did anything. No amount of "was this read
+// fresh" checking on a single call fixes that - the only guarantee that a resumed tab's entire in-memory
+// state (not just its next read) reflects the current server data is to re-run boot from scratch.
+const RESUME_FORCE_RELOAD_MS = 10*60*1000;
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ _hiddenSinceTs = Date.now(); return; }
   if(_hiddenSinceTs==null) return;
   const hiddenMs = Date.now()-_hiddenSinceTs;
   _hiddenSinceTs = null;
+  if(hiddenMs>RESUME_FORCE_RELOAD_MS){ location.reload(); return; }
   if(hiddenMs>RESUME_CANARY_THRESHOLD_MS && fb) runResumeConnectivityCanary();
 });
 async function runResumeConnectivityCanary(){
