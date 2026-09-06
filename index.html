@@ -14113,13 +14113,6 @@ window.addEventListener('pagehide', ()=>{ if(sessionHeartbeatTimer) releaseSessi
 let clubId = null; // Firestore doc id for this player's save, chosen via the entry gate
 const memoryStore = {}; // last-resort in-memory fallback (session only)
 let storageWarned = false;
-// Shown once, right after boot, whenever the session ends up with fb===null (Firestore unreachable -
-// see initFirebase's connectivity probe). Never auto-hides like toast() does: the whole risk this
-// guards against is a player not noticing they're on a local/offline fallback and continuing to play,
-// which on a device that's never successfully synced looks like a fresh/reset account, and on a device
-// that HAS synced before looks like the account "jumped back" to that older local snapshot - neither
-// is real data loss (the actual cloud save is untouched), but nothing they do this session reliably
-// reaches it either. A reload is the correct fix in the common case (transient network hiccup).
 // Shown when the boot read of saves/{clubId} fails while Firebase IS connected (transient network
 // error, not "no cloud save exists yet"). Blocks fully - never falls through to account creation/
 // rendering - so a flaky reconnect can never again get misread as a brand new account and overwrite
@@ -14137,6 +14130,13 @@ function showBootLoadFailedScreen(){
     </div>`;
   document.getElementById('boot-fail-retry').addEventListener('click', ()=>location.reload());
 }
+// Shown once, right after boot, whenever the session ends up with fb===null (Firestore unreachable -
+// see initFirebase's connectivity probe). Never auto-hides like toast() does: the whole risk this
+// guards against is a player not noticing they're on a local/offline fallback and continuing to play,
+// which on a device that's never successfully synced looks like a fresh/reset account, and on a device
+// that HAS synced before looks like the account "jumped back" to that older local snapshot - neither
+// is real data loss (the actual cloud save is untouched), but nothing they do this session reliably
+// reaches it either. A reload is the correct fix in the common case (transient network hiccup).
 function showOfflineBanner(){
   if(document.getElementById('offline-banner')) return;
   const el = document.createElement('div');
@@ -14727,6 +14727,11 @@ function showSignInModal(id){
 async function switchClub(){
   await releaseSession();
   profile = null; collection = []; squad = null; clubId = null;
+  // Without this, the NEXT club's very first collection write (its starter collection, or just normal
+  // early gameplay) would be compared against the PREVIOUS club's collection size (see sSet's collapse
+  // guard) - a large account switching to a small/brand-new one would then get its own legitimate save
+  // blocked as a false "collapse".
+  _lastKnownCollectionLen = null;
   try{ if(fb && fb.auth) fb.signOut(fb.auth); }catch(e){}
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
   showEntryGate();
