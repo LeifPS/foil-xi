@@ -16,6 +16,13 @@ service cloud.firestore {
     match /saves/{clubId} {
       allow read, write: if request.auth != null;
     }
+    // Automatischer Versionsverlauf von saves/{clubId} (siehe recordSaveSnapshot) - gleiche
+    // Zugriffsregel wie saves selbst, damit z.B. der Admin-Wiederherstellungsdialog eines Accounts
+    // die Historie eines ANDEREN Accounts lesen/schreiben kann, genau wie beim Markt/Handel/Admin-Panel
+    // bereits üblich.
+    match /saveHistory/{clubId}/versions/{versionId} {
+      allow read, write: if request.auth != null;
+    }
 
     // ===== Admin-geschützte Aktionen =====
     // config/resetEvent (Great Reset) darf NUR von den echten Admin-Accounts geschrieben werden -
