@@ -2071,6 +2071,13 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .wp-tile .wp-claim{width:100%;margin-top:8px;padding:5px 0;font-size:9.5px;border-radius:8px;border:none;background:var(--turf-bright);color:#06110b;font-weight:700;cursor:pointer;box-shadow:0 2px 8px -2px rgba(61,220,132,.5);}
 .wp-tile .wp-check{margin-top:8px;font-size:11px;color:var(--turf-bright);font-weight:700;opacity:0;height:0;}
 .wp-tile .wp-lockicon{margin-top:8px;font-size:13px;opacity:.7;}
+.wp-tile-choice:not(.claimed){--tile-acc:linear-gradient(90deg,#4a9eff,#8bd0ff,#4a9eff);}
+.wp-tile .wp-claim-choice{background:linear-gradient(90deg,#4a9eff,#8bd0ff);color:#06131f;}
+.wp-choice-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px;}
+.wp-choice-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 70%);border:1px solid var(--line);border-radius:14px;padding:16px 10px;text-align:center;cursor:pointer;transition:transform .15s, border-color .15s;}
+.wp-choice-card:hover{transform:translateY(-3px);border-color:#4a9eff;}
+.wp-choice-icon{font-size:28px;margin-bottom:8px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
+.wp-choice-label{font-size:12px;color:var(--chalk);line-height:1.35;}
 .wp-quest-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(230px, 1fr));gap:11px;}
 .wp-quest{background:linear-gradient(165deg,var(--panel2),var(--panel) 80%);border:1px solid var(--line);border-radius:14px;padding:13px 15px;transition:opacity .2s, border-color .2s;display:flex;gap:11px;}
 .wp-quest.done{border-color:rgba(61,220,132,.4);}
@@ -8272,6 +8279,28 @@ function weekPassRewardLabel(reward){
   const pack = PACKS.find(p=>p.id===reward.packId);
   return pack ? `${pack.name} ${UT_PACK_ICON}` : 'Pack';
 }
+// ===== Wochen Pass: Belohnung wählen (Skill-Tree-Update) - jede bisherige feste Pack-Stufe (3, 6, 9,
+// 12, 18, 21, 24, 27) wird zu einer Wahl zwischen 3 Optionen: dem ursprünglichen Pack (Option 0, damit
+// niemand gegenüber vorher schlechter dasteht, wenn er einfach wie bisher weiterklickt), einem
+// alternativen Pack ähnlicher Wertigkeit (Option 1) und einer garantierten Coins-Alternative in
+// derselben Größenordnung wie die "normalen" (nicht-Pack) Stufen dieses Levels (Option 2) - für alle,
+// denen ein sicherer Ertrag lieber ist als Pack-RNG. Level 15/20/30 bleiben bewusst fixe Fixpunkte
+// (Showcase-Karte bzw. das namentlich zugesagte "27 Ratings"-Pack), keine Wahl dort. Die konkreten
+// Alternativ-Pack-Paarungen sind eine erste, plausible Einschätzung nach Shop-Preis (siehe PACKS) -
+// bei Bedarf hier einfach die packId austauschen, ohne dass Client-Logik/Speicherformat sich ändern muss.
+const WEEK_PASS_CHOICE_ALT_PACK = {
+  3:'derby', 6:'derby',
+  9:'scout', 12:'scout',
+  18:'poeten', 21:'poeten',
+  24:'zeitgeist', 27:'zeitgeist',
+};
+// Returns null for a normal, fixed-reward level (weekPassReward(level) is the one and only reward), or
+// an array of exactly 3 reward objects [original pack, alternative pack, coins] for a choice level.
+function weekPassChoiceOptions(level){
+  const altPackId = WEEK_PASS_CHOICE_ALT_PACK[level];
+  if(!altPackId) return null;
+  return [weekPassReward(level), {type:'pack', packId:altPackId}, {type:'coins', amount: 900 + level*80}];
+}
 // ===== Post-Level-30-Bonus: once the pass is fully maxed, XP earned from there on isn't wasted - every
 // WEEK_PASS_BONUS_XP_STEP of it (profile.weekPass.xp already accumulates uncapped past the max level,
 // see WEEK_PASS_MAX_LEVEL's own comment) unlocks another 5.000-Coins bonus, no cap on how many per week.
@@ -8313,12 +8342,23 @@ async function claimWeekPassBonus(){
   }
   if(currentTab==='week') renderWeekPass(document.getElementById('view'));
 }
-async function claimWeekPassReward(level){
+async function claimWeekPassReward(level, choiceIndex){
   const wp = profile.weekPass;
   if(wp.claimed.includes(level)) return;
   if(weekPassLevel(wp.xp) < level) return;
-  const reward = weekPassReward(level);
-  const newWp = {...wp, claimed:[...wp.claimed, level]};
+  const options = weekPassChoiceOptions(level);
+  let reward, chosenPatch = {};
+  if(options){
+    // Choice levels must go through openWeekPassChoiceModal first, which always passes a valid index -
+    // silently refusing here (rather than defaulting to option 0) means a caller that forgets to pass
+    // one fails loudly/visibly (nothing claimed) instead of quietly always picking the same option.
+    if(choiceIndex==null || !options[choiceIndex]) return;
+    reward = options[choiceIndex];
+    chosenPatch = {chosen: {...wp.chosen, [level]: choiceIndex}};
+  } else {
+    reward = weekPassReward(level);
+  }
+  const newWp = {...wp, claimed:[...wp.claimed, level], ...chosenPatch};
   if(reward.type==='coins'){
     await atomicCoinChange(reward.amount, {weekPass:newWp});
     toast(`+${formatCoins(reward.amount)} Coins!`);
@@ -8460,16 +8500,27 @@ function renderWeekPass(view){
   const tiles = Array.from({length:WEEK_PASS_MAX_LEVEL}, (_,i)=>i+1).map(lv=>{
     const unlocked = level>=lv;
     const claimed = wp.claimed.includes(lv);
-    const reward = weekPassReward(lv);
+    const choiceOptions = weekPassChoiceOptions(lv);
+    // A claimed choice level shows the option the player actually picked, not option 0 - an unclaimed
+    // one shows a generic "multiple options" placeholder instead of implying it's a single fixed reward.
+    const chosenIdx = choiceOptions && claimed ? wp.chosen[lv] : null;
+    const reward = choiceOptions ? (chosenIdx!=null ? choiceOptions[chosenIdx] : choiceOptions[0]) : weekPassReward(lv);
     const isMax = lv===WEEK_PASS_MAX_LEVEL;
     const state = claimed ? 'claimed' : (lv===level+1 && active ? 'current' : (unlocked ? '' : 'locked'));
     const btn = claimed
       ? ''
-      : (unlocked && active ? `<button class="wp-claim" data-level="${lv}">Holen</button>` : `<div class="wp-lockicon">🔒</div>`);
-    return `<div class="wp-tile ${weekPassRewardClass(reward)} ${state} ${isMax?'wp-tile-max':''}">
+      : (unlocked && active
+        ? (choiceOptions ? `<button class="wp-claim wp-claim-choice" data-choice-level="${lv}">🔀 Wählen</button>` : `<button class="wp-claim" data-level="${lv}">Holen</button>`)
+        : `<div class="wp-lockicon">🔒</div>`);
+    return `<div class="wp-tile ${weekPassRewardClass(reward)} ${state} ${isMax?'wp-tile-max':''} ${choiceOptions?'wp-tile-choice':''}">
       <div class="wp-lv">${isMax?'🏁 ':''}${lv}</div>
-      <div class="wp-icon">${weekPassRewardIcon(reward)}</div>
-      <div class="wp-label">${weekPassRewardLabel(reward)}</div>
+      ${choiceOptions && !claimed ? `
+        <div class="wp-icon">🔀</div>
+        <div class="wp-label">3 Optionen zur Wahl</div>
+      ` : `
+        <div class="wp-icon">${weekPassRewardIcon(reward)}</div>
+        <div class="wp-label">${weekPassRewardLabel(reward)}</div>
+      `}
       ${btn}
     </div>`;
   }).join('');
@@ -8518,6 +8569,9 @@ function renderWeekPass(view){
   view.querySelectorAll('.wp-claim[data-level]').forEach(btn=>{
     btn.addEventListener('click', ()=>claimWeekPassReward(Number(btn.dataset.level)));
   });
+  view.querySelectorAll('.wp-claim[data-choice-level]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openWeekPassChoiceModal(Number(btn.dataset.choiceLevel)));
+  });
   view.querySelectorAll('.wp-claim[data-quest]').forEach(btn=>{
     btn.addEventListener('click', ()=>claimWeekPassQuest(btn.dataset.quest));
   });
@@ -8533,6 +8587,29 @@ function renderWeekPass(view){
       .filter(q=>{ const def = WEEK_PASS_QUEST_DEFS.find(d=>d.id===q.id); return def && q.progress>=def.target; })
       .map(q=>q.id);
     for(const id of doneIds) await claimWeekPassQuest(id);
+  });
+}
+// Wochen-Pass-Wahlstufe: presents all 3 options side by side, picking one immediately claims it (no
+// separate confirm step - the modal itself already IS the confirmation, and every option is a real
+// reward, so there's no "wrong" pick worth double-checking).
+function openWeekPassChoiceModal(level){
+  const options = weekPassChoiceOptions(level);
+  if(!options) return;
+  const cardsHTML = options.map((opt,i)=>`
+    <div class="wp-choice-card" data-choice-index="${i}">
+      <div class="wp-choice-icon">${weekPassRewardIcon(opt)}</div>
+      <div class="wp-choice-label">${weekPassRewardLabel(opt)}</div>
+    </div>`).join('');
+  openModal(`
+    <h2 style="margin-bottom:4px;">🔀 Stufe ${level}: Belohnung wählen</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">Wähle EINE der folgenden Belohnungen — die anderen sind danach nicht mehr verfügbar.</p>
+    <div class="wp-choice-grid">${cardsHTML}</div>`);
+  document.querySelectorAll('.wp-choice-card').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      const idx = Number(el.dataset.choiceIndex);
+      closeModal();
+      await claimWeekPassReward(level, idx);
+    });
   });
 }
 function iconSwapCardUnlocked(card){ return Date.now() >= iconSwapUnlockTime(card.unlockDay); }
@@ -14896,8 +14973,9 @@ async function init(){
     if(!profile.crest) profile.crest = {shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(profile.displayName||'?')[0].toUpperCase()};
     if(profile.iconSwapTokens===undefined) profile.iconSwapTokens = 0;
     if(!profile.iconSwapRedeemed) profile.iconSwapRedeemed = [];
-    if(!profile.weekPass || profile.weekPass.weekId!==WEEK_PASS_ID) profile.weekPass = {weekId: WEEK_PASS_ID, xp:0, claimed:[], bonusClaimed:0};
+    if(!profile.weekPass || profile.weekPass.weekId!==WEEK_PASS_ID) profile.weekPass = {weekId: WEEK_PASS_ID, xp:0, claimed:[], bonusClaimed:0, chosen:{}};
     if(profile.weekPass.bonusClaimed===undefined) profile.weekPass.bonusClaimed = 0; // pre-existing weekPass docs from before the post-Level-30-Bonus existed
+    if(!profile.weekPass.chosen) profile.weekPass.chosen = {}; // pre-existing weekPass docs from before choice levels existed - see WEEK_PASS_CHOICE_ALT_PACK
     if(!profile.dailyRewardTracker) profile.dailyRewardTracker = {date:'', count:0};
     if(profile.prestige===undefined) profile.prestige = 0;
     if(profile.lastResetId===undefined) profile.lastResetId = null;
