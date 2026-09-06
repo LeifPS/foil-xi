@@ -18314,6 +18314,7 @@ async function loadAdminUserPanel(targetId){
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="action-btn secondary" id="admin-give-coins" style="width:auto;">Coins geben</button>
+      <button class="action-btn secondary" id="admin-give-wins" style="width:auto;">Siege geben</button>
       <button class="action-btn secondary" id="admin-give-card" style="width:auto;">Karte schicken</button>
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
       <button class="action-btn secondary" id="admin-give-pack-unopened" style="width:auto;">Pack (unge\u00f6ffnet) schicken</button>
@@ -18338,6 +18339,20 @@ async function loadAdminUserPanel(targetId){
       toast(`${amount>=0?'+':''}${formatCoins(amount)} Coins f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
     }, 12);
+  });
+  document.getElementById('admin-give-wins').addEventListener('click', ()=>{
+    askTextModal('Siege hinzuf\u00fcgen (negativ zum Abziehen)', '0', async (val)=>{
+      const amount = parseInt(val,10);
+      if(!Number.isFinite(amount)) return;
+      // careerWins wird bei jedem echten Match-Sieg IMMER zusammen mit wins hochgez\u00e4hlt (siehe
+      // commitMatchResult) und nie von einem Great Reset zur\u00fcckgesetzt - ein manuell verliehener Sieg
+      // verh\u00e4lt sich hier bewusst identisch zu einem echten, damit die Karriere-Statistik konsistent bleibt.
+      const newProfile = {...p, wins:Math.max(0,(p.wins||0)+amount), careerWins:Math.max(0,(p.careerWins||0)+amount)};
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      catch(e){ console.warn('admin give wins failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
+      toast(`${amount>=0?'+':''}${amount} Siege f\u00fcr ${targetId}.`);
+      loadAdminUserPanel(targetId);
+    }, 6);
   });
   const clearSessionBtn = document.getElementById('admin-clear-session');
   if(clearSessionBtn && activeSession) clearSessionBtn.addEventListener('click', async ()=>{
