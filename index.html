@@ -1875,10 +1875,18 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .is2-banner-cta{position:relative;z-index:1;flex-shrink:0;font-weight:700;color:#4a9eff;white-space:nowrap;}
 .is2-head{position:relative;border-radius:14px;padding:16px 18px;margin-bottom:16px;overflow:hidden;
   background:linear-gradient(155deg, rgba(74,158,255,.12), var(--panel) 65%);border:1px solid rgba(74,158,255,.35);}
-.is2-head h2{background:linear-gradient(90deg,#8bd0ff,#4a9eff,#c9a2ff,#4a9eff,#8bd0ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:iridescentSweep 6s linear infinite;}
-.is2-balance-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
-.is2-balance{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono';font-size:15px;font-weight:700;color:#8bd0ff;}
-.is2-section-title{font-family:'Anton';font-size:14px;letter-spacing:.02em;color:#8bd0ff;text-transform:uppercase;margin-bottom:10px;}
+.is2-head::after{content:"";position:absolute;top:-50%;right:-15%;width:260px;height:260px;pointer-events:none;
+  background:radial-gradient(circle, rgba(139,208,255,.16), transparent 65%);}
+.is2-head h2{position:relative;background:linear-gradient(90deg,#8bd0ff,#4a9eff,#c9a2ff,#4a9eff,#8bd0ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:iridescentSweep 6s linear infinite;}
+.is2-head p{position:relative;}
+.is2-head .is2-btn{position:relative;}
+.is2-balance-row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
+.is2-balance{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono';font-size:16px;font-weight:700;color:#8bd0ff;
+  background:linear-gradient(135deg, rgba(74,158,255,.16), rgba(74,158,255,.03));border:1px solid rgba(74,158,255,.4);
+  border-radius:100px;padding:8px 18px 8px 14px;box-shadow:0 4px 14px -8px rgba(74,158,255,.5);}
+.is2-section-title{display:flex;align-items:center;gap:8px;font-family:'Anton';font-size:14px;letter-spacing:.02em;color:#8bd0ff;text-transform:uppercase;margin-bottom:10px;}
+.is2-section-title::before{content:"";width:4px;height:14px;border-radius:2px;
+  background:linear-gradient(180deg,#4a9eff,#c9a2ff);flex-shrink:0;}
 .is2-shop-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:16px;}
 .is2-shop-card{position:relative;overflow:hidden;background:linear-gradient(165deg,var(--panel2),var(--panel) 70%);
   border:1px solid var(--tier-acc, #4a9eff);border-radius:16px;padding:18px 14px 15px;text-align:center;
@@ -1898,11 +1906,17 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
    tapping is how rare the slot is. Fades out (not just disappears) on tap so the reveal itself feels
    like a small event rather than a jump-cut. */
 .is2-shop-cover{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
-  background:linear-gradient(165deg,var(--panel2),var(--panel) 70%);border-radius:16px;cursor:pointer;transition:opacity .32s ease;}
+  background:
+    radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--tier-acc, #4a9eff) 20%, transparent), transparent 70%),
+    linear-gradient(165deg,var(--panel2),var(--panel) 70%);
+  border-radius:16px;cursor:pointer;transition:opacity .32s ease, background .18s ease;}
+.is2-shop-cover:hover{background:
+    radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--tier-acc, #4a9eff) 32%, transparent), transparent 70%),
+    linear-gradient(165deg,var(--panel2),var(--panel) 70%);}
 .is2-shop-cover.is2-cover-fade{opacity:0;pointer-events:none;}
 .is2-shop-cover-tier{display:inline-block;font-family:'Anton';font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#04101f;font-weight:700;
-  background:var(--tier-acc, #4a9eff);padding:5px 16px;border-radius:100px;}
-.is2-shop-cover-hint{font-size:10.5px;color:var(--muted);}
+  background:var(--tier-acc, #4a9eff);padding:5px 16px;border-radius:100px;box-shadow:0 4px 14px -6px color-mix(in srgb, var(--tier-acc,#4a9eff) 70%, transparent);}
+.is2-shop-cover-hint{font-size:10.5px;color:var(--muted);letter-spacing:.02em;}
 /* Shop-Chancen modal (openIconSwap2OddsModal) - one block per rarity tier, each with its own accent
    color and a wrapping grid of full, unclipped card/icon previews (not a cramped thumbnail row) so
    every card is actually recognizable. Title cells are separately clickable (openIconSwap2TitlePreview)
@@ -1923,6 +1937,17 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
   background:radial-gradient(circle, color-mix(in srgb, var(--tier-acc,#4a9eff) 28%, transparent), transparent 70%);color:var(--tier-acc,#4a9eff);}
 .is2-odds-name{font-size:10.5px;color:var(--chalk);font-weight:600;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .is2-odds-preview-hint{font-size:9.5px;color:#8bd0ff;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+/* Karte abgeben modal (openIconSwap2GiveModal) - accent-matched search field and result tiles instead
+   of the generic panel/price-pill look, so the modal reads as part of this event rather than a reused
+   shell with the event's colors dropped in on top. */
+.is2-give-search{width:100%;background:linear-gradient(165deg,var(--panel2),var(--panel) 80%);border:1px solid rgba(74,158,255,.4);
+  color:var(--chalk);padding:11px 14px;border-radius:10px;margin:0 0 12px;font-size:13px;transition:border-color .15s;}
+.is2-give-search:focus{outline:none;border-color:#4a9eff;}
+.is2-give-option{cursor:pointer;position:relative;transition:transform .15s ease;}
+.is2-give-option:hover{transform:translateY(-2px);}
+.is2-give-tag{position:absolute;bottom:6px;left:6px;right:6px;display:flex;align-items:center;justify-content:center;
+  background:rgba(6,8,12,.82);border:1px solid rgba(74,158,255,.35);border-radius:8px;padding:4px 0;
+  font-family:'JetBrains Mono';font-weight:700;font-size:10.5px;color:#8bd0ff;}
 body.gfx-no-fxlayers .is2-banner-glimmer{animation:none !important; opacity:.15;}
 /* Icon Swap Token symbol - a slow, gentle facet-glint (brightness+rotate wobble) so the gem itself
    always feels subtly "alive"/faceted rather than a static icon, everywhere it's used (price tags,
@@ -29344,7 +29369,7 @@ function openIconSwap2GiveModal(){
   openModal(`
     <h2 style="margin-bottom:4px;">Karte abgeben</h2>
     <p class="hint" style="margin-top:0;margin-bottom:10px;">Wähle eine Karte aus deiner Sammlung — sie wird endgültig entfernt, du bekommst dafür Icon Swap Tokens (mehr für stärkere Karten).</p>
-    <input id="is2-give-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:0 0 12px;">
+    <input id="is2-give-search" class="is2-give-search" placeholder="Spielername...">
     <div class="picker-list" id="is2-give-results" style="max-height:400px;overflow-y:auto;"></div>`);
   const input = document.getElementById('is2-give-search');
   const results = document.getElementById('is2-give-results');
@@ -29355,11 +29380,10 @@ function openIconSwap2GiveModal(){
     filtered.forEach(({entry,def})=>{
       const tokens = iconSwap2TokensForCard(def);
       const wrap = document.createElement('div');
-      wrap.style.cssText = 'cursor:pointer;position:relative;';
+      wrap.className = 'is2-give-option';
       wrap.appendChild(cardEl(def,'mini'));
       const tag = document.createElement('div');
-      tag.className = 'price-pill';
-      tag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.8);border-radius:8px;padding:3px 0;font-size:10.5px;color:#8bd0ff;';
+      tag.className = 'is2-give-tag';
       tag.innerHTML = `+${tokens} ${iconSwap2TokenIcon(12)}Token${tokens===1?'':'s'}`;
       wrap.appendChild(tag);
       wrap.addEventListener('click', ()=>confirmIconSwap2Give(entry.uid, def, tokens));
@@ -29512,7 +29536,7 @@ function renderIconSwap2Hub(view){
     <div class="view-head is2-head">
       <button class="is2-btn is2-btn-ghost" id="is2-back" style="width:auto;margin-bottom:10px;">← Zurück</button>
       <h2>Icon Swap: Remastered</h2>
-      <p>Gib Karten aus deiner Sammlung ab, um Icon Swap Tokens zu bekommen — je stärker die Karte, desto mehr. Tausche die Tokens im rotierenden Shop gegen exklusive Karten, Packs und Titel (für ALLE Spieler gleichzeitig gleich). Noch ${daysLeft} Tag${daysLeft===1?'':'e'} verfügbar.</p>
+      <p>Gib Karten aus deiner Sammlung ab, um Icon Swap Tokens zu bekommen — je stärker die Karte, desto mehr. Tausche die Tokens im rotierenden Shop gegen exklusive Karten und Titel (für ALLE Spieler gleichzeitig gleich). Noch ${daysLeft} Tag${daysLeft===1?'':'e'} verfügbar.</p>
     </div>
     <div class="is2-balance-row">
       <div class="is2-balance">${iconSwap2TokenIcon(20)}<span id="is2-token-count">${profile.iconSwap2Tokens||0}</span> Tokens</div>
