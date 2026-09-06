@@ -1766,6 +1766,41 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .iconswap-lock-overlay .lock-ic{font-size:22px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6));}
 .iconswap-lock-overlay .lock-day{font-family:'JetBrains Mono';font-size:10px;font-weight:700;letter-spacing:.03em;color:#eef3ea;
   background:rgba(6,8,12,.75);border:1px solid #22d3ee;border-radius:100px;padding:3px 9px;white-space:nowrap;}
+/* Icon Swap: Remastered - "iridescent" theme: blue/light-blue as the dominant color everywhere, with a
+   faint rainbow sweep layered on top (own semi-transparent gradient element, not recoloring the base
+   blue) so it reads as "shifts with the angle" rather than "rainbow-colored" - the blue must stay the
+   thing you notice first. Reused across the banner, hub header and every shop card via the same
+   iridescentSweep keyframe on a ::before/::after, same "own overlay element" convention as the
+   card-theme FX elsewhere (.gem-facets, .legikone-fx, ...). */
+@keyframes iridescentSweep{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.is2-banner{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;cursor:pointer;
+  background:linear-gradient(135deg, rgba(74,158,255,.16), var(--panel) 60%);border:1px solid #4a9eff;border-radius:14px;padding:16px 20px;margin-bottom:18px;transition:transform .15s, box-shadow .15s;}
+.is2-banner:hover{transform:translateY(-2px);box-shadow:0 8px 22px -10px rgba(74,158,255,.55);}
+.is2-banner-glimmer{position:absolute;inset:0;pointer-events:none;opacity:.35;
+  background:linear-gradient(100deg, transparent 0%, #4a9eff 15%, #9dffe8 30%, #ff9de2 45%, #c9a2ff 60%, #8bd0ff 75%, transparent 90%);
+  background-size:250% 100%;animation:iridescentSweep 6s linear infinite;mix-blend-mode:screen;}
+.is2-banner-body{position:relative;z-index:1;}
+.is2-banner-title{font-family:'Anton';font-size:16px;letter-spacing:.02em;
+  background:linear-gradient(90deg,#8bd0ff,#4a9eff,#8bd0ff);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:iridescentSweep 5s linear infinite;}
+.is2-banner-sub{color:var(--muted);font-size:12px;margin-top:3px;}
+.is2-banner-cta{position:relative;z-index:1;flex-shrink:0;font-weight:700;color:#4a9eff;white-space:nowrap;}
+.is2-head{position:relative;border-radius:14px;padding:16px 18px;margin-bottom:16px;overflow:hidden;
+  background:linear-gradient(155deg, rgba(74,158,255,.12), var(--panel) 65%);border:1px solid rgba(74,158,255,.35);}
+.is2-head h2{background:linear-gradient(90deg,#8bd0ff,#4a9eff,#c9a2ff,#4a9eff,#8bd0ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:iridescentSweep 6s linear infinite;}
+.is2-balance-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
+.is2-balance{font-family:'JetBrains Mono';font-size:15px;font-weight:700;color:#8bd0ff;}
+.is2-balance .token-dot{background:#4a9eff;box-shadow:0 0 7px #4a9eff;}
+.is2-section-title{font-family:'Anton';font-size:14px;letter-spacing:.02em;color:#8bd0ff;text-transform:uppercase;margin-bottom:10px;}
+.is2-shop-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:14px;}
+.is2-shop-card{position:relative;overflow:hidden;background:linear-gradient(165deg,var(--panel2),var(--panel) 70%);
+  border:1px solid var(--tier-acc, #4a9eff);border-radius:14px;padding:14px 12px;text-align:center;}
+.is2-shop-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--tier-acc, #4a9eff);}
+.is2-shop-tier{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--tier-acc, #4a9eff);font-weight:700;margin-bottom:6px;}
+.is2-shop-visual{margin:4px 0 8px;display:flex;justify-content:center;}
+.is2-shop-icon{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;
+  background:radial-gradient(circle, color-mix(in srgb, var(--tier-acc, #4a9eff) 25%, transparent), transparent 70%);color:var(--tier-acc, #4a9eff);}
+.is2-shop-label{font-size:12px;color:var(--chalk);line-height:1.3;min-height:32px;}
+body.gfx-no-fxlayers .is2-banner-glimmer{animation:none !important; opacity:.15;}
 .stat-row{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
 .stat-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px;flex:1;min-width:100px;text-align:center;}
 .stat-box .n{font-family:'Anton';font-size:24px;}
@@ -1991,6 +2026,12 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
   50%{opacity:.4;}
   75%{opacity:1;}
 }
+/* Icon Swap: Remastered nametags - blue-anchored ("iridescent" = looks different depending on the
+   viewing angle), a faint rainbow sweeps through rather than dominating, matching the event's whole
+   blue/light-blue-with-a-hint-of-rainbow theme. Prisma (the rarer/top one) gets the glitter pulse on
+   top, same convention as every other tier pairing its own second animation with the shared sweep. */
+.nt-iridescent{--glow:#4a9eff;background:linear-gradient(90deg,#4a9eff,#8bd0ff,#c9a2ff,#8bd0ff,#4a9eff);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite, nametagGlow 2.2s ease-in-out infinite;}
+.nt-prisma{--glow:#8bd0ff;background:linear-gradient(90deg,#4a9eff,#9dffe8,#ffd76a,#ff9de2,#c9a2ff,#8bd0ff,#4a9eff);background-size:500% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4.5s linear infinite, nametagGlitter 2s ease-in-out infinite;}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
 .ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .ach-icon{font-size:24px;flex-shrink:0;width:40px;height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
@@ -8723,6 +8764,89 @@ const KAPITAENE_SPECIALS = KAPITAENE_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KAPITAENE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// ===== Icon Swap: Remastered (limited event) - give away cards from your own collection for Icon
+// Swap Tokens (payout scales with the given-away card's OVR, see iconSwap2TokensForCard), then spend
+// tokens in a rotating shop: always exactly 3 items showing at once, refreshed globally (same 3 for
+// EVERY player, no per-device reroll-by-reloading) every 6 hours, drawn from a rarity-weighted pool -
+// the original 20 Icon Swap cards (see PLAYERS_ICONSWAP/ICONSWAP_CARDS above) folded in alongside new
+// cards/packs/titles added here. Rarer tier = shows up less often in rotation AND costs more.
+// Run window - 14 days (more content than the original 7-day event, so it gets a bit more room).
+// Adjust freely before shipping if a different start date is wanted.
+const ICONSWAP2_START = new Date('2026-09-08T00:00:00').getTime();
+const ICONSWAP2_END = ICONSWAP2_START + 14*24*60*60*1000;
+function iconSwap2Active(){ return Date.now()>=ICONSWAP2_START && Date.now()<ICONSWAP2_END; }
+// OVR -> token payout when giving a card away: exponential, so a handful of low-rated cards are worth
+// pocket change but a single very high-OVR card meaningfully dents even the priciest shop item - tuned
+// so the top tier (450 tokens, see ICONSWAP2_TIERS.legendary) is reachable by giving up roughly 4-5 of
+// your best 105+ cards, not hundreds of scrubs.
+function iconSwap2TokensForCard(card){
+  if(!card || typeof card.ov!=='number') return 0;
+  return Math.max(1, Math.round(0.6*Math.pow(1.14, card.ov-70)));
+}
+// Rarity tiers for the ROTATING SHOP - cards/packs/titles all share this one tier system. weight is the
+// relative selection weight per rotation slot (see rollIconSwap2ShopSlots), price is the fixed token
+// cost for every item of that tier (simpler to reason about/balance than a per-item price).
+const ICONSWAP2_TIERS = {
+  common:    {label:'Häufig',   weight:50, price:20,  accent:'#8bd0ff'},
+  rare:      {label:'Selten',   weight:30, price:60,  accent:'#4a9eff'},
+  epic:      {label:'Episch',   weight:15, price:160, accent:'#a26bff'},
+  legendary: {label:'Legendär', weight:5,  price:450, accent:'#ff9de2'},
+};
+// New Icon Swap Remastered cards - built from real, already-validated base players via the same
+// findBaseCard/boostBaseToOv mechanism as Kronjuwelen/Kapitäne above (reusing their already-confirmed
+// working image URLs), own variant/theme so they read as clearly part of THIS event.
+const ICONSWAP2_ROSTER = [
+  {baseId:199503, ov:92,  tier:'common',    img:KAPITAENE_IMG_OVERRIDE[199503]},    // G. Xhaka
+  {baseId:207865, ov:93,  tier:'common',    img:KAPITAENE_IMG_OVERRIDE[207865]},    // Marquinhos
+  {baseId:192387, ov:94,  tier:'common',    img:KRONJUWELEN_IMG_OVERRIDE[192387]},  // C. Immobile
+  {baseId:188567, ov:95,  tier:'common',    img:KRONJUWELEN_IMG_OVERRIDE[188567]},  // P. Aubameyang
+  {baseId:222665, ov:97,  tier:'rare',      img:KAPITAENE_IMG_OVERRIDE[222665]},    // M. Ødegaard
+  {baseId:215441, ov:98,  tier:'rare',      img:KRONJUWELEN_IMG_OVERRIDE[215441]},  // S. Guirassy
+  {baseId:212622, ov:99,  tier:'rare',      img:KAPITAENE_IMG_OVERRIDE[212622]},    // J. Kimmich
+  {baseId:202126, ov:102, tier:'epic',      img:KAPITAENE_IMG_OVERRIDE[202126]},    // H. Kane
+  {baseId:203376, ov:104, tier:'epic',      img:KAPITAENE_IMG_OVERRIDE[203376]},    // V. van Dijk
+  {baseId:231747, ov:108, tier:'legendary', img:KAPITAENE_IMG_OVERRIDE[231747]},    // K. Mbappé
+];
+const ICONSWAP2_SPECIALS = ICONSWAP2_ROSTER.map((r,i)=>{
+  const base = findBaseCard(r.baseId);
+  if(!base) return null;
+  const card = boostBaseToOv(base, r.ov, 9762000+i, 'iconswap2', 'Icon Swap: Remastered', 'iconswap2');
+  if(r.img) card.img = r.img;
+  card.iconswap2Tier = r.tier;
+  return card;
+}).filter(Boolean);
+ICONSWAP2_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// Old Icon Swap cards fold straight into the new tier system so nothing from the original event goes
+// to waste - swapTier maps 1:1 onto the new common/rare/epic/legendary labels.
+const ICONSWAP2_OLD_TIER_MAP = {1:'common', 2:'rare', 3:'epic', 4:'legendary'};
+ICONSWAP_CARDS.forEach(c=>{ if(c.swapTier) c.iconswap2Tier = ICONSWAP2_OLD_TIER_MAP[c.swapTier]; });
+// All cards eligible for the rotating shop's CARD slots (new + old, both already tagged with
+// iconswap2Tier above).
+function iconSwap2AllCards(){ return ICONSWAP2_SPECIALS.concat(ICONSWAP_CARDS); }
+// 3 new packs, bought with TOKENS (not Coins) exclusively inside this event's shop - never appear in
+// the normal Kartenladen/PACKS array. Each draws from this event's own card pool at its tier (plus a
+// small chance of the tier just above), so opening one always feels on-theme regardless of luck.
+function iconSwap2CardPool(tier){
+  const tiers = ['common','rare','epic','legendary'];
+  const idx = tiers.indexOf(tier);
+  const eligible = new Set([tier, idx<tiers.length-1 ? tiers[idx+1] : tier]);
+  const pool = iconSwap2AllCards().filter(c=>eligible.has(c.iconswap2Tier));
+  return pool.length ? pool : iconSwap2AllCards();
+}
+const ICONSWAP2_PACKS = [
+  {id:'is2-prism', name:'Prisma Pack', tier:'common',
+    desc:'1 zufällige Icon-Swap-Karte (Häufig, kleine Chance auf Selten).',
+    draw(){ return [pick(iconSwap2CardPool('common'))]; }},
+  {id:'is2-prism-double', name:'Doppel-Prisma Pack', tier:'rare',
+    desc:'2 zufällige Icon-Swap-Karten (Selten, kleine Chance auf Episch).',
+    draw(){ return [pick(iconSwap2CardPool('rare')), pick(iconSwap2CardPool('rare'))]; }},
+  {id:'is2-spectrum', name:'Spektrum Pack', tier:'epic',
+    desc:'1 zufällige Icon-Swap-Karte (Episch, kleine Chance auf Legendär).',
+    draw(){ return [pick(iconSwap2CardPool('epic'))]; }},
+];
+// 2 new exclusive nametags for this event's shop - definitions (label/symbol/cls/accent) live with all
+// other NAMETAGS further down, this just maps them to a shop tier/price.
+const ICONSWAP2_TITLE_TIERS = {iridescent:'epic', prisma:'legendary'};
 // ===== WM 2026: the real 48-team World Cup, exactly as it lined up (see WM26_GROUPS below - the
 // game mode itself lives further down, near Turnier-Modus). Two reward-variant tiers, both resolved
 // dynamically at load time from the existing real-player pool rather than a hand-picked id list -
@@ -16009,6 +16133,7 @@ function renderView(tab){
   if(tab==='week') return renderWeekPass(view);
   if(tab==='achievements') return renderAchievementsPanel(view);
   if(tab==='admin') return isAdmin() ? renderAdminPanel(view) : renderPlay(view);
+  if(tab==='iconswap2') return renderIconSwap2Hub(view);
 }
 
 // ===== STORE =====
@@ -16460,6 +16585,7 @@ function renderStore(view){
   view.innerHTML = `
     <div class="view-head"><h2>Kartenladen</h2><p>\u00d6ffne Packs, um Spieler zu deinem Verein hinzuzuf\u00fcgen. Die angegebenen Werte sind garantierte Mindestwerte \u2014 jedes Pack kann auch mehr liefern.</p></div>
     ${renderDailyBanner()}
+    ${renderIconSwap2Banner()}
     <div id="liga-quickpreview"></div>
     <div class="toolbar" style="margin-bottom:18px;">
       <input id="redeem-input" placeholder="Code einl\u00f6sen..." style="max-width:220px;">
@@ -16534,6 +16660,8 @@ function renderStore(view){
   }
   document.getElementById('redeem-btn').addEventListener('click', redeemCode);
   document.getElementById('redeem-input').addEventListener('keydown', e=>{ if(e.key==='Enter') redeemCode(); });
+  const is2Banner = document.getElementById('is2-banner');
+  if(is2Banner) is2Banner.addEventListener('click', ()=>renderView('iconswap2'));
 }
 async function redeemCode(){
   const input = document.getElementById('redeem-input');
@@ -25413,6 +25541,10 @@ const NAMETAGS = {
   // (siehe .nt-auserwaehlt::after) - siehe openAdminSetLigaBadgeModal, das jeden NAMETAGS-Eintrag
   // automatisch als vergebbar anbietet, ohne eigene Verdrahtung.
   auserwaehlt: {label:'Auserwählt', symbol:'♛', cls:'nt-auserwaehlt', accent:'#ffd76a'},
+  // Icon Swap: Remastered event nametags (see ICONSWAP2_TITLE_TIERS) - blue-anchored with a faint
+  // rainbow sweep ("iridescent"/"changes with the viewing angle"), matching the event's whole theme.
+  iridescent: {label:'Iridescent', symbol:'◈', cls:'nt-iridescent', accent:'#4a9eff'},
+  prisma: {label:'Prisma', symbol:'✷', cls:'nt-prisma', accent:'#8bd0ff'},
 };
 // Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
 // card types currently in the collection - captures every source (packs, Handel, Belohnungen, Admin-
@@ -28867,6 +28999,204 @@ function showIconSwapModal(){
       showIconSwapModal();
     });
   });
+}
+// ===== Icon Swap: Remastered - rotating shop + give-away UI (see the data model near KAPITAENE_SPECIALS
+// for tiers/roster/packs/tokens) =====
+const ICONSWAP2_ROTATION_HOURS = 6;
+// The current 6h "bucket" index - the same bucket number always produces the exact same 3 shop slots
+// for EVERY player (see rollIconSwap2ShopSlots), since it's a pure function of wall-clock time, not
+// anything stored per-account. No server coordination needed, and no way to "reroll" by reloading.
+function iconSwap2RotationBucket(){ return Math.floor(Date.now()/(ICONSWAP2_ROTATION_HOURS*60*60*1000)); }
+function iconSwap2NextRotationAt(){ return (iconSwap2RotationBucket()+1)*ICONSWAP2_ROTATION_HOURS*60*60*1000; }
+// Tiny seeded PRNG (mulberry32) - deterministic per integer seed, good enough distribution for picking
+// 3 items out of a few dozen. Not used anywhere security-sensitive, purely cosmetic shop rotation.
+function iconSwap2Mulberry32(seed){
+  return function(){
+    seed |= 0; seed = seed+0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed>>>15, 1 | seed);
+    t = t+Math.imul(t ^ t>>>7, 61 | t) ^ t;
+    return ((t ^ t>>>14)>>>0)/4294967296;
+  };
+}
+// All items ever eligible for the rotating shop - cards (new + old Icon Swap), the 3 new packs, and
+// the 2 new titles. Rebuilt fresh on every call (cheap - a few dozen items) rather than cached, so it
+// always reflects the current NAMETAGS/roster state with zero staleness concerns.
+function iconSwap2AllShopItems(){
+  const cardItems = iconSwap2AllCards().map(c=>({type:'card', tier:c.iconswap2Tier, card:c, id:'card-'+c.id}));
+  const packItems = ICONSWAP2_PACKS.map(p=>({type:'pack', tier:p.tier, pack:p, id:'pack-'+p.id}));
+  const titleItems = Object.entries(ICONSWAP2_TITLE_TIERS).map(([nametagId,tier])=>({type:'title', tier, nametagId, id:'title-'+nametagId}));
+  return cardItems.concat(packItems, titleItems).filter(it=>ICONSWAP2_TIERS[it.tier]);
+}
+// Picks exactly 3 DISTINCT items for the current rotation bucket, weighted by tier rarity (see
+// ICONSWAP2_TIERS.weight) - rarer tiers are both less likely to be picked AND cost more once picked.
+// Same bucket -> same rng seed -> same 3 items for every player, always (see iconSwap2RotationBucket).
+function rollIconSwap2ShopSlots(){
+  const rng = iconSwap2Mulberry32(iconSwap2RotationBucket());
+  const remaining = iconSwap2AllShopItems();
+  const chosen = [];
+  for(let i=0; i<3 && remaining.length; i++){
+    const total = remaining.reduce((s,it)=>s+ICONSWAP2_TIERS[it.tier].weight, 0);
+    let r = rng()*total, idx = 0;
+    for(; idx<remaining.length; idx++){ r -= ICONSWAP2_TIERS[remaining[idx].tier].weight; if(r<=0) break; }
+    if(idx>=remaining.length) idx = remaining.length-1;
+    chosen.push(remaining[idx]);
+    remaining.splice(idx,1);
+  }
+  return chosen;
+}
+function iconSwap2ItemLabel(item){
+  if(item.type==='card') return `${item.card.n} (${item.card.ov} OVR)`;
+  if(item.type==='pack') return item.pack.name;
+  return NAMETAGS[item.nametagId].label + ' (Titel)';
+}
+function iconSwap2ItemIcon(item){
+  if(item.type==='card') return null; // rendered as a real mini card instead of an icon
+  if(item.type==='pack') return '🎁';
+  return NAMETAGS[item.nametagId].symbol;
+}
+async function buyIconSwap2Item(item){
+  const tier = ICONSWAP2_TIERS[item.tier];
+  if((profile.iconSwapTokens||0) < tier.price){ toast('Nicht genug Icon Swap Tokens.'); return; }
+  if(item.type==='title' && (profile.unlockedNametags||[]).includes(item.nametagId)){ toast('Titel bereits freigeschaltet.'); return; }
+  profile.iconSwapTokens -= tier.price;
+  if(item.type==='card'){
+    collection.push({uid:genId(), cardId:item.card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId});
+    bumpCardMintCount(item.card.id, 1, !!item.card.untradable);
+    await sSet('collection', collection);
+    await sSet('profile', profile);
+    toast(`${item.card.n} gekauft!`);
+  } else if(item.type==='title'){
+    profile.unlockedNametags = [...(profile.unlockedNametags||[]), item.nametagId];
+    await sSet('profile', profile);
+    toast(`Titel "${NAMETAGS[item.nametagId].label}" freigeschaltet!`);
+  } else {
+    await sSet('profile', profile);
+    const pack = item.pack;
+    showPackOpening({...pack, name:`${pack.name} ${UT_PACK_ICON}`}, pack.draw(), {untradable:true});
+  }
+  renderIconSwap2Hub(document.getElementById('view'));
+}
+// Karte abgeben (Sacrifice): pick any card from the own collection, confirm, remove it and grant
+// tokens - the whole modal doubles as the confirmation (a second explicit confirm step would be
+// redundant friction for a flow whose entire point is "give something up for something else").
+function openIconSwap2GiveModal(){
+  const pool = collection.map(entry=>({entry, def:BY_ID.get(entry.cardId)})).filter(x=>x.def);
+  openModal(`
+    <h2 style="margin-bottom:4px;">Karte abgeben</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:10px;">Wähle eine Karte aus deiner Sammlung — sie wird endgültig entfernt, du bekommst dafür Icon Swap Tokens (mehr für stärkere Karten).</p>
+    <input id="is2-give-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:0 0 12px;">
+    <div class="picker-list" id="is2-give-results" style="max-height:400px;overflow-y:auto;"></div>`);
+  const input = document.getElementById('is2-give-search');
+  const results = document.getElementById('is2-give-results');
+  function renderResults(){
+    const q = input.value.trim().toLowerCase();
+    const filtered = pool.filter(x=>!q || x.def.n.toLowerCase().includes(q)).slice(0,40);
+    results.innerHTML = '';
+    filtered.forEach(({entry,def})=>{
+      const tokens = iconSwap2TokensForCard(def);
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'cursor:pointer;position:relative;';
+      wrap.appendChild(cardEl(def,'mini'));
+      const tag = document.createElement('div');
+      tag.className = 'price-pill';
+      tag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.8);border-radius:8px;padding:3px 0;font-size:10.5px;color:#8bd0ff;';
+      tag.innerHTML = `+${tokens} Token${tokens===1?'':'s'}`;
+      wrap.appendChild(tag);
+      wrap.addEventListener('click', ()=>confirmIconSwap2Give(entry.uid, def, tokens));
+      results.appendChild(wrap);
+    });
+  }
+  input.addEventListener('input', renderResults);
+  renderResults();
+}
+function confirmIconSwap2Give(uid, def, tokens){
+  openModal(`
+    <h2 style="margin-bottom:10px;color:#4a9eff;">${def.n} abgeben?</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Diese Karte wird endgültig aus deiner Sammlung entfernt. Du erhältst dafür <b style="color:#8bd0ff;">${tokens} Icon Swap Token${tokens===1?'':'s'}</b>. Nicht rückgängig zu machen.</p>
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="is2-give-cancel" style="flex:1;">Abbrechen</button>
+      <button class="action-btn" id="is2-give-confirm" style="flex:1;background:#4a9eff;">Abgeben</button>
+    </div>`);
+  document.getElementById('is2-give-cancel').addEventListener('click', openIconSwap2GiveModal);
+  document.getElementById('is2-give-confirm').addEventListener('click', async ()=>{
+    const idx = collection.findIndex(c=>c.uid===uid);
+    if(idx<0){ closeModal(); return; }
+    collection.splice(idx,1);
+    profile.iconSwapTokens = (profile.iconSwapTokens||0) + tokens;
+    await sSet('collection', collection);
+    await sSet('profile', profile);
+    toast(`+${tokens} Icon Swap Token${tokens===1?'':'s'} für ${def.n}.`);
+    closeModal();
+    renderIconSwap2Hub(document.getElementById('view'));
+  });
+}
+let iconSwap2CountdownTimer = null;
+function renderIconSwap2Hub(view){
+  if(iconSwap2CountdownTimer){ clearInterval(iconSwap2CountdownTimer); iconSwap2CountdownTimer = null; }
+  if(!iconSwap2Active()){ renderView('store'); return; }
+  const slots = rollIconSwap2ShopSlots();
+  const slotsHtml = slots.map(item=>{
+    const tier = ICONSWAP2_TIERS[item.tier];
+    const canAfford = (profile.iconSwapTokens||0) >= tier.price;
+    const alreadyOwnedTitle = item.type==='title' && (profile.unlockedNametags||[]).includes(item.nametagId);
+    const disabled = !canAfford || alreadyOwnedTitle;
+    const visual = item.type==='card'
+      ? cardEl(item.card,'mini').outerHTML
+      : `<div class="is2-shop-icon" style="--tier-acc:${tier.accent};">${iconSwap2ItemIcon(item)}</div>`;
+    return `<div class="is2-shop-card" style="--tier-acc:${tier.accent};">
+      <div class="is2-shop-tier">${tier.label}</div>
+      <div class="is2-shop-visual">${visual}</div>
+      <div class="is2-shop-label">${iconSwap2ItemLabel(item)}</div>
+      ${item.type!=='card' ? `<div class="hint" style="margin:2px 0 0;font-size:10.5px;">${item.type==='pack'?item.pack.desc:'Exklusiver Titel'}</div>` : ''}
+      <button class="action-btn ${disabled?'secondary':''}" data-item-id="${item.id}" style="width:100%;margin-top:8px;" ${disabled?'disabled':''}>
+        ${alreadyOwnedTitle ? 'Bereits freigeschaltet' : `<span class="token-dot"></span>${tier.price} Token`}
+      </button>
+    </div>`;
+  }).join('');
+  const daysLeft = Math.max(0, Math.ceil((ICONSWAP2_END-Date.now())/(24*60*60*1000)));
+  view.innerHTML = `
+    <div class="view-head is2-head">
+      <button class="action-btn secondary" id="is2-back" style="width:auto;padding:7px 14px;margin-bottom:10px;">← Zurück</button>
+      <h2>Icon Swap: Remastered</h2>
+      <p>Gib Karten aus deiner Sammlung ab, um Icon Swap Tokens zu bekommen — je stärker die Karte, desto mehr. Tausche die Tokens im rotierenden Shop gegen exklusive Karten, Packs und Titel (für ALLE Spieler gleichzeitig gleich). Noch ${daysLeft} Tag${daysLeft===1?'':'e'} verfügbar.</p>
+    </div>
+    <div class="is2-balance-row">
+      <div class="is2-balance"><span class="token-dot"></span><span id="is2-token-count">${profile.iconSwapTokens||0}</span> Tokens</div>
+      <button class="action-btn" id="is2-give-btn" style="width:auto;">Karte abgeben</button>
+    </div>
+    <div class="is2-section-title">Shop <span class="mono" id="is2-refresh-countdown" style="color:var(--muted);font-size:11px;font-weight:400;"></span></div>
+    <div class="is2-shop-grid">${slotsHtml}</div>`;
+  document.getElementById('is2-back').addEventListener('click', ()=>renderView('store'));
+  document.getElementById('is2-give-btn').addEventListener('click', openIconSwap2GiveModal);
+  view.querySelectorAll('[data-item-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const item = slots.find(s=>s.id===btn.dataset.itemId);
+      if(item) buyIconSwap2Item(item);
+    });
+  });
+  const updateCountdown = ()=>{
+    const el = document.getElementById('is2-refresh-countdown');
+    if(!el){ if(iconSwap2CountdownTimer){ clearInterval(iconSwap2CountdownTimer); iconSwap2CountdownTimer=null; } return; }
+    const remaining = formatCountdown(iconSwap2NextRotationAt() - Date.now());
+    if(!remaining){ renderIconSwap2Hub(view); return; }
+    el.textContent = `· nächste Rotation in ${remaining}`;
+  };
+  updateCountdown();
+  iconSwap2CountdownTimer = setInterval(updateCountdown, 30000);
+}
+// Homescreen banner (Kartenladen, direkt unter der Täglichen Belohnung) - siehe renderStore.
+function renderIconSwap2Banner(){
+  if(!iconSwap2Active()) return '';
+  const daysLeft = Math.max(0, Math.ceil((ICONSWAP2_END-Date.now())/(24*60*60*1000)));
+  return `
+    <div class="is2-banner" id="is2-banner">
+      <div class="is2-banner-glimmer"></div>
+      <div class="is2-banner-body">
+        <div class="is2-banner-title">Icon Swap: Remastered</div>
+        <div class="is2-banner-sub">Karten abgeben, Tokens verdienen, im rotierenden Shop einlösen — noch ${daysLeft} Tag${daysLeft===1?'':'e'}</div>
+      </div>
+      <div class="is2-banner-cta">Öffnen →</div>
+    </div>`;
 }
 // ===== Ballon d'Or Challenge: the single hardest one-off match in the game =====
 function renderPlay(view){
