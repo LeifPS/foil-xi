@@ -556,6 +556,38 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .goat-crack.g3{top:70%;left:14%;width:50%;transform:rotate(8deg);animation-duration:3.8s;animation-delay:.6s;}
 .pcard .goat-crack.g4{top:60%;left:52%;width:34%;transform:rotate(-20deg);animation-duration:2.9s;animation-delay:1.8s;}
 @keyframes goatCrackFlicker{0%,100%{opacity:0;}45%{opacity:0;}52%{opacity:.9;}58%{opacity:.2;}70%{opacity:.7;}80%{opacity:0;}}
+/* Icon Swap: Remastered (theme 'iconswap2') - deep navy face, a border gradient that continuously
+   drifts through the event's whole blue->cyan->violet->pink spectrum (not just pulsing glow like
+   legacy/legacystar), plus its own FX layer below: a diagonal light band sweeping back and forth like
+   a real holographic sticker catching the light, and a few fixed twinkling sparkle points - genuinely
+   its own mechanism, not a palette-swapped rainbow-border theme. */
+.pcard.theme-iconswap2{--acc:#4a9eff;border:2px solid transparent;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(139,208,255,.12), transparent 45%),
+    linear-gradient(160deg,#0a1830 0%,#0d1424 50%,#0a1830 100%) padding-box,
+    linear-gradient(135deg,#4a9eff,#9dffe8,#c9a2ff,#ff9de2,#8bd0ff,#4a9eff) border-box !important;
+  background-size:100% 100%, 100% 100%, 400% 400%;
+  animation:iconswap2BorderDrift 7s linear infinite, ultimateBreathe 2.6s ease-in-out infinite;}
+.pcard.theme-iconswap2::before{animation:autoShine 1.7s ease-in-out infinite;}
+.pcard.theme-iconswap2 .name{color:#dff0ff;text-shadow:0 0 9px rgba(74,158,255,.7);}
+.pcard.theme-iconswap2 .name.name-variant{color:#dff0ff;text-shadow:0 0 9px rgba(74,158,255,.7);}
+@keyframes iconswap2BorderDrift{0%{background-position:0% 0%, 0% 0%, 0% 50%;}100%{background-position:0% 0%, 0% 0%, 300% 50%;}}
+.pcard .iconswap2-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .iconswap2-sweep{position:absolute;top:-60%;left:-60%;width:220%;height:220%;
+  background:linear-gradient(115deg, transparent 42%, rgba(139,208,255,.3) 47%, rgba(255,255,255,.55) 50%, rgba(201,162,255,.3) 53%, transparent 58%);
+  animation:iconswap2Sweep 4.2s ease-in-out infinite;}
+@keyframes iconswap2Sweep{0%,100%{transform:translate(-22%,-22%);}50%{transform:translate(22%,22%);}}
+.pcard .iconswap2-spark{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;
+  box-shadow:0 0 6px 1.5px rgba(139,208,255,.9);opacity:0;animation:iconswap2Twinkle linear infinite;}
+.pcard .iconswap2-spark.p1{top:12%;left:18%;animation-duration:2.8s;animation-delay:0s;}
+.pcard .iconswap2-spark.p2{top:22%;left:78%;animation-duration:3.4s;animation-delay:.6s;}
+.pcard .iconswap2-spark.p3{top:48%;left:8%;animation-duration:2.4s;animation-delay:1.3s;}
+.pcard .iconswap2-spark.p4{top:58%;left:88%;animation-duration:3.1s;animation-delay:.3s;}
+.pcard .iconswap2-spark.p5{top:78%;left:32%;animation-duration:2.9s;animation-delay:1.8s;}
+.pcard .iconswap2-spark.p6{top:84%;left:64%;animation-duration:3.6s;animation-delay:1s;}
+@keyframes iconswap2Twinkle{0%,100%{opacity:0;transform:scale(.6);}50%{opacity:1;transform:scale(1.4);}}
+body.gfx-no-fxlayers .iconswap2-sweep{animation:none !important;opacity:.4;}
+body.gfx-no-fxlayers .iconswap2-spark{animation:none !important;opacity:.5;}
 /* OG Icons (variant 'ogicon', legendary players from decades past): previously just inherited the
    generic r-ultimate look too, distinguished only by THEME_ACC's bronze accent border color - no
    dedicated background of its own, nothing that actually reads "archival footage of a legend" rather
@@ -1788,8 +1820,7 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
   background:linear-gradient(155deg, rgba(74,158,255,.12), var(--panel) 65%);border:1px solid rgba(74,158,255,.35);}
 .is2-head h2{background:linear-gradient(90deg,#8bd0ff,#4a9eff,#c9a2ff,#4a9eff,#8bd0ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:iridescentSweep 6s linear infinite;}
 .is2-balance-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
-.is2-balance{font-family:'JetBrains Mono';font-size:15px;font-weight:700;color:#8bd0ff;}
-.is2-balance .token-dot{background:#4a9eff;box-shadow:0 0 7px #4a9eff;}
+.is2-balance{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono';font-size:15px;font-weight:700;color:#8bd0ff;}
 .is2-section-title{font-family:'Anton';font-size:14px;letter-spacing:.02em;color:#8bd0ff;text-transform:uppercase;margin-bottom:10px;}
 .is2-shop-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:14px;}
 .is2-shop-card{position:relative;overflow:hidden;background:linear-gradient(165deg,var(--panel2),var(--panel) 70%);
@@ -1801,6 +1832,22 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
   background:radial-gradient(circle, color-mix(in srgb, var(--tier-acc, #4a9eff) 25%, transparent), transparent 70%);color:var(--tier-acc, #4a9eff);}
 .is2-shop-label{font-size:12px;color:var(--chalk);line-height:1.3;min-height:32px;}
 body.gfx-no-fxlayers .is2-banner-glimmer{animation:none !important; opacity:.15;}
+/* Icon Swap: Remastered - bespoke button style (a gradient pill, not the generic .action-btn look)
+   used everywhere in this event's own UI (hub, give-away modal, shop buy buttons). */
+.is2-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:2px;
+  width:100%;padding:10px 18px;margin-top:0;border:none;border-radius:11px;cursor:pointer;
+  font-family:'JetBrains Mono';font-weight:700;font-size:13px;color:#04101f;
+  background:linear-gradient(100deg,#4a9eff,#8bd0ff,#c9a2ff,#8bd0ff,#4a9eff);background-size:300% 100%;
+  animation:iridescentSweep 5s linear infinite;
+  box-shadow:0 4px 14px -6px rgba(74,158,255,.6);transition:transform .12s, box-shadow .12s;}
+.is2-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px -6px rgba(74,158,255,.75);}
+.is2-btn:active{transform:translateY(0);}
+.is2-btn-ghost{background:var(--panel2);color:#8bd0ff;border:1px solid #4a9eff;animation:none;box-shadow:none;}
+.is2-btn-ghost:hover{box-shadow:0 4px 14px -8px rgba(74,158,255,.5);}
+.is2-btn-disabled, .is2-btn:disabled{background:var(--panel2) !important;color:var(--muted) !important;
+  border:1px solid var(--line);animation:none !important;box-shadow:none !important;cursor:not-allowed;opacity:.6;}
+.is2-back-row{display:flex;margin-bottom:10px;}
+.is2-back-row .is2-btn{width:auto;padding:8px 16px;}
 .stat-row{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
 .stat-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px;flex:1;min-width:100px;text-align:center;}
 .stat-box .n{font-family:'Anton';font-size:24px;}
@@ -15445,6 +15492,7 @@ const VARIANT_ICON = {
   ratings27:'<path d="M23 6L13.5 15.5L8.5 10.5L1 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 6h6v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   goat:'<circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 5.5l1.9 4.8 5 .4-3.8 3.3 1.2 4.9L12 15.9l-4.3 2.9 1.2-4.9-3.8-3.3 5-.4z" fill="currentColor"/>',
   iconswap:'<path d="M4 9a8 8 0 0114-4.9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 15a8 8 0 01-14 4.9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M18 3.6V7h-3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 20.4V17h3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  iconswap2:'<path d="M4 9L12 2L20 9L12 22Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M4 9H20M8 9L12 2M16 9L12 2" fill="none" stroke="currentColor" stroke-width="1.1"/>',
   wcchamp:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
   goldenball:'<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 6.5l2.6 1.7-.8 3h-3.6l-.8-3z" fill="currentColor"/><path d="M12 6.5V4M8.2 8.2L6 6.7M15.8 8.2L18 6.7M10.2 11.2l-3.4 1M13.8 11.2l3.4 1" stroke="currentColor" stroke-width="1.1"/>',
   ggwm:'<path d="M6 12V6a2 2 0 014 0v3M10 9V5a2 2 0 014 0v4M14 9V6a2 2 0 014 0v6c0 4-3 7-7 7s-7-3-7-7v-2a2 2 0 014 0v1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
@@ -15579,6 +15627,16 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const goatFxHTML = isGoatTier ? `<div class="goat-fx">
       <div class="goat-halo"></div>
       ${Array.from({length:4},(_,i)=>`<i class="goat-crack g${i+1}"></i>`).join('')}
+    </div>` : '';
+  // Icon Swap: Remastered (variant/theme 'iconswap2') - a genuine holographic-foil look, not a
+  // recolor of the shared rainbow-border-box treatment every other bespoke theme uses: a diagonal
+  // light band sweeps back and forth across the whole face (like a foil sticker catching the light as
+  // you tilt it - the literal "looks different depending on the angle" the whole event's theme is
+  // built around), plus a handful of small twinkling sparkle points at fixed offsets.
+  const isIconSwap2Tier = card.theme==='iconswap2';
+  const iconswap2FxHTML = isIconSwap2Tier ? `<div class="iconswap2-fx">
+      <div class="iconswap2-sweep"></div>
+      ${Array.from({length:6},(_,i)=>`<i class="iconswap2-spark p${i+1}"></i>`).join('')}
     </div>` : '';
   // OG Icons: no static centerpiece - a steady rain of small green laurel leaves, gold crowns and gold
   // stars drifting down the whole card, each rotating as it falls. Left position/delay/duration are
@@ -15753,6 +15811,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${wm26kFxHTML}
     ${breakoutFxHTML}
     ${goatFxHTML}
+    ${iconswap2FxHTML}
     ${ogiconFxHTML}
     ${iconpromoFxHTML}
     ${adminFxHTML}
@@ -29051,6 +29110,20 @@ function rollIconSwap2ShopSlots(){
   }
   return chosen;
 }
+// Bespoke Icon Swap Token symbol - a small faceted gem (flat-shaded facets, no gradients so it stays
+// crisp at 14-18px and never risks an SVG gradient id colliding when several instances render at once
+// on the same page) instead of reusing the generic .token-dot circle every other token/currency in the
+// game shares - this event gets its own unmistakable icon everywhere its currency appears.
+function iconSwap2TokenIcon(size=15){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 20 20" style="vertical-align:-3px;margin-right:4px;flex-shrink:0;" aria-hidden="true">
+    <path d="M4 8L10 2L16 8L10 18Z" fill="#4a9eff"/>
+    <path d="M4 8L10 8L10 18Z" fill="#2f7fe0"/>
+    <path d="M10 8L16 8L10 18Z" fill="#8bd0ff"/>
+    <path d="M4 8L10 2L10 8Z" fill="#9de2ff"/>
+    <path d="M10 2L16 8L10 8Z" fill="#c9a2ff"/>
+    <path d="M4 8H16" stroke="#06101f" stroke-width="0.6"/>
+  </svg>`;
+}
 function iconSwap2ItemLabel(item){
   if(item.type==='card') return `${item.card.n} (${item.card.ov} OVR)`;
   if(item.type==='pack') return item.pack.name;
@@ -29107,7 +29180,7 @@ function openIconSwap2GiveModal(){
       const tag = document.createElement('div');
       tag.className = 'price-pill';
       tag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.8);border-radius:8px;padding:3px 0;font-size:10.5px;color:#8bd0ff;';
-      tag.innerHTML = `+${tokens} Token${tokens===1?'':'s'}`;
+      tag.innerHTML = `+${tokens} ${iconSwap2TokenIcon(12)}Token${tokens===1?'':'s'}`;
       wrap.appendChild(tag);
       wrap.addEventListener('click', ()=>confirmIconSwap2Give(entry.uid, def, tokens));
       results.appendChild(wrap);
@@ -29119,10 +29192,10 @@ function openIconSwap2GiveModal(){
 function confirmIconSwap2Give(uid, def, tokens){
   openModal(`
     <h2 style="margin-bottom:10px;color:#4a9eff;">${def.n} abgeben?</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Diese Karte wird endgültig aus deiner Sammlung entfernt. Du erhältst dafür <b style="color:#8bd0ff;">${tokens} Icon Swap Token${tokens===1?'':'s'}</b>. Nicht rückgängig zu machen.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Diese Karte wird endgültig aus deiner Sammlung entfernt. Du erhältst dafür <b style="color:#8bd0ff;">${iconSwap2TokenIcon(14)}${tokens} Icon Swap Token${tokens===1?'':'s'}</b>. Nicht rückgängig zu machen.</p>
     <div style="display:flex;gap:10px;">
-      <button class="action-btn secondary" id="is2-give-cancel" style="flex:1;">Abbrechen</button>
-      <button class="action-btn" id="is2-give-confirm" style="flex:1;background:#4a9eff;">Abgeben</button>
+      <button class="is2-btn is2-btn-ghost" id="is2-give-cancel" style="flex:1;">Abbrechen</button>
+      <button class="is2-btn" id="is2-give-confirm" style="flex:1;">Abgeben</button>
     </div>`);
   document.getElementById('is2-give-cancel').addEventListener('click', openIconSwap2GiveModal);
   document.getElementById('is2-give-confirm').addEventListener('click', async ()=>{
@@ -29155,21 +29228,21 @@ function renderIconSwap2Hub(view){
       <div class="is2-shop-visual">${visual}</div>
       <div class="is2-shop-label">${iconSwap2ItemLabel(item)}</div>
       ${item.type!=='card' ? `<div class="hint" style="margin:2px 0 0;font-size:10.5px;">${item.type==='pack'?item.pack.desc:'Exklusiver Titel'}</div>` : ''}
-      <button class="action-btn ${disabled?'secondary':''}" data-item-id="${item.id}" style="width:100%;margin-top:8px;" ${disabled?'disabled':''}>
-        ${alreadyOwnedTitle ? 'Bereits freigeschaltet' : `<span class="token-dot"></span>${tier.price} Token`}
+      <button class="is2-btn ${disabled?'is2-btn-disabled':''}" data-item-id="${item.id}" ${disabled?'disabled':''}>
+        ${alreadyOwnedTitle ? 'Bereits freigeschaltet' : `${iconSwap2TokenIcon(14)}${tier.price} Token`}
       </button>
     </div>`;
   }).join('');
   const daysLeft = Math.max(0, Math.ceil((ICONSWAP2_END-Date.now())/(24*60*60*1000)));
   view.innerHTML = `
     <div class="view-head is2-head">
-      <button class="action-btn secondary" id="is2-back" style="width:auto;padding:7px 14px;margin-bottom:10px;">← Zurück</button>
+      <button class="is2-btn is2-btn-ghost" id="is2-back" style="width:auto;margin-bottom:10px;">← Zurück</button>
       <h2>Icon Swap: Remastered</h2>
       <p>Gib Karten aus deiner Sammlung ab, um Icon Swap Tokens zu bekommen — je stärker die Karte, desto mehr. Tausche die Tokens im rotierenden Shop gegen exklusive Karten, Packs und Titel (für ALLE Spieler gleichzeitig gleich). Noch ${daysLeft} Tag${daysLeft===1?'':'e'} verfügbar.</p>
     </div>
     <div class="is2-balance-row">
-      <div class="is2-balance"><span class="token-dot"></span><span id="is2-token-count">${profile.iconSwapTokens||0}</span> Tokens</div>
-      <button class="action-btn" id="is2-give-btn" style="width:auto;">Karte abgeben</button>
+      <div class="is2-balance">${iconSwap2TokenIcon(20)}<span id="is2-token-count">${profile.iconSwapTokens||0}</span> Tokens</div>
+      <button class="is2-btn" id="is2-give-btn" style="width:auto;">Karte abgeben</button>
     </div>
     <div class="is2-section-title">Shop <span class="mono" id="is2-refresh-countdown" style="color:var(--muted);font-size:11px;font-weight:400;"></span></div>
     <div class="is2-shop-grid">${slotsHtml}</div>`;
