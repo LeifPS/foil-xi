@@ -2272,6 +2272,11 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
 body.gfx-no-fxlayers .nt-iridescent .nametag-symbol::before, body.gfx-no-fxlayers .nt-iridescent::after,
 body.gfx-no-fxlayers .nt-prisma .nametag-symbol::before, body.gfx-no-fxlayers .nt-prisma::after{ display:none !important; }
 body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
+/* Icon Swap: Remastered achievement nametags (Tokenjäger/Komplettist) - the plain gradient+pulse
+   treatment, matching every other achievement line's tier-V nametag rather than the shop titles' full
+   rays/particles/slash package above. */
+.nt-tokenjaeger{--glow:#4a9eff;background:linear-gradient(90deg,#4a9eff,#9de2ff,#4a9eff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagFlash 2.6s ease-in-out infinite;}
+.nt-komplettist{--glow:#8bd0ff;background:linear-gradient(90deg,#8bd0ff,#c9a2ff,#8bd0ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.8s linear infinite, nametagGlow 2.4s ease-in-out infinite;}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
 .ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .ach-icon{font-size:24px;flex-shrink:0;width:40px;height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
@@ -16269,7 +16274,7 @@ function achievementsClaimableCount(){
   if(!profile) return 0;
   ensureAchievementState();
   let count = 0;
-  ACHIEVEMENTS.forEach(ach=>{ count += Math.max(0, achievementUnlockedTier(ach) - achievementClaimedTier(ach)); });
+  ACHIEVEMENTS.forEach(ach=>{ if(ach.eventOnly && !iconSwap2Active()) return; count += Math.max(0, achievementUnlockedTier(ach) - achievementClaimedTier(ach)); });
   return count;
 }
 // Count of pending INCOMING trade offers - shown as a nav badge on "Handel" so a new offer is visible
@@ -25789,6 +25794,31 @@ const ACHIEVEMENTS = [
       {coins:80000, packs:['kronjuwelen']},
       {coins:200000, packs:['kronjuwelen'], card:'wepTrophy', nametag:'pokalkoenig'},
     ]},
+  // Icon Swap: Remastered event-only achievement lines - eventOnly:true hides both entirely (see
+  // renderAchievementsPanel/achievementsClaimableCount) once iconSwap2Active() goes false, so they only
+  // ever show up while the event itself is live. Rewards deliberately pay out Icon Swap Tokens instead
+  // of Coins at every tier (moderate amounts - these aren't meant to fund the shop on their own, just
+  // nudge it along), with the usual tier-V nametag on top.
+  {id:'iconSwap2TokensEarned', name:'Icon Swap: Token-Jäger', desc:'Verdiene Icon Swap Tokens, indem du Karten im Event abgibst.', icon:'💠', stat:'iconSwap2TokensEarned', eventOnly:true,
+    cond:n=>`${n} Icon Swap Tokens verdient`,
+    tiers:[100,400,1200,3000,6000],
+    rewards:[
+      {iconSwap2Tokens:20},
+      {iconSwap2Tokens:40},
+      {iconSwap2Tokens:80},
+      {iconSwap2Tokens:150},
+      {iconSwap2Tokens:300, nametag:'tokenjaeger'},
+    ]},
+  {id:'iconSwap2CardsCollected', name:'Icon Swap: Vollständige Sammlung', desc:'Sammle einzigartige Icon Swap: Remastered Karten (neue und alte).', icon:'🃏', stat:'iconSwap2CardsCollected', eventOnly:true,
+    cond:n=>`${n} von ${iconSwap2AllCards().length} Icon Swap Karten`,
+    tiers:[5,10,18,25,iconSwap2AllCards().length],
+    rewards:[
+      {iconSwap2Tokens:20},
+      {iconSwap2Tokens:40},
+      {iconSwap2Tokens:80},
+      {iconSwap2Tokens:150},
+      {iconSwap2Tokens:300, nametag:'komplettist'},
+    ]},
 ];
 const ACHIEVEMENT_TIER_LABEL = ['I','II','III','IV','V'];
 // Every possible Nametag - a symbol (deliberately plain Unicode, never emoji, so background-clip:text
@@ -25826,6 +25856,12 @@ const NAMETAGS = {
   spektrum: {label:'Spektrum', symbol:'❈', cls:'nt-spektrum', accent:'#6fc7ff'},
   iridescent: {label:'Iridescent', symbol:'◈', cls:'nt-iridescent', accent:'#4a9eff'},
   prisma: {label:'Prisma', symbol:'✷', cls:'nt-prisma', accent:'#8bd0ff'},
+  // Icon Swap: Remastered ACHIEVEMENT nametags (not shop-buyable, see ACHIEVEMENTS'
+  // iconSwap2TokensEarned/iconSwap2CardsCollected lines) - same event-blue family as the shop titles
+  // above but the plainer gradient+pulse treatment every other achievement's tier-V nametag gets,
+  // rather than the shop titles' full rays/particles/slash package.
+  tokenjaeger: {label:'Tokenjäger', symbol:'⬦', cls:'nt-tokenjaeger', accent:'#4a9eff'},
+  komplettist: {label:'Komplettist', symbol:'❋', cls:'nt-komplettist', accent:'#8bd0ff'},
 };
 // Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
 // card types currently in the collection - captures every source (packs, Handel, Belohnungen, Admin-
@@ -25836,6 +25872,10 @@ const NAMETAGS = {
 function achievementStatValue(ach){
   ensureAchievementState();
   if(ach.id==='cardsAcquired') return new Set(collection.map(c=>c.cardId)).size;
+  // Same "live count off the collection" approach as Kartensammler above, just scoped to Icon Swap:
+  // Remastered cards specifically (theme==='iconswap2' covers both the new roster AND the old cards,
+  // which were retagged onto the same theme - see the ICONSWAP_CARDS.forEach retheme near ICONSWAP2_SPECIALS).
+  if(ach.id==='iconSwap2CardsCollected') return new Set(collection.filter(c=>{ const d=BY_ID.get(c.cardId); return d && d.theme==='iconswap2'; }).map(c=>c.cardId)).size;
   // Kartensünder braucht zwei getrennte Zähler (Gelb/Rot) statt einem einzelnen Schwellwert - siehe
   // die {y,r}-Stufen in ACHIEVEMENTS und tierMet direkt unten.
   if(ach.id==='cardDiscipline') return {y: profile.achievementStats.yellowCards||0, r: profile.achievementStats.redCards||0};
@@ -25925,6 +25965,9 @@ async function claimAchievementTier(achId, tier){
   const reward = ach.rewards[tier-1];
   profile.achievementClaimed[achId] = tier;
   if(reward.coins) profile.coins = (profile.coins||0) + reward.coins;
+  // The two Icon Swap: Remastered lines pay Icon Swap Tokens instead of Coins at every tier - see
+  // reward.coins being absent on those (mutually exclusive with reward.iconSwap2Tokens, never both).
+  if(reward.iconSwap2Tokens) profile.iconSwap2Tokens = (profile.iconSwap2Tokens||0) + reward.iconSwap2Tokens;
   // Auto-equip only the very first nametag a player ever unlocks (mirrors the ligaBadge-migration
   // behavior in init()) - otherwise a first-time claim would sit invisible until they happen to find
   // "Mein Verein" and equip it themselves. Anyone who already has one equipped keeps their own choice.
@@ -25939,7 +25982,9 @@ async function claimAchievementTier(achId, tier){
   }
   await sSet('profile', profile);
   if(grantedCard) await sSet('collection', collection);
-  let msg = `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${formatCoins(reward.coins||0)} Coins`;
+  let msg = reward.iconSwap2Tokens
+    ? `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${reward.iconSwap2Tokens} Icon Swap Tokens`
+    : `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${formatCoins(reward.coins||0)} Coins`;
   if(reward.nametag) msg += ` · neues Nametag "${NAMETAGS[reward.nametag] ? NAMETAGS[reward.nametag].label : reward.nametag}"`;
   if(grantedCard) msg += ` · ${grantedCard.n}`;
   toast(msg);
@@ -26022,7 +26067,7 @@ async function renderAchievementsPanel(view){
     ${nametagRow}
     <div id="ach-list"></div>`;
   const list = document.getElementById('ach-list');
-  list.innerHTML = ACHIEVEMENTS.map(ach=>{
+  list.innerHTML = ACHIEVEMENTS.filter(ach=>!ach.eventOnly || iconSwap2Active()).map(ach=>{
     const lastTier = ach.tiers.length;
     const value = achievementStatValue(ach);
     const unlocked = achievementUnlockedTier(ach);
@@ -26043,7 +26088,7 @@ async function renderAchievementsPanel(view){
       const tier = i+1;
       const status = tier<=claimed ? 'done' : tier<=unlocked ? 'claimable' : 'locked';
       const r = ach.rewards[i];
-      const rewardParts = [`+${formatCoins(r.coins||0)} Coins`];
+      const rewardParts = [r.iconSwap2Tokens ? `+${r.iconSwap2Tokens} ${iconSwap2TokenIcon(11)}Icon Swap Tokens` : `+${formatCoins(r.coins||0)} Coins`];
       (r.packs||[]).forEach(pid=>{ const p = PACKS.find(x=>x.id===pid); if(p) rewardParts.push(p.name); });
       if(r.card) rewardParts.push('Einzelkarte');
       if(r.nametag && NAMETAGS[r.nametag]) rewardParts.push(`Nametag ${nametagHTML(NAMETAGS[r.nametag].label, r.nametag)}`);
@@ -29439,12 +29484,19 @@ async function buyIconSwap2Item(item){
     await sSet('collection', collection);
     await sSet('profile', profile);
     toast(`${item.card.n} gekauft!`);
+    // Same OVR-tiered reveal cutscene every other card grant in the game gets (quest rewards, Ballon
+    // d'Or, ...) - showCutscene itself checks isMythicReveal (ov>=100) to decide the plain flip vs the
+    // full dramatic reveal, no extra branching needed here.
+    showCutscene(item.card, ()=>{});
   } else if(item.type==='manager'){
     managerCollection.push({uid:genId(), mgrId:item.manager.id});
     bumpMgrMintCount(item.manager.id, 1, false);
     await sSet('managerCollection', managerCollection);
     await sSet('profile', profile);
     toast(`${item.manager.n} freigeschaltet!`);
+    // isMythicReveal treats a manager with boostValue>5 as mythic too, so our +8% trainer gets the
+    // same full reveal treatment as a 100+ card.
+    showCutscene(item.manager, ()=>{});
   } else {
     profile.unlockedNametags = [...(profile.unlockedNametags||[]), item.nametagId];
     await sSet('profile', profile);
@@ -29499,6 +29551,7 @@ function confirmIconSwap2Give(uid, def, tokens){
     collection.splice(idx,1);
     const oldTokens = profile.iconSwap2Tokens||0;
     profile.iconSwap2Tokens = oldTokens + tokens;
+    applyAchievementDeltas({iconSwap2TokensEarned: tokens});
     await sSet('collection', collection);
     await sSet('profile', profile);
     // Capture BOTH endpoints before the modal closes (the confirm button is about to disappear) -
