@@ -7485,7 +7485,7 @@ const PLAYERS_OGICONS = [
     "nat": "Scotland",
     "tier": "Legendär",
     "boostType": "percent",
-    "boostValue": 10,
+    "boostValue": 9,
     "variant": "og_mgr",
     "variantLabel": "Legendärer Trainer",
     "theme": "og_mgr"
@@ -8157,19 +8157,23 @@ MGR_BY_ID.set(ZIDANE_MANAGER.id, ZIDANE_MANAGER);
 // Hall of Fame Pack's ultra-rare manager pulls (0.1% each, see the 'hof' pack def) - real legendary
 // coaches, same plain-manager shape as PLAYERS_MANAGERS entries (no variant/theme needed, isManager
 // alone drives the correct card styling/pattern fallback).
+// Balance-Nerf: alle Trainer über +9% wurden auf +9% gekappt (kein Trainer im Spiel geht mehr darüber
+// hinaus). Als Ausgleich ziehen genau diese Trainer jetzt häufiger, skaliert nach ihrer VORHERIGEN
+// Stärke (siehe MANAGER_NERF_DRAW_MULTIPLIER unten, angewendet an jeder Ziehstelle dieser drei
+// Trainer) - Wenger/Sacchi/Mourinho waren alle gleich stark (11%), bekommen also denselben Faktor.
 const HOF_WENGER_MANAGER = {
   id: 9800120, n:'Arsène Wenger', club:'Arsenal', nat:'France', tier:'Legendär',
-  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+  boostType:'percent', boostValue:9, isManager:true, pos:'MGR', ov:99,
 };
 MGR_BY_ID.set(HOF_WENGER_MANAGER.id, HOF_WENGER_MANAGER);
 const HOF_SACCHI_MANAGER = {
   id: 9800121, n:'Arrigo Sacchi', club:'AC Milan', nat:'Italy', tier:'Legendär',
-  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+  boostType:'percent', boostValue:9, isManager:true, pos:'MGR', ov:99,
 };
 MGR_BY_ID.set(HOF_SACCHI_MANAGER.id, HOF_SACCHI_MANAGER);
 const HOF_MOURINHO_MANAGER = {
   id: 9800122, n:'José Mourinho', club:'Chelsea', nat:'Portugal', tier:'Legendär',
-  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+  boostType:'percent', boostValue:9, isManager:true, pos:'MGR', ov:99,
 };
 MGR_BY_ID.set(HOF_MOURINHO_MANAGER.id, HOF_MOURINHO_MANAGER);
 const DERBY_SPECIALS = PLAYERS_DERBY;
@@ -10310,12 +10314,16 @@ const PACKS = [
     desc:'7 Spieler, alle garantiert mit Rating 88 oder h\u00f6her.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
   {id:'hof',name:'Hall of Fame Pack',cost:42000,tier:'ultimate',count:1,
-    desc:'1 Spieler, garantiert Ikone, Zenturio, Ruhmeshalle oder Gal\u00e1ctico \u2014 Rating 95+. Winzige Chance (0,1% je Trainer) auf einen von drei legend\u00e4ren Trainern: Ars\u00e8ne Wenger, Arrigo Sacchi oder Jos\u00e9 Mourinho (je +11%). Das einzige Pack mit diesen Karten.',
+    desc:'1 Spieler, garantiert Ikone, Zenturio, Ruhmeshalle oder Gal\u00e1ctico \u2014 Rating 95+. 5% Gesamtchance auf einen von drei legend\u00e4ren Trainern (je ca. 1,67%): Ars\u00e8ne Wenger, Arrigo Sacchi oder Jos\u00e9 Mourinho (je +9%). Das einzige Pack mit diesen Karten.',
     draw(){
       const r = Math.random();
-      if(r<0.001) return [HOF_WENGER_MANAGER];
-      if(r<0.002) return [HOF_SACCHI_MANAGER];
-      if(r<0.003) return [HOF_MOURINHO_MANAGER];
+      // 5% Gesamtchance auf irgendeinen der drei Trainer, gleichm\u00e4\u00dfig aufgeteilt (alle drei gleich
+      // stark, je +9%) - HOF_TRAINER_TOTAL_CHANCE/3 pro Trainer.
+      const HOF_TRAINER_TOTAL_CHANCE = 0.05;
+      const hofP = HOF_TRAINER_TOTAL_CHANCE/3;
+      if(r<hofP) return [HOF_WENGER_MANAGER];
+      if(r<hofP*2) return [HOF_SACCHI_MANAGER];
+      if(r<hofP*3) return [HOF_MOURINHO_MANAGER];
       const pool=specialsByVariant(['icon','centurion','hall_of_fame','galactico']).filter(c=>c.ov>=95);
       return [pick(pool.length?pool:specialsByVariant(['icon','centurion','hall_of_fame','galactico']))];
     }},
@@ -10409,7 +10417,7 @@ const PACKS = [
       return Array.from({length:5}, (_,i)=> i===captainSlot ? (finalCaptain || pick(kapitaene)) : pick(variante));
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
-    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Birgit Prinz (101), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Mia Hamm (105), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
+    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Birgit Prinz (101), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Mia Hamm (105), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). 2% Chance pro Pack-\u00d6ffnung auf Trainer Sir Alex Ferguson (+9% Team-Bonus \u2014 einer der st\u00e4rksten Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
     draw(){
       if(!ogPackTierPools){
         const all = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS).filter(c=>!c.isManager);
@@ -10424,7 +10432,9 @@ const PACKS = [
       // 1-(1-p)^5 solved for the combined per-card probability of that tier's named legends,
       // then split across the tier's own legends in their previous relative proportions.
       const P = {
-        ferguson:0.0012, pele:0.0031, maradona:0.0081, zidane:0.0081,
+        // 2% Chance PRO PACK-ÖFFNUNG auf Ferguson (nicht pro Karte) - wie bei den anderen Legenden
+        // hier über 1-(1-p)^5=0.02 auf die Pro-Karte-Chance p über die 5 Kartenplätze zurückgerechnet.
+        ferguson:1-Math.pow(1-0.02, 1/5), pele:0.0031, maradona:0.0081, zidane:0.0081,
         cruyff:0.0041, hamm:0.0047, beckenbauer:0.0085, ronaldoNazario:0.0142, prinz:0.0178, best:0.0213,
         rare:0.06, good:0.18,
       };
@@ -14908,6 +14918,16 @@ const GFX_PRESET_LABEL = {full:'Voll', medium:'Mittel', lite:'Reduziert', off:'A
 // Lazy migration: older accounts only ever had profile.graphicsPreset ('full'/'lite') - derive the new
 // granular profile.gfx from it the first time this is needed, in memory, without forcing an extra
 // Firestore write just for a display preference default.
+// Only used to pick a DEFAULT for a brand new account - never touches an existing profile.gfx, which
+// always wins once it exists (see ensureGfxToggles). Card-heavy views (Kartenladen, Kader-Editor) run
+// several simultaneous CSS animations per visible card (see the .pcard comments), which is more likely
+// to actually be felt as jank on a touch/coarse-pointer device (typically weaker GPU, battery-throttled)
+// than on desktop - 'medium' turns off just the priciest layer (fxlayers) while keeping cardshine,
+// confetti and badge animations, a light first impression rather than a silent full/lite dice roll.
+function defaultGraphicsPresetForThisDevice(){
+  try{ return (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ? 'medium' : 'full'; }
+  catch(e){ return 'full'; }
+}
 function ensureGfxToggles(){
   if(!profile.gfx) profile.gfx = {...GFX_PRESETS[profile.graphicsPreset==='lite' ? 'lite' : 'full']};
   // `shine` was added after cardshine/fxlayers/confetti/badgeanim - an account whose profile.gfx was
@@ -14950,7 +14970,7 @@ async function init(){
   const _bootWasExistingAccount = !!_boot.profile; // gates recordSaveSnapshot() below - a brand new account has nothing worth a history entry yet
   profile = _boot.profile;
   if(!profile){
-    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false, pendingLigaPacks:[]};
+    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:defaultGraphicsPresetForThisDevice(), showDecimalEffOv:false, pendingLigaPacks:[]};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -17905,9 +17925,14 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
     // a manager's boost counts up twice as slowly as a player's OVR - it's the ONLY thing he has to
     // reveal, so it gets to be the whole show
     const dur = card.isManager ? 7600 : 3800, start = performance.now();
+    // Single smooth power curve (t^0.35) instead of the previous two-phase piecewise version - that
+    // had a visible kink right at its phase boundary (a sudden change in speed, not a fluid one). This
+    // is continuous and monotonically decelerating everywhere: still races through most of the value
+    // early and crawls through the last stretch before the final OVR, but without ever visibly
+    // "shifting gears".
     function tick(now){
       const t = Math.min(1, (now-start)/dur);
-      const eased = 1-Math.pow(1-t,3);
+      const eased = Math.pow(t, 0.35);
       if(ovEl){
         if(card.isManager){
           const val = Math.round(card.boostValue*eased);
@@ -30299,8 +30324,8 @@ function flipMatchDataSides(md){
 }
 function goalRowHTML(minute, scorer, teamName, side, assist){
   const imgTag = scorer.img
-    ? `<img src="${proxyImg(scorer.img)}" data-raw="${scorer.img}" alt="" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">`
-    : `<img src="${NOTFOUND_FACE_IMG}" alt="">`;
+    ? `<img src="${proxyImg(scorer.img)}" data-raw="${scorer.img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">`
+    : `<img src="${NOTFOUND_FACE_IMG}" alt="" loading="lazy">`;
   return `<div class="goal-row ${side}">
       <span class="gm">${minute}'</span>
       <span class="gav-wrap">${imgTag}</span>
