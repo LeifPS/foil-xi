@@ -2184,8 +2184,11 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
 }
 /* Icon Swap: Remastered nametags - blue-anchored ("iridescent" = looks different depending on the
    viewing angle), a faint rainbow sweeps through rather than dominating, matching the event's whole
-   blue/light-blue-with-a-hint-of-rainbow theme. Prisma (the rarer/top one) gets the glitter pulse on
-   top, same convention as every other tier pairing its own second animation with the shared sweep. */
+   blue/light-blue-with-a-hint-of-rainbow theme. One per shop rarity tier, each step visibly richer:
+   Schimmer (Häufig) is just a slow single-hue pulse, Spektrum (Selten) a calmer few-color sweep,
+   Iridescent (Episch) the full sweep+glow, Prisma (Legendär) adds the glitter pulse on top of that. */
+.nt-schimmer{--glow:#4a9eff;background:linear-gradient(90deg,#4a9eff,#8bd0ff,#4a9eff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 5.5s linear infinite;}
+.nt-spektrum{--glow:#6fc7ff;background:linear-gradient(90deg,#4a9eff,#9dffe8,#8bd0ff,#c9a2ff,#4a9eff);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4.6s linear infinite;}
 .nt-iridescent{--glow:#4a9eff;background:linear-gradient(90deg,#4a9eff,#8bd0ff,#c9a2ff,#8bd0ff,#4a9eff);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite, nametagGlow 2.2s ease-in-out infinite;}
 .nt-prisma{--glow:#8bd0ff;background:linear-gradient(90deg,#4a9eff,#9dffe8,#ffd76a,#ff9de2,#c9a2ff,#8bd0ff,#4a9eff);background-size:500% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4.5s linear infinite, nametagGlitter 2s ease-in-out infinite;}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
@@ -9002,30 +9005,10 @@ ICONSWAP_CARDS.forEach(c=>{
 // All cards eligible for the rotating shop's CARD slots (new + old, both already tagged with
 // iconswap2Tier above).
 function iconSwap2AllCards(){ return ICONSWAP2_SPECIALS.concat(ICONSWAP_CARDS); }
-// 3 new packs, bought with TOKENS (not Coins) exclusively inside this event's shop - never appear in
-// the normal Kartenladen/PACKS array. Each draws from this event's own card pool at its tier (plus a
-// small chance of the tier just above), so opening one always feels on-theme regardless of luck.
-function iconSwap2CardPool(tier){
-  const tiers = ['common','rare','epic','legendary'];
-  const idx = tiers.indexOf(tier);
-  const eligible = new Set([tier, idx<tiers.length-1 ? tiers[idx+1] : tier]);
-  const pool = iconSwap2AllCards().filter(c=>eligible.has(c.iconswap2Tier));
-  return pool.length ? pool : iconSwap2AllCards();
-}
-const ICONSWAP2_PACKS = [
-  {id:'is2-prism', name:'Prisma Pack', tier:'common',
-    desc:'1 zufällige Icon-Swap-Karte (Häufig, kleine Chance auf Selten).',
-    draw(){ return [pick(iconSwap2CardPool('common'))]; }},
-  {id:'is2-prism-double', name:'Doppel-Prisma Pack', tier:'rare',
-    desc:'2 zufällige Icon-Swap-Karten (Selten, kleine Chance auf Episch).',
-    draw(){ return [pick(iconSwap2CardPool('rare')), pick(iconSwap2CardPool('rare'))]; }},
-  {id:'is2-spectrum', name:'Spektrum Pack', tier:'epic',
-    desc:'1 zufällige Icon-Swap-Karte (Episch, kleine Chance auf Legendär).',
-    draw(){ return [pick(iconSwap2CardPool('epic'))]; }},
-];
-// 2 new exclusive nametags for this event's shop - definitions (label/symbol/cls/accent) live with all
-// other NAMETAGS further down, this just maps them to a shop tier/price.
-const ICONSWAP2_TITLE_TIERS = {iridescent:'epic', prisma:'legendary'};
+// 4 exclusive nametags for this event's shop, one per rarity tier - definitions (label/symbol/cls/
+// accent) live with all other NAMETAGS further down, this just maps them to a shop tier/price. No
+// packs in this shop (removed - cards/titles only), so titles are the only non-card item type left.
+const ICONSWAP2_TITLE_TIERS = {schimmer:'common', spektrum:'rare', iridescent:'epic', prisma:'legendary'};
 // ===== WM 2026: the real 48-team World Cup, exactly as it lined up (see WM26_GROUPS below - the
 // game mode itself lives further down, near Turnier-Modus). Two reward-variant tiers, both resolved
 // dynamically at load time from the existing real-player pool rather than a hand-picked id list -
@@ -25738,6 +25721,11 @@ const NAMETAGS = {
   auserwaehlt: {label:'Auserwählt', symbol:'♛', cls:'nt-auserwaehlt', accent:'#ffd76a'},
   // Icon Swap: Remastered event nametags (see ICONSWAP2_TITLE_TIERS) - blue-anchored with a faint
   // rainbow sweep ("iridescent"/"changes with the viewing angle"), matching the event's whole theme.
+  // One per shop rarity tier, each visibly calmer/flashier than the last: Schimmer (Häufig) is a
+  // single gentle hue pulse, Spektrum (Selten) a few-color sweep, Iridescent (Episch) the full sweep+
+  // glow, Prisma (Legendär) adds the glitter pulse on top of everything.
+  schimmer: {label:'Schimmer', symbol:'◇', cls:'nt-schimmer', accent:'#4a9eff'},
+  spektrum: {label:'Spektrum', symbol:'❈', cls:'nt-spektrum', accent:'#6fc7ff'},
   iridescent: {label:'Iridescent', symbol:'◈', cls:'nt-iridescent', accent:'#4a9eff'},
   prisma: {label:'Prisma', symbol:'✷', cls:'nt-prisma', accent:'#8bd0ff'},
 };
@@ -29238,14 +29226,14 @@ function iconSwap2Mulberry32(seed){
     return ((t ^ t>>>14)>>>0)/4294967296;
   };
 }
-// All items ever eligible for the rotating shop - cards (new + old Icon Swap), the 3 new packs, and
-// the 2 new titles. Rebuilt fresh on every call (cheap - a few dozen items) rather than cached, so it
-// always reflects the current NAMETAGS/roster state with zero staleness concerns.
+// All items ever eligible for the rotating shop - cards (new + old Icon Swap) and the 4 titles (one
+// per rarity tier, see ICONSWAP2_TITLE_TIERS). No packs (removed). Rebuilt fresh on every call (cheap
+// - a few dozen items) rather than cached, so it always reflects the current NAMETAGS/roster state
+// with zero staleness concerns.
 function iconSwap2AllShopItems(){
   const cardItems = iconSwap2AllCards().map(c=>({type:'card', tier:c.iconswap2Tier, card:c, id:'card-'+c.id}));
-  const packItems = ICONSWAP2_PACKS.map(p=>({type:'pack', tier:p.tier, pack:p, id:'pack-'+p.id}));
   const titleItems = Object.entries(ICONSWAP2_TITLE_TIERS).map(([nametagId,tier])=>({type:'title', tier, nametagId, id:'title-'+nametagId}));
-  return cardItems.concat(packItems, titleItems).filter(it=>ICONSWAP2_TIERS[it.tier]);
+  return cardItems.concat(titleItems).filter(it=>ICONSWAP2_TIERS[it.tier]);
 }
 // Picks exactly 3 DISTINCT items for the current rotation bucket, weighted by tier rarity (see
 // ICONSWAP2_TIERS.weight) - rarer tiers are both less likely to be picked AND cost more once picked.
@@ -29322,12 +29310,10 @@ function iconSwap2TokenIcon(size=15){
 }
 function iconSwap2ItemLabel(item){
   if(item.type==='card') return `${item.card.n} (${item.card.ov} OVR)`;
-  if(item.type==='pack') return item.pack.name;
   return NAMETAGS[item.nametagId].label + ' (Titel)';
 }
 function iconSwap2ItemIcon(item){
   if(item.type==='card') return null; // rendered as a real mini card instead of an icon
-  if(item.type==='pack') return '🎁';
   return NAMETAGS[item.nametagId].symbol;
 }
 async function buyIconSwap2Item(item){
@@ -29343,14 +29329,10 @@ async function buyIconSwap2Item(item){
     await sSet('collection', collection);
     await sSet('profile', profile);
     toast(`${item.card.n} gekauft!`);
-  } else if(item.type==='title'){
+  } else {
     profile.unlockedNametags = [...(profile.unlockedNametags||[]), item.nametagId];
     await sSet('profile', profile);
     toast(`Titel "${NAMETAGS[item.nametagId].label}" freigeschaltet!`);
-  } else {
-    await sSet('profile', profile);
-    const pack = item.pack;
-    showPackOpening({...pack, name:`${pack.name} ${UT_PACK_ICON}`}, pack.draw(), {untradable:true});
   }
   renderIconSwap2Hub(document.getElementById('view'));
 }
@@ -29519,7 +29501,7 @@ function renderIconSwap2Hub(view){
       <div class="is2-shop-tier">${tier.label}</div>
       <div class="is2-shop-visual">${visual}</div>
       <div class="is2-shop-label">${iconSwap2ItemLabel(item)}</div>
-      ${item.type!=='card' ? `<div class="hint" style="margin:2px 0 0;font-size:10.5px;">${item.type==='pack'?item.pack.desc:'Exklusiver Titel'}</div>` : ''}
+      ${item.type!=='card' ? `<div class="hint" style="margin:2px 0 0;font-size:10.5px;">Exklusiver Titel</div>` : ''}
       <button class="is2-btn ${disabled?'is2-btn-disabled':''}" data-item-id="${item.id}" ${disabled?'disabled':''}>
         ${buyLabel}
       </button>
