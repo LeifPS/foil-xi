@@ -25392,7 +25392,11 @@ function renderWochenendpokalPendingRewards(box){
       <p class="hint" style="margin-top:0;margin-bottom:10px;">${pending.length} Preis${pending.length>1?'e':''} warten noch darauf, abgeholt zu werden.</p>
       <button class="action-btn" id="wep-claim-reward" style="width:auto;padding:9px 18px;">${label} abholen (1/${pending.length})</button>
     </div>`;
-  document.getElementById('wep-claim-reward').addEventListener('click', async (e)=>{
+  // Query within `box` itself, not document.getElementById - the caller (renderWochenendpokalPanel)
+  // builds this into a detached `document.createElement('div')` BEFORE inserting it into the page (see
+  // its own box.prepend(pendingHost) calls further down), so at the moment this runs the button isn't
+  // part of the live document yet and getElementById would return null.
+  box.querySelector('#wep-claim-reward').addEventListener('click', async (e)=>{
     e.target.disabled = true;
     profile.pendingWochenendpokalRewards = profile.pendingWochenendpokalRewards.slice(1);
     if(next.kind==='coins') profile.coins = (profile.coins||0) + next.amount;
