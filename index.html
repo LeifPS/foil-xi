@@ -9021,12 +9021,10 @@ KAPITAENE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 // 14th begins, i.e. the event's very last visible day is the 13th).
 const ICONSWAP2_START = new Date('2026-09-07T00:00:00').getTime();
 const ICONSWAP2_END = new Date('2026-09-14T00:00:00').getTime();
-// Admins can already open/test the whole event before ICONSWAP2_START (see the admin/test accounts
-// this always resolves true for) - everyone else only sees it activate exactly on schedule. This is
-// what lets the real launch date stay Monday while still allowing hands-on testing today, without
-// needing a second temporary "testing" constant that could get forgotten and shipped by accident.
+// Activates for EVERYONE, admins included, strictly on schedule - no early-access bypass anymore
+// (there used to be an isAdmin() early-preview exception here for pre-launch testing; removed now that
+// the real launch date is locked in, so nobody sees the event before Monday 2026-09-07).
 function iconSwap2Active(){
-  if(Date.now()<ICONSWAP2_START && isAdmin()) return true;
   return Date.now()>=ICONSWAP2_START && Date.now()<ICONSWAP2_END;
 }
 // Only cards at/above this OVR can be given away at all (see openIconSwap2GiveModal's pool filter) -
