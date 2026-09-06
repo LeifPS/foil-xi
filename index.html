@@ -14163,22 +14163,34 @@ async function sGetMany(keys, shared=false){
   if(!shared){
     await fbReady;
     if(fb && clubId){
-      try{
-        const snap = await fb.getDoc(fb.doc(fb.db,'saves',clubId));
-        const d = snap.exists() ? snap.data() : {};
-        const out = {};
-        keys.forEach(k=>{ out[k] = (k in d) ? d[k] : null; });
-        return out;
-      }catch(e){
-        // Do NOT fall through to the local fallback here (window.storage/memoryStore, both empty on a
-        // fresh page load): fb is connected, so a failure at this exact call is a transient read error
-        // (e.g. a flaky mobile reconnect), not "this account has no cloud save yet". Falling through used
-        // to make every key resolve to null, which init() then read as "brand new account" and immediately
-        // wrote a blank profile back over the real one - silently destroying it. Rethrowing lets the boot
-        // caller block and ask for a retry instead of ever fabricating a new account from a read failure.
-        console.warn('Firestore private batch read failed', e);
-        throw e;
+      // Up to 3 attempts with a short pause between them before giving up (see the catch below for why
+      // giving up now means blocking, not silently falling through) - a mobile connection dropping a
+      // single request for a moment (brief reconnect, cell handoff) is common enough that failing this
+      // read straight to the boot's "Laden fehlgeschlagen"/manual-reload screen on the very first hiccup
+      // made an ordinary, self-resolving blip look like the game "doesn't load" on mobile, when it used
+      // to (unsafely) just eventually limp through with whatever it had. Retrying here absorbs exactly
+      // that common case silently; only a failure that persists across all 3 attempts still blocks.
+      let lastErr;
+      for(let attempt=0; attempt<3; attempt++){
+        if(attempt>0) await new Promise(r=>setTimeout(r, 1200));
+        try{
+          const snap = await fb.getDoc(fb.doc(fb.db,'saves',clubId));
+          const d = snap.exists() ? snap.data() : {};
+          const out = {};
+          keys.forEach(k=>{ out[k] = (k in d) ? d[k] : null; });
+          return out;
+        }catch(e){
+          lastErr = e;
+          console.warn(`Firestore private batch read failed (attempt ${attempt+1}/3)`, e);
+        }
       }
+      // Do NOT fall through to the local fallback here (window.storage/memoryStore, both empty on a
+      // fresh page load): fb is connected, so a failure at this exact call is a transient read error
+      // (e.g. a flaky mobile reconnect), not "this account has no cloud save yet". Falling through used
+      // to make every key resolve to null, which init() then read as "brand new account" and immediately
+      // wrote a blank profile back over the real one - silently destroying it. Rethrowing lets the boot
+      // caller block and ask for a retry instead of ever fabricating a new account from a read failure.
+      throw lastErr;
     }
   }
   // no Firebase (or a shared/non-club key set) - the fallback stores (window.storage/memoryStore) are
