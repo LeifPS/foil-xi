@@ -1336,6 +1336,7 @@ body.gfx-no-badgeanim .liga-name-gold, body.gfx-no-badgeanim .liga-name-silver, 
    ligaBadge system, kept only so nothing else references them unexpectedly) - wire the same toggle to
    it so "Abzeichen/Nametag-Animationen aus" actually does something today. */
 body.gfx-no-badgeanim .nametag{ animation:none !important; }
+body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity:.7; }
 
 /* One crest-card layout for EVERY match state (see ligaMatchRowHTML) - crest + short code on each
    side, styled after a real sports app's match-preview card instead of a plain text row. Only the
@@ -1965,6 +1966,31 @@ body.gfx-no-badgeanim .nametag{ animation:none !important; }
 .nt-ruepel{background:linear-gradient(90deg,#ff9d9d,#d94f4f,#2b2b2b,#ff9d9d);background-size:320% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.4s linear infinite, nametagFlicker 3.4s ease-in-out infinite;}
 /* Pokalkönig (Wochenendpokal) - das seltenste Nametag: Regenbogen-Verlauf UND ein Glühen obendrauf */
 .nt-pokalkoenig{--glow:#ffd76a;background:linear-gradient(90deg,#ff9de2,#ffd76a,#9dffb0,#9de2ff,#d79dff,#ff9de2);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite, nametagGlow 2s ease-in-out infinite;}
+/* Auserwählt - exklusives Admin-Nametag, eine Stufe über Pokalkönig: derselbe Regenbogen-Verlauf +
+   Glühen, plus ein paar leise funkelnde Partikel um den Text herum. display:inline-block+position:
+   relative NUR auf dieser einen Klasse (nicht der geteilten .nametag-Basis) - siehe die Begründung
+   oben, warum .nametag sonst absichtlich inline bleibt; hier lohnt sich die Ausnahme, weil dieses
+   Nametag ohnehin nur ein einziges Mal je vergeben wird. Die Partikel selbst sind ein einzelnes ::after
+   mit mehreren radial-gradient-Punkten statt echter DOM-Elemente - genügt für eine Handvoll Funken. */
+.nt-auserwaehlt{--glow:#ffd76a;display:inline-block;position:relative;
+  background:linear-gradient(90deg,#ff9de2,#ffd76a,#9dffb0,#9de2ff,#d79dff,#ffd76a,#ff9de2);background-size:500% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:nametagShift 4.5s linear infinite, nametagGlow 2s ease-in-out infinite;}
+.nt-auserwaehlt::after{content:'';position:absolute;inset:-7px -11px;pointer-events:none;
+  background-image:radial-gradient(circle, #fff 0 1px, transparent 1.6px),
+    radial-gradient(circle, #ffd76a 0 1px, transparent 1.6px),
+    radial-gradient(circle, #9de2ff 0 1px, transparent 1.6px),
+    radial-gradient(circle, #ff9de2 0 1px, transparent 1.6px),
+    radial-gradient(circle, #9dffb0 0 1px, transparent 1.6px);
+  background-repeat:no-repeat;background-size:7px 7px;
+  background-position:8% 5%, 32% 88%, 58% 8%, 78% 78%, 95% 30%;
+  animation:auserwaehltTwinkle 2.6s ease-in-out infinite;}
+@keyframes auserwaehltTwinkle{
+  0%,100%{opacity:.35;}
+  25%{opacity:.9;}
+  50%{opacity:.4;}
+  75%{opacity:1;}
+}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
 .ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .ach-icon{font-size:24px;flex-shrink:0;width:40px;height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
@@ -25047,6 +25073,12 @@ const NAMETAGS = {
   kroesus: {label:'Krösus', symbol:'✪', cls:'nt-kroesus', accent:'#e6c343'},
   ruepel: {label:'Rüpel', symbol:'▮', cls:'nt-ruepel', accent:'#d94f4f'},
   pokalkoenig: {label:'Pokalkönig', symbol:'★', cls:'nt-pokalkoenig', accent:'#ff9de2'},
+  // Exklusiv, nur manuell per Admin-Panel vergeben (kein Erfolg schaltet es frei) - bewusst eine Stufe
+  // über Pokalkönig, dem bis dahin auffälligsten Nametag (Regenbogen-Verlauf + Glühen): derselbe
+  // Regenbogen-Verlauf, aber mit ein paar zusätzlichen, leise funkelnden Partikeln um den Text herum
+  // (siehe .nt-auserwaehlt::after) - siehe openAdminSetLigaBadgeModal, das jeden NAMETAGS-Eintrag
+  // automatisch als vergebbar anbietet, ohne eigene Verdrahtung.
+  auserwaehlt: {label:'Auserwählt', symbol:'♛', cls:'nt-auserwaehlt', accent:'#ffd76a'},
 };
 // Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
 // card types currently in the collection - captures every source (packs, Handel, Belohnungen, Admin-
