@@ -8866,14 +8866,16 @@ const ICONSWAP2_TIERS = {
 // New Icon Swap Remastered cards - built from real, already-validated base players via the same
 // findBaseCard/boostBaseToOv mechanism as Kronjuwelen/Kapitäne above (reusing their already-confirmed
 // working image URLs), own variant/theme so they read as clearly part of THIS event.
+// Only 100+ cards get a special (hand-picked override) image - anything under 100 just keeps its
+// base player's own default photo, no img override at all.
 const ICONSWAP2_ROSTER = [
-  {baseId:199503, ov:92,  tier:'common',    img:KAPITAENE_IMG_OVERRIDE[199503]},    // G. Xhaka
-  {baseId:207865, ov:93,  tier:'common',    img:KAPITAENE_IMG_OVERRIDE[207865]},    // Marquinhos
-  {baseId:192387, ov:94,  tier:'common',    img:KRONJUWELEN_IMG_OVERRIDE[192387]},  // C. Immobile
-  {baseId:188567, ov:95,  tier:'common',    img:KRONJUWELEN_IMG_OVERRIDE[188567]},  // P. Aubameyang
-  {baseId:222665, ov:97,  tier:'rare',      img:KAPITAENE_IMG_OVERRIDE[222665]},    // M. Ødegaard
-  {baseId:215441, ov:98,  tier:'rare',      img:KRONJUWELEN_IMG_OVERRIDE[215441]},  // S. Guirassy
-  {baseId:212622, ov:99,  tier:'rare',      img:KAPITAENE_IMG_OVERRIDE[212622]},    // J. Kimmich
+  {baseId:199503, ov:92,  tier:'common'},    // G. Xhaka
+  {baseId:207865, ov:93,  tier:'common'},    // Marquinhos
+  {baseId:192387, ov:94,  tier:'common'},    // C. Immobile
+  {baseId:188567, ov:95,  tier:'common'},    // P. Aubameyang
+  {baseId:222665, ov:97,  tier:'rare'},      // M. Ødegaard
+  {baseId:215441, ov:98,  tier:'rare'},      // S. Guirassy
+  {baseId:212622, ov:99,  tier:'rare'},      // J. Kimmich
   {baseId:202126, ov:102, tier:'epic',      img:KAPITAENE_IMG_OVERRIDE[202126]},    // H. Kane
   {baseId:203376, ov:104, tier:'epic',      img:KAPITAENE_IMG_OVERRIDE[203376]},    // V. van Dijk
   {baseId:231747, ov:108, tier:'legendary', img:KAPITAENE_IMG_OVERRIDE[231747]},    // K. Mbappé
@@ -18290,12 +18292,6 @@ async function renderAdminPanel(view){
       <button class="action-btn secondary" id="admin-seed-leagues" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Ligen jetzt einmalig einteilen</button>
       <p class="hint" id="admin-seed-leagues-result" style="margin:10px 0 0;"></p>
     </div>
-    <div class="vs-panel" style="margin-bottom:20px;border-color:#4a9eff;">
-      <h3 style="font-size:15px;margin-bottom:10px;color:#4a9eff;text-transform:uppercase;letter-spacing:.04em;">Icon Swap: Remastered</h3>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Rollt die 3 Shop-Items nur für DICH neu (rein lokal, zum Testen/Vorschauen) - für alle anderen Spieler ändert sich nichts, bis die nächste echte 6h-Rotation eintritt.</p>
-      <button class="action-btn secondary" id="admin-refresh-iconswap2" style="width:auto;border-color:#4a9eff;color:#4a9eff;">Shop-Vorrat jetzt erneuern</button>
-      <p class="hint" id="admin-refresh-iconswap2-result" style="margin:10px 0 0;"></p>
-    </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Meine Liga verlassen</h3>
       <p class="hint" style="margin-top:0;margin-bottom:10px;">Entfernt DIESEN Account sofort aus seiner aktuellen Liga - z.B. um einen versehentlichen Test-Beitritt rückgängig zu machen. Tages-unabhängig, rührt aber weder den laufenden Spielplan noch bereits gespielte Ergebnisse an.</p>
@@ -18356,12 +18352,6 @@ async function renderAdminPanel(view){
       resultEl.style.color = 'var(--danger)';
     }
     e.target.disabled = false; e.target.textContent = 'Ligen jetzt einmalig einteilen';
-  });
-  document.getElementById('admin-refresh-iconswap2').addEventListener('click', ()=>{
-    adminRefreshIconSwap2Stock();
-    const resultEl = document.getElementById('admin-refresh-iconswap2-result');
-    resultEl.textContent = 'Neu gerollt - nur für dich, in diesem Hub sichtbar. Öffne den Icon-Swap-Hub, um die neue Auswahl zu sehen.';
-    resultEl.style.color = 'var(--turf-bright)';
   });
   document.getElementById('admin-leave-liga').addEventListener('click', async (e)=>{
     e.target.disabled = true; e.target.textContent = 'Läuft…';
@@ -29219,9 +29209,9 @@ function iconSwap2ItemIcon(item){
 }
 async function buyIconSwap2Item(item){
   const tier = ICONSWAP2_TIERS[item.tier];
-  if((profile.iconSwapTokens||0) < tier.price){ toast('Nicht genug Icon Swap Tokens.'); return; }
+  if((profile.iconSwap2Tokens||0) < tier.price){ toast('Nicht genug Icon Swap Tokens.'); return; }
   if(item.type==='title' && (profile.unlockedNametags||[]).includes(item.nametagId)){ toast('Titel bereits freigeschaltet.'); return; }
-  profile.iconSwapTokens -= tier.price;
+  profile.iconSwap2Tokens -= tier.price;
   if(item.type==='card'){
     collection.push({uid:genId(), cardId:item.card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId});
     bumpCardMintCount(item.card.id, 1, !!item.card.untradable);
@@ -29285,8 +29275,8 @@ function confirmIconSwap2Give(uid, def, tokens){
     const idx = collection.findIndex(c=>c.uid===uid);
     if(idx<0){ closeModal(); return; }
     collection.splice(idx,1);
-    const oldTokens = profile.iconSwapTokens||0;
-    profile.iconSwapTokens = oldTokens + tokens;
+    const oldTokens = profile.iconSwap2Tokens||0;
+    profile.iconSwap2Tokens = oldTokens + tokens;
     await sSet('collection', collection);
     await sSet('profile', profile);
     // Capture BOTH endpoints before the modal closes (the confirm button is about to disappear) -
@@ -29319,7 +29309,7 @@ function renderIconSwap2Hub(view){
   const slots = rollIconSwap2ShopSlots();
   const slotsHtml = slots.map(item=>{
     const tier = ICONSWAP2_TIERS[item.tier];
-    const canAfford = (profile.iconSwapTokens||0) >= tier.price;
+    const canAfford = (profile.iconSwap2Tokens||0) >= tier.price;
     const alreadyOwnedTitle = item.type==='title' && (profile.unlockedNametags||[]).includes(item.nametagId);
     const disabled = !canAfford || alreadyOwnedTitle;
     const visual = item.type==='card'
@@ -29343,13 +29333,20 @@ function renderIconSwap2Hub(view){
       <p>Gib Karten aus deiner Sammlung ab, um Icon Swap Tokens zu bekommen — je stärker die Karte, desto mehr. Tausche die Tokens im rotierenden Shop gegen exklusive Karten, Packs und Titel (für ALLE Spieler gleichzeitig gleich). Noch ${daysLeft} Tag${daysLeft===1?'':'e'} verfügbar.</p>
     </div>
     <div class="is2-balance-row">
-      <div class="is2-balance">${iconSwap2TokenIcon(20)}<span id="is2-token-count">${profile.iconSwapTokens||0}</span> Tokens</div>
+      <div class="is2-balance">${iconSwap2TokenIcon(20)}<span id="is2-token-count">${profile.iconSwap2Tokens||0}</span> Tokens</div>
       <button class="is2-btn" id="is2-give-btn" style="width:auto;">Karte abgeben</button>
     </div>
-    <div class="is2-section-title">Shop <span class="mono" id="is2-refresh-countdown" style="color:var(--muted);font-size:11px;font-weight:400;"></span></div>
+    <div class="is2-section-title">Shop <span class="mono" id="is2-refresh-countdown" style="color:var(--muted);font-size:11px;font-weight:400;"></span>
+      ${isAdmin() ? `<button class="is2-btn is2-btn-ghost" id="is2-admin-refresh" style="width:auto;padding:4px 10px;font-size:10.5px;margin-left:8px;">🔧 Vorrat erneuern (nur ich)</button>` : ''}
+    </div>
     <div class="is2-shop-grid">${slotsHtml}</div>`;
   document.getElementById('is2-back').addEventListener('click', ()=>renderView('store'));
   document.getElementById('is2-give-btn').addEventListener('click', openIconSwap2GiveModal);
+  const adminRefreshBtn = document.getElementById('is2-admin-refresh');
+  if(adminRefreshBtn) adminRefreshBtn.addEventListener('click', ()=>{
+    adminRefreshIconSwap2Stock();
+    renderIconSwap2Hub(view);
+  });
   view.querySelectorAll('[data-item-id]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const item = slots.find(s=>s.id===btn.dataset.itemId);
