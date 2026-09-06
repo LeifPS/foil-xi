@@ -8873,7 +8873,10 @@ ICONSWAP2_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 // Old Icon Swap cards fold straight into the new tier system so nothing from the original event goes
 // to waste - swapTier maps 1:1 onto the new common/rare/epic/legendary labels.
 const ICONSWAP2_OLD_TIER_MAP = {1:'common', 2:'rare', 3:'epic', 4:'legendary'};
-ICONSWAP_CARDS.forEach(c=>{ if(c.swapTier) c.iconswap2Tier = ICONSWAP2_OLD_TIER_MAP[c.swapTier]; });
+// Retheme the old cards to the SAME visual design as the new ones ('iconswap2' - see the card CSS/FX
+// near .pcard.theme-iconswap2), purely cosmetic (only .theme drives the CSS class, nothing checks
+// .variant/.theme for old-vs-new logic anywhere) - old and new pulls now look identical in the shop.
+ICONSWAP_CARDS.forEach(c=>{ if(c.swapTier){ c.iconswap2Tier = ICONSWAP2_OLD_TIER_MAP[c.swapTier]; c.theme = 'iconswap2'; } });
 // All cards eligible for the rotating shop's CARD slots (new + old, both already tagged with
 // iconswap2Tier above).
 function iconSwap2AllCards(){ return ICONSWAP2_SPECIALS.concat(ICONSWAP_CARDS); }
