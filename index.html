@@ -1832,6 +1832,23 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
   background:radial-gradient(circle, color-mix(in srgb, var(--tier-acc, #4a9eff) 25%, transparent), transparent 70%);color:var(--tier-acc, #4a9eff);}
 .is2-shop-label{font-size:12px;color:var(--chalk);line-height:1.3;min-height:32px;}
 body.gfx-no-fxlayers .is2-banner-glimmer{animation:none !important; opacity:.15;}
+/* Icon Swap Token symbol - a slow, gentle facet-glint (brightness+rotate wobble) so the gem itself
+   always feels subtly "alive"/faceted rather than a static icon, everywhere it's used (price tags,
+   balance display, buttons, burst particles below all inherit this too). Kept deliberately subtle
+   since this renders inline in running text/buttons all over the event UI - not a distracting bounce. */
+@keyframes is2TokenGlint{0%,100%{filter:brightness(1) drop-shadow(0 0 0 transparent);transform:rotate(0deg);}50%{filter:brightness(1.35) drop-shadow(0 0 3px rgba(139,208,255,.7));transform:rotate(-4deg);}}
+.is2-token-icon{animation:is2TokenGlint 2.6s ease-in-out infinite;}
+body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
+/* Icon Swap: Remastered - "coin burst" token-gain animation (the classic mobile-game beat: earned
+   tokens scatter outward from wherever they were earned, then all fly up to the balance counter,
+   ticking it up as they land) - see playIconSwap2TokenBurst. Fixed full-screen overlay layer so the
+   particles fly correctly regardless of any scrolling/re-rendering happening underneath mid-flight. */
+.is2-burst-layer{position:fixed;inset:0;z-index:9999;pointer-events:none;}
+.is2-burst-token{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;will-change:transform,opacity;}
+@keyframes is2ScatterOut{0%{transform:translate(0,0) scale(.3);opacity:0;}55%{opacity:1;}100%{transform:translate(var(--sx),var(--sy)) scale(1);opacity:1;}}
+@keyframes is2FlyToTarget{0%{transform:translate(var(--sx),var(--sy)) scale(1);opacity:1;}75%{opacity:1;}100%{transform:translate(var(--tx),var(--ty)) scale(.25);opacity:0;}}
+.is2-balance.is2-balance-pop{animation:is2BalancePop .28s ease-out;}
+@keyframes is2BalancePop{0%{transform:scale(1);}45%{transform:scale(1.18);}100%{transform:scale(1);}}
 /* Icon Swap: Remastered - bespoke button style (a gradient pill, not the generic .action-btn look)
    used everywhere in this event's own UI (hub, give-away modal, shop buy buttons). */
 .is2-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:2px;
@@ -29134,12 +29151,54 @@ function rollIconSwap2ShopSlots(){
   }
   return chosen;
 }
+// "Coin burst" token-gain animation (see the CSS comment next to .is2-burst-layer) - spawns up to
+// ICONSWAP2_BURST_MAX_PARTICLES small token icons at originRect's center, scatters them outward, then
+// flies them all to targetRect's center (the balance display). onParticleLand(tokensForThisParticle) is
+// called as each one arrives so the caller can tick the visible counter up in step with the animation
+// instead of just jumping straight to the final number - amount is split as evenly as possible across
+// however many particles actually spawn (capped, so e.g. 113 tokens from one very high-OVR card don't
+// try to render 113 individual sprites) so the per-particle amounts still sum to EXACTLY `amount`.
+const ICONSWAP2_BURST_MAX_PARTICLES = 16;
+function playIconSwap2TokenBurst(amount, originRect, targetRect, onParticleLand, onDone){
+  if(!originRect || !targetRect || amount<=0){ if(onDone) onDone(); return; }
+  const count = Math.min(amount, ICONSWAP2_BURST_MAX_PARTICLES);
+  const originX = originRect.left+originRect.width/2, originY = originRect.top+originRect.height/2;
+  const targetX = targetRect.left+targetRect.width/2, targetY = targetRect.top+targetRect.height/2;
+  const layer = document.createElement('div');
+  layer.className = 'is2-burst-layer';
+  document.body.appendChild(layer);
+  let landed = 0;
+  for(let i=0; i<count; i++){
+    const el = document.createElement('div');
+    el.className = 'is2-burst-token';
+    el.innerHTML = iconSwap2TokenIcon(16);
+    el.style.left = originX+'px';
+    el.style.top = originY+'px';
+    const angle = Math.random()*Math.PI*2, dist = 36+Math.random()*54;
+    el.style.setProperty('--sx', (Math.cos(angle)*dist)+'px');
+    el.style.setProperty('--sy', (Math.sin(angle)*dist)+'px');
+    el.style.setProperty('--tx', (targetX-originX)+'px');
+    el.style.setProperty('--ty', (targetY-originY)+'px');
+    const scatterDelay = i*14, scatterDur = 220, flyDelay = 120+Math.random()*140, flyDur = 480+Math.random()*220;
+    el.style.animation = `is2ScatterOut ${scatterDur}ms ease-out ${scatterDelay}ms both, is2FlyToTarget ${flyDur}ms cubic-bezier(.3,.6,.3,1) ${scatterDelay+scatterDur+flyDelay}ms both`;
+    layer.appendChild(el);
+    // this particle's share of the total, evenly split and guaranteed to sum to exactly `amount`
+    // across all particles (Math.round(amount*(i+1)/count) - Math.round(amount*i/count) telescopes).
+    const share = Math.round(amount*(i+1)/count) - Math.round(amount*i/count);
+    setTimeout(()=>{
+      el.remove();
+      landed++;
+      if(onParticleLand) onParticleLand(share);
+      if(landed===count){ layer.remove(); if(onDone) onDone(); }
+    }, scatterDelay+scatterDur+flyDelay+flyDur);
+  }
+}
 // Bespoke Icon Swap Token symbol - a small faceted gem (flat-shaded facets, no gradients so it stays
 // crisp at 14-18px and never risks an SVG gradient id colliding when several instances render at once
 // on the same page) instead of reusing the generic .token-dot circle every other token/currency in the
 // game shares - this event gets its own unmistakable icon everywhere its currency appears.
 function iconSwap2TokenIcon(size=15){
-  return `<svg width="${size}" height="${size}" viewBox="0 0 20 20" style="vertical-align:-3px;margin-right:4px;flex-shrink:0;" aria-hidden="true">
+  return `<svg class="is2-token-icon" width="${size}" height="${size}" viewBox="0 0 20 20" style="vertical-align:-3px;margin-right:4px;flex-shrink:0;" aria-hidden="true">
     <path d="M4 8L10 2L16 8L10 18Z" fill="#4a9eff"/>
     <path d="M4 8L10 8L10 18Z" fill="#2f7fe0"/>
     <path d="M10 8L16 8L10 18Z" fill="#8bd0ff"/>
@@ -29226,12 +29285,31 @@ function confirmIconSwap2Give(uid, def, tokens){
     const idx = collection.findIndex(c=>c.uid===uid);
     if(idx<0){ closeModal(); return; }
     collection.splice(idx,1);
-    profile.iconSwapTokens = (profile.iconSwapTokens||0) + tokens;
+    const oldTokens = profile.iconSwapTokens||0;
+    profile.iconSwapTokens = oldTokens + tokens;
     await sSet('collection', collection);
     await sSet('profile', profile);
-    toast(`+${tokens} Icon Swap Token${tokens===1?'':'s'} für ${def.n}.`);
+    // Capture BOTH endpoints before the modal closes (the confirm button is about to disappear) -
+    // origin is literally "where you clicked to confirm", target is the balance display sitting on
+    // the hub underneath this modal. If either is missing for some reason, just skip straight to the
+    // plain toast+re-render rather than risk animating into nothing.
+    const originRect = document.getElementById('is2-give-confirm').getBoundingClientRect();
     closeModal();
-    renderIconSwap2Hub(document.getElementById('view'));
+    const balanceEl = document.getElementById('is2-token-count');
+    const targetRect = balanceEl ? balanceEl.getBoundingClientRect() : null;
+    toast(`+${tokens} Icon Swap Token${tokens===1?'':'s'} für ${def.n}.`);
+    if(balanceEl && targetRect){
+      let running = oldTokens;
+      playIconSwap2TokenBurst(tokens, originRect, targetRect, (share)=>{
+        running += share;
+        balanceEl.textContent = running;
+        balanceEl.parentElement.classList.remove('is2-balance-pop');
+        void balanceEl.parentElement.offsetWidth; // restart the pop animation on every landing
+        balanceEl.parentElement.classList.add('is2-balance-pop');
+      }, ()=>renderIconSwap2Hub(document.getElementById('view')));
+    } else {
+      renderIconSwap2Hub(document.getElementById('view'));
+    }
   });
 }
 let iconSwap2CountdownTimer = null;
