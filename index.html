@@ -14249,11 +14249,34 @@ async function atomicCoinChange(delta, extraSets={}, opts={}){
   }
   await sSet('profile', profile);
 }
+// Tracks the size of the player's OWN collection across successful writes, purely so sSet() can spot
+// an implausible sudden collapse (see the guard below) - every real sSet('collection', collection) call
+// site in this file mutates the SAME global collection array by one card at a time (push/splice/filter),
+// so by the time sSet() runs, comparing its incoming value against itself would tell us nothing; this
+// separately-tracked "last known good" size is what actually lets the guard tell "shrank a lot in one
+// step" apart from "was already this size".
+let _lastKnownCollectionLen = null;
 async function sSet(key, value, shared=false){
   if(!shared){
     await fbReady;
+    // Refuse to persist a collapse of the player's own card collection to a small fraction of its last
+    // known size in a single write. This is deliberately blunt (no per-call-site "is this shrink
+    // legitimate" allowlist - there's no legitimate flow in this game that removes more than one card at
+    // a time anyway) rather than clever, because the exact failure mode it exists to stop is a silent
+    // one: a bug elsewhere in a 2.7M-character file constructing the wrong array and calling sSet with
+    // it. Failing this write is always safe - the real collection is untouched on the server, the game
+    // just won't reflect this one broken write until whatever caused it is fixed.
+    if(key==='collection' && Array.isArray(value) && _lastKnownCollectionLen!==null && _lastKnownCollectionLen>5 && value.length < _lastKnownCollectionLen*0.5){
+      console.error(`sSet('collection', ...) blocked: refusing to shrink the collection from ${_lastKnownCollectionLen} to ${value.length} cards in one write - this looks like the exact pattern that caused real data loss, not a normal single-card action. Nothing was written; the real collection on the server is untouched.`);
+      toast('Speichern übersprungen: verdächtig große Änderung an deiner Kartensammlung wurde blockiert. Bitte lade die Seite neu.');
+      return null;
+    }
     if(fb && clubId){
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',clubId), {[key]:value}, {merge:true}); return true; }
+      try{
+        await fb.setDoc(fb.doc(fb.db,'saves',clubId), {[key]:value}, {merge:true});
+        if(key==='collection' && Array.isArray(value)) _lastKnownCollectionLen = value.length;
+        return true;
+      }
       catch(e){ console.warn('Firestore private write failed, falling back', e); }
     }
     try{
@@ -14855,6 +14878,11 @@ async function init(){
     collection = buildStarterCollection();
     await sSet('collection', collection);
   }
+  // Baseline for sSet()'s shrink guard, set from the just-loaded real server value (or the starter
+  // collection just above for a genuinely brand new account) - not left null until the first later
+  // write, so the guard is armed from this session's very first collection write onward, not just from
+  // its second.
+  _lastKnownCollectionLen = collection.length;
   // WM26_VARIANTE_SPECIALS/WM26_KAPITAEN_SPECIALS (World Cup Pack cards, ids 50000000+/60000000+) are
   // built LAZILY on first use (opening that pack, or the admin card tools) to avoid thousands of
   // wasted boostBaseToOv calls at every single page load for the vast majority of players who never
