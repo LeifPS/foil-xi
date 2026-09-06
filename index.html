@@ -29328,26 +29328,70 @@ function showIconSwapModal(){
 }
 // ===== Icon Swap: Remastered - rotating shop + give-away UI (see the data model near KAPITAENE_SPECIALS
 // for tiers/roster/packs/tokens) =====
-const ICONSWAP2_ROTATION_HOURS = 6;
-// The current 6h "bucket" index - the same bucket number always produces the exact same 3 shop slots
-// for EVERY player (see rollIconSwap2ShopSlots), since it's a pure function of wall-clock time, not
-// anything stored per-account. No server coordination needed, and no way to "reroll" by reloading.
-function iconSwap2RotationBucket(){ return Math.floor(Date.now()/(ICONSWAP2_ROTATION_HOURS*60*60*1000)); }
-function iconSwap2NextRotationAt(){ return (iconSwap2RotationBucket()+1)*ICONSWAP2_ROTATION_HOURS*60*60*1000; }
-// Lets an admin preview a different roll of the shop, LOCALLY ONLY - purely an in-memory nonce, never
-// written anywhere shared. Every other player keeps seeing the real, purely time-based global rotation
-// (iconSwap2RotationBucket alone) completely unaffected; only this admin's own current session sees a
-// different roll, until either they reload or the next real 6h boundary passes and overtakes it anyway.
-let iconSwap2RefreshNonce = 0;
-function adminRefreshIconSwap2Stock(){
-  iconSwap2RefreshNonce = Math.floor(Math.random()*1e9);
+// The shop rotates once per CALENDAR DAY in Berlin time (not UTC, not the viewer's own device time) -
+// deliberately timezone-anchored so "today's" shop is the same fixed 24h window for every player
+// regardless of where they are, the same way the old 6h UTC buckets used to be globally consistent.
+function iconSwap2BerlinDateStr(){
+  return new Intl.DateTimeFormat('en-CA', {timeZone:'Europe/Berlin', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
+}
+// Berlin's UTC offset (60 or 120 minutes, depending on CET/CEST) AT THE GIVEN INSTANT - found by asking
+// Intl what the Berlin wall-clock reads at that instant and comparing it back to the instant itself,
+// rather than hardcoding either offset (which would drift wrong twice a year at the DST transitions).
+function iconSwap2BerlinOffsetMinutes(date=new Date()){
+  const parts = new Intl.DateTimeFormat('en-US', {timeZone:'Europe/Berlin', hour12:false,
+    year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'})
+    .formatToParts(date).reduce((o,p)=>{ o[p.type]=p.value; return o; }, {});
+  const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour===24?0:+parts.hour, +parts.minute, +parts.second);
+  return Math.round((asUTC-date.getTime())/60000);
+}
+// The current Berlin calendar day, as a plain incrementing integer - the same day always produces the
+// exact same 3 shop slots for EVERY player (see rollIconSwap2ShopSlots) unless they've personally paid
+// to skip it (see the per-account skip state below), since it's otherwise a pure function of the
+// wall-clock date, not anything stored per-account. No server coordination needed for the daily part.
+function iconSwap2RotationBucket(){
+  const [y,m,d] = iconSwap2BerlinDateStr().split('-').map(Number);
+  return Math.floor(Date.UTC(y,m-1,d)/86400000);
+}
+function iconSwap2NextRotationAt(){
+  const offsetMin = iconSwap2BerlinOffsetMinutes();
+  const [y,m,d] = iconSwap2BerlinDateStr().split('-').map(Number);
+  return Date.UTC(y,m-1,d+1,0,0,0) - offsetMin*60000;
+}
+// Any player can pay to skip straight to a freshly-rolled shop, as many times as they like in a day -
+// PURELY LOCAL to their own account (profile.iconSwap2Skip*, not shared/global), so nobody else's shop
+// changes when someone skips theirs. Cost doubles with every skip THAT DAY (25/50/100/200/400/800/...)
+// and resets back to 25 the next Berlin day, tracked by profile.iconSwap2SkipDay alongside the count.
+const ICONSWAP2_SKIP_BASE_COST = 25;
+function iconSwap2EnsureSkipState(){
+  if(!profile) return; // e.g. rollIconSwap2ShopSlots() called before login/profile load - no per-account skip to apply yet
+  const day = iconSwap2RotationBucket();
+  if(profile.iconSwap2SkipDay !== day){
+    profile.iconSwap2SkipDay = day;
+    profile.iconSwap2SkipCount = 0;
+    profile.iconSwap2SkipNonce = 0;
+  }
+}
+function iconSwap2CurrentSkipCost(){
+  iconSwap2EnsureSkipState();
+  return ICONSWAP2_SKIP_BASE_COST * Math.pow(2, (profile && profile.iconSwap2SkipCount)||0);
+}
+async function iconSwap2SkipRotation(){
+  iconSwap2EnsureSkipState();
+  const cost = iconSwap2CurrentSkipCost();
+  if((profile.iconSwap2Tokens||0) < cost){ toast('Nicht genug Icon Swap Tokens zum Überspringen.'); return; }
+  profile.iconSwap2Tokens -= cost;
+  profile.iconSwap2SkipCount = (profile.iconSwap2SkipCount||0) + 1;
+  profile.iconSwap2SkipNonce = Math.floor(Math.random()*1e9);
+  await sSet('profile', profile);
+  toast(`Shop übersprungen (-${cost} Tokens).`);
+  renderIconSwap2Hub(document.getElementById('view'));
 }
 // Every card/pack slot can only be bought ONCE per rotation (titles are already limited to once ever
 // via profile.unlockedNametags, so they don't need this) - tracked per-account in the profile, keyed
 // by the exact bucket the item was bought under (same bucket key rollIconSwap2ShopSlots seeds with,
-// so an admin's local-only reroll also gets its own independent one-per-item limit on whatever it is
-// currently showing them, consistent with what they actually see on screen).
-function iconSwap2CurrentPurchaseBucket(){ return iconSwap2RotationBucket() + iconSwap2RefreshNonce; }
+// so a player's own paid skip also gets its own independent one-per-item limit on whatever it rolled
+// them, consistent with what they actually see on screen).
+function iconSwap2CurrentPurchaseBucket(){ iconSwap2EnsureSkipState(); return iconSwap2RotationBucket() + (profile && profile.iconSwap2SkipNonce||0); }
 function iconSwap2AlreadyPurchasedThisRotation(itemId){
   const rec = profile.iconSwap2PurchasedThisRotation;
   return !!(rec && rec.bucket===iconSwap2CurrentPurchaseBucket() && rec.ids.includes(itemId));
@@ -29383,9 +29427,11 @@ function iconSwap2AllShopItems(){
 }
 // Picks exactly 3 DISTINCT items for the current rotation bucket, weighted by tier rarity (see
 // ICONSWAP2_TIERS.weight) - rarer tiers are both less likely to be picked AND cost more once picked.
-// Same bucket -> same rng seed -> same 3 items for every player, always (see iconSwap2RotationBucket).
+// Same bucket -> same rng seed -> same 3 items for every player, every day, UNLESS they've personally
+// paid to skip today's roll (iconSwap2SkipNonce), which only changes what THIS seed computes for them.
 function rollIconSwap2ShopSlots(){
-  const rng = iconSwap2Mulberry32(iconSwap2RotationBucket() + iconSwap2RefreshNonce);
+  iconSwap2EnsureSkipState();
+  const rng = iconSwap2Mulberry32(iconSwap2RotationBucket() + (profile && profile.iconSwap2SkipNonce||0));
   const remaining = iconSwap2AllShopItems();
   const chosen = [];
   for(let i=0; i<3 && remaining.length; i++){
@@ -29649,6 +29695,8 @@ function renderIconSwap2Hub(view){
   if(!iconSwap2Active()){ renderView('store'); return; }
   iconSwap2EnsureRevealState();
   const slots = rollIconSwap2ShopSlots();
+  const skipCost = iconSwap2CurrentSkipCost();
+  const skipDisabled = (profile.iconSwap2Tokens||0) < skipCost;
   const slotsHtml = slots.map(item=>{
     const tier = ICONSWAP2_TIERS[item.tier];
     const canAfford = (profile.iconSwap2Tokens||0) >= tier.price;
@@ -29692,17 +29740,13 @@ function renderIconSwap2Hub(view){
       </div>
     </div>
     <div class="is2-section-title">Shop <span class="mono" id="is2-refresh-countdown" style="color:var(--muted);font-size:11px;font-weight:400;"></span>
-      ${isAdmin() ? `<button class="is2-btn is2-btn-ghost" id="is2-admin-refresh" style="width:auto;padding:4px 10px;font-size:10.5px;margin-left:8px;">🔧 Vorrat erneuern (nur ich)</button>` : ''}
+      <button class="is2-btn is2-btn-ghost ${skipDisabled?'is2-btn-disabled':''}" id="is2-skip-btn" style="width:auto;padding:4px 10px;font-size:10.5px;margin-left:8px;" ${skipDisabled?'disabled':''}>⟳ Überspringen (${iconSwap2TokenIcon(11)}${skipCost})</button>
     </div>
     <div class="is2-shop-grid">${slotsHtml}</div>`;
   document.getElementById('is2-back').addEventListener('click', ()=>renderView('store'));
   document.getElementById('is2-give-btn').addEventListener('click', openIconSwap2GiveModal);
   document.getElementById('is2-odds-btn').addEventListener('click', openIconSwap2OddsModal);
-  const adminRefreshBtn = document.getElementById('is2-admin-refresh');
-  if(adminRefreshBtn) adminRefreshBtn.addEventListener('click', ()=>{
-    adminRefreshIconSwap2Stock();
-    renderIconSwap2Hub(view);
-  });
+  document.getElementById('is2-skip-btn').addEventListener('click', iconSwap2SkipRotation);
   view.querySelectorAll('[data-item-id]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const item = slots.find(s=>s.id===btn.dataset.itemId);
