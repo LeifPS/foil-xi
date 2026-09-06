@@ -14918,6 +14918,16 @@ const GFX_PRESET_LABEL = {full:'Voll', medium:'Mittel', lite:'Reduziert', off:'A
 // Lazy migration: older accounts only ever had profile.graphicsPreset ('full'/'lite') - derive the new
 // granular profile.gfx from it the first time this is needed, in memory, without forcing an extra
 // Firestore write just for a display preference default.
+// Only used to pick a DEFAULT for a brand new account - never touches an existing profile.gfx, which
+// always wins once it exists (see ensureGfxToggles). Card-heavy views (Kartenladen, Kader-Editor) run
+// several simultaneous CSS animations per visible card (see the .pcard comments), which is more likely
+// to actually be felt as jank on a touch/coarse-pointer device (typically weaker GPU, battery-throttled)
+// than on desktop - 'medium' turns off just the priciest layer (fxlayers) while keeping cardshine,
+// confetti and badge animations, a light first impression rather than a silent full/lite dice roll.
+function defaultGraphicsPresetForThisDevice(){
+  try{ return (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ? 'medium' : 'full'; }
+  catch(e){ return 'full'; }
+}
 function ensureGfxToggles(){
   if(!profile.gfx) profile.gfx = {...GFX_PRESETS[profile.graphicsPreset==='lite' ? 'lite' : 'full']};
   // `shine` was added after cardshine/fxlayers/confetti/badgeanim - an account whose profile.gfx was
@@ -14960,7 +14970,7 @@ async function init(){
   const _bootWasExistingAccount = !!_boot.profile; // gates recordSaveSnapshot() below - a brand new account has nothing worth a history entry yet
   profile = _boot.profile;
   if(!profile){
-    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false, pendingLigaPacks:[]};
+    profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:defaultGraphicsPresetForThisDevice(), showDecimalEffOv:false, pendingLigaPacks:[]};
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -30314,8 +30324,8 @@ function flipMatchDataSides(md){
 }
 function goalRowHTML(minute, scorer, teamName, side, assist){
   const imgTag = scorer.img
-    ? `<img src="${proxyImg(scorer.img)}" data-raw="${scorer.img}" alt="" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">`
-    : `<img src="${NOTFOUND_FACE_IMG}" alt="">`;
+    ? `<img src="${proxyImg(scorer.img)}" data-raw="${scorer.img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="handleFacePhotoError(this)">`
+    : `<img src="${NOTFOUND_FACE_IMG}" alt="" loading="lazy">`;
   return `<div class="goal-row ${side}">
       <span class="gm">${minute}'</span>
       <span class="gav-wrap">${imgTag}</span>
