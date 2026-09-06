@@ -17914,10 +17914,22 @@ function stageMythicCardReveal(card, wrapEl, onSequenceDone){
   function tweenOv(){
     // a manager's boost counts up twice as slowly as a player's OVR - it's the ONLY thing he has to
     // reveal, so it gets to be the whole show
-    const dur = card.isManager ? 7600 : 6000, start = performance.now();
+    const dur = card.isManager ? 7600 : 3800, start = performance.now();
+    // Two-phase curve instead of a single smooth ease-out: races through the first COUNT_SPLIT_V share
+    // of the value in the first COUNT_SPLIT_T share of the time, then spends the REMAINING time slowly
+    // crawling (its own ease-out) through the last stretch right before the final OVR - same total
+    // duration as a plain ease-out, but the deceleration is now concentrated right at the end instead
+    // of spread evenly across the whole count-up.
+    const COUNT_SPLIT_T = 0.35, COUNT_SPLIT_V = 0.9;
     function tick(now){
       const t = Math.min(1, (now-start)/dur);
-      const eased = 1-Math.pow(1-t,3);
+      let eased;
+      if(t<COUNT_SPLIT_T){
+        eased = (t/COUNT_SPLIT_T) * COUNT_SPLIT_V;
+      } else {
+        const tailT = (t-COUNT_SPLIT_T)/(1-COUNT_SPLIT_T);
+        eased = COUNT_SPLIT_V + (1-Math.pow(1-tailT,2))*(1-COUNT_SPLIT_V);
+      }
       if(ovEl){
         if(card.isManager){
           const val = Math.round(card.boostValue*eased);
