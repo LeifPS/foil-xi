@@ -8987,7 +8987,9 @@ const ICONSWAP2_TIERS = {
   common:    {label:'Häufig',   weight:50, price:20,  accent:'#8bd0ff'},
   rare:      {label:'Selten',   weight:30, price:60,  accent:'#4a9eff'},
   epic:      {label:'Episch',   weight:15, price:160, accent:'#a26bff'},
-  legendary: {label:'Legendär', weight:5,  price:450, accent:'#ff9de2'},
+  // weight bumped 5->8 (~8% per slot) to make room for the exclusive manager below without starving
+  // the existing legendary cards/title of pulls.
+  legendary: {label:'Legendär', weight:8,  price:450, accent:'#ff9de2'},
 };
 // New Icon Swap Remastered cards - built from real, already-validated base players via the same
 // findBaseCard/boostBaseToOv mechanism as Kronjuwelen/Kapitäne above (reusing their already-confirmed
@@ -9040,6 +9042,15 @@ function iconSwap2AllCards(){ return ICONSWAP2_SPECIALS.concat(ICONSWAP_CARDS); 
 // accent) live with all other NAMETAGS further down, this just maps them to a shop tier/price. No
 // packs in this shop (removed - cards/titles only), so titles are the only non-card item type left.
 const ICONSWAP2_TITLE_TIERS = {schimmer:'common', spektrum:'rare', iridescent:'epic', prisma:'legendary'};
+// Exactly one exclusive manager, legendary tier only - unlike cards/titles it can only ever be bought
+// ONCE per account (checked in buyIconSwap2Item against managerCollection, not the per-rotation
+// purchase log), same "you already have the one there is" rule as a title.
+const ICONSWAP2_MANAGER = {
+  id: 9762100, n:'Carlo Ancelotti', club:'Real Madrid', nat:'Italy', tier:'Legendär',
+  boostType:'percent', boostValue:9, isManager:true, pos:'MGR', ov:99,
+  variant:'iconswap2_mgr', variantLabel:'Icon Swap: Remastered', theme:'iconswap2_mgr',
+};
+MGR_BY_ID.set(ICONSWAP2_MANAGER.id, ICONSWAP2_MANAGER);
 // ===== WM 2026: the real 48-team World Cup, exactly as it lined up (see WM26_GROUPS below - the
 // game mode itself lives further down, near Turnier-Modus). Two reward-variant tiers, both resolved
 // dynamically at load time from the existing real-player pool rather than a hand-picked id list -
@@ -9550,10 +9561,11 @@ const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8
   uclw:'#0a1e4d',uclw_mgr:'#e8003c', ballondor:'#f2c14e', wm_mgr:'#aa151b', prime:'#ffd76a',
   sigicon:'#7ad9ff', eradef:'#ffcf5c', sigseason:'#ff6fb1',
   ogicon:'#c98a3e', og_mgr:'#c98a3e', legende_mgr:'#ffce00', iconswap:'#22d3ee', poet:'#b06cff',
-  promocard:'#ffce00', admin:'#ff2020'};
+  promocard:'#ffce00', admin:'#ff2020', iconswap2_mgr:'#4a9eff'};
 function cardAccent(card){
   if(card.variant==='meistertrainer') return '#ff8a3d';
   if(card.variant==='uclw_mgr') return THEME_ACC.uclw_mgr;
+  if(card.variant==='iconswap2_mgr') return THEME_ACC.iconswap2_mgr;
   if(card.variant==='wm_mgr') return THEME_ACC.wm_mgr;
   if(card.variant==='og_mgr') return THEME_ACC.og_mgr;
   if(card.variant==='legende_mgr') return THEME_ACC.legende_mgr;
@@ -29257,14 +29269,17 @@ function iconSwap2Mulberry32(seed){
     return ((t ^ t>>>14)>>>0)/4294967296;
   };
 }
-// All items ever eligible for the rotating shop - cards (new + old Icon Swap) and the 4 titles (one
-// per rarity tier, see ICONSWAP2_TITLE_TIERS). No packs (removed). Rebuilt fresh on every call (cheap
-// - a few dozen items) rather than cached, so it always reflects the current NAMETAGS/roster state
-// with zero staleness concerns.
+// All items ever eligible for the rotating shop - cards (new + old Icon Swap), the 4 titles (one per
+// rarity tier, see ICONSWAP2_TITLE_TIERS) and the single exclusive legendary manager (ICONSWAP2_MANAGER
+// - once owned it drops out of the pool entirely via the already-bought filter in buyIconSwap2Item, not
+// here, so it still occupies its normal slot-weight for anyone who doesn't have it yet). No packs
+// (removed). Rebuilt fresh on every call (cheap - a few dozen items) rather than cached, so it always
+// reflects the current NAMETAGS/roster state with zero staleness concerns.
 function iconSwap2AllShopItems(){
   const cardItems = iconSwap2AllCards().map(c=>({type:'card', tier:c.iconswap2Tier, card:c, id:'card-'+c.id}));
   const titleItems = Object.entries(ICONSWAP2_TITLE_TIERS).map(([nametagId,tier])=>({type:'title', tier, nametagId, id:'title-'+nametagId}));
-  return cardItems.concat(titleItems).filter(it=>ICONSWAP2_TIERS[it.tier]);
+  const managerItems = [{type:'manager', tier:'legendary', manager:ICONSWAP2_MANAGER, id:'manager-'+ICONSWAP2_MANAGER.id}];
+  return cardItems.concat(titleItems, managerItems).filter(it=>ICONSWAP2_TIERS[it.tier]);
 }
 // Picks exactly 3 DISTINCT items for the current rotation bucket, weighted by tier rarity (see
 // ICONSWAP2_TIERS.weight) - rarer tiers are both less likely to be picked AND cost more once picked.
@@ -29341,25 +29356,40 @@ function iconSwap2TokenIcon(size=15){
 }
 function iconSwap2ItemLabel(item){
   if(item.type==='card') return `${item.card.n} (${item.card.ov} OVR)`;
+  if(item.type==='manager') return `${item.manager.n} (Trainer)`;
   return NAMETAGS[item.nametagId].label + ' (Titel)';
 }
 function iconSwap2ItemIcon(item){
   if(item.type==='card') return null; // rendered as a real mini card instead of an icon
+  if(item.type==='manager') return '🧑‍💼';
   return NAMETAGS[item.nametagId].symbol;
+}
+// Cards/packs are limited to once PER ROTATION (see iconSwap2AlreadyPurchasedThisRotation); titles and
+// the manager are limited to once EVER instead - a title checks profile.unlockedNametags, the manager
+// checks managerCollection directly, since there's only ever going to be the one of it in the game.
+function iconSwap2ManagerAlreadyOwned(){
+  return managerCollection.some(m=>m.mgrId===ICONSWAP2_MANAGER.id);
 }
 async function buyIconSwap2Item(item){
   const tier = ICONSWAP2_TIERS[item.tier];
   if((profile.iconSwap2Tokens||0) < tier.price){ toast('Nicht genug Icon Swap Tokens.'); return; }
   if(item.type==='title' && (profile.unlockedNametags||[]).includes(item.nametagId)){ toast('Titel bereits freigeschaltet.'); return; }
-  if(item.type!=='title' && iconSwap2AlreadyPurchasedThisRotation(item.id)){ toast('Dieses Item wurde in dieser Rotation bereits gekauft.'); return; }
+  if(item.type==='manager' && iconSwap2ManagerAlreadyOwned()){ toast('Trainer bereits freigeschaltet.'); return; }
+  if(item.type!=='title' && item.type!=='manager' && iconSwap2AlreadyPurchasedThisRotation(item.id)){ toast('Dieses Item wurde in dieser Rotation bereits gekauft.'); return; }
   profile.iconSwap2Tokens -= tier.price;
-  if(item.type!=='title') iconSwap2MarkPurchasedThisRotation(item.id);
+  if(item.type!=='title' && item.type!=='manager') iconSwap2MarkPurchasedThisRotation(item.id);
   if(item.type==='card'){
     collection.push({uid:genId(), cardId:item.card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId});
     bumpCardMintCount(item.card.id, 1, !!item.card.untradable);
     await sSet('collection', collection);
     await sSet('profile', profile);
     toast(`${item.card.n} gekauft!`);
+  } else if(item.type==='manager'){
+    managerCollection.push({uid:genId(), mgrId:item.manager.id});
+    bumpMgrMintCount(item.manager.id, 1, false);
+    await sSet('managerCollection', managerCollection);
+    await sSet('profile', profile);
+    toast(`${item.manager.n} freigeschaltet!`);
   } else {
     profile.unlockedNametags = [...(profile.unlockedNametags||[]), item.nametagId];
     await sSet('profile', profile);
@@ -29515,9 +29545,10 @@ function renderIconSwap2Hub(view){
     const tier = ICONSWAP2_TIERS[item.tier];
     const canAfford = (profile.iconSwap2Tokens||0) >= tier.price;
     const alreadyOwnedTitle = item.type==='title' && (profile.unlockedNametags||[]).includes(item.nametagId);
-    const alreadyPurchased = item.type!=='title' && iconSwap2AlreadyPurchasedThisRotation(item.id);
-    const disabled = !canAfford || alreadyOwnedTitle || alreadyPurchased;
-    const buyLabel = alreadyOwnedTitle ? 'Bereits freigeschaltet' : alreadyPurchased ? 'Bereits gekauft' : `${iconSwap2TokenIcon(14)}${tier.price} Token`;
+    const alreadyOwnedManager = item.type==='manager' && iconSwap2ManagerAlreadyOwned();
+    const alreadyPurchased = item.type!=='title' && item.type!=='manager' && iconSwap2AlreadyPurchasedThisRotation(item.id);
+    const disabled = !canAfford || alreadyOwnedTitle || alreadyOwnedManager || alreadyPurchased;
+    const buyLabel = (alreadyOwnedTitle || alreadyOwnedManager) ? 'Bereits freigeschaltet' : alreadyPurchased ? 'Bereits gekauft' : `${iconSwap2TokenIcon(14)}${tier.price} Token`;
     const visual = item.type==='card'
       ? cardEl(item.card,'mini').outerHTML
       : `<div class="is2-shop-icon" style="--tier-acc:${tier.accent};">${iconSwap2ItemIcon(item)}</div>`;
@@ -29526,12 +29557,13 @@ function renderIconSwap2Hub(view){
       <div class="is2-shop-cover-tier">${tier.label}</div>
       <div class="is2-shop-cover-hint">Tippen zum Aufdecken</div>
     </div>`;
+    const nonCardHint = item.type==='manager' ? 'Exklusiver Trainer' : item.type==='title' ? 'Exklusiver Titel' : '';
     return `<div class="is2-shop-card" style="--tier-acc:${tier.accent};">
       ${cover}
       <div class="is2-shop-tier">${tier.label}</div>
       <div class="is2-shop-visual">${visual}</div>
       <div class="is2-shop-label">${iconSwap2ItemLabel(item)}</div>
-      ${item.type!=='card' ? `<div class="hint" style="margin:2px 0 0;font-size:10.5px;">Exklusiver Titel</div>` : ''}
+      ${nonCardHint ? `<div class="hint" style="margin:2px 0 0;font-size:10.5px;">${nonCardHint}</div>` : ''}
       <button class="is2-btn ${disabled?'is2-btn-disabled':''}" data-item-id="${item.id}" ${disabled?'disabled':''}>
         ${buyLabel}
       </button>
