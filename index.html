@@ -9012,13 +9012,15 @@ KAPITAENE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 // ===== Icon Swap: Remastered (limited event) - give away cards from your own collection for Icon
 // Swap Tokens (payout scales with the given-away card's OVR, see iconSwap2TokensForCard), then spend
 // tokens in a rotating shop: always exactly 3 items showing at once, refreshed globally (same 3 for
-// EVERY player, no per-device reroll-by-reloading) every 6 hours, drawn from a rarity-weighted pool -
-// the original 20 Icon Swap cards (see PLAYERS_ICONSWAP/ICONSWAP_CARDS above) folded in alongside new
-// cards/packs/titles added here. Rarer tier = shows up less often in rotation AND costs more.
-// Run window - 14 days (more content than the original 7-day event, so it gets a bit more room).
-// Adjust freely before shipping if a different start date is wanted.
-const ICONSWAP2_START = new Date('2026-09-08T00:00:00').getTime();
-const ICONSWAP2_END = ICONSWAP2_START + 14*24*60*60*1000;
+// EVERY player) once per Berlin calendar day - see iconSwap2RotationBucket - drawn from a rarity-
+// weighted pool - the original 20 Icon Swap cards (see PLAYERS_ICONSWAP/ICONSWAP_CARDS above) folded in
+// alongside new cards/titles added here. Rarer tier = shows up less often in rotation AND costs more.
+// Any player can also pay Icon Swap Tokens to skip straight to a fresh personal roll any number of
+// times per day (see iconSwap2SkipRotation) - cost doubles with each skip, resets daily.
+// Run window - exactly 7 days, 7.9. through 13.9. (both inclusive; ICONSWAP2_END is the instant the
+// 14th begins, i.e. the event's very last visible day is the 13th).
+const ICONSWAP2_START = new Date('2026-09-07T00:00:00').getTime();
+const ICONSWAP2_END = new Date('2026-09-14T00:00:00').getTime();
 // Admins can already open/test the whole event before ICONSWAP2_START (see the admin/test accounts
 // this always resolves true for) - everyone else only sees it activate exactly on schedule. This is
 // what lets the real launch date stay Monday while still allowing hands-on testing today, without
