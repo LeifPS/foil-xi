@@ -8983,12 +8983,13 @@ function iconSwap2TokensForCard(card){
 // Rarity tiers for the ROTATING SHOP - cards/packs/titles all share this one tier system. weight is the
 // relative selection weight per rotation slot (see rollIconSwap2ShopSlots), price is the fixed token
 // cost for every item of that tier (simpler to reason about/balance than a per-item price).
+// Weights sum to exactly 100 so each is also its literal per-slot percentage - epic trimmed 15->12 to
+// make room for legendary's 5->8 bump (see the exclusive manager below) landing on a clean 8%, not
+// 7.8%-and-change.
 const ICONSWAP2_TIERS = {
   common:    {label:'Häufig',   weight:50, price:20,  accent:'#8bd0ff'},
   rare:      {label:'Selten',   weight:30, price:60,  accent:'#4a9eff'},
-  epic:      {label:'Episch',   weight:15, price:160, accent:'#a26bff'},
-  // weight bumped 5->8 (~8% per slot) to make room for the exclusive manager below without starving
-  // the existing legendary cards/title of pulls.
+  epic:      {label:'Episch',   weight:12, price:160, accent:'#a26bff'},
   legendary: {label:'Legendär', weight:8,  price:450, accent:'#ff9de2'},
 };
 // New Icon Swap Remastered cards - built from real, already-validated base players via the same
