@@ -14120,6 +14120,23 @@ let storageWarned = false;
 // that HAS synced before looks like the account "jumped back" to that older local snapshot - neither
 // is real data loss (the actual cloud save is untouched), but nothing they do this session reliably
 // reaches it either. A reload is the correct fix in the common case (transient network hiccup).
+// Shown when the boot read of saves/{clubId} fails while Firebase IS connected (transient network
+// error, not "no cloud save exists yet"). Blocks fully - never falls through to account creation/
+// rendering - so a flaky reconnect can never again get misread as a brand new account and overwrite
+// the real save. Only a manual reload can pass this, deliberately: no auto-retry loop that could end
+// up hammering Firestore, and no way to click past it into a half-loaded game.
+function showBootLoadFailedScreen(){
+  hideBootLoader();
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:380px;text-align:center;">
+        <h2 style="margin-bottom:8px;color:var(--danger);">Laden fehlgeschlagen</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Dein Spielstand konnte gerade nicht geladen werden (vermutlich eine kurze Verbindungsstörung). Er ist NICHT verloren - bitte lade die Seite einfach neu.</p>
+        <button class="action-btn" id="boot-fail-retry" style="width:100%;">Erneut versuchen</button>
+      </div>
+    </div>`;
+  document.getElementById('boot-fail-retry').addEventListener('click', ()=>location.reload());
+}
 function showOfflineBanner(){
   if(document.getElementById('offline-banner')) return;
   const el = document.createElement('div');
@@ -14152,7 +14169,16 @@ async function sGetMany(keys, shared=false){
         const out = {};
         keys.forEach(k=>{ out[k] = (k in d) ? d[k] : null; });
         return out;
-      }catch(e){ console.warn('Firestore private batch read failed, falling back', e); }
+      }catch(e){
+        // Do NOT fall through to the local fallback here (window.storage/memoryStore, both empty on a
+        // fresh page load): fb is connected, so a failure at this exact call is a transient read error
+        // (e.g. a flaky mobile reconnect), not "this account has no cloud save yet". Falling through used
+        // to make every key resolve to null, which init() then read as "brand new account" and immediately
+        // wrote a blank profile back over the real one - silently destroying it. Rethrowing lets the boot
+        // caller block and ask for a retry instead of ever fabricating a new account from a read failure.
+        console.warn('Firestore private batch read failed', e);
+        throw e;
+      }
     }
   }
   // no Firebase (or a shared/non-club key set) - the fallback stores (window.storage/memoryStore) are
@@ -14734,7 +14760,16 @@ async function init(){
   // one round-trip instead of six (see sGetMany) - profile/collection/managerCollection/packCollection/
   // squad/squadPresets all live in the same Firestore doc, and none of them depends on another's value
   // below, so there's nothing to lose by fetching them together up front.
-  const _boot = await sGetMany(['profile','collection','managerCollection','packCollection','squad','squadPresets']);
+  let _boot;
+  try{
+    _boot = await sGetMany(['profile','collection','managerCollection','packCollection','squad','squadPresets']);
+  }catch(e){
+    // A connected-but-failed boot read must never be treated as "new account" (see sGetMany) - block
+    // here instead of falling through to the account-creation code below, which would otherwise write
+    // a blank profile over a real one on nothing worse than a flaky reconnect.
+    showBootLoadFailedScreen();
+    return;
+  }
   profile = _boot.profile;
   if(!profile){
     profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:'full', showDecimalEffOv:false, pendingLigaPacks:[]};
