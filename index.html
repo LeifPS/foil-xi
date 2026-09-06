@@ -18273,6 +18273,12 @@ async function renderAdminPanel(view){
       <button class="action-btn secondary" id="admin-seed-leagues" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Ligen jetzt einmalig einteilen</button>
       <p class="hint" id="admin-seed-leagues-result" style="margin:10px 0 0;"></p>
     </div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#4a9eff;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#4a9eff;text-transform:uppercase;letter-spacing:.04em;">Icon Swap: Remastered</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Rollt die 3 Shop-Items nur für DICH neu (rein lokal, zum Testen/Vorschauen) - für alle anderen Spieler ändert sich nichts, bis die nächste echte 6h-Rotation eintritt.</p>
+      <button class="action-btn secondary" id="admin-refresh-iconswap2" style="width:auto;border-color:#4a9eff;color:#4a9eff;">Shop-Vorrat jetzt erneuern</button>
+      <p class="hint" id="admin-refresh-iconswap2-result" style="margin:10px 0 0;"></p>
+    </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Meine Liga verlassen</h3>
       <p class="hint" style="margin-top:0;margin-bottom:10px;">Entfernt DIESEN Account sofort aus seiner aktuellen Liga - z.B. um einen versehentlichen Test-Beitritt rückgängig zu machen. Tages-unabhängig, rührt aber weder den laufenden Spielplan noch bereits gespielte Ergebnisse an.</p>
@@ -18333,6 +18339,12 @@ async function renderAdminPanel(view){
       resultEl.style.color = 'var(--danger)';
     }
     e.target.disabled = false; e.target.textContent = 'Ligen jetzt einmalig einteilen';
+  });
+  document.getElementById('admin-refresh-iconswap2').addEventListener('click', ()=>{
+    adminRefreshIconSwap2Stock();
+    const resultEl = document.getElementById('admin-refresh-iconswap2-result');
+    resultEl.textContent = 'Neu gerollt - nur für dich, in diesem Hub sichtbar. Öffne den Icon-Swap-Hub, um die neue Auswahl zu sehen.';
+    resultEl.style.color = 'var(--turf-bright)';
   });
   document.getElementById('admin-leave-liga').addEventListener('click', async (e)=>{
     e.target.disabled = true; e.target.textContent = 'Läuft…';
@@ -29078,6 +29090,14 @@ const ICONSWAP2_ROTATION_HOURS = 6;
 // anything stored per-account. No server coordination needed, and no way to "reroll" by reloading.
 function iconSwap2RotationBucket(){ return Math.floor(Date.now()/(ICONSWAP2_ROTATION_HOURS*60*60*1000)); }
 function iconSwap2NextRotationAt(){ return (iconSwap2RotationBucket()+1)*ICONSWAP2_ROTATION_HOURS*60*60*1000; }
+// Lets an admin preview a different roll of the shop, LOCALLY ONLY - purely an in-memory nonce, never
+// written anywhere shared. Every other player keeps seeing the real, purely time-based global rotation
+// (iconSwap2RotationBucket alone) completely unaffected; only this admin's own current session sees a
+// different roll, until either they reload or the next real 6h boundary passes and overtakes it anyway.
+let iconSwap2RefreshNonce = 0;
+function adminRefreshIconSwap2Stock(){
+  iconSwap2RefreshNonce = Math.floor(Math.random()*1e9);
+}
 // Tiny seeded PRNG (mulberry32) - deterministic per integer seed, good enough distribution for picking
 // 3 items out of a few dozen. Not used anywhere security-sensitive, purely cosmetic shop rotation.
 function iconSwap2Mulberry32(seed){
@@ -29101,7 +29121,7 @@ function iconSwap2AllShopItems(){
 // ICONSWAP2_TIERS.weight) - rarer tiers are both less likely to be picked AND cost more once picked.
 // Same bucket -> same rng seed -> same 3 items for every player, always (see iconSwap2RotationBucket).
 function rollIconSwap2ShopSlots(){
-  const rng = iconSwap2Mulberry32(iconSwap2RotationBucket());
+  const rng = iconSwap2Mulberry32(iconSwap2RotationBucket() + iconSwap2RefreshNonce);
   const remaining = iconSwap2AllShopItems();
   const chosen = [];
   for(let i=0; i<3 && remaining.length; i++){
