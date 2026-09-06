@@ -7485,7 +7485,7 @@ const PLAYERS_OGICONS = [
     "nat": "Scotland",
     "tier": "Legendär",
     "boostType": "percent",
-    "boostValue": 10,
+    "boostValue": 9,
     "variant": "og_mgr",
     "variantLabel": "Legendärer Trainer",
     "theme": "og_mgr"
@@ -8157,21 +8157,31 @@ MGR_BY_ID.set(ZIDANE_MANAGER.id, ZIDANE_MANAGER);
 // Hall of Fame Pack's ultra-rare manager pulls (0.1% each, see the 'hof' pack def) - real legendary
 // coaches, same plain-manager shape as PLAYERS_MANAGERS entries (no variant/theme needed, isManager
 // alone drives the correct card styling/pattern fallback).
+// Balance-Nerf: alle Trainer über +9% wurden auf +9% gekappt (kein Trainer im Spiel geht mehr darüber
+// hinaus). Als Ausgleich ziehen genau diese Trainer jetzt häufiger, skaliert nach ihrer VORHERIGEN
+// Stärke (siehe MANAGER_NERF_DRAW_MULTIPLIER unten, angewendet an jeder Ziehstelle dieser drei
+// Trainer) - Wenger/Sacchi/Mourinho waren alle gleich stark (11%), bekommen also denselben Faktor.
 const HOF_WENGER_MANAGER = {
   id: 9800120, n:'Arsène Wenger', club:'Arsenal', nat:'France', tier:'Legendär',
-  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+  boostType:'percent', boostValue:9, isManager:true, pos:'MGR', ov:99,
 };
 MGR_BY_ID.set(HOF_WENGER_MANAGER.id, HOF_WENGER_MANAGER);
 const HOF_SACCHI_MANAGER = {
   id: 9800121, n:'Arrigo Sacchi', club:'AC Milan', nat:'Italy', tier:'Legendär',
-  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+  boostType:'percent', boostValue:9, isManager:true, pos:'MGR', ov:99,
 };
 MGR_BY_ID.set(HOF_SACCHI_MANAGER.id, HOF_SACCHI_MANAGER);
 const HOF_MOURINHO_MANAGER = {
   id: 9800122, n:'José Mourinho', club:'Chelsea', nat:'Portugal', tier:'Legendär',
-  boostType:'percent', boostValue:11, isManager:true, pos:'MGR', ov:99,
+  boostType:'percent', boostValue:9, isManager:true, pos:'MGR', ov:99,
 };
 MGR_BY_ID.set(HOF_MOURINHO_MANAGER.id, HOF_MOURINHO_MANAGER);
+// Vorherige boostValue-Werte, rein für die Ziehwahrscheinlichkeits-Skalierung unten (die Karten selbst
+// tragen jetzt überall boostValue:9) - nie woanders referenzieren, nur hier zur Berechnung des Faktors.
+const MANAGER_PRE_NERF_BOOST = {9800120:11, 9800121:11, 9800122:11, 9800303:10};
+// Ziehwahrscheinlichkeit hoch skaliert im Verhältnis "war vorher X% stark, jetzt nur noch 9%" - je
+// stärker ein Trainer vorher war, desto mehr gleicht die höhere Ziehchance den Verlust aus.
+function managerNerfDrawMultiplier(mgrId){ return MANAGER_PRE_NERF_BOOST[mgrId] / 9; }
 const DERBY_SPECIALS = PLAYERS_DERBY;
 DERBY_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 const UNDERDOG_SPECIALS = PLAYERS_UNDERDOG;
@@ -10310,12 +10320,15 @@ const PACKS = [
     desc:'7 Spieler, alle garantiert mit Rating 88 oder h\u00f6her.',
     draw(){ const pool=poolByRange(88,99,true); return Array.from({length:7},()=>pick(pool)); }},
   {id:'hof',name:'Hall of Fame Pack',cost:42000,tier:'ultimate',count:1,
-    desc:'1 Spieler, garantiert Ikone, Zenturio, Ruhmeshalle oder Gal\u00e1ctico \u2014 Rating 95+. Winzige Chance (0,1% je Trainer) auf einen von drei legend\u00e4ren Trainern: Ars\u00e8ne Wenger, Arrigo Sacchi oder Jos\u00e9 Mourinho (je +11%). Das einzige Pack mit diesen Karten.',
+    desc:'1 Spieler, garantiert Ikone, Zenturio, Ruhmeshalle oder Gal\u00e1ctico \u2014 Rating 95+. Winzige Chance (ca. 0,12% je Trainer) auf einen von drei legend\u00e4ren Trainern: Ars\u00e8ne Wenger, Arrigo Sacchi oder Jos\u00e9 Mourinho (je +9%). Das einzige Pack mit diesen Karten.',
     draw(){
       const r = Math.random();
-      if(r<0.001) return [HOF_WENGER_MANAGER];
-      if(r<0.002) return [HOF_SACCHI_MANAGER];
-      if(r<0.003) return [HOF_MOURINHO_MANAGER];
+      // je 0.001 Basis-Chance * managerNerfDrawMultiplier (11/9 \u2248 1.222, siehe dort) als Ausgleich
+      // daf\u00fcr, dass alle drei von +11% auf +9% gekappt wurden.
+      const hofP = 0.001 * managerNerfDrawMultiplier(HOF_WENGER_MANAGER.id);
+      if(r<hofP) return [HOF_WENGER_MANAGER];
+      if(r<hofP*2) return [HOF_SACCHI_MANAGER];
+      if(r<hofP*3) return [HOF_MOURINHO_MANAGER];
       const pool=specialsByVariant(['icon','centurion','hall_of_fame','galactico']).filter(c=>c.ov>=95);
       return [pick(pool.length?pool:specialsByVariant(['icon','centurion','hall_of_fame','galactico']))];
     }},
@@ -10409,7 +10422,7 @@ const PACKS = [
       return Array.from({length:5}, (_,i)=> i===captainSlot ? (finalCaptain || pick(kapitaene)) : pick(variante));
     }},
   {id:'legendpack',name:'Fu\u00dfballg\u00f6tter Pack',cost:30000,tier:'ultimate',count:5,hidden:true,
-    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Birgit Prinz (101), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Mia Hamm (105), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+10% Team-Bonus \u2014 der st\u00e4rkste Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
+    desc:'5 Karten mit Rating 80 bis hin zu den absoluten Ausnahmekarten der Fu\u00dfballgeschichte \u2014 keine WM- oder GOAT-Karten enthalten. Jede Karte im Pool ist erreichbar \u2014 selbst die seltenste Karte hat mindestens 0,5% Chance pro Pack-\u00d6ffnung. Von h\u00e4ufiger zu seltener: George Best (100), Birgit Prinz (101), Ronaldo Naz\u00e1rio (102), Franz Beckenbauer (104), Mia Hamm (105), Johan Cruyff (106), Diego Maradona/Zinedine Zidane (je 108) und ganz zum Schluss Pel\u00e9 (111 OVR). Extrem extrem selten: Trainer Sir Alex Ferguson (+9% Team-Bonus \u2014 einer der st\u00e4rksten Trainer im Spiel). Nur k\u00e4uflich, nachdem die O Rei Herausforderung abgeschlossen wurde.',
     draw(){
       if(!ogPackTierPools){
         const all = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS).filter(c=>!c.isManager);
@@ -10424,7 +10437,9 @@ const PACKS = [
       // 1-(1-p)^5 solved for the combined per-card probability of that tier's named legends,
       // then split across the tier's own legends in their previous relative proportions.
       const P = {
-        ferguson:0.0012, pele:0.0031, maradona:0.0081, zidane:0.0081,
+        // 0.0012 Basis-Chance * managerNerfDrawMultiplier (10/9, siehe dort) als Ausgleich dafür,
+        // dass Ferguson von +10% auf +9% gekappt wurde.
+        ferguson:0.0012 * managerNerfDrawMultiplier(OG_MANAGER.id), pele:0.0031, maradona:0.0081, zidane:0.0081,
         cruyff:0.0041, hamm:0.0047, beckenbauer:0.0085, ronaldoNazario:0.0142, prinz:0.0178, best:0.0213,
         rare:0.06, good:0.18,
       };
