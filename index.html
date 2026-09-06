@@ -14251,23 +14251,31 @@ async function atomicCoinChange(delta, extraSets={}, opts={}){
 }
 // Tracks the size of the player's OWN collection across successful writes, purely so sSet() can spot
 // an implausible sudden collapse (see the guard below) - every real sSet('collection', collection) call
-// site in this file mutates the SAME global collection array by one card at a time (push/splice/filter),
-// so by the time sSet() runs, comparing its incoming value against itself would tell us nothing; this
-// separately-tracked "last known good" size is what actually lets the guard tell "shrank a lot in one
-// step" apart from "was already this size".
+// site in this file mutates the SAME global collection array (push/splice/filter), so by the time sSet()
+// runs, comparing its incoming value against itself would tell us nothing; this separately-tracked "last
+// known good" size is what actually lets the guard tell "collapsed in one step" apart from "was already
+// this size".
 let _lastKnownCollectionLen = null;
+// Deliberately an absolute floor, not just a percentage: a single big multi-card trade can legitimately
+// give away more than half a large collection in one sSet() call (see setLiveTradeAccepted) and must NOT
+// trip this, so a relative-only threshold would either miss the real incident or false-positive on that.
+// The real incident collapsed a collection in the thousands down to a small double-digit starter-sized
+// one - collapsing to AT MOST this many cards from a meaningfully larger collection is what's actually
+// implausible for any real single action (trade, sale, ...) in this game, which is the only combination
+// this guard blocks.
+const COLLECTION_COLLAPSE_FLOOR = 20;
+const COLLECTION_COLLAPSE_MIN_PRIOR = 50;
 async function sSet(key, value, shared=false){
   if(!shared){
     await fbReady;
-    // Refuse to persist a collapse of the player's own card collection to a small fraction of its last
-    // known size in a single write. This is deliberately blunt (no per-call-site "is this shrink
-    // legitimate" allowlist - there's no legitimate flow in this game that removes more than one card at
-    // a time anyway) rather than clever, because the exact failure mode it exists to stop is a silent
-    // one: a bug elsewhere in a 2.7M-character file constructing the wrong array and calling sSet with
-    // it. Failing this write is always safe - the real collection is untouched on the server, the game
-    // just won't reflect this one broken write until whatever caused it is fixed.
-    if(key==='collection' && Array.isArray(value) && _lastKnownCollectionLen!==null && _lastKnownCollectionLen>5 && value.length < _lastKnownCollectionLen*0.5){
-      console.error(`sSet('collection', ...) blocked: refusing to shrink the collection from ${_lastKnownCollectionLen} to ${value.length} cards in one write - this looks like the exact pattern that caused real data loss, not a normal single-card action. Nothing was written; the real collection on the server is untouched.`);
+    // Refuse to persist a collapse of the player's own card collection down to near-nothing in a single
+    // write. This is deliberately blunt (no per-call-site "is this shrink legitimate" allowlist) rather
+    // than clever, because the exact failure mode it exists to stop is a silent one: a bug elsewhere in a
+    // 2.7M-character file constructing the wrong array and calling sSet with it. Failing this write is
+    // always safe - the real collection is untouched on the server, the game just won't reflect this one
+    // broken write until whatever caused it is fixed.
+    if(key==='collection' && Array.isArray(value) && _lastKnownCollectionLen!==null && _lastKnownCollectionLen>=COLLECTION_COLLAPSE_MIN_PRIOR && value.length<=COLLECTION_COLLAPSE_FLOOR){
+      console.error(`sSet('collection', ...) blocked: refusing to collapse the collection from ${_lastKnownCollectionLen} to ${value.length} cards in one write - this looks like the exact pattern that caused real data loss, not a normal trade/sale. Nothing was written; the real collection on the server is untouched.`);
       toast('Speichern übersprungen: verdächtig große Änderung an deiner Kartensammlung wurde blockiert. Bitte lade die Seite neu.');
       return null;
     }
