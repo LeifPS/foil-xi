@@ -8966,13 +8966,17 @@ function iconSwap2Active(){
   if(Date.now()<ICONSWAP2_START && isAdmin()) return true;
   return Date.now()>=ICONSWAP2_START && Date.now()<ICONSWAP2_END;
 }
-// OVR -> token payout when giving a card away: exponential, so a handful of low-rated cards are worth
-// pocket change but a single very high-OVR card meaningfully dents even the priciest shop item - tuned
-// so the top tier (450 tokens, see ICONSWAP2_TIERS.legendary) is reachable by giving up roughly 4-5 of
-// your best 105+ cards, not hundreds of scrubs.
+// Only cards at/above this OVR can be given away at all (see openIconSwap2GiveModal's pool filter) -
+// anything weaker just isn't eligible, full stop, rather than being technically allowed for a token
+// or two.
+const ICONSWAP2_MIN_GIVE_OVR = 90;
+// OVR -> token payout when giving a card away: the triangular number of the OVR itself (1+2+...+ovr =
+// ovr*(ovr+1)/2), so payout accelerates with OVR - each additional OVR point is worth more than the
+// last, not a fixed or merely exponential step.
 function iconSwap2TokensForCard(card){
   if(!card || typeof card.ov!=='number') return 0;
-  return Math.max(1, Math.round(0.6*Math.pow(1.14, card.ov-70)));
+  const ovr = card.ov;
+  return ovr*(ovr+1)/2;
 }
 // Rarity tiers for the ROTATING SHOP - cards/packs/titles all share this one tier system. weight is the
 // relative selection weight per rotation slot (see rollIconSwap2ShopSlots), price is the fixed token
@@ -29365,10 +29369,10 @@ async function buyIconSwap2Item(item){
 // tokens - the whole modal doubles as the confirmation (a second explicit confirm step would be
 // redundant friction for a flow whose entire point is "give something up for something else").
 function openIconSwap2GiveModal(){
-  const pool = collection.map(entry=>({entry, def:BY_ID.get(entry.cardId)})).filter(x=>x.def);
+  const pool = collection.map(entry=>({entry, def:BY_ID.get(entry.cardId)})).filter(x=>x.def && x.def.ov>=ICONSWAP2_MIN_GIVE_OVR);
   openModal(`
     <h2 style="margin-bottom:4px;">Karte abgeben</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:10px;">Wähle eine Karte aus deiner Sammlung — sie wird endgültig entfernt, du bekommst dafür Icon Swap Tokens (mehr für stärkere Karten).</p>
+    <p class="hint" style="margin-top:0;margin-bottom:10px;">Wähle eine Karte ab ${ICONSWAP2_MIN_GIVE_OVR} OVR aus deiner Sammlung — sie wird endgültig entfernt, du bekommst dafür Icon Swap Tokens (mehr für stärkere Karten).</p>
     <input id="is2-give-search" class="is2-give-search" placeholder="Spielername...">
     <div class="picker-list" id="is2-give-results" style="max-height:400px;overflow-y:auto;"></div>`);
   const input = document.getElementById('is2-give-search');
@@ -29536,7 +29540,7 @@ function renderIconSwap2Hub(view){
     <div class="view-head is2-head">
       <button class="is2-btn is2-btn-ghost" id="is2-back" style="width:auto;margin-bottom:10px;">← Zurück</button>
       <h2>Icon Swap: Remastered</h2>
-      <p>Gib Karten aus deiner Sammlung ab, um Icon Swap Tokens zu bekommen — je stärker die Karte, desto mehr. Tausche die Tokens im rotierenden Shop gegen exklusive Karten und Titel (für ALLE Spieler gleichzeitig gleich). Noch ${daysLeft} Tag${daysLeft===1?'':'e'} verfügbar.</p>
+      <p>Gib Karten ab ${ICONSWAP2_MIN_GIVE_OVR} OVR aus deiner Sammlung ab, um Icon Swap Tokens zu bekommen — je stärker die Karte, desto mehr. Tausche die Tokens im rotierenden Shop gegen exklusive Karten und Titel (für ALLE Spieler gleichzeitig gleich). Noch ${daysLeft} Tag${daysLeft===1?'':'e'} verfügbar.</p>
     </div>
     <div class="is2-balance-row">
       <div class="is2-balance">${iconSwap2TokenIcon(20)}<span id="is2-token-count">${profile.iconSwap2Tokens||0}</span> Tokens</div>
