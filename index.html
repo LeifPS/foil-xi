@@ -2214,8 +2214,64 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
    Iridescent (Episch) the full sweep+glow, Prisma (Legendär) adds the glitter pulse on top of that. */
 .nt-schimmer{--glow:#4a9eff;background:linear-gradient(90deg,#4a9eff,#8bd0ff,#4a9eff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 5.5s linear infinite;}
 .nt-spektrum{--glow:#6fc7ff;background:linear-gradient(90deg,#4a9eff,#9dffe8,#8bd0ff,#c9a2ff,#4a9eff);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4.6s linear infinite;}
-.nt-iridescent{--glow:#4a9eff;background:linear-gradient(90deg,#4a9eff,#8bd0ff,#c9a2ff,#8bd0ff,#4a9eff);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite, nametagGlow 2.2s ease-in-out infinite;}
-.nt-prisma{--glow:#8bd0ff;background:linear-gradient(90deg,#4a9eff,#9dffe8,#ffd76a,#ff9de2,#c9a2ff,#8bd0ff,#4a9eff);background-size:500% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4.5s linear infinite, nametagGlitter 2s ease-in-out infinite;}
+/* Iridescent/Prisma get the full treatment beyond the shared gradient-shift: a compact halo of thin
+   rotating light rays + a couple of orbiting particle dots anchored to the SYMBOL GLYPH specifically
+   (not the whole name - a conic-gradient wedge stretched across a wide-but-short name badge draws long
+   distorted diagonal streaks instead of a neat radial burst, whereas the roughly-square symbol gives it
+   a clean circular halo to rotate in), plus a diagonal "slash" of light that sweeps across the whole
+   badge every few seconds (::after on the badge itself, a plain translucent bar - not text-clipped, so
+   it doesn't fight the base gradient's own background-position animation on the same property).
+   display:inline-block + position:relative on the symbol is the same one-off exception .nt-auserwaehlt
+   already uses on the whole badge, for the same reason: the pseudo-element needs a positioning context.
+   Prisma's symbol additionally spins continuously - its rarest/top nametag, so the extra motion (and
+   the richer halo below) is deliberately exclusive to it. */
+.nt-iridescent{--glow:#4a9eff;display:inline-block;position:relative;
+  background:linear-gradient(90deg,#4a9eff,#8bd0ff,#c9a2ff,#8bd0ff,#4a9eff);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite, nametagGlow 2.2s ease-in-out infinite;}
+.nt-iridescent .nametag-symbol{position:relative;display:inline-block;}
+.nt-iridescent .nametag-symbol::before{content:'';position:absolute;inset:-5px;pointer-events:none;z-index:-1;
+  background:
+    conic-gradient(from 0deg, transparent 0deg 40deg, rgba(74,158,255,.5) 44deg 46deg, transparent 50deg 130deg, rgba(157,255,232,.45) 134deg 136deg, transparent 140deg 220deg, rgba(201,162,255,.5) 224deg 226deg, transparent 230deg 310deg, rgba(139,208,255,.45) 314deg 316deg, transparent 320deg 360deg),
+    radial-gradient(circle, #fff 0 1px, transparent 1.6px),
+    radial-gradient(circle, #9de2ff 0 1px, transparent 1.6px);
+  background-repeat:no-repeat;background-size:100% 100%, 3px 3px, 3px 3px;
+  background-position:0 0, 10% 20%, 85% 80%;
+  mix-blend-mode:screen;animation:nametagRaySpin 4s linear infinite;}
+.nt-iridescent::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg, transparent 35%, rgba(255,255,255,.85) 48%, transparent 61%);
+  background-size:300% 100%;mix-blend-mode:screen;animation:nametagSlash 3.6s ease-in-out infinite;}
+.nt-prisma{--glow:#8bd0ff;display:inline-block;position:relative;
+  background:linear-gradient(90deg,#4a9eff,#9dffe8,#ffd76a,#ff9de2,#c9a2ff,#8bd0ff,#4a9eff);background-size:500% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4.5s linear infinite, nametagGlitter 2s ease-in-out infinite;}
+.nt-prisma .nametag-symbol{position:relative;display:inline-block;animation:nametagSymbolSpin 3s linear infinite;}
+.nt-prisma .nametag-symbol::before{content:'';position:absolute;inset:-6px;pointer-events:none;z-index:-1;
+  background:
+    conic-gradient(from 0deg, transparent 0deg 30deg, rgba(255,157,226,.55) 34deg 36deg, transparent 40deg 100deg, rgba(157,255,232,.5) 104deg 106deg, transparent 110deg 170deg, rgba(255,215,106,.5) 174deg 176deg, transparent 180deg 240deg, rgba(201,162,255,.55) 244deg 246deg, transparent 250deg 310deg, rgba(74,158,255,.5) 314deg 316deg, transparent 320deg 360deg),
+    radial-gradient(circle, #fff 0 1px, transparent 1.6px),
+    radial-gradient(circle, #ffd76a 0 1px, transparent 1.6px),
+    radial-gradient(circle, #ff9de2 0 1px, transparent 1.6px),
+    radial-gradient(circle, #9dffb0 0 1px, transparent 1.6px);
+  background-repeat:no-repeat;background-size:100% 100%, 3px 3px, 3px 3px, 3px 3px, 3px 3px;
+  background-position:0 0, 8% 15%, 88% 12%, 12% 88%, 90% 85%;
+  mix-blend-mode:screen;
+  /* counter-rotate the halo against the symbol's own spin so the rays/particles orbit at their own
+     pace instead of just being dragged around 1:1 with the glyph underneath them */
+  animation:nametagRaySpinReverse 2.6s linear infinite;}
+.nt-prisma::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg, transparent 35%, rgba(255,255,255,.9) 48%, transparent 61%);
+  background-size:300% 100%;mix-blend-mode:screen;animation:nametagSlash 2.6s ease-in-out infinite;}
+@keyframes nametagRaySpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+@keyframes nametagRaySpinReverse{0%{transform:rotate(0deg);}100%{transform:rotate(-360deg);}}
+@keyframes nametagSlash{
+  0%{background-position:160% 0;opacity:0;}
+  38%{opacity:0;}
+  46%{opacity:1;}
+  60%{background-position:-60% 0;opacity:1;}
+  68%{opacity:0;}
+  100%{opacity:0;background-position:-60% 0;}
+}
+@keyframes nametagSymbolSpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+body.gfx-no-fxlayers .nt-iridescent .nametag-symbol::before, body.gfx-no-fxlayers .nt-iridescent::after,
+body.gfx-no-fxlayers .nt-prisma .nametag-symbol::before, body.gfx-no-fxlayers .nt-prisma::after{ display:none !important; }
+body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
 .ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .ach-icon{font-size:24px;flex-shrink:0;width:40px;height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
