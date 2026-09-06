@@ -18564,6 +18564,7 @@ async function loadAdminUserPanel(targetId){
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="action-btn secondary" id="admin-give-coins" style="width:auto;">Coins geben</button>
       <button class="action-btn secondary" id="admin-give-wins" style="width:auto;">Siege geben</button>
+      <button class="action-btn secondary" id="admin-give-weekpass-xp" style="width:auto;">Wochen-Pass-XP geben</button>
       <button class="action-btn secondary" id="admin-give-card" style="width:auto;">Karte schicken</button>
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
       <button class="action-btn secondary" id="admin-give-pack-unopened" style="width:auto;">Pack (unge\u00f6ffnet) schicken</button>
@@ -18601,6 +18602,22 @@ async function loadAdminUserPanel(targetId){
       try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
       catch(e){ console.warn('admin give wins failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
       toast(`${amount>=0?'+':''}${amount} Siege f\u00fcr ${targetId}.`);
+      loadAdminUserPanel(targetId);
+    }, 6);
+  });
+  document.getElementById('admin-give-weekpass-xp').addEventListener('click', ()=>{
+    askTextModal('Wochen-Pass-XP hinzuf\u00fcgen (negativ zum Abziehen)', '0', async (val)=>{
+      const amount = parseInt(val,10);
+      if(!Number.isFinite(amount)) return;
+      // A stale weekPass (from a week that has since ended, or no weekPass at all yet) is treated the
+      // same way init()'s own migration treats it - start this week fresh - rather than adding XP onto
+      // an old week's numbers that would never actually be shown/claimable again.
+      const currentWp = (p.weekPass && p.weekPass.weekId===WEEK_PASS_ID) ? p.weekPass : {weekId:WEEK_PASS_ID, xp:0, claimed:[], bonusClaimed:0, chosen:{}};
+      const newWp = {...currentWp, xp:Math.max(0,(currentWp.xp||0)+amount)};
+      const newProfile = {...p, weekPass:newWp};
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      catch(e){ console.warn('admin give week pass xp failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
+      toast(`${amount>=0?'+':''}${amount} Wochen-Pass-XP f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
     }, 6);
   });
