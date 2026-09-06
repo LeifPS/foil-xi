@@ -8970,13 +8970,15 @@ function iconSwap2Active(){
 // anything weaker just isn't eligible, full stop, rather than being technically allowed for a token
 // or two.
 const ICONSWAP2_MIN_GIVE_OVR = 90;
-// OVR -> token payout when giving a card away: the triangular number of the OVR itself (1+2+...+ovr =
-// ovr*(ovr+1)/2), so payout accelerates with OVR - each additional OVR point is worth more than the
-// last, not a fixed or merely exponential step.
+// OVR -> token payout when giving a card away: the triangular number of x, where x=1 at the minimum
+// give-away OVR and increments by 1 per OVR point above that (90->1, 91->2, 92->3, ...) - so payout is
+// T(x)=x*(x+1)/2: 90 OVR gives 1, 91 gives 3, 92 gives 6, 93 gives 10, 94 gives 15, and so on,
+// accelerating faster with every OVR point above the minimum.
 function iconSwap2TokensForCard(card){
   if(!card || typeof card.ov!=='number') return 0;
-  const ovr = card.ov;
-  return ovr*(ovr+1)/2;
+  const x = card.ov - (ICONSWAP2_MIN_GIVE_OVR-1);
+  if(x<=0) return 0;
+  return x*(x+1)/2;
 }
 // Rarity tiers for the ROTATING SHOP - cards/packs/titles all share this one tier system. weight is the
 // relative selection weight per rotation slot (see rollIconSwap2ShopSlots), price is the fixed token
