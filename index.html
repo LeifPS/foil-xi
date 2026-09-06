@@ -330,7 +330,8 @@ body.gfx-no-fxlayers .pcard .refresh-fx,
 body.gfx-no-fxlayers .pcard .legikone-fx,
 body.gfx-no-fxlayers .pcard .wm26k-fx,
 body.gfx-no-fxlayers .pcard .breakout-fx,
-body.gfx-no-fxlayers .pcard .iconpromo-fx{ display:none !important; }
+body.gfx-no-fxlayers .pcard .iconpromo-fx,
+body.gfx-no-fxlayers .pcard .iconswap2-fx{ display:none !important; }
 body.gfx-no-confetti .wm26-trophy-cutscene *{ animation:none !important; }
 body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
@@ -556,27 +557,66 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .goat-crack.g3{top:70%;left:14%;width:50%;transform:rotate(8deg);animation-duration:3.8s;animation-delay:.6s;}
 .pcard .goat-crack.g4{top:60%;left:52%;width:34%;transform:rotate(-20deg);animation-duration:2.9s;animation-delay:1.8s;}
 @keyframes goatCrackFlicker{0%,100%{opacity:0;}45%{opacity:0;}52%{opacity:.9;}58%{opacity:.2;}70%{opacity:.7;}80%{opacity:0;}}
-/* Icon Swap: Remastered (theme 'iconswap2') - deep navy face, a border gradient that continuously
-   drifts through the event's whole blue->cyan->violet->pink spectrum (not just pulsing glow like
-   legacy/legacystar), plus its own FX layer below: a diagonal light band sweeping back and forth like
-   a real holographic sticker catching the light, and a few fixed twinkling sparkle points - genuinely
-   its own mechanism, not a palette-swapped rainbow-border theme. */
-.pcard.theme-iconswap2{--acc:#4a9eff;border:2px solid transparent;
+/* Icon Swap: Remastered (theme 'iconswap2') - deep navy face shared by every rarity, but each of the
+   4 rarity tiers (iconswap2-tier-common/rare/epic/legendary, set alongside theme-iconswap2 in cardEl)
+   gets its OWN distinct visual gimmick rather than one shared "shimmer" scaled up/down - common is
+   near-static cut glass, rare is a slow drifting liquid-light current, epic is a rotating faceted
+   prism, legendary is a full rotating aurora with a starfield. Rarer = visibly more going on, but each
+   is its own idea rather than a turned-up version of the last. */
+.pcard.theme-iconswap2{--acc:#4a9eff;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(139,208,255,.1), transparent 45%),
+    linear-gradient(160deg,#0a1830 0%,#0d1424 50%,#0a1830 100%);}
+.pcard.theme-iconswap2::before{animation:autoShine 1.7s ease-in-out infinite;}
+.pcard.theme-iconswap2 .name{color:#dff0ff;text-shadow:0 0 9px rgba(74,158,255,.7);}
+.pcard.theme-iconswap2 .name.name-variant{color:#dff0ff;text-shadow:0 0 9px rgba(74,158,255,.7);}
+.pcard .iconswap2-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+/* Häufig: "cut glass" - a static faceted hatch (no motion at all bar a slow breathing border), reads
+   as understated/premium rather than flashy. */
+.pcard.theme-iconswap2.iconswap2-tier-common{border:2px solid #8bd0ff;
+  animation:ultimateBreathe 3.2s ease-in-out infinite;}
+.pcard.theme-iconswap2.iconswap2-tier-common .iconswap2-cut{position:absolute;inset:0;
+  background:repeating-linear-gradient(115deg, transparent 0 16px, rgba(139,208,255,.07) 16px 17px, transparent 17px 33px, rgba(255,255,255,.04) 33px 34px);}
+.pcard.theme-iconswap2.iconswap2-tier-common .iconswap2-glint{position:absolute;width:22%;height:150%;top:-25%;left:-30%;
+  background:linear-gradient(180deg, transparent, rgba(255,255,255,.4), transparent);
+  animation:iconswap2GlintPass 7s ease-in-out infinite;}
+@keyframes iconswap2GlintPass{0%,80%,100%{transform:translateX(0) rotate(18deg);opacity:0;}84%{opacity:.75;}90%{transform:translateX(560%) rotate(18deg);opacity:0;}}
+/* Selten: a slow liquid current - two blurred colour blobs drifting past each other behind the face,
+   like light moving through water rather than a flat sweep across the surface. */
+.pcard.theme-iconswap2.iconswap2-tier-rare{border:2px solid #4a9eff;
+  animation:ultimateBreathe 2.9s ease-in-out infinite;}
+.pcard.theme-iconswap2.iconswap2-tier-rare .iconswap2-current{position:absolute;inset:-25%;
+  background:radial-gradient(circle at 28% 32%, rgba(74,158,255,.4), transparent 55%),
+             radial-gradient(circle at 72% 68%, rgba(157,255,232,.28), transparent 55%);
+  filter:blur(7px);animation:iconswap2CurrentDrift 9s ease-in-out infinite alternate;}
+@keyframes iconswap2CurrentDrift{0%{transform:translate(-5%,-4%) scale(1);}100%{transform:translate(6%,5%) scale(1.1);}}
+/* Episch: a rotating faceted prism - a repeating conic wedge pattern spinning slowly under screen
+   blend, with two diagonal glints passing at staggered offsets so it never reads as one static ring. */
+.pcard.theme-iconswap2.iconswap2-tier-epic{border:2px solid #a26bff;
+  animation:ultimateBreathe 2.6s ease-in-out infinite;}
+.pcard.theme-iconswap2.iconswap2-tier-epic .iconswap2-prism{position:absolute;inset:-40%;
+  background:repeating-conic-gradient(from 0deg at 50% 50%, rgba(162,107,255,.16) 0deg 12deg, transparent 12deg 24deg);
+  mix-blend-mode:screen;animation:iconswap2PrismSpin 16s linear infinite;}
+@keyframes iconswap2PrismSpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+.pcard.theme-iconswap2.iconswap2-tier-epic .iconswap2-glint{position:absolute;width:20%;height:150%;top:-25%;left:-30%;
+  background:linear-gradient(180deg, transparent, rgba(255,255,255,.5), transparent);
+  animation:iconswap2GlintPass 5s ease-in-out infinite;}
+.pcard.theme-iconswap2.iconswap2-tier-epic .iconswap2-glint.g2{animation-delay:2.4s;}
+/* Legendär: a full rotating aurora (conic gradient sweeping the whole event spectrum, blurred into a
+   nebula) plus a small fixed starfield of twinkling points and the multi-hue drifting border - the
+   most elaborate of the four, reserved for the rarest tier. */
+.pcard.theme-iconswap2.iconswap2-tier-legendary{border:2px solid transparent;
   background:
     radial-gradient(circle at 30% 20%, rgba(139,208,255,.12), transparent 45%),
     linear-gradient(160deg,#0a1830 0%,#0d1424 50%,#0a1830 100%) padding-box,
     linear-gradient(135deg,#4a9eff,#9dffe8,#c9a2ff,#ff9de2,#8bd0ff,#4a9eff) border-box !important;
   background-size:100% 100%, 100% 100%, 400% 400%;
   animation:iconswap2BorderDrift 7s linear infinite, ultimateBreathe 2.6s ease-in-out infinite;}
-.pcard.theme-iconswap2::before{animation:autoShine 1.7s ease-in-out infinite;}
-.pcard.theme-iconswap2 .name{color:#dff0ff;text-shadow:0 0 9px rgba(74,158,255,.7);}
-.pcard.theme-iconswap2 .name.name-variant{color:#dff0ff;text-shadow:0 0 9px rgba(74,158,255,.7);}
 @keyframes iconswap2BorderDrift{0%{background-position:0% 0%, 0% 0%, 0% 50%;}100%{background-position:0% 0%, 0% 0%, 300% 50%;}}
-.pcard .iconswap2-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
-.pcard .iconswap2-sweep{position:absolute;top:-60%;left:-60%;width:220%;height:220%;
-  background:linear-gradient(115deg, transparent 42%, rgba(139,208,255,.3) 47%, rgba(255,255,255,.55) 50%, rgba(201,162,255,.3) 53%, transparent 58%);
-  animation:iconswap2Sweep 4.2s ease-in-out infinite;}
-@keyframes iconswap2Sweep{0%,100%{transform:translate(-22%,-22%);}50%{transform:translate(22%,22%);}}
+.pcard.theme-iconswap2.iconswap2-tier-legendary .iconswap2-aurora{position:absolute;inset:-35%;
+  background:conic-gradient(from 0deg, rgba(74,158,255,.4), rgba(255,157,226,.32), rgba(201,162,255,.4), rgba(157,255,232,.32), rgba(74,158,255,.4));
+  filter:blur(13px);mix-blend-mode:screen;animation:iconswap2AuroraSpin 11s linear infinite;}
+@keyframes iconswap2AuroraSpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
 .pcard .iconswap2-spark{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;
   box-shadow:0 0 6px 1.5px rgba(139,208,255,.9);opacity:0;animation:iconswap2Twinkle linear infinite;}
 .pcard .iconswap2-spark.p1{top:12%;left:18%;animation-duration:2.8s;animation-delay:0s;}
@@ -586,8 +626,6 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .iconswap2-spark.p5{top:78%;left:32%;animation-duration:2.9s;animation-delay:1.8s;}
 .pcard .iconswap2-spark.p6{top:84%;left:64%;animation-duration:3.6s;animation-delay:1s;}
 @keyframes iconswap2Twinkle{0%,100%{opacity:0;transform:scale(.6);}50%{opacity:1;transform:scale(1.4);}}
-body.gfx-no-fxlayers .iconswap2-sweep{animation:none !important;opacity:.4;}
-body.gfx-no-fxlayers .iconswap2-spark{animation:none !important;opacity:.5;}
 /* OG Icons (variant 'ogicon', legendary players from decades past): previously just inherited the
    generic r-ultimate look too, distinguished only by THEME_ACC's bronze accent border color - no
    dedicated background of its own, nothing that actually reads "archival footage of a legend" rather
@@ -1820,7 +1858,7 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
   background:linear-gradient(155deg, rgba(74,158,255,.12), var(--panel) 65%);border:1px solid rgba(74,158,255,.35);}
 .is2-head h2{background:linear-gradient(90deg,#8bd0ff,#4a9eff,#c9a2ff,#4a9eff,#8bd0ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:iridescentSweep 6s linear infinite;}
 .is2-balance-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
-.is2-balance{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono';font-size:23px;font-weight:700;color:#8bd0ff;}
+.is2-balance{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono';font-size:15px;font-weight:700;color:#8bd0ff;}
 .is2-section-title{font-family:'Anton';font-size:14px;letter-spacing:.02em;color:#8bd0ff;text-transform:uppercase;margin-bottom:10px;}
 .is2-shop-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:16px;}
 .is2-shop-card{position:relative;overflow:hidden;background:linear-gradient(165deg,var(--panel2),var(--panel) 70%);
@@ -1836,6 +1874,16 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
   background:radial-gradient(circle, color-mix(in srgb, var(--tier-acc, #4a9eff) 30%, transparent), transparent 70%);color:var(--tier-acc, #4a9eff);
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--tier-acc,#4a9eff) 45%, transparent);}
 .is2-shop-label{font-size:12.5px;color:var(--chalk);line-height:1.35;min-height:34px;font-weight:600;}
+/* "Tap to uncover" shop slot cover (see iconSwap2EnsureRevealState) - sits on top of the fully-built
+   card underneath and hides everything except the rarity, so the only information available before
+   tapping is how rare the slot is. Fades out (not just disappears) on tap so the reveal itself feels
+   like a small event rather than a jump-cut. */
+.is2-shop-cover{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:linear-gradient(165deg,var(--panel2),var(--panel) 70%);border-radius:16px;cursor:pointer;transition:opacity .32s ease;}
+.is2-shop-cover.is2-cover-fade{opacity:0;pointer-events:none;}
+.is2-shop-cover-tier{display:inline-block;font-family:'Anton';font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#04101f;font-weight:700;
+  background:var(--tier-acc, #4a9eff);padding:5px 16px;border-radius:100px;}
+.is2-shop-cover-hint{font-size:10.5px;color:var(--muted);}
 /* Shop-Chancen modal (openIconSwap2OddsModal) - one collapsible-looking block per rarity tier, each
    with its own accent color and a compact icon/mini-card row per possible item. */
 .is2-odds-scroll{max-height:min(60vh,440px);overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-right:4px;}
@@ -8897,9 +8945,9 @@ const ICONSWAP2_ROSTER = [
   {baseId:222665, ov:97,  tier:'rare'},      // M. Ødegaard
   {baseId:215441, ov:98,  tier:'rare'},      // S. Guirassy
   {baseId:212622, ov:99,  tier:'rare'},      // J. Kimmich
-  {baseId:202126, ov:102, tier:'epic',      img:KAPITAENE_IMG_OVERRIDE[202126]},    // H. Kane
-  {baseId:203376, ov:104, tier:'epic',      img:KAPITAENE_IMG_OVERRIDE[203376]},    // V. van Dijk
-  {baseId:231747, ov:108, tier:'legendary', img:KAPITAENE_IMG_OVERRIDE[231747]},    // K. Mbappé
+  {baseId:202126, ov:102, tier:'epic',      img:'https://cdn3.futbin.com/content/fifa26/img/players/p201528718.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=e86c1118f584baa23cf49dcd3cd646d4'},    // H. Kane
+  {baseId:203376, ov:104, tier:'epic',      img:'https://cdn3.futbin.com/content/fifa26/img/players/p151198320.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=c15404c9eaf9c87c6900d0a1148b148d'},    // V. van Dijk
+  {baseId:231747, ov:108, tier:'legendary', img:'https://cdn3.futbin.com/content/fifa26/img/players/p134449475.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=622bed24083ab6cb60bc22e3abf06f33'},    // K. Mbappé
 ];
 const ICONSWAP2_SPECIALS = ICONSWAP2_ROSTER.map((r,i)=>{
   const base = findBaseCard(r.baseId);
@@ -8918,6 +8966,16 @@ const ICONSWAP2_OLD_TIER_MAP = {1:'common', 2:'rare', 3:'epic', 4:'legendary'};
 // (card face, labels, ...), not just in the CSS background. Nothing checks the OLD 'iconswap' variant
 // for logic anywhere (verified), so this is safe.
 ICONSWAP_CARDS.forEach(c=>{ if(c.swapTier){ c.iconswap2Tier = ICONSWAP2_OLD_TIER_MAP[c.swapTier]; c.variant = 'iconswap2'; c.theme = 'iconswap2'; c.variantLabel = 'Icon Swap: Remastered'; } });
+// The old roster (PLAYERS_ICONSWAP) was authored with its own hand-picked img on every entry, unlike
+// the new roster above - so applying the same "only 100+ keeps a special image" rule here means
+// actively replacing the img on every old sub-100 card with its base player's own default photo
+// (looked up via baseId), not just omitting an override.
+ICONSWAP_CARDS.forEach(c=>{
+  if(c.swapTier && c.ov<100 && c.baseId){
+    const base = findBaseCard(c.baseId);
+    if(base) c.img = base.img;
+  }
+});
 // All cards eligible for the rotating shop's CARD slots (new + old, both already tagged with
 // iconswap2Tier above).
 function iconSwap2AllCards(){ return ICONSWAP2_SPECIALS.concat(ICONSWAP_CARDS); }
@@ -15672,16 +15730,19 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="goat-halo"></div>
       ${Array.from({length:4},(_,i)=>`<i class="goat-crack g${i+1}"></i>`).join('')}
     </div>` : '';
-  // Icon Swap: Remastered (variant/theme 'iconswap2') - a genuine holographic-foil look, not a
-  // recolor of the shared rainbow-border-box treatment every other bespoke theme uses: a diagonal
-  // light band sweeps back and forth across the whole face (like a foil sticker catching the light as
-  // you tilt it - the literal "looks different depending on the angle" the whole event's theme is
-  // built around), plus a handful of small twinkling sparkle points at fixed offsets.
+  // Icon Swap: Remastered (variant/theme 'iconswap2') - each rarity tier gets its own distinct FX
+  // markup (see the .iconswap2-tier-* CSS above cardEl for what each one actually looks like): common
+  // is near-static cut glass, rare a drifting liquid current, epic a spinning faceted prism with two
+  // glints, legendary a full rotating aurora plus a small twinkling starfield - not the same element
+  // just recolored per tier.
   const isIconSwap2Tier = card.theme==='iconswap2';
-  const iconswap2FxHTML = isIconSwap2Tier ? `<div class="iconswap2-fx">
-      <div class="iconswap2-sweep"></div>
-      ${Array.from({length:6},(_,i)=>`<i class="iconswap2-spark p${i+1}"></i>`).join('')}
-    </div>` : '';
+  const iconswap2FxHTML = isIconSwap2Tier ? (()=>{
+    const tier = card.iconswap2Tier;
+    if(tier==='common') return `<div class="iconswap2-fx"><div class="iconswap2-cut"></div><div class="iconswap2-glint"></div></div>`;
+    if(tier==='rare') return `<div class="iconswap2-fx"><div class="iconswap2-current"></div></div>`;
+    if(tier==='epic') return `<div class="iconswap2-fx"><div class="iconswap2-prism"></div><div class="iconswap2-glint g1"></div><div class="iconswap2-glint g2"></div></div>`;
+    return `<div class="iconswap2-fx"><div class="iconswap2-aurora"></div>${Array.from({length:6},(_,i)=>`<i class="iconswap2-spark p${i+1}"></i>`).join('')}</div>`;
+  })() : '';
   // OG Icons: no static centerpiece - a steady rain of small green laurel leaves, gold crowns and gold
   // stars drifting down the whole card, each rotating as it falls. Left position/delay/duration are
   // randomized per card instance (not fixed CSS classes) so the rain never looks like the same 12
@@ -15753,7 +15814,8 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   })() : '';
   const div = document.createElement('div');
   const isDiamondLevel = !card.isManager && card.level===4;
-  div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
+  const iconswap2TierClass = card.theme==='iconswap2' && card.iconswap2Tier ? `iconswap2-tier-${card.iconswap2Tier}` : '';
+  div.className = `pcard ${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${iconswap2TierClass} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
   const boostText = card.isManager ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue}`) : '';
   const nameClass = (hasVariant || card.isManager) ? ' name-variant' : '';
@@ -29126,6 +29188,23 @@ let iconSwap2RefreshNonce = 0;
 function adminRefreshIconSwap2Stock(){
   iconSwap2RefreshNonce = Math.floor(Math.random()*1e9);
 }
+// Every card/pack slot can only be bought ONCE per rotation (titles are already limited to once ever
+// via profile.unlockedNametags, so they don't need this) - tracked per-account in the profile, keyed
+// by the exact bucket the item was bought under (same bucket key rollIconSwap2ShopSlots seeds with,
+// so an admin's local-only reroll also gets its own independent one-per-item limit on whatever it is
+// currently showing them, consistent with what they actually see on screen).
+function iconSwap2CurrentPurchaseBucket(){ return iconSwap2RotationBucket() + iconSwap2RefreshNonce; }
+function iconSwap2AlreadyPurchasedThisRotation(itemId){
+  const rec = profile.iconSwap2PurchasedThisRotation;
+  return !!(rec && rec.bucket===iconSwap2CurrentPurchaseBucket() && rec.ids.includes(itemId));
+}
+function iconSwap2MarkPurchasedThisRotation(itemId){
+  const bucket = iconSwap2CurrentPurchaseBucket();
+  if(!profile.iconSwap2PurchasedThisRotation || profile.iconSwap2PurchasedThisRotation.bucket!==bucket){
+    profile.iconSwap2PurchasedThisRotation = {bucket, ids:[]};
+  }
+  profile.iconSwap2PurchasedThisRotation.ids.push(itemId);
+}
 // Tiny seeded PRNG (mulberry32) - deterministic per integer seed, good enough distribution for picking
 // 3 items out of a few dozen. Not used anywhere security-sensitive, purely cosmetic shop rotation.
 function iconSwap2Mulberry32(seed){
@@ -29232,7 +29311,9 @@ async function buyIconSwap2Item(item){
   const tier = ICONSWAP2_TIERS[item.tier];
   if((profile.iconSwap2Tokens||0) < tier.price){ toast('Nicht genug Icon Swap Tokens.'); return; }
   if(item.type==='title' && (profile.unlockedNametags||[]).includes(item.nametagId)){ toast('Titel bereits freigeschaltet.'); return; }
+  if(item.type!=='title' && iconSwap2AlreadyPurchasedThisRotation(item.id)){ toast('Dieses Item wurde in dieser Rotation bereits gekauft.'); return; }
   profile.iconSwap2Tokens -= tier.price;
+  if(item.type!=='title') iconSwap2MarkPurchasedThisRotation(item.id);
   if(item.type==='card'){
     collection.push({uid:genId(), cardId:item.card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId});
     bumpCardMintCount(item.card.id, 1, !!item.card.untradable);
@@ -29274,7 +29355,7 @@ function openIconSwap2GiveModal(){
       const tag = document.createElement('div');
       tag.className = 'price-pill';
       tag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.8);border-radius:8px;padding:3px 0;font-size:10.5px;color:#8bd0ff;';
-      tag.innerHTML = `+${tokens} ${iconSwap2TokenIcon(16)}Token${tokens===1?'':'s'}`;
+      tag.innerHTML = `+${tokens} ${iconSwap2TokenIcon(12)}Token${tokens===1?'':'s'}`;
       wrap.appendChild(tag);
       wrap.addEventListener('click', ()=>confirmIconSwap2Give(entry.uid, def, tokens));
       results.appendChild(wrap);
@@ -29286,7 +29367,7 @@ function openIconSwap2GiveModal(){
 function confirmIconSwap2Give(uid, def, tokens){
   openModal(`
     <h2 style="margin-bottom:10px;color:#4a9eff;">${def.n} abgeben?</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Diese Karte wird endgültig aus deiner Sammlung entfernt. Du erhältst dafür <b style="color:#8bd0ff;font-size:15px;">${iconSwap2TokenIcon(22)}${tokens} Icon Swap Token${tokens===1?'':'s'}</b>. Nicht rückgängig zu machen.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Diese Karte wird endgültig aus deiner Sammlung entfernt. Du erhältst dafür <b style="color:#8bd0ff;">${iconSwap2TokenIcon(14)}${tokens} Icon Swap Token${tokens===1?'':'s'}</b>. Nicht rückgängig zu machen.</p>
     <div style="display:flex;gap:10px;">
       <button class="is2-btn is2-btn-ghost" id="is2-give-cancel" style="flex:1;">Abbrechen</button>
       <button class="is2-btn" id="is2-give-confirm" style="flex:1;">Abgeben</button>
@@ -29363,26 +29444,45 @@ function openIconSwap2OddsModal(){
     <p class="hint" style="margin-top:0;margin-bottom:14px;">Jede Rotation zieht 3 verschiedene Items, gewichtet nach Seltenheit — seltenere Stufen sind unwahrscheinlicher und teurer. Die Prozentangaben gelten pro gezogenem Slot.</p>
     <div class="is2-odds-scroll">${tierBlocks}</div>`);
 }
+// Reveal state for the "tap to uncover" shop cards (see below) - only the rarity is visible until the
+// player taps a cover, then that slot's actual item stays revealed for as long as the rotation shows
+// it. Keyed to the same bucket the shop itself rolls against, so a real 6h rotation (or an admin's
+// local reroll, which changes the bucket too) always starts fresh, hidden again.
+let iconSwap2RevealedBucket = null;
+let iconSwap2RevealedIds = new Set();
+function iconSwap2EnsureRevealState(){
+  const bucket = iconSwap2CurrentPurchaseBucket();
+  if(iconSwap2RevealedBucket !== bucket){ iconSwap2RevealedBucket = bucket; iconSwap2RevealedIds = new Set(); }
+}
 let iconSwap2CountdownTimer = null;
 function renderIconSwap2Hub(view){
   if(iconSwap2CountdownTimer){ clearInterval(iconSwap2CountdownTimer); iconSwap2CountdownTimer = null; }
   if(!iconSwap2Active()){ renderView('store'); return; }
+  iconSwap2EnsureRevealState();
   const slots = rollIconSwap2ShopSlots();
   const slotsHtml = slots.map(item=>{
     const tier = ICONSWAP2_TIERS[item.tier];
     const canAfford = (profile.iconSwap2Tokens||0) >= tier.price;
     const alreadyOwnedTitle = item.type==='title' && (profile.unlockedNametags||[]).includes(item.nametagId);
-    const disabled = !canAfford || alreadyOwnedTitle;
+    const alreadyPurchased = item.type!=='title' && iconSwap2AlreadyPurchasedThisRotation(item.id);
+    const disabled = !canAfford || alreadyOwnedTitle || alreadyPurchased;
+    const buyLabel = alreadyOwnedTitle ? 'Bereits freigeschaltet' : alreadyPurchased ? 'Bereits gekauft' : `${iconSwap2TokenIcon(14)}${tier.price} Token`;
     const visual = item.type==='card'
       ? cardEl(item.card,'mini').outerHTML
       : `<div class="is2-shop-icon" style="--tier-acc:${tier.accent};">${iconSwap2ItemIcon(item)}</div>`;
+    const revealed = iconSwap2RevealedIds.has(item.id);
+    const cover = revealed ? '' : `<div class="is2-shop-cover" data-cover-id="${item.id}" style="--tier-acc:${tier.accent};">
+      <div class="is2-shop-cover-tier">${tier.label}</div>
+      <div class="is2-shop-cover-hint">Tippen zum Aufdecken</div>
+    </div>`;
     return `<div class="is2-shop-card" style="--tier-acc:${tier.accent};">
+      ${cover}
       <div class="is2-shop-tier">${tier.label}</div>
       <div class="is2-shop-visual">${visual}</div>
       <div class="is2-shop-label">${iconSwap2ItemLabel(item)}</div>
       ${item.type!=='card' ? `<div class="hint" style="margin:2px 0 0;font-size:10.5px;">${item.type==='pack'?item.pack.desc:'Exklusiver Titel'}</div>` : ''}
       <button class="is2-btn ${disabled?'is2-btn-disabled':''}" data-item-id="${item.id}" ${disabled?'disabled':''}>
-        ${alreadyOwnedTitle ? 'Bereits freigeschaltet' : `${iconSwap2TokenIcon(19)}${tier.price} Token`}
+        ${buyLabel}
       </button>
     </div>`;
   }).join('');
@@ -29394,7 +29494,7 @@ function renderIconSwap2Hub(view){
       <p>Gib Karten aus deiner Sammlung ab, um Icon Swap Tokens zu bekommen — je stärker die Karte, desto mehr. Tausche die Tokens im rotierenden Shop gegen exklusive Karten, Packs und Titel (für ALLE Spieler gleichzeitig gleich). Noch ${daysLeft} Tag${daysLeft===1?'':'e'} verfügbar.</p>
     </div>
     <div class="is2-balance-row">
-      <div class="is2-balance">${iconSwap2TokenIcon(34)}<span id="is2-token-count">${profile.iconSwap2Tokens||0}</span> Tokens</div>
+      <div class="is2-balance">${iconSwap2TokenIcon(20)}<span id="is2-token-count">${profile.iconSwap2Tokens||0}</span> Tokens</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="is2-btn is2-btn-ghost" id="is2-odds-btn" style="width:auto;">🎲 Chancen</button>
         <button class="is2-btn" id="is2-give-btn" style="width:auto;">Karte abgeben</button>
@@ -29416,6 +29516,13 @@ function renderIconSwap2Hub(view){
     btn.addEventListener('click', ()=>{
       const item = slots.find(s=>s.id===btn.dataset.itemId);
       if(item) buyIconSwap2Item(item);
+    });
+  });
+  view.querySelectorAll('[data-cover-id]').forEach(cover=>{
+    cover.addEventListener('click', ()=>{
+      iconSwap2RevealedIds.add(cover.dataset.coverId);
+      cover.classList.add('is2-cover-fade');
+      setTimeout(()=>cover.remove(), 320);
     });
   });
   const updateCountdown = ()=>{
