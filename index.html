@@ -1970,14 +1970,29 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .pen-score-lbl{color:var(--muted);font-size:11.5px;margin-top:2px;}
 .pen-score-mid{text-align:center;flex:1.4;font-size:12px;color:var(--muted);line-height:1.4;}
 .pen-phase{font-family:'Anton';font-size:14px;color:var(--chalk);letter-spacing:.02em;}
-.pen-track{position:relative;height:14px;border-radius:100px;background:var(--panel2);border:1px solid var(--line);margin-bottom:6px;overflow:visible;}
-.pen-sweetspot{position:absolute;top:0;bottom:0;background:rgba(61,220,132,.28);border-left:1px solid #3ddc84;border-right:1px solid #3ddc84;border-radius:4px;}
-.pen-marker{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 10px 2px rgba(255,255,255,.8);
-  transform:translate(-50%,-50%);transition:none;}
-.pen-zones{display:grid;grid-template-columns:repeat(3, 1fr);gap:10px;}
-.pen-zone-btn:disabled{opacity:.5;cursor:not-allowed;}
+/* v2 drag-to-aim field: a wide goal box (fixed aspect ratio via padding-top hack, since aspect-ratio
+   support isn't assumed elsewhere in this file) with a net pattern, a keeper and ball positioned by
+   percentage (left/top = the exact nx/ny fraction * 100, so no pixel math is ever needed to place
+   them), and a reticle that follows the pointer while dragging. overflow:visible on .pen-goal so the
+   ball can rest below the frame (at the penalty spot) and shots that sail wide/over remain visible
+   past the posts instead of getting clipped. */
+.pen-field{max-width:480px;margin:0 auto 6px;}
+.pen-goal{position:relative;width:100%;padding-top:42%;overflow:visible;touch-action:none;cursor:crosshair;
+  background:linear-gradient(180deg, rgba(139,208,255,.05), transparent 60%);
+  border:6px solid #e8ecef;border-bottom:none;border-radius:2px;box-shadow:inset 0 0 30px rgba(0,0,0,.35);}
+.pen-net{position:absolute;inset:0;pointer-events:none;opacity:.35;
+  background-image:repeating-linear-gradient(115deg, rgba(255,255,255,.5) 0 1px, transparent 1px 14px),
+    repeating-linear-gradient(65deg, rgba(255,255,255,.5) 0 1px, transparent 1px 14px);}
+.pen-keeper,.pen-ball{position:absolute;transform:translate(-50%,-50%);font-size:28px;pointer-events:none;
+  filter:drop-shadow(0 3px 4px rgba(0,0,0,.6));z-index:2;}
+.pen-ball{font-size:22px;z-index:3;}
+.pen-reticle{position:absolute;width:26px;height:26px;border-radius:50%;border:3px solid #3ddc84;
+  transform:translate(-50%,-50%);pointer-events:none;z-index:4;box-shadow:0 0 10px rgba(255,255,255,.5);}
 .pen-result{min-height:52px;text-align:center;margin-top:14px;}
 .pen-result-label{font-family:'Anton';font-size:22px;}
+.pen-result-goal{color:#3ddc84;}
+.pen-result-saved{color:#ffd76a;}
+.pen-result-miss{color:#e2564f;}
 .pen-opponent-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px;}
 body.gfx-no-fxlayers .is2-banner-glimmer{animation:none !important; opacity:.15;}
 /* Icon Swap Token symbol - a slow, gentle facet-glint (brightness+rotate wobble) so the gem itself
@@ -18498,7 +18513,7 @@ async function renderAdminPanel(view){
     </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">🥅 Elfmeterschießen (Skill-Modus, Prototyp)</h3>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Timing-basiertes Elfmeterschießen - Ergebnis haengt fast ausschliesslich vom Tap-Timing ab, Kader-Stats geben nur einen moderaten Vorteil (breiteres Zeitfenster), kein Geraetevorteil (nur Tap/Klick, kein Ziehen/Ziel). Noch komplett getrennt von allen anderen Modi, wirkt sich auf keinen Account aus - nur zum Testen.</p>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Wisch-zum-Schießen (v2) - im Tor zum Zielpunkt ziehen und loslassen, Ecken sind unhaltbar aber riskant zu treffen. Kader-Stats geben einen moderaten Vorteil (Torwart-Reichweite, Schuss-Toleranz), kein Geraetevorteil (normalisierte Ziehgeste, kein Pixel-Ziel). Noch komplett getrennt von allen anderen Modi, wirkt sich auf keinen Account aus - nur zum Testen.</p>
       <button class="action-btn secondary" id="admin-penalty-test" style="width:auto;">Testen</button>
     </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
@@ -18631,42 +18646,37 @@ async function renderAdminPanel(view){
   refreshAdminRecentUserChips();
 }
 // ===== Elfmeterschießen (Skill-Modus, ADMIN-ONLY PROTOTYPE - see renderView('penalty') gate) =====
-// Design goals from the brainstorm: (1) high skill ceiling - a much better PLAYER should beat a much
-// better SQUAD almost every time; (2) fully separate mode - own state, own screen, touches no shared
-// currency/stats/account data; (3) zero device advantage - every input is a single tap/click on a big
-// button, never a drag or a precise cursor position, so touch and mouse are equally capable; (4) squad
-// stats matter (wider margin for error) without making a weaker side unbeatable (just much harder).
-//
-// Core mechanic: a bar sweeps 0->100->0 on a sine curve (slowest at the ends, fastest through the
-// middle - so hitting dead-center "perfect" is the hardest timing, not the easiest) over a fixed real-
-// world duration; each of the 3 direction buttons BOTH picks the shot's zone AND locks in the timing
-// the instant it's tapped. Quality is computed purely from the actual elapsed time (event timestamp),
-// never from counted animation frames, so a slow/laggy device never changes the outcome - only reaction
-// timing does. A shot's "sweet spot" half-width scales gently with the shooter's SHO (attacking) or
-// keeper's DEFN (defending, used as a reflex proxy - this game has no dedicated goalkeeping stat), which
-// only ever adds ~7 percentage points of margin between the weakest and strongest squad - real but not
-// dominant next to raw timing skill.
-const PENALTY_BAR_PERIOD_MS = 1400;
-const PENALTY_ZONES = ['links','mitte','rechts'];
-const PENALTY_ZONE_LABEL = {links:'⬅ Links', mitte:'⬆ Mitte', rechts:'Rechts ➡'};
+// v2: the original timing-bar mechanic tested badly (too abstract, no football feel, frustrating to
+// hit) - replaced with drag-to-aim: press/drag anywhere inside the goal box to move a reticle, release
+// to shoot at (or dive toward) that exact spot. Still device-neutral (Pointer Events fire identically
+// for mouse and touch, and everything is normalized coordinates - 0..1 across the goal box - never raw
+// pixels, so screen size/DPI never matters), still has a real skill ceiling (corner placement is both
+// the highest-quality AND the riskiest shot - a shot that lands close enough to a post is literally
+// unstoppable regardless of the keeper), and squad stats still matter without dominating (see
+// penaltyShotForgiveness/penaltyKeeperReach below).
 const PENALTY_TEST_OPPONENTS = [
   {label:'70 OVR Bot', sho:70, gk:70},
   {label:'80 OVR Bot', sho:80, gk:80},
   {label:'90 OVR Bot', sho:90, gk:90},
   {label:'99 OVR Bot', sho:99, gk:99},
 ];
-// pos in [0,100], 50 = dead center of the sweep. Sine curve (not linear/triangle) so the bar moves
-// SLOWEST at the two ends and FASTEST through the middle - the sweet spot sits at center, so nailing a
-// truly perfect hit means timing a tap during the fastest part of the sweep, not the slowest.
-function penaltyBarPosition(elapsedMs){
-  const t = (elapsedMs % PENALTY_BAR_PERIOD_MS) / PENALTY_BAR_PERIOD_MS;
-  return 50 - 50*Math.cos(2*Math.PI*t);
+// Shot "quality" = how close to a post, on a 0..1 scale (1 = right on a post, 0 = dead center) - this is
+// what makes corners simultaneously the best AND riskiest shots, exactly like real penalties.
+function penaltyShotQuality(nx){
+  return Math.max(0, 1 - Math.min(nx, 1-nx)/0.5);
 }
-// Half-width of the "on target" window in bar-percent, as a function of the relevant stat - deliberately
-// a small spread even at 99 (roughly 11-13 out of a 0-100 bar), so even a maxed-out squad still needs
-// real timing to score/save consistently; a weak squad's window is only ~2 points narrower, not gone.
-function penaltyWindowHalfWidth(stat){
-  return 6 + (Math.max(1,Math.min(99,stat))/99)*7;
+// Keeper's save reach (as a fraction of the goal box) - scales gently with the relevant stat, same
+// "matters but doesn't dominate" range as before (~0.22 at the weakest possible keeper up to ~0.37 at
+// a maxed one).
+function penaltyKeeperReach(stat){
+  return 0.22 + (Math.max(1,Math.min(99,stat))/99)*0.15;
+}
+// How far outside the visible goal frame a shot can land and still count as on target, purely from
+// shooting technique (SHO) - up to ~6% of the goal box at 99, essentially none at the low end. This is
+// the squad-stat advantage on the ATTACKING side (the keeper-reach function above is its defensive
+// counterpart).
+function penaltyShotForgiveness(stat){
+  return (Math.max(1,Math.min(99,stat))/99)*0.06;
 }
 function penaltyShooterStat(){
   let best = 65;
@@ -18679,30 +18689,28 @@ function penaltyKeeperStat(){
   return (gk && typeof gk.defn==='number') ? gk.defn : 65;
 }
 let penaltyGame = null;
-let penaltyRoundStart = 0;
-let penaltyBarRaf = null;
-let penaltyAiShot = null; // {zone, quality} - the bot's hidden shot, rolled fresh each 'save' phase
+let penaltyAiShot = null; // {nx, ny, quality, missed} - the bot's hidden shot, rolled fresh each 'save' phase
 function penaltyStartGame(opp){
-  penaltyGame = {opp, round:1, maxRounds:5, playerScore:0, botScore:0, phase:'shoot', suddenDeath:false, log:[]};
+  penaltyGame = {opp, round:1, maxRounds:5, playerScore:0, botScore:0, phase:'shoot', suddenDeath:false};
   penaltyRenderRound();
 }
 function penaltyRollAiShot(){
-  // Higher opponent SHO shifts the average shot quality up (harder to guess right AND time a save
-  // against) - still leaves real spread so a weak bot can skew its own shot wide on a bad roll, and a
-  // strong bot can still be read/saved on a merely-good (not "unstoppable") attempt.
-  const base = (penaltyGame.opp.sho/99)*0.55;
-  const quality = Math.max(0, Math.min(1, base + Math.random()*0.5 - 0.1));
-  return {zone: pick(PENALTY_ZONES), quality};
+  const cornerBias = penaltyGame.opp.sho/99;
+  // Stronger opponents go for a corner more often (harder to guess/save); weaker ones play it safer
+  // but also skew wide on their own more often (missChance), independent of anything the keeper does.
+  const nx = Math.random() < 0.25+cornerBias*0.45
+    ? (Math.random()<0.5 ? Math.random()*0.16 : 1-Math.random()*0.16)
+    : 0.18+Math.random()*0.64;
+  const ny = 0.18+Math.random()*0.64;
+  const missChance = Math.max(0.03, 0.16-cornerBias*0.1);
+  return {nx, ny, quality: penaltyShotQuality(nx), missed: Math.random()<missChance};
 }
 function penaltyRenderRound(){
-  if(penaltyBarRaf){ cancelAnimationFrame(penaltyBarRaf); penaltyBarRaf=null; }
   const g = penaltyGame;
   const view = document.getElementById('view');
   if(!view || !g) return;
   const isShoot = g.phase==='shoot';
   if(!isShoot) penaltyAiShot = penaltyRollAiShot();
-  const stat = isShoot ? penaltyShooterStat() : penaltyKeeperStat();
-  const half = penaltyWindowHalfWidth(stat);
   const roundLabel = g.suddenDeath ? 'Sudden Death' : `Runde ${g.round} / ${g.maxRounds}`;
   view.innerHTML = `
     <div class="view-head"><h2>🥅 Elfmeterschießen (Test)</h2><p>Admin-only Prototyp - reine Live-Ansicht, wirkt sich auf keinen Account aus. Gegner: ${g.opp.label}.</p></div>
@@ -18711,68 +18719,129 @@ function penaltyRenderRound(){
       <div class="pen-score-mid">${roundLabel}<br><span class="pen-phase">${isShoot?'Du schießt':'Du hältst'}</span></div>
       <div class="pen-score-side"><div class="pen-score-num">${g.botScore}</div><div class="pen-score-lbl">${g.opp.label}</div></div>
     </div>
-    <div class="pen-track" id="pen-track">
-      <div class="pen-sweetspot" style="left:${50-half}%;width:${half*2}%;"></div>
-      <div class="pen-marker" id="pen-marker"></div>
+    <div class="pen-field">
+      <div class="pen-goal" id="pen-goal">
+        <div class="pen-net"></div>
+        <div class="pen-keeper" id="pen-keeper">🧤</div>
+        <div class="pen-ball" id="pen-ball">⚽</div>
+        <div class="pen-reticle" id="pen-reticle" hidden></div>
+      </div>
     </div>
-    <p class="hint" style="text-align:center;margin:6px 0 16px;">Tippe eine Richtung GENAU wenn der Zeiger im markierten Bereich ist.</p>
-    <div class="pen-zones">${PENALTY_ZONES.map(z=>`<button class="is2-btn pen-zone-btn" data-zone="${z}">${PENALTY_ZONE_LABEL[z]}</button>`).join('')}</div>
+    <p class="hint" style="text-align:center;margin:10px 0 4px;">${isShoot
+      ? 'Ziehe im Tor zum Zielpunkt und lass los, um zu schießen. Ecken sind unhaltbar, aber riskanter zu treffen.'
+      : 'Ziehe den Torwart zum Punkt, wo du hinspringen willst, und lass los.'}</p>
     <div id="pen-result" class="pen-result"></div>
-    <button class="is2-btn is2-btn-ghost" id="pen-back" style="width:auto;margin-top:18px;">← Zurück zum Admin-Panel</button>`;
+    <button class="is2-btn is2-btn-ghost" id="pen-back" style="width:auto;margin-top:14px;">← Zurück zum Admin-Panel</button>`;
   document.getElementById('pen-back').addEventListener('click', ()=>renderView('admin'));
-  const marker = document.getElementById('pen-marker');
-  penaltyRoundStart = performance.now();
-  const tick = ()=>{
-    marker.style.left = penaltyBarPosition(performance.now()-penaltyRoundStart)+'%';
-    penaltyBarRaf = requestAnimationFrame(tick);
+  penaltySetupAimSurface(isShoot);
+}
+// Wires up drag-to-aim on the goal box: pointerdown starts the reticle, pointermove drags it live,
+// pointerup locks in the final (nx,ny) and resolves the kick/save. A plain tap (down+up, no movement)
+// works identically - it just aims at wherever you tapped.
+function penaltySetupAimSurface(isShoot){
+  const surface = document.getElementById('pen-goal');
+  const reticle = document.getElementById('pen-reticle');
+  const ball = document.getElementById('pen-ball');
+  const keeper = document.getElementById('pen-keeper');
+  ball.style.transition = 'none';
+  keeper.style.transition = 'none';
+  ball.style.left = '50%'; ball.style.top = '128%'; ball.style.opacity = isShoot ? '1' : '.3';
+  keeper.style.left = '50%'; keeper.style.top = '52%';
+  let dragging = false;
+  const posFromEvent = e=>{
+    const rect = surface.getBoundingClientRect();
+    return {nx:(e.clientX-rect.left)/rect.width, ny:(e.clientY-rect.top)/rect.height};
   };
-  penaltyBarRaf = requestAnimationFrame(tick);
-  view.querySelectorAll('.pen-zone-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      view.querySelectorAll('.pen-zone-btn').forEach(b=>b.disabled=true);
-      if(penaltyBarRaf){ cancelAnimationFrame(penaltyBarRaf); penaltyBarRaf=null; }
-      const elapsed = performance.now()-penaltyRoundStart;
-      if(isShoot) penaltyResolveShot(btn.dataset.zone, elapsed, half);
-      else penaltyResolveSave(btn.dataset.zone, elapsed, half);
-    });
-  });
+  const updateReticle = (nx,ny)=>{
+    reticle.hidden = false;
+    reticle.style.left = (nx*100)+'%';
+    reticle.style.top = (ny*100)+'%';
+    const q = penaltyShotQuality(Math.max(0,Math.min(1,nx)));
+    reticle.style.borderColor = `color-mix(in srgb, #3ddc84 ${Math.round(q*100)}%, #e2564f)`;
+  };
+  const onMove = e=>{ if(!dragging) return; const p=posFromEvent(e); updateReticle(p.nx,p.ny); };
+  const onUp = e=>{
+    if(!dragging) return;
+    dragging = false;
+    surface.removeEventListener('pointermove', onMove);
+    surface.removeEventListener('pointerup', onUp);
+    surface.removeEventListener('pointercancel', onUp);
+    reticle.hidden = true;
+    const {nx,ny} = posFromEvent(e);
+    if(isShoot) penaltyResolvePlayerShot(nx,ny); else penaltyResolvePlayerSave(nx,ny);
+  };
+  surface.addEventListener('pointerdown', e=>{
+    dragging = true;
+    const {nx,ny} = posFromEvent(e);
+    updateReticle(nx,ny);
+    surface.addEventListener('pointermove', onMove);
+    surface.addEventListener('pointerup', onUp);
+    surface.addEventListener('pointercancel', onUp);
+  }, {once:true});
 }
-function penaltyResolveShot(zone, elapsed, half){
+function penaltyResolvePlayerShot(nx, ny){
   const g = penaltyGame;
-  const pos = penaltyBarPosition(elapsed);
-  const dist = Math.abs(pos-50);
-  let outcome, quality=0;
-  if(dist>half){ outcome='miss'; }
-  else {
-    quality = 1-(dist/half);
-    // A better opponent keeper "reads" the shooter's zone a bit more often (guessChance), but even
-    // then a truly well-timed shot (quality>0.82, i.e. very close to dead-center) always beats the dive
-    // - real skill should be able to beat any keeper, matching the requested high skill ceiling.
-    const guessChance = 0.25 + (g.opp.gk/99)*0.2;
-    const diveZone = Math.random()<guessChance ? zone : pick(PENALTY_ZONES);
-    outcome = (diveZone===zone && quality<0.82) ? 'saved' : 'goal';
+  const forgive = penaltyShotForgiveness(penaltyShooterStat());
+  if(nx<-forgive || nx>1+forgive || ny<-forgive || ny>1+forgive){
+    penaltyAnimateShot(nx, ny, null, ()=>penaltyFinishShot('miss', null));
+    return;
   }
-  if(outcome==='goal') g.playerScore++;
-  penaltyShowResult(outcome==='goal' ? '⚽ TOR!' : outcome==='saved' ? '🧤 Gehalten!' : '❌ Vorbei!', quality, ()=>penaltyAdvance());
+  const cnx = Math.max(0,Math.min(1,nx)), cny = Math.max(0,Math.min(1,ny));
+  const quality = penaltyShotQuality(cnx);
+  const reach = penaltyKeeperReach(g.opp.gk);
+  const guessSkill = 0.3 + (g.opp.gk/99)*0.35;
+  const diveX = Math.random()<guessSkill ? Math.max(0,Math.min(1, cnx+(Math.random()-0.5)*0.15)) : Math.random();
+  const dist = Math.hypot(cnx-diveX, cny-0.5);
+  const outcome = quality>0.8 ? 'goal' : (dist<reach ? 'saved' : 'goal');
+  penaltyAnimateShot(cnx, cny, diveX, ()=>penaltyFinishShot(outcome, quality));
 }
-function penaltyResolveSave(zone, elapsed, half){
+function penaltyResolvePlayerSave(nx, ny){
   const g = penaltyGame;
-  const pos = penaltyBarPosition(elapsed);
-  const dist = Math.abs(pos-50);
-  const diveQuality = dist<=half ? 1-(dist/half) : 0;
   const ai = penaltyAiShot;
-  let outcome;
-  if(ai.quality<0.15) outcome='miss'; // bot skies it on its own, independent of the keeper
-  else if(ai.quality>0.85) outcome='goal'; // unstoppable - top-bin, even a perfect dive can't reach it
-  else if(zone===ai.zone && diveQuality>0.35) outcome='saved';
-  else outcome='goal';
-  if(outcome==='goal') g.botScore++;
-  penaltyShowResult(outcome==='goal' ? '⚽ Gegentor.' : outcome==='saved' ? '🧤 GEHALTEN!' : '❌ Der Bot schießt vorbei!', diveQuality, ()=>penaltyAdvance());
+  const cnx = Math.max(0,Math.min(1,nx)), cny = Math.max(0,Math.min(1,ny));
+  if(ai.missed){ penaltyAnimateSave(cnx, ai, ()=>penaltyFinishSave('miss')); return; }
+  const reach = penaltyKeeperReach(penaltyKeeperStat());
+  const dist = Math.hypot(ai.nx-cnx, ai.ny-cny);
+  const outcome = ai.quality>0.85 ? 'goal' : (dist<reach ? 'saved' : 'goal');
+  penaltyAnimateSave(cnx, ai, ()=>penaltyFinishSave(outcome));
 }
-function penaltyShowResult(label, quality, onDone){
+function penaltyAnimateShot(nx, ny, diveX, onDone){
+  const ball = document.getElementById('pen-ball');
+  const keeper = document.getElementById('pen-keeper');
+  ball.style.transition = 'left .45s cubic-bezier(.2,.7,.3,1), top .45s cubic-bezier(.2,.7,.3,1), opacity .3s';
+  ball.style.left = (Math.max(-15,Math.min(115,nx*100)))+'%';
+  ball.style.top = (Math.max(-10,Math.min(115,ny*100)))+'%';
+  if(diveX!=null){ keeper.style.transition = 'left .32s ease-out'; keeper.style.left = (diveX*100)+'%'; }
+  setTimeout(onDone, 500);
+}
+function penaltyAnimateSave(diveX, ai, onDone){
+  const ball = document.getElementById('pen-ball');
+  const keeper = document.getElementById('pen-keeper');
+  keeper.style.transition = 'left .32s ease-out';
+  keeper.style.left = (diveX*100)+'%';
+  ball.style.transition = 'left .45s cubic-bezier(.2,.7,.3,1), top .45s cubic-bezier(.2,.7,.3,1), opacity .3s';
+  ball.style.opacity = '1';
+  ball.style.left = (ai.nx*100)+'%';
+  ball.style.top = (ai.ny*100)+'%';
+  setTimeout(onDone, 500);
+}
+function penaltyFinishShot(outcome, quality){
+  const g = penaltyGame;
+  if(outcome==='goal') g.playerScore++;
+  const label = outcome==='goal' ? '⚽ TOR!' : outcome==='saved' ? '🧤 Gehalten!' : '❌ Vorbei!';
+  penaltyShowResult(label, outcome, quality);
+}
+function penaltyFinishSave(outcome){
+  const g = penaltyGame;
+  if(outcome==='goal') g.botScore++;
+  const label = outcome==='goal' ? '⚽ Gegentor.' : outcome==='saved' ? '🧤 GEHALTEN!' : '❌ Der Bot schießt vorbei!';
+  penaltyShowResult(label, outcome, null);
+}
+function penaltyShowResult(label, outcome, quality){
   const el = document.getElementById('pen-result');
-  if(el) el.innerHTML = `<div class="pen-result-label">${label}</div><p class="hint" style="margin:4px 0 0;">Timing-Qualität: ${Math.round(quality*100)}%</p>`;
-  setTimeout(onDone, 1400);
+  if(el) el.innerHTML = `<div class="pen-result-label pen-result-${outcome}">${label}</div>${quality!=null?`<p class="hint" style="margin:4px 0 0;">Ecken-Qualität: ${Math.round(quality*100)}%</p>`:''}`;
+  playSfx(outcome==='goal' ? 'notification' : 'click');
+  setTimeout(()=>penaltyAdvance(), 1400);
 }
 function penaltyAdvance(){
   const g = penaltyGame;
@@ -18809,10 +18878,9 @@ function penaltyEndGame(){
   document.getElementById('pen-rematch').addEventListener('click', ()=>penaltyStartGame(g.opp));
 }
 function renderPenaltyShootout(view){
-  if(penaltyBarRaf){ cancelAnimationFrame(penaltyBarRaf); penaltyBarRaf=null; }
   penaltyGame = null;
   view.innerHTML = `
-    <div class="view-head"><h2>🥅 Elfmeterschießen (Test)</h2><p>Admin-only Skill-Modus-Prototyp - waehle einen Test-Gegner, um zu pruefen, wie stark sich der Kaderunterschied gegenueber reinem Timing auswirkt.</p></div>
+    <div class="view-head"><h2>🥅 Elfmeterschießen (Test)</h2><p>Admin-only Skill-Modus-Prototyp - waehle einen Test-Gegner, um zu pruefen, wie stark sich der Kaderunterschied gegenueber reiner Zielgenauigkeit auswirkt.</p></div>
     <div class="pen-opponent-grid">
       ${PENALTY_TEST_OPPONENTS.map((o,i)=>`<button class="is2-btn pen-opponent-btn" data-idx="${i}">${o.label}</button>`).join('')}
     </div>
