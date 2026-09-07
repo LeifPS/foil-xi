@@ -9089,15 +9089,18 @@ const ICONSWAP2_SPECIALS = ICONSWAP2_ROSTER.map((r,i)=>{
   card.iconswap2Tier = r.tier;
   return card;
 }).filter(Boolean);
-ICONSWAP2_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// Untradable, like every other exclusive/limited-time card source in the game (Kapitäne, UCLW, Prime,
+// quest rewards, ...) - these only ever come from the event's own give-away/shop loop, never meant to
+// hit the transfer market.
+ICONSWAP2_SPECIALS.forEach(p=>{ p.untradable = true; BY_ID.set(p.id,p); });
 // Old Icon Swap cards fold straight into the new tier system so nothing from the original event goes
 // to waste - swapTier maps 1:1 onto the new common/rare/epic/legendary labels.
 const ICONSWAP2_OLD_TIER_MAP = {1:'common', 2:'rare', 3:'epic', 4:'legendary'};
 // Old cards become the SAME type as the new ones, not just visually - variant/theme/variantLabel all
 // switch to 'iconswap2', so old and new pulls are indistinguishable everywhere a card's type shows up
 // (card face, labels, ...), not just in the CSS background. Nothing checks the OLD 'iconswap' variant
-// for logic anywhere (verified), so this is safe.
-ICONSWAP_CARDS.forEach(c=>{ if(c.swapTier){ c.iconswap2Tier = ICONSWAP2_OLD_TIER_MAP[c.swapTier]; c.variant = 'iconswap2'; c.theme = 'iconswap2'; c.variantLabel = 'Icon Swap: Remastered'; } });
+// for logic anywhere (verified), so this is safe. Also untradable now, matching the new roster above.
+ICONSWAP_CARDS.forEach(c=>{ if(c.swapTier){ c.iconswap2Tier = ICONSWAP2_OLD_TIER_MAP[c.swapTier]; c.variant = 'iconswap2'; c.theme = 'iconswap2'; c.variantLabel = 'Icon Swap: Remastered'; c.untradable = true; } });
 // The old roster (PLAYERS_ICONSWAP) was authored with its own hand-picked img on every entry, unlike
 // the new roster above - so applying the same "only 100+ keeps a special image" rule here means
 // actively replacing the img on every old sub-100 card with its base player's own default photo
@@ -9120,7 +9123,7 @@ const ICONSWAP2_TITLE_TIERS = {schimmer:'common', spektrum:'rare', iridescent:'e
 // purchase log), same "you already have the one there is" rule as a title.
 const ICONSWAP2_MANAGER = {
   id: 9762100, n:'Carlo Ancelotti', club:'Real Madrid', nat:'Italy', tier:'Legendär',
-  boostType:'percent', boostValue:8, isManager:true, pos:'MGR', ov:99,
+  boostType:'percent', boostValue:8, isManager:true, pos:'MGR', ov:99, untradable:true,
   variant:'iconswap2_mgr', variantLabel:'Icon Swap: Remastered', theme:'iconswap2_mgr',
 };
 MGR_BY_ID.set(ICONSWAP2_MANAGER.id, ICONSWAP2_MANAGER);
