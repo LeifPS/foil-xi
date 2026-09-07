@@ -1948,6 +1948,19 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .is2-give-tag{position:absolute;bottom:6px;left:6px;right:6px;display:flex;align-items:center;justify-content:center;
   background:rgba(6,8,12,.82);border:1px solid rgba(74,158,255,.35);border-radius:8px;padding:4px 0;
   font-family:'JetBrains Mono';font-weight:700;font-size:10.5px;color:#8bd0ff;}
+/* Multi-select give-away (openIconSwap2GiveModal) - tapping a card just toggles it, no per-card modal,
+   so picking several cards in a row stays inside this one screen. Selected cards get a bright border +
+   a checkmark badge; the footer summary/submit bar sits below the scrollable result list and stays put. */
+.is2-give-option.is2-give-selected{outline:2px solid #4a9eff;outline-offset:2px;border-radius:12px;}
+.is2-give-check{position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:50%;
+  background:#4a9eff;color:#04101f;display:none;align-items:center;justify-content:center;font-size:12px;font-weight:900;
+  box-shadow:0 2px 8px -2px rgba(74,158,255,.8);}
+.is2-give-option.is2-give-selected .is2-give-check{display:flex;}
+.is2-give-footer{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
+.is2-give-confirm-list{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-bottom:4px;}
+.is2-give-confirm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:rgba(6,8,12,.35);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--chalk);}
+.is2-give-confirm-row span:last-child{color:#8bd0ff;font-family:'JetBrains Mono';font-weight:700;font-size:11.5px;white-space:nowrap;}
 body.gfx-no-fxlayers .is2-banner-glimmer{animation:none !important; opacity:.15;}
 /* Icon Swap Token symbol - a slow, gentle facet-glint (brightness+rotate wobble) so the gem itself
    always feels subtly "alive"/faceted rather than a static icon, everywhere it's used (price tags,
@@ -29554,18 +29567,37 @@ async function buyIconSwap2Item(item){
   }
   renderIconSwap2Hub(document.getElementById('view'));
 }
-// Karte abgeben (Sacrifice): pick any card from the own collection, confirm, remove it and grant
-// tokens - the whole modal doubles as the confirmation (a second explicit confirm step would be
-// redundant friction for a flow whose entire point is "give something up for something else").
+// Karte abgeben (Sacrifice): tap any number of cards from the own collection to select them (no
+// per-card confirm - selecting is non-destructive), then a single "Abgeben" confirms the whole batch
+// at once. After a batch goes through, the modal reopens itself fresh (fresh pool, cleared selection)
+// instead of dropping back to the hub - picking several cards in a row is the common case, and
+// forcing a trip back to the hub between every single card was the whole complaint being fixed here.
 function openIconSwap2GiveModal(){
   const pool = collection.map(entry=>({entry, def:BY_ID.get(entry.cardId)})).filter(x=>x.def && x.def.ov>=ICONSWAP2_MIN_GIVE_OVR);
+  const selected = new Map(); // uid -> {entry, def, tokens}
   openModal(`
     <h2 style="margin-bottom:4px;">Karte abgeben</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:10px;">Wähle eine Karte ab ${ICONSWAP2_MIN_GIVE_OVR} OVR aus deiner Sammlung — sie wird endgültig entfernt, du bekommst dafür Icon Swap Tokens (mehr für stärkere Karten).</p>
+    <p class="hint" style="margin-top:0;margin-bottom:10px;">Wähle beliebig viele Karten ab ${ICONSWAP2_MIN_GIVE_OVR} OVR aus deiner Sammlung — sie werden endgültig entfernt, du bekommst dafür Icon Swap Tokens (mehr für stärkere Karten).</p>
     <input id="is2-give-search" class="is2-give-search" placeholder="Spielername...">
-    <div class="picker-list" id="is2-give-results" style="max-height:400px;overflow-y:auto;"></div>`);
+    <div class="picker-list" id="is2-give-results" style="max-height:360px;overflow-y:auto;"></div>
+    <div class="is2-give-footer">
+      <p class="hint" id="is2-give-summary" style="margin:0;">Keine Karte ausgewählt.</p>
+      <div style="display:flex;gap:10px;">
+        <button class="is2-btn is2-btn-ghost" id="is2-give-close" style="flex:1;">Schließen</button>
+        <button class="is2-btn is2-btn-disabled" id="is2-give-submit" style="flex:1;" disabled>Abgeben</button>
+      </div>
+    </div>`);
   const input = document.getElementById('is2-give-search');
   const results = document.getElementById('is2-give-results');
+  const summary = document.getElementById('is2-give-summary');
+  const submitBtn = document.getElementById('is2-give-submit');
+  function updateSummary(){
+    const n = selected.size;
+    const total = Array.from(selected.values()).reduce((s,x)=>s+x.tokens,0);
+    summary.textContent = n ? `${n} Karte${n===1?'':'n'} ausgewählt · +${total} Token${total===1?'':'s'} gesamt` : 'Keine Karte ausgewählt.';
+    submitBtn.disabled = n===0;
+    submitBtn.classList.toggle('is2-btn-disabled', n===0);
+  }
   function renderResults(){
     const q = input.value.trim().toLowerCase();
     const filtered = pool.filter(x=>!q || x.def.n.toLowerCase().includes(q)).slice(0,40);
@@ -29573,35 +29605,54 @@ function openIconSwap2GiveModal(){
     filtered.forEach(({entry,def})=>{
       const tokens = iconSwap2TokensForCard(def);
       const wrap = document.createElement('div');
-      wrap.className = 'is2-give-option';
+      wrap.className = 'is2-give-option' + (selected.has(entry.uid) ? ' is2-give-selected' : '');
       wrap.appendChild(cardEl(def,'mini'));
       const tag = document.createElement('div');
       tag.className = 'is2-give-tag';
       tag.innerHTML = `+${tokens} ${iconSwap2TokenIcon(12)}Token${tokens===1?'':'s'}`;
       wrap.appendChild(tag);
-      wrap.addEventListener('click', ()=>confirmIconSwap2Give(entry.uid, def, tokens));
+      const check = document.createElement('div');
+      check.className = 'is2-give-check';
+      check.textContent = '✓';
+      wrap.appendChild(check);
+      wrap.addEventListener('click', ()=>{
+        if(selected.has(entry.uid)) selected.delete(entry.uid);
+        else selected.set(entry.uid, {entry, def, tokens});
+        wrap.classList.toggle('is2-give-selected');
+        updateSummary();
+      });
       results.appendChild(wrap);
     });
   }
   input.addEventListener('input', renderResults);
+  document.getElementById('is2-give-close').addEventListener('click', closeModal);
+  submitBtn.addEventListener('click', ()=>{
+    if(selected.size) openIconSwap2GiveBatchConfirm(Array.from(selected.values()));
+  });
   renderResults();
+  updateSummary();
 }
-function confirmIconSwap2Give(uid, def, tokens){
+function openIconSwap2GiveBatchConfirm(items){
+  const total = items.reduce((s,x)=>s+x.tokens,0);
+  const rows = items.map(x=>`<div class="is2-give-confirm-row"><span>${x.def.n}</span><span>+${x.tokens} ${iconSwap2TokenIcon(11)}</span></div>`).join('');
   openModal(`
-    <h2 style="margin-bottom:10px;color:#4a9eff;">${def.n} abgeben?</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Diese Karte wird endgültig aus deiner Sammlung entfernt. Du erhältst dafür <b style="color:#8bd0ff;">${iconSwap2TokenIcon(14)}${tokens} Icon Swap Token${tokens===1?'':'s'}</b>. Nicht rückgängig zu machen.</p>
+    <h2 style="margin-bottom:10px;color:#4a9eff;">${items.length} Karte${items.length===1?'':'n'} abgeben?</h2>
+    <div class="is2-give-confirm-list">${rows}</div>
+    <p class="hint" style="margin:10px 0 16px;">Diese Karten werden endgültig aus deiner Sammlung entfernt. Du erhältst dafür insgesamt <b style="color:#8bd0ff;">${iconSwap2TokenIcon(14)}${total} Icon Swap Token${total===1?'':'s'}</b>. Nicht rückgängig zu machen.</p>
     <div style="display:flex;gap:10px;">
       <button class="is2-btn is2-btn-ghost" id="is2-give-cancel" style="flex:1;">Abbrechen</button>
       <button class="is2-btn" id="is2-give-confirm" style="flex:1;">Abgeben</button>
     </div>`);
   document.getElementById('is2-give-cancel').addEventListener('click', openIconSwap2GiveModal);
   document.getElementById('is2-give-confirm').addEventListener('click', async ()=>{
-    const idx = collection.findIndex(c=>c.uid===uid);
-    if(idx<0){ closeModal(); return; }
-    collection.splice(idx,1);
+    let totalTokens = 0;
+    items.forEach(({entry,tokens})=>{
+      const idx = collection.findIndex(c=>c.uid===entry.uid);
+      if(idx>=0){ collection.splice(idx,1); totalTokens += tokens; }
+    });
     const oldTokens = profile.iconSwap2Tokens||0;
-    profile.iconSwap2Tokens = oldTokens + tokens;
-    applyAchievementDeltas({iconSwap2TokensEarned: tokens});
+    profile.iconSwap2Tokens = oldTokens + totalTokens;
+    applyAchievementDeltas({iconSwap2TokensEarned: totalTokens});
     await sSet('collection', collection);
     await sSet('profile', profile);
     // Capture BOTH endpoints before the modal closes (the confirm button is about to disappear) -
@@ -29612,18 +29663,21 @@ function confirmIconSwap2Give(uid, def, tokens){
     closeModal();
     const balanceEl = document.getElementById('is2-token-count');
     const targetRect = balanceEl ? balanceEl.getBoundingClientRect() : null;
-    toast(`+${tokens} Icon Swap Token${tokens===1?'':'s'} für ${def.n}.`);
+    toast(`+${totalTokens} Icon Swap Token${totalTokens===1?'':'s'} für ${items.length} Karte${items.length===1?'':'n'}.`);
+    // Reopens the give modal fresh right after the burst lands - staying in the "give away" flow
+    // instead of dropping back to the hub is the whole point of this batch flow.
     if(balanceEl && targetRect){
       let running = oldTokens;
-      playIconSwap2TokenBurst(tokens, originRect, targetRect, (share)=>{
+      playIconSwap2TokenBurst(totalTokens, originRect, targetRect, (share)=>{
         running += share;
         balanceEl.textContent = running;
         balanceEl.parentElement.classList.remove('is2-balance-pop');
         void balanceEl.parentElement.offsetWidth; // restart the pop animation on every landing
         balanceEl.parentElement.classList.add('is2-balance-pop');
-      }, ()=>renderIconSwap2Hub(document.getElementById('view')));
+      }, ()=>{ renderIconSwap2Hub(document.getElementById('view')); openIconSwap2GiveModal(); });
     } else {
       renderIconSwap2Hub(document.getElementById('view'));
+      openIconSwap2GiveModal();
     }
   });
 }
