@@ -1961,6 +1961,24 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .is2-give-confirm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
   background:rgba(6,8,12,.35);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--chalk);}
 .is2-give-confirm-row span:last-child{color:#8bd0ff;font-family:'JetBrains Mono';font-weight:700;font-size:11.5px;white-space:nowrap;}
+/* Elfmeterschießen (renderPenaltyShootout) - admin-only skill-mode prototype, deliberately its own
+   look (not reusing .is2-* Icon Swap classes despite the shared pill-button style) since this is meant
+   to become a fully separate mode. */
+.pen-scoreboard{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;}
+.pen-score-side{text-align:center;flex:1;}
+.pen-score-num{font-family:'Anton';font-size:32px;line-height:1;}
+.pen-score-lbl{color:var(--muted);font-size:11.5px;margin-top:2px;}
+.pen-score-mid{text-align:center;flex:1.4;font-size:12px;color:var(--muted);line-height:1.4;}
+.pen-phase{font-family:'Anton';font-size:14px;color:var(--chalk);letter-spacing:.02em;}
+.pen-track{position:relative;height:14px;border-radius:100px;background:var(--panel2);border:1px solid var(--line);margin-bottom:6px;overflow:visible;}
+.pen-sweetspot{position:absolute;top:0;bottom:0;background:rgba(61,220,132,.28);border-left:1px solid #3ddc84;border-right:1px solid #3ddc84;border-radius:4px;}
+.pen-marker{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 10px 2px rgba(255,255,255,.8);
+  transform:translate(-50%,-50%);transition:none;}
+.pen-zones{display:grid;grid-template-columns:repeat(3, 1fr);gap:10px;}
+.pen-zone-btn:disabled{opacity:.5;cursor:not-allowed;}
+.pen-result{min-height:52px;text-align:center;margin-top:14px;}
+.pen-result-label{font-family:'Anton';font-size:22px;}
+.pen-opponent-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px;}
 body.gfx-no-fxlayers .is2-banner-glimmer{animation:none !important; opacity:.15;}
 /* Icon Swap Token symbol - a slow, gentle facet-glint (brightness+rotate wobble) so the gem itself
    always feels subtly "alive"/faceted rather than a static icon, everywhere it's used (price tags,
@@ -16431,6 +16449,7 @@ function renderView(tab){
   if(tab==='achievements') return renderAchievementsPanel(view);
   if(tab==='admin') return isAdmin() ? renderAdminPanel(view) : renderPlay(view);
   if(tab==='iconswap2') return renderIconSwap2Hub(view);
+  if(tab==='penalty') return isAdmin() ? renderPenaltyShootout(view) : renderPlay(view);
 }
 
 // ===== STORE =====
@@ -18478,6 +18497,11 @@ async function renderAdminPanel(view){
       <button class="action-btn secondary" id="admin-team-sim" style="width:auto;">2 Teams simulieren</button>
     </div>
     <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
+      <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">🥅 Elfmeterschießen (Skill-Modus, Prototyp)</h3>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Timing-basiertes Elfmeterschießen - Ergebnis haengt fast ausschliesslich vom Tap-Timing ab, Kader-Stats geben nur einen moderaten Vorteil (breiteres Zeitfenster), kein Geraetevorteil (nur Tap/Klick, kein Ziehen/Ziel). Noch komplett getrennt von allen anderen Modi, wirkt sich auf keinen Account aus - nur zum Testen.</p>
+      <button class="action-btn secondary" id="admin-penalty-test" style="width:auto;">Testen</button>
+    </div>
+    <div class="vs-panel" style="margin-bottom:20px;border-color:#ff5f5f;">
       <h3 style="font-size:15px;margin-bottom:10px;color:#ff5f5f;text-transform:uppercase;letter-spacing:.04em;">Great Reset</h3>
       <p class="hint" style="margin-top:0;margin-bottom:10px;">Setzt ALLE Spieler zurück (Coins, Karten, Kader, Statistiken) — jeder bekommt vorher einen dauerhaften Prestige-Rang, der über Resets hinweg erhalten bleibt.</p>
       <button class="action-btn secondary" id="admin-great-reset" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Great Reset auslösen</button>
@@ -18600,10 +18624,203 @@ async function renderAdminPanel(view){
   });
   document.getElementById('admin-add-all-cards').addEventListener('click', openAdminGiveAllCardsModal);
   document.getElementById('admin-team-sim').addEventListener('click', openAdminTeamSimBuilder);
+  document.getElementById('admin-penalty-test').addEventListener('click', ()=>renderView('penalty'));
   const doLoad = ()=>loadAdminUserPanel(document.getElementById('admin-user-search').value.trim());
   document.getElementById('admin-user-load').addEventListener('click', doLoad);
   document.getElementById('admin-user-search').addEventListener('keydown', e=>{ if(e.key==='Enter') doLoad(); });
   refreshAdminRecentUserChips();
+}
+// ===== Elfmeterschießen (Skill-Modus, ADMIN-ONLY PROTOTYPE - see renderView('penalty') gate) =====
+// Design goals from the brainstorm: (1) high skill ceiling - a much better PLAYER should beat a much
+// better SQUAD almost every time; (2) fully separate mode - own state, own screen, touches no shared
+// currency/stats/account data; (3) zero device advantage - every input is a single tap/click on a big
+// button, never a drag or a precise cursor position, so touch and mouse are equally capable; (4) squad
+// stats matter (wider margin for error) without making a weaker side unbeatable (just much harder).
+//
+// Core mechanic: a bar sweeps 0->100->0 on a sine curve (slowest at the ends, fastest through the
+// middle - so hitting dead-center "perfect" is the hardest timing, not the easiest) over a fixed real-
+// world duration; each of the 3 direction buttons BOTH picks the shot's zone AND locks in the timing
+// the instant it's tapped. Quality is computed purely from the actual elapsed time (event timestamp),
+// never from counted animation frames, so a slow/laggy device never changes the outcome - only reaction
+// timing does. A shot's "sweet spot" half-width scales gently with the shooter's SHO (attacking) or
+// keeper's DEFN (defending, used as a reflex proxy - this game has no dedicated goalkeeping stat), which
+// only ever adds ~7 percentage points of margin between the weakest and strongest squad - real but not
+// dominant next to raw timing skill.
+const PENALTY_BAR_PERIOD_MS = 1400;
+const PENALTY_ZONES = ['links','mitte','rechts'];
+const PENALTY_ZONE_LABEL = {links:'⬅ Links', mitte:'⬆ Mitte', rechts:'Rechts ➡'};
+const PENALTY_TEST_OPPONENTS = [
+  {label:'70 OVR Bot', sho:70, gk:70},
+  {label:'80 OVR Bot', sho:80, gk:80},
+  {label:'90 OVR Bot', sho:90, gk:90},
+  {label:'99 OVR Bot', sho:99, gk:99},
+];
+// pos in [0,100], 50 = dead center of the sweep. Sine curve (not linear/triangle) so the bar moves
+// SLOWEST at the two ends and FASTEST through the middle - the sweet spot sits at center, so nailing a
+// truly perfect hit means timing a tap during the fastest part of the sweep, not the slowest.
+function penaltyBarPosition(elapsedMs){
+  const t = (elapsedMs % PENALTY_BAR_PERIOD_MS) / PENALTY_BAR_PERIOD_MS;
+  return 50 - 50*Math.cos(2*Math.PI*t);
+}
+// Half-width of the "on target" window in bar-percent, as a function of the relevant stat - deliberately
+// a small spread even at 99 (roughly 11-13 out of a 0-100 bar), so even a maxed-out squad still needs
+// real timing to score/save consistently; a weak squad's window is only ~2 points narrower, not gone.
+function penaltyWindowHalfWidth(stat){
+  return 6 + (Math.max(1,Math.min(99,stat))/99)*7;
+}
+function penaltyShooterStat(){
+  let best = 65;
+  Object.values(squad.slots||{}).forEach(uid=>{ const c=ownedCard(uid); if(c && !c.isManager && typeof c.sho==='number') best=Math.max(best,c.sho); });
+  return best;
+}
+function penaltyKeeperStat(){
+  const gkUid = squad.slots && squad.slots['gk'];
+  const gk = gkUid ? ownedCard(gkUid) : null;
+  return (gk && typeof gk.defn==='number') ? gk.defn : 65;
+}
+let penaltyGame = null;
+let penaltyRoundStart = 0;
+let penaltyBarRaf = null;
+let penaltyAiShot = null; // {zone, quality} - the bot's hidden shot, rolled fresh each 'save' phase
+function penaltyStartGame(opp){
+  penaltyGame = {opp, round:1, maxRounds:5, playerScore:0, botScore:0, phase:'shoot', suddenDeath:false, log:[]};
+  penaltyRenderRound();
+}
+function penaltyRollAiShot(){
+  // Higher opponent SHO shifts the average shot quality up (harder to guess right AND time a save
+  // against) - still leaves real spread so a weak bot can skew its own shot wide on a bad roll, and a
+  // strong bot can still be read/saved on a merely-good (not "unstoppable") attempt.
+  const base = (penaltyGame.opp.sho/99)*0.55;
+  const quality = Math.max(0, Math.min(1, base + Math.random()*0.5 - 0.1));
+  return {zone: pick(PENALTY_ZONES), quality};
+}
+function penaltyRenderRound(){
+  if(penaltyBarRaf){ cancelAnimationFrame(penaltyBarRaf); penaltyBarRaf=null; }
+  const g = penaltyGame;
+  const view = document.getElementById('view');
+  if(!view || !g) return;
+  const isShoot = g.phase==='shoot';
+  if(!isShoot) penaltyAiShot = penaltyRollAiShot();
+  const stat = isShoot ? penaltyShooterStat() : penaltyKeeperStat();
+  const half = penaltyWindowHalfWidth(stat);
+  const roundLabel = g.suddenDeath ? 'Sudden Death' : `Runde ${g.round} / ${g.maxRounds}`;
+  view.innerHTML = `
+    <div class="view-head"><h2>🥅 Elfmeterschießen (Test)</h2><p>Admin-only Prototyp - reine Live-Ansicht, wirkt sich auf keinen Account aus. Gegner: ${g.opp.label}.</p></div>
+    <div class="pen-scoreboard">
+      <div class="pen-score-side"><div class="pen-score-num">${g.playerScore}</div><div class="pen-score-lbl">Du</div></div>
+      <div class="pen-score-mid">${roundLabel}<br><span class="pen-phase">${isShoot?'Du schießt':'Du hältst'}</span></div>
+      <div class="pen-score-side"><div class="pen-score-num">${g.botScore}</div><div class="pen-score-lbl">${g.opp.label}</div></div>
+    </div>
+    <div class="pen-track" id="pen-track">
+      <div class="pen-sweetspot" style="left:${50-half}%;width:${half*2}%;"></div>
+      <div class="pen-marker" id="pen-marker"></div>
+    </div>
+    <p class="hint" style="text-align:center;margin:6px 0 16px;">Tippe eine Richtung GENAU wenn der Zeiger im markierten Bereich ist.</p>
+    <div class="pen-zones">${PENALTY_ZONES.map(z=>`<button class="is2-btn pen-zone-btn" data-zone="${z}">${PENALTY_ZONE_LABEL[z]}</button>`).join('')}</div>
+    <div id="pen-result" class="pen-result"></div>
+    <button class="is2-btn is2-btn-ghost" id="pen-back" style="width:auto;margin-top:18px;">← Zurück zum Admin-Panel</button>`;
+  document.getElementById('pen-back').addEventListener('click', ()=>renderView('admin'));
+  const marker = document.getElementById('pen-marker');
+  penaltyRoundStart = performance.now();
+  const tick = ()=>{
+    marker.style.left = penaltyBarPosition(performance.now()-penaltyRoundStart)+'%';
+    penaltyBarRaf = requestAnimationFrame(tick);
+  };
+  penaltyBarRaf = requestAnimationFrame(tick);
+  view.querySelectorAll('.pen-zone-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      view.querySelectorAll('.pen-zone-btn').forEach(b=>b.disabled=true);
+      if(penaltyBarRaf){ cancelAnimationFrame(penaltyBarRaf); penaltyBarRaf=null; }
+      const elapsed = performance.now()-penaltyRoundStart;
+      if(isShoot) penaltyResolveShot(btn.dataset.zone, elapsed, half);
+      else penaltyResolveSave(btn.dataset.zone, elapsed, half);
+    });
+  });
+}
+function penaltyResolveShot(zone, elapsed, half){
+  const g = penaltyGame;
+  const pos = penaltyBarPosition(elapsed);
+  const dist = Math.abs(pos-50);
+  let outcome, quality=0;
+  if(dist>half){ outcome='miss'; }
+  else {
+    quality = 1-(dist/half);
+    // A better opponent keeper "reads" the shooter's zone a bit more often (guessChance), but even
+    // then a truly well-timed shot (quality>0.82, i.e. very close to dead-center) always beats the dive
+    // - real skill should be able to beat any keeper, matching the requested high skill ceiling.
+    const guessChance = 0.25 + (g.opp.gk/99)*0.2;
+    const diveZone = Math.random()<guessChance ? zone : pick(PENALTY_ZONES);
+    outcome = (diveZone===zone && quality<0.82) ? 'saved' : 'goal';
+  }
+  if(outcome==='goal') g.playerScore++;
+  penaltyShowResult(outcome==='goal' ? '⚽ TOR!' : outcome==='saved' ? '🧤 Gehalten!' : '❌ Vorbei!', quality, ()=>penaltyAdvance());
+}
+function penaltyResolveSave(zone, elapsed, half){
+  const g = penaltyGame;
+  const pos = penaltyBarPosition(elapsed);
+  const dist = Math.abs(pos-50);
+  const diveQuality = dist<=half ? 1-(dist/half) : 0;
+  const ai = penaltyAiShot;
+  let outcome;
+  if(ai.quality<0.15) outcome='miss'; // bot skies it on its own, independent of the keeper
+  else if(ai.quality>0.85) outcome='goal'; // unstoppable - top-bin, even a perfect dive can't reach it
+  else if(zone===ai.zone && diveQuality>0.35) outcome='saved';
+  else outcome='goal';
+  if(outcome==='goal') g.botScore++;
+  penaltyShowResult(outcome==='goal' ? '⚽ Gegentor.' : outcome==='saved' ? '🧤 GEHALTEN!' : '❌ Der Bot schießt vorbei!', diveQuality, ()=>penaltyAdvance());
+}
+function penaltyShowResult(label, quality, onDone){
+  const el = document.getElementById('pen-result');
+  if(el) el.innerHTML = `<div class="pen-result-label">${label}</div><p class="hint" style="margin:4px 0 0;">Timing-Qualität: ${Math.round(quality*100)}%</p>`;
+  setTimeout(onDone, 1400);
+}
+function penaltyAdvance(){
+  const g = penaltyGame;
+  if(!g) return;
+  if(g.phase==='shoot'){ g.phase='save'; penaltyRenderRound(); return; }
+  // Both sides have now taken this round's kick.
+  if(!g.suddenDeath && g.round>=g.maxRounds){
+    if(g.playerScore!==g.botScore){ penaltyEndGame(); return; }
+    g.suddenDeath = true;
+  } else if(g.suddenDeath && g.playerScore!==g.botScore){
+    penaltyEndGame(); return;
+  }
+  g.round++;
+  g.phase='shoot';
+  penaltyRenderRound();
+}
+function penaltyEndGame(){
+  const g = penaltyGame;
+  const won = g.playerScore>g.botScore;
+  const view = document.getElementById('view');
+  if(!view) return;
+  view.innerHTML = `
+    <div class="view-head"><h2>🥅 Elfmeterschießen (Test)</h2></div>
+    <div class="pen-scoreboard" style="margin-bottom:18px;">
+      <div class="pen-score-side"><div class="pen-score-num">${g.playerScore}</div><div class="pen-score-lbl">Du</div></div>
+      <div class="pen-score-mid" style="color:${won?'#3ddc84':'#e2564f'};font-family:'Anton';font-size:18px;">${won?'GEWONNEN':'VERLOREN'}</div>
+      <div class="pen-score-side"><div class="pen-score-num">${g.botScore}</div><div class="pen-score-lbl">${g.opp.label}</div></div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="is2-btn is2-btn-ghost" id="pen-back" style="flex:1;">Zurück zum Admin-Panel</button>
+      <button class="is2-btn" id="pen-rematch" style="flex:1;">Nochmal (${g.opp.label})</button>
+    </div>`;
+  document.getElementById('pen-back').addEventListener('click', ()=>renderView('admin'));
+  document.getElementById('pen-rematch').addEventListener('click', ()=>penaltyStartGame(g.opp));
+}
+function renderPenaltyShootout(view){
+  if(penaltyBarRaf){ cancelAnimationFrame(penaltyBarRaf); penaltyBarRaf=null; }
+  penaltyGame = null;
+  view.innerHTML = `
+    <div class="view-head"><h2>🥅 Elfmeterschießen (Test)</h2><p>Admin-only Skill-Modus-Prototyp - waehle einen Test-Gegner, um zu pruefen, wie stark sich der Kaderunterschied gegenueber reinem Timing auswirkt.</p></div>
+    <div class="pen-opponent-grid">
+      ${PENALTY_TEST_OPPONENTS.map((o,i)=>`<button class="is2-btn pen-opponent-btn" data-idx="${i}">${o.label}</button>`).join('')}
+    </div>
+    <button class="is2-btn is2-btn-ghost" id="pen-back" style="width:auto;margin-top:18px;">← Zurück zum Admin-Panel</button>`;
+  document.getElementById('pen-back').addEventListener('click', ()=>renderView('admin'));
+  view.querySelectorAll('.pen-opponent-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>penaltyStartGame(PENALTY_TEST_OPPONENTS[+btn.dataset.idx]));
+  });
 }
 function adminFullCardPool(){
   // every player card that exists gets registered into BY_ID at boot (see the many BY_ID.set(...) calls
