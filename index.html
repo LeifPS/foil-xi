@@ -19021,6 +19021,7 @@ async function loadAdminUserPanel(targetId){
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="action-btn secondary" id="admin-give-coins" style="width:auto;">Coins geben</button>
       <button class="action-btn secondary" id="admin-give-wins" style="width:auto;">Siege geben</button>
+      <button class="action-btn secondary" id="admin-give-wepwin" style="width:auto;">Wochenendpokal-Sieg nachtragen</button>
       <button class="action-btn secondary" id="admin-give-weekpass-xp" style="width:auto;">Wochen-Pass-XP geben</button>
       <button class="action-btn secondary" id="admin-give-card" style="width:auto;">Karte schicken</button>
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
@@ -19059,6 +19060,24 @@ async function loadAdminUserPanel(targetId){
       try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
       catch(e){ console.warn('admin give wins failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
       toast(`${amount>=0?'+':''}${amount} Siege f\u00fcr ${targetId}.`);
+      loadAdminUserPanel(targetId);
+    }, 6);
+  });
+  document.getElementById('admin-give-wepwin').addEventListener('click', ()=>{
+    // Nachtr\u00e4gliche Korrektur f\u00fcr den "Wochenendpokal-Sieger"-Erfolg (siehe ACHIEVEMENTS 'wepWins'),
+    // z.B. wenn ein Sieg wegen der "wer auch immer zuerst den Ligen-Tab \u00f6ffnet"-Auszahlung nicht richtig
+    // durchgez\u00e4hlt wurde. Erh\u00f6ht NUR den rohen Z\u00e4hler (profile.achievementStats.wepWins) - die
+    // Belohnung selbst muss der Spieler wie jede andere Erfolgsstufe ganz normal in "Erfolge" abholen,
+    // exakt wie bei einem echten, korrekt gez\u00e4hlten Sieg.
+    askTextModal('Wochenendpokal-Siege hinzuf\u00fcgen (negativ zum Abziehen)', '1', async (val)=>{
+      const amount = parseInt(val,10);
+      if(!Number.isFinite(amount)) return;
+      const currentStats = p.achievementStats || {};
+      const newStats = {...currentStats, wepWins: Math.max(0,(currentStats.wepWins||0)+amount)};
+      const newProfile = {...p, achievementStats: newStats};
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      catch(e){ console.warn('admin give wep win failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
+      toast(`${amount>=0?'+':''}${amount} Wochenendpokal-Sieg(e) f\u00fcr ${targetId} - Erfolg kann jetzt in "Erfolge" abgeholt werden.`);
       loadAdminUserPanel(targetId);
     }, 6);
   });
