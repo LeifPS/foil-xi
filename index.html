@@ -10974,6 +10974,33 @@ function sbcReqScore(sbc, cards){
   for(const r of sbc.reqs) if(r.check(cards)) s++;
   return s;
 }
+// Same real player (matched by name, like every other same-name-dedupe in this file - see
+// usedNames in the squad builder) is never allowed twice in one SBC combo. Without this, nothing
+// stopped the solver from spending BOTH copies of a duplicated card at once - most visibly in
+// "Nur Duplikate" mode, whose whole point is to spend spare copies while keeping at least one, but
+// which instead happily used every copy since nothing told it two slots can't be the same player.
+const sbcNameConflict = (cards, idx, name) => cards.some((c,ci)=>ci!==idx && c.card.n===name);
+// Builds a `size`-long seed with no repeated player name, preferring the highest-ranked entries of
+// `sortedPool` (already sorted by whatever the caller cares about - OV, group membership, ...). Pads
+// with leftover (possibly same-name) entries only if there aren't enough distinct players to fill
+// every slot, so a very small collection still gets a full-size seed instead of an incomplete one.
+function seedUniqueByName(sortedPool, size){
+  const seen = new Set(); const out = [];
+  for(const x of sortedPool){
+    if(seen.has(x.card.n)) continue;
+    seen.add(x.card.n); out.push(x);
+    if(out.length>=size) break;
+  }
+  if(out.length<size){
+    const usedUids = new Set(out.map(x=>x.uid));
+    for(const x of sortedPool){
+      if(out.length>=size) break;
+      if(usedUids.has(x.uid)) continue;
+      out.push(x); usedUids.add(x.uid);
+    }
+  }
+  return out;
+}
 // deterministic steepest-ascent hill-climb from a given starting `size`-card seed: each iteration
 // tries every possible single swap and takes whichever one improves the requirement score the most.
 // Returns {current, outside, currentScore} - the caller decides whether currentScore reached target.
@@ -10987,6 +11014,7 @@ function climbSbcFrom(sbc, pool, size, seed, target){
     let bestOutIdx=-1, bestInIdx=-1, bestScore=currentScore;
     for(let oi=0; oi<current.length; oi++){
       for(let ii=0; ii<outside.length; ii++){
+        if(sbcNameConflict(current, oi, outside[ii].card.n)) continue;
         const trial = current.slice();
         trial[oi] = outside[ii];
         const trialScore = sbcReqScore(sbc, trial.map(x=>x.card));
@@ -11025,7 +11053,7 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
   // isn't guaranteed to find a feasible combo within its iteration budget. 'highest' reliably finds a
   // feasible combo when one exists; the refinement pass further down then optimizes toward cheaper/more-
   // duplicated cards from that guaranteed-feasible baseline instead.
-  const topOvSeed = searchPool.slice(0, size);
+  const topOvSeed = seedUniqueByName(searchPool, size);
   let {current, outside, currentScore} = climbSbcFrom(sbc, searchPool, size, topOvSeed, target);
   // an "ALL cards must share property X" requirement (same nation/league) can never be discovered by
   // the single-swap hill-climb above unless the top-OV seed already happens to contain enough matching
@@ -11068,11 +11096,12 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
       // swap crosses the threshold, so the greedy climb never gets there once higher-OV non-matching
       // cards dominate the initial seed.
       const sortedMembers = members.slice().sort((a,b)=>b.card.ov-a.card.ov);
-      const takeMembers = sortedMembers.slice(0, size);
+      const takeMembers = seedUniqueByName(sortedMembers, size);
       const memberUids = new Set(takeMembers.map(x=>x.uid));
+      const memberNames = new Set(takeMembers.map(x=>x.card.n));
       const fillCount = size-takeMembers.length;
       const filler = fillCount>0
-        ? searchPool.filter(x=>!memberUids.has(x.uid)).slice(0, fillCount)
+        ? seedUniqueByName(searchPool.filter(x=>!memberUids.has(x.uid) && !memberNames.has(x.card.n)), fillCount)
         : [];
       const groupSeed = takeMembers.concat(filler);
       if(groupSeed.length!==size) continue;
@@ -11098,6 +11127,7 @@ function trySolveSBC(sbc, pool, size, mode='highest'){
       for(let i=0;i<current.length;i++){
         let best = null, bestVal = valueOf(current[i]);
         outside.forEach(o=>{
+          if(sbcNameConflict(current, i, o.card.n)) return;
           const trial = current.slice(); trial[i]=o;
           if(sbcReqScore(sbc, trial.map(x=>x.card))>=target){
             const v = valueOf(o);
