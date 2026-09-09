@@ -1844,6 +1844,16 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 @media(max-width:820px){.play-grid{grid-template-columns:1fr;}}
 .icon-swap-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
   background:linear-gradient(135deg, rgba(34,211,238,.14), var(--panel) 55%);border:1px solid #22d3ee;border-radius:14px;padding:14px 18px;margin-bottom:18px;}
+/* Turnier-Homescreen-Banner (siehe renderTournamentBanner) - gold statt event-blau, damit es sich klar
+   von den zeitlich befristeten Event-Bannern (Icon Swap etc.) abhebt und stattdessen wie die anderen
+   dauerhaften "hier gibt's was zu holen"-Flächen (z.B. Liga-/Wochenendpokal-Preise) wirkt. Die
+   "urgent"-Variante (mindestens ein abzuholender Preis) hebt den Rand zusätzlich hervor - ungeholtes,
+   bereits verdientes Preisgeld ist dringlicher als eine bloße Beitritts-Gelegenheit.*/
+.tourney-banner-box{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;cursor:pointer;
+  background:linear-gradient(135deg, rgba(230,195,67,.14), var(--panel) 60%);border:1px solid var(--gold);border-radius:14px;padding:14px 18px;margin-bottom:18px;transition:transform .15s, box-shadow .15s;}
+.tourney-banner-box:hover{transform:translateY(-2px);box-shadow:0 8px 22px -10px rgba(230,195,67,.5);}
+.tourney-banner-urgent{border-width:2px;box-shadow:0 0 0 1px rgba(230,195,67,.25);}
+.tourney-banner-cta{flex-shrink:0;font-weight:700;color:var(--gold);white-space:nowrap;}
 .iconswap-tier{margin-bottom:22px;}
 .iconswap-tier h4{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;}
 .iconswap-grid{display:flex;gap:14px;flex-wrap:wrap;}
@@ -2290,6 +2300,9 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
    rays/particles/slash package above. */
 .nt-tokenjaeger{--glow:#4a9eff;background:linear-gradient(90deg,#4a9eff,#9de2ff,#4a9eff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagFlash 2.6s ease-in-out infinite;}
 .nt-komplettist{--glow:#8bd0ff;background:linear-gradient(90deg,#8bd0ff,#c9a2ff,#8bd0ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.8s linear infinite, nametagGlow 2.4s ease-in-out infinite;}
+/* Turnier-Achievement-Nametags (Cupmeister/Mäzen) - selbe schlichte Gradient+Puls-Behandlung. */
+.nt-cupmeister{--glow:#3dc482;background:linear-gradient(90deg,#3dc482,#a0f0c8,#3dc482);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagFlash 2.6s ease-in-out infinite;}
+.nt-maezen{--glow:#c78bf5;background:linear-gradient(90deg,#c78bf5,#ecd3ff,#c78bf5);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.8s linear infinite, nametagGlow 2.4s ease-in-out infinite;}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
 .ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .ach-icon{font-size:24px;flex-shrink:0;width:40px;height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
@@ -15524,6 +15537,7 @@ async function init(){
   if(!fb) showOfflineBanner();
   refreshLigaPendingBadge();
   refreshTradeIncomingBadge();
+  refreshTournamentClaimBadge();
   checkWishlistAgainstMarket();
   setInterval(checkWishlistAgainstMarket, 90000);
   ensureOwnListingsWatcher();
@@ -16266,6 +16280,55 @@ async function renderLigaQuickPreview(){
     });
   }catch(e){ console.warn('liga quick preview failed', e); }
 }
+// Prominent homescreen banner for hosted Turniere (see hostTournamentPrompt etc.) - the whole feature
+// used to be invisible unless you specifically scrolled down into "Online spielen", so neither "you
+// could join something right now" nor "you have a prize waiting" was ever noticed without deliberately
+// looking. Mirrors renderLigaQuickPreview's "fetch async, fill in a placeholder div, no-op if there's
+// nothing worth showing" shape. Reuses the exact same cached reads loadOpenTournaments/
+// loadMyTournamentResults already use (same cache keys), so visiting the homescreen first never costs
+// an extra Firestore round trip beyond what opening "Online spielen" afterwards would need anyway.
+async function renderTournamentBanner(){
+  const host = document.getElementById('tournament-banner');
+  if(!host) return;
+  try{
+    await fbReady;
+    if(!fb) return;
+    const {rating, filled} = squadRating();
+    const [openList, mine] = await Promise.all([
+      cachedRead('open-tournaments', TOURNAMENT_REFRESH_MS, async ()=>{
+        const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('status','in',['registering','running']), fb.limit(20)));
+        return snap.docs.map(d=>normalizeTournamentDoc(d.data()));
+      }),
+      cachedRead('my-tournament-results:'+profile.userId, 20000, async ()=>{
+        const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('participantIds','array-contains',profile.userId), fb.limit(50)));
+        return snap.docs.map(d=>normalizeTournamentDoc(d.data())).filter(t=>t.status==='running'||t.status==='completed');
+      }),
+    ]);
+    const stillHost = document.getElementById('tournament-banner');
+    if(!stillHost) return;
+    const joinable = filled>=11 ? openList.filter(t=>{
+      if(t.status!=='registering' || t.participants.length>=t.maxSlots) return false;
+      if(t.participants.some(p=>p.userId===profile.userId)) return false;
+      if(t.maxJoinRating!=null && rating>t.maxJoinRating) return false;
+      return true;
+    }).length : 0;
+    const claimable = mine.filter(t=>t.status==='completed' && ((t.winnerUserId===profile.userId && !t.prizeClaimed) || (t.runnerUpUserId===profile.userId && !t.runnerUpPrizeClaimed && t.runnerUpPrizeCoins>0))).length;
+    const liveMine = mine.filter(t=>t.status==='running').length;
+    if(!joinable && !claimable && !liveMine){ stillHost.innerHTML = ''; return; }
+    const parts = [];
+    if(claimable) parts.push(`🏆 ${claimable} Preis${claimable===1?'':'e'} abzuholen`);
+    if(liveMine) parts.push(`${liveMine} live${liveMine===1?'s':''} laufend`);
+    if(joinable) parts.push(`${joinable} offen zum Beitreten`);
+    stillHost.innerHTML = `<div class="tourney-banner-box${claimable?' tourney-banner-urgent':''}">
+      <div>
+        <div class="lbl" style="font-family:'Anton';font-size:15px;letter-spacing:.02em;">🏆 Turniere</div>
+        <div class="hint" style="margin:3px 0 0;">${parts.join(' · ')}</div>
+      </div>
+      <div class="tourney-banner-cta">Ansehen →</div>
+    </div>`;
+    stillHost.querySelector('.tourney-banner-box').addEventListener('click', ()=>{ currentTab='play'; renderNav(); renderView('play'); });
+  }catch(e){ console.warn('tournament banner failed', e); }
+}
 // How many Wochen-Pass rewards (level tiles + the 3 rotating quests) are unlocked/done and just
 // waiting on a "Holen" click - all purely local `profile` state, no async needed, unlike the Liga
 // badge above.
@@ -16303,6 +16366,23 @@ let tradeIncomingCount = 0;
 // stale badge left over from a much earlier boot would be more misleading than just showing 0 until
 // the tab is actually opened once this session).
 let duelIncomingCount = 0;
+// Count of tournament prizes (winner or runner-up share) the player has already earned but not yet
+// clicked "Preis abholen" for - same "needs your action, you already earned it" shape as
+// achievementsClaimableCount, just backed by a Firestore read like Liga/Trade above since tournament
+// results live in their own collection, not local profile state. Refreshed on boot AND whenever
+// loadMyTournamentResults() itself fetches fresh data (see that function), so the badge is visible
+// the moment a tournament you're in finishes, not only after manually opening "Online spielen" once.
+let tournamentClaimCount = 0;
+async function refreshTournamentClaimBadge(){
+  try{
+    await fbReady;
+    if(!fb){ tournamentClaimCount = 0; renderNavBadges(); return; }
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('participantIds','array-contains',profile.userId), fb.limit(50)));
+    const mine = snap.docs.map(d=>normalizeTournamentDoc(d.data())).filter(t=>t.status==='completed');
+    tournamentClaimCount = mine.filter(t=> (t.winnerUserId===profile.userId && !t.prizeClaimed) || (t.runnerUpUserId===profile.userId && !t.runnerUpPrizeClaimed && t.runnerUpPrizeCoins>0)).length;
+  }catch(e){ console.warn('tournament claim badge refresh failed', e); }
+  renderNavBadges();
+}
 async function refreshTradeIncomingBadge(){
   try{
     await fbReady;
@@ -16329,7 +16409,7 @@ function renderNavBadges(){
   };
   addBadge('ligen', ligaPendingCount);
   addBadge('trade', tradeIncomingCount);
-  addBadge('play', duelIncomingCount);
+  addBadge('play', duelIncomingCount + tournamentClaimCount);
   if(profile){
     addBadge('store', computeStreakDay().canClaim ? 1 : 0);
     addBadge('week', weekPassClaimableCount());
@@ -16884,12 +16964,14 @@ function renderStore(view){
     ${renderDailyBanner()}
     ${renderIconSwap2Banner()}
     <div id="liga-quickpreview"></div>
+    <div id="tournament-banner"></div>
     <div class="toolbar" style="margin-bottom:18px;">
       <input id="redeem-input" placeholder="Code einl\u00f6sen..." style="max-width:220px;">
       <button class="action-btn secondary" id="redeem-btn" style="width:auto;padding:9px 16px;">Einl\u00f6sen</button>
     </div>
     <div id="pack-sections"></div>`;
   renderLigaQuickPreview();
+  renderTournamentBanner();
   const claimBtn = document.getElementById('daily-claim');
   if(claimBtn && !claimBtn.disabled) claimBtn.addEventListener('click', (e)=>{ e.target.disabled=true; claimDailyReward(); });
   const sectionsEl = document.getElementById('pack-sections');
@@ -21809,6 +21891,21 @@ function botStrengthTierLabel(t){
   if(t.botStrength==='custom') return `Eigener Bereich (${t.botStrengthMin}-${t.botStrengthMax})`;
   return tier.label;
 }
+// Frist, bis zu der ein noch nicht volles Turnier spätestens mit CPU-Vereinen aufgefüllt und
+// gestartet wird (siehe autoStartExpiredTournament) - verhindert "Turnier-Leichen", die sonst beliebig
+// lange als "offen"/aktiv gelistet blieben, obwohl sie schon lange niemand mehr füllt. Wählbar beim
+// Erstellen, Standard 24 Stunden.
+const TOURNAMENT_DEADLINE_OPTIONS = {
+  '6h': {label:'6 Stunden', ms:6*60*60*1000},
+  '24h': {label:'24 Stunden', ms:24*60*60*1000},
+  '3d': {label:'3 Tage', ms:3*24*60*60*1000},
+  '7d': {label:'7 Tage', ms:7*24*60*60*1000},
+};
+const HOSTED_TOURNAMENT_DEFAULT_DEADLINE = '24h';
+// Ältere Turniere (vor diesem Feature erstellt) bekommen ihre Frist rückwirkend ab createdAt - eine
+// bereits seit Wochen offene "Leiche" ist damit sofort fällig, statt für immer ohne Frist zu bleiben
+// (siehe normalizeTournamentDoc).
+const TOURNAMENT_LEGACY_DEADLINE_MS = TOURNAMENT_DEADLINE_OPTIONS[HOSTED_TOURNAMENT_DEFAULT_DEADLINE].ms;
 function liveBadgeHtml(){ return `<span class="live-badge"><span class="live-dot"></span>Live</span>`; }
 // German round names for single elimination, generic for any bracket size (4..64 participants).
 // Index 0 = the round right before the final; the array is read from the end so it lines up
@@ -21944,6 +22041,14 @@ function normalizeTournamentDoc(t){
   if(t.winnerPrizeCoins==null) t.winnerPrizeCoins = t.prizeType!=='card' ? (t.prizeCoins||0) : 0;
   if(t.runnerUpPrizeCoins==null) t.runnerUpPrizeCoins = 0;
   if(t.runnerUpPrizeClaimed===undefined) t.runnerUpPrizeClaimed = true;
+  // Rating-Cap (siehe hostTournamentPrompt/joinHostedTournament): kein Cap = jeder mit vollem Kader
+  // darf beitreten, exakt das alte Verhalten. Der Host selbst ist von seinem eigenen Cap ausgenommen
+  // (kann also ein Turnier für schwächere Kader ausschreiben/sponsern, ohne selbst darunter zu liegen).
+  t.maxJoinRating = (t.maxJoinRating!=null && Number.isFinite(Number(t.maxJoinRating))) ? Math.round(Number(t.maxJoinRating)) : null;
+  // End-Datum gegen "Turnier-Leichen" (siehe autoStartExpiredTournament) - Docs von vor diesem Feature
+  // bekommen ihre Frist rückwirkend ab createdAt, damit ein längst verlassenes "registering"-Turnier
+  // beim nächsten Laden sofort fällig ist, statt für immer ohne Frist offen zu bleiben.
+  if(!Number.isFinite(t.deadlineAt)) t.deadlineAt = (t.createdAt||Date.now()) + TOURNAMENT_LEGACY_DEADLINE_MS;
   return t;
 }
 // shared match-record builder for every bracket simulator below - always keeps both aUserId/bUserId
@@ -22258,6 +22363,37 @@ function resolveHostedTournamentOutcome(t, participantsBeforeBots){
     prizeClaimed: run.prizeClaimed, runnerUpPrizeClaimed: run.runnerUpPrizeClaimed, hostRefundCoins: run.hostRefundCoins,
     winnerPrizeCoins: run.winnerPrizeCoins, runnerUpPrizeCoins: run.runnerUpPrizeCoins, feePoolCoins: run.feePoolCoins, feeRefunds: run.feeRefunds};
 }
+// Applies a resolved bracket run (see prepareHostedTournamentRun) inside an already-open transaction -
+// the exact same set of writes was previously duplicated between joinHostedTournament's fill-branch and
+// startHostedTournament's transaction branch (and now also autoStartExpiredTournament); factored out
+// once here so all three can never drift apart on what "a tournament just filled/started" actually writes.
+function applyHostedTournamentRunTx(tx, ref, t, out){
+  tx.update(ref, {participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
+    winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
+    prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
+    prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
+  if(out.hostRefundCoins>0 && fb.increment){
+    tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
+  }
+  if(fb.increment) out.feeRefunds.forEach(r=>{
+    tx.update(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)});
+  });
+}
+// Same as applyHostedTournamentRunTx, for the no-transaction fallback path (plain setDoc/updateDoc
+// calls instead of tx.update) - kept only so joining/starting/auto-expiring still work at all against
+// a backend without transaction support.
+async function applyHostedTournamentRunFallback(ref, t, out){
+  await fb.setDoc(ref, {...t, participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
+    winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
+    winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
+    prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
+  if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
+    try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
+  }
+  if(fb.updateDoc && fb.increment) for(const r of out.feeRefunds){
+    try{ await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)}); }catch(_){}
+  }
+}
 let hostPrizeCardUid = null; // card selected in the currently-open host-tournament modal, if any
 async function hostTournamentPrompt(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
@@ -22295,6 +22431,20 @@ async function hostTournamentPrompt(){
         <input id="bot-strength-max" type="number" min="${BOT_STRENGTH_ABSOLUTE_MIN}" value="99" placeholder="Max OVR" style="flex:1;">
       </div>
       <p class="hint" style="margin:6px 0 0;">Ab OVR ${BOT_STRENGTH_ABSOLUTE_MIN}, nach oben offen.</p>
+    </div>
+    <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Spätester Start</div>
+    <div class="toolbar" style="margin-bottom:14px;">
+      <select id="tournament-deadline">
+        ${Object.entries(TOURNAMENT_DEADLINE_OPTIONS).map(([key,opt])=>`<option value="${key}" ${key===HOSTED_TOURNAMENT_DEFAULT_DEADLINE?'selected':''}>${opt.label}</option>`).join('')}
+      </select>
+    </div>
+    <p class="hint" style="margin-top:-8px;margin-bottom:14px;">Ist das Turnier bis dahin nicht voll, wird es automatisch mit CPU-Vereinen aufgefüllt und gestartet — wie ein manueller "Turnier starten"-Klick.</p>
+    <label style="display:flex;align-items:center;gap:8px;color:var(--chalk);font-size:13.5px;margin:0 0 10px;cursor:pointer;">
+      <input type="checkbox" id="max-rating-enabled"> Maximales Rating für Beitretende festlegen
+    </label>
+    <div id="max-rating-block" style="display:none;margin-bottom:14px;">
+      <p class="hint" style="margin-top:0;margin-bottom:8px;">Nur Vereine mit einem Rating bis zu diesem Wert können beitreten — du selbst bist als Veranstalter davon ausgenommen. Ideal, um ein Turnier gezielt für schwächere/neuere Vereine auszurichten und mit eigenem Preisgeld zu unterstützen.</p>
+      <input id="max-rating-input" type="number" min="1" max="115" placeholder="Max. Rating (z. B. 80)" style="width:100%;">
     </div>
     <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Preis</div>
     <div class="toolbar" style="margin-bottom:14px;">
@@ -22344,6 +22494,10 @@ async function hostTournamentPrompt(){
   entryFeeEnabled.addEventListener('change', ()=>{
     document.getElementById('entry-fee-block').style.display = entryFeeEnabled.checked ? 'block' : 'none';
   });
+  const maxRatingEnabled = document.getElementById('max-rating-enabled');
+  maxRatingEnabled.addEventListener('change', ()=>{
+    document.getElementById('max-rating-block').style.display = maxRatingEnabled.checked ? 'block' : 'none';
+  });
   const grid = document.getElementById('prize-card-grid');
   if(!eligibleCards.length){ document.getElementById('prize-card-empty').style.display='block'; }
   eligibleCards.forEach(({uid,card})=>{
@@ -22370,12 +22524,21 @@ async function hostTournamentPrompt(){
     const botStrength = BOT_STRENGTH_TIERS[botStrengthSelect.value] ? botStrengthSelect.value : HOSTED_TOURNAMENT_DEFAULT_BOT_STRENGTH;
     const prizeType = typeSelect.value;
     const myPlayers = getMySquadPlayers();
+    const deadlineKey = TOURNAMENT_DEADLINE_OPTIONS[document.getElementById('tournament-deadline').value] ? document.getElementById('tournament-deadline').value : HOSTED_TOURNAMENT_DEFAULT_DEADLINE;
+    const createdAt = Date.now();
     const baseDoc = {
       id: genId(), hostUserId:profile.userId, hostName:profile.displayName||profile.userId,
       maxSlots, format, botStrength, participants:[{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:myPlayers}],
       participantIds:[profile.userId],
-      status:'registering', createdAt:Date.now()
+      status:'registering', createdAt,
+      deadlineAt: createdAt + TOURNAMENT_DEADLINE_OPTIONS[deadlineKey].ms,
+      maxJoinRating: null,
     };
+    if(document.getElementById('max-rating-enabled').checked){
+      const cap = Math.round(parseFloat(document.getElementById('max-rating-input').value));
+      if(!Number.isFinite(cap) || cap<1){ toast('Bitte ein gültiges maximales Rating angeben.'); e.target.disabled=false; return; }
+      baseDoc.maxJoinRating = cap;
+    }
     if(botStrength==='custom'){
       let lo = Math.round(parseFloat(document.getElementById('bot-strength-min').value));
       let hi = Math.round(parseFloat(document.getElementById('bot-strength-max').value));
@@ -22433,6 +22596,15 @@ async function hostTournamentPrompt(){
         toast('Turnier erstellt! Es startet automatisch, sobald es voll ist \u2014 oder du startest es jederzeit selbst mit CPU-Auff\u00fcllung.');
         invalidateReadCache('open-tournaments');
         loadOpenTournaments();
+        // "Turnier-M\u00e4zen"-Erfolg (siehe ACHIEVEMENTS 'tournamentPrizeOffered') - z\u00e4hlt ausgelobtes
+        // Preisgeld, nicht gewonnenes, um das Veranstalten gro\u00dfz\u00fcgiger Turniere zu belohnen statt nur
+        // das Gewinnen. Nur hier gebumpt (nicht im Card-Zweig oben), da nur ein Coins-Preis \u00fcberhaupt
+        // einen Betrag hat, der daf\u00fcr z\u00e4hlen kann. Erst NACH erfolgreichem setDoc, damit ein
+        // fehlgeschlagenes (und erstattetes) Turnier nichts z\u00e4hlt.
+        applyAchievementDeltas({tournamentPrizeOffered: prize});
+        if(fb.updateDoc && clubId){
+          fb.updateDoc(fb.doc(fb.db,'saves',clubId), achievementDeltaPayload({tournamentPrizeOffered: prize})).catch(e=>console.warn('tournament prize achievement sync failed', e));
+        }
       }catch(err){
         console.warn('host tournament (coins) failed', err);
         await atomicCoinChange(prize);
@@ -22458,7 +22630,8 @@ async function joinHostedTournament(id, entryFee=0){
   const ref = fb.doc(fb.db,'tournaments', id);
   // outcome flags set from inside the transaction (or the no-transaction fallback below),
   // then turned into a single toast after the write has actually landed.
-  let outcome = null; // 'joined' | 'joined-and-running' | 'already' | 'full' | 'running' | 'gone'
+  let outcome = null; // 'joined' | 'joined-and-running' | 'already' | 'full' | 'running' | 'gone' | 'rating-too-high'
+  let ratingCapAt = null;
   try{
     if(fb.runTransaction){
       // Transaction closes the race: two players tapping "Beitreten" within the same instant
@@ -22472,19 +22645,13 @@ async function joinHostedTournament(id, entryFee=0){
         if(t.status!=='registering'){ outcome='running'; return; }
         if(t.participants.some(p=>p.userId===profile.userId)){ outcome='already'; return; }
         if(t.participants.length>=t.maxSlots){ outcome='full'; return; }
+        // Rating-Cap (siehe hostTournamentPrompt) - gilt nur für Beitretende, nicht für den Host selbst
+        // (der ist ja schon beim Erstellen automatisch Teilnehmer, unabhängig von seinem eigenen Rating).
+        if(t.maxJoinRating!=null && rating>t.maxJoinRating){ outcome='rating-too-high'; ratingCapAt=t.maxJoinRating; return; }
         const participants = t.participants.concat([{userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()}]);
         if(participants.length>=t.maxSlots){
           const out = prepareHostedTournamentRun(t, participants);
-          tx.update(ref, {participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
-            winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
-            prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
-            prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
-          if(out.hostRefundCoins>0 && fb.increment){
-            tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
-          }
-          if(fb.increment) out.feeRefunds.forEach(r=>{
-            tx.update(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)});
-          });
+          applyHostedTournamentRunTx(tx, ref, t, out);
           outcome='joined-and-running';
         } else {
           tx.update(ref, {participants, participantIds: participants.map(p=>p.userId), prizeType:t.prizeType, prizeCoins:t.prizeCoins});
@@ -22501,20 +22668,12 @@ async function joinHostedTournament(id, entryFee=0){
         if(t.status!=='registering'){ outcome='running'; }
         else if(t.participants.some(p=>p.userId===profile.userId)){ outcome='already'; }
         else if(t.participants.length>=t.maxSlots){ outcome='full'; }
+        else if(t.maxJoinRating!=null && rating>t.maxJoinRating){ outcome='rating-too-high'; ratingCapAt=t.maxJoinRating; }
         else{
           t.participants.push({userId:profile.userId, name:profile.displayName||profile.userId, rating, players:getMySquadPlayers()});
           if(t.participants.length>=t.maxSlots){
             const out = resolveHostedTournamentOutcome(t, t.participants);
-            await fb.setDoc(ref, {...t, participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
-              winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
-              winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
-              prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
-            if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
-              try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
-            }
-            if(fb.updateDoc && fb.increment) for(const r of out.feeRefunds){
-              try{ await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)}); }catch(_){}
-            }
+            await applyHostedTournamentRunFallback(ref, t, out);
             outcome='joined-and-running';
           } else {
             t.participantIds = t.participants.map(p=>p.userId);
@@ -22529,7 +22688,8 @@ async function joinHostedTournament(id, entryFee=0){
     const messages = {
       gone:'Turnier existiert nicht mehr.', running:'Dieses Turnier l\u00e4uft bereits oder ist beendet.',
       already:'Du bist bereits angemeldet.', full:'Turnier ist bereits voll.', joined:'Angemeldet!',
-      'joined-and-running': 'Angemeldet \u2014 Turnier ist jetzt voll und l\u00e4uft live! Verfolge die Runden unter \u201eLive ansehen\u201c.'
+      'joined-and-running': 'Angemeldet \u2014 Turnier ist jetzt voll und l\u00e4uft live! Verfolge die Runden unter \u201eLive ansehen\u201c.',
+      'rating-too-high': `Dein Rating ist zu hoch f\u00fcr dieses Turnier (max. ${ratingCapAt}).`,
     };
     toast(messages[outcome] || 'Beitritt fehlgeschlagen.');
     invalidateReadCache('open-tournaments');
@@ -22562,16 +22722,7 @@ async function startHostedTournament(id){
         if(t.hostUserId!==profile.userId){ result='not-host'; return; }
         if(t.status!=='registering'){ result='already-running'; return; }
         const out = prepareHostedTournamentRun(t, t.participants);
-        tx.update(ref, {participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1,out.rounds.length),
-          winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
-          prizeType:t.prizeType, prizeCoins:t.prizeCoins, winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
-          prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
-        if(out.hostRefundCoins>0 && fb.increment){
-          tx.update(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)});
-        }
-        if(fb.increment) out.feeRefunds.forEach(r=>{
-          tx.update(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)});
-        });
+        applyHostedTournamentRunTx(tx, ref, t, out);
         result='started'; winnerName=out.winnerName;
       });
     } else {
@@ -22583,16 +22734,7 @@ async function startHostedTournament(id){
         else if(t.status!=='registering'){ result='already-running'; }
         else{
           const out = resolveHostedTournamentOutcome(t, t.participants);
-          await fb.setDoc(ref, {...t, participants:out.participants, participantIds:out.participants.map(p=>p.userId), status:'running', rounds:out.rounds, visibleRounds: Math.min(1, out.rounds.length),
-            winnerUserId:out.winnerUserId, winnerName:out.winnerName, runnerUpUserId:out.runnerUpUserId, runnerUpName:out.runnerUpName,
-            winnerPrizeCoins:out.winnerPrizeCoins, runnerUpPrizeCoins:out.runnerUpPrizeCoins,
-            prizeClaimed:out.prizeClaimed, runnerUpPrizeClaimed:out.runnerUpPrizeClaimed, feePoolCoins:out.feePoolCoins});
-          if(out.hostRefundCoins>0 && fb.updateDoc && fb.increment){
-            try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {'profile.coins': fb.increment(out.hostRefundCoins)}); }catch(_){}
-          }
-          if(fb.updateDoc && fb.increment) for(const r of out.feeRefunds){
-            try{ await fb.updateDoc(fb.doc(fb.db,'saves', r.userId), {'profile.coins': fb.increment(r.amount)}); }catch(_){}
-          }
+          await applyHostedTournamentRunFallback(ref, t, out);
           result='started'; winnerName=out.winnerName;
         }
       }
@@ -22605,6 +22747,41 @@ async function startHostedTournament(id){
     invalidateReadCache('my-tournament-results:'+profile.userId);
     loadMyTournamentResults();
   }catch(e){ console.warn('start tournament failed', e); toast('Turnier konnte nicht gestartet werden.'); }
+}
+// Gegen "Turnier-Leichen" (siehe TOURNAMENT_DEADLINE_OPTIONS/normalizeTournamentDoc): sobald ein noch
+// 'registering' Turnier seine deadlineAt überschritten hat, füllt und startet JEDER Client, der es
+// beim Laden der offenen-Turniere-Liste sieht, es automatisch mit CPU-Vereinen - exakt wie ein
+// manueller "Turnier starten"-Klick des Hosts (siehe startHostedTournament), nur ohne dessen
+// Host-Only-Gate und system- statt nutzergetriggert. Selbes "wer auch immer zuerst hinschaut, macht es"
+// Prinzip wie resolveWeeklyRolloverIfNeeded bei der Liga - die Transaktion/status-Prüfung stellt sicher,
+// dass es bei mehreren gleichzeitigen Betrachtern trotzdem nur genau einmal passiert. Rein informativ
+// für den aufrufenden Client (kein Toast) - wer zufällig gerade die Liste offen hat, während ein
+// fremdes Turnier abläuft, muss davon nichts mitbekommen.
+async function autoStartExpiredTournament(t){
+  await fbReady;
+  if(!fb) return;
+  const ref = fb.doc(fb.db,'tournaments', t.id);
+  try{
+    if(fb.runTransaction){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const snap = await tx.get(ref);
+        if(!snap.exists()) return;
+        const fresh = normalizeTournamentDoc(snap.data());
+        if(fresh.status!=='registering' || fresh.deadlineAt>Date.now()) return;
+        const out = prepareHostedTournamentRun(fresh, fresh.participants);
+        applyHostedTournamentRunTx(tx, ref, fresh, out);
+      });
+    } else {
+      const snap = await fb.getDoc(ref);
+      if(!snap.exists()) return;
+      const fresh = normalizeTournamentDoc(snap.data());
+      if(fresh.status!=='registering' || fresh.deadlineAt>Date.now()) return;
+      const out = resolveHostedTournamentOutcome(fresh, fresh.participants);
+      await applyHostedTournamentRunFallback(ref, fresh, out);
+    }
+    invalidateReadCache('open-tournaments');
+    invalidateReadCache('my-tournament-results:'+t.hostUserId);
+  }catch(e){ console.warn('auto-start expired tournament failed', e); }
 }
 // True while at least one needsLiveReveal match among the given rounds hasn't actually been played
 // yet - used to hold a tournament back from 'completed' (and its winner banner) until every human
@@ -22753,7 +22930,7 @@ async function claimTournamentPrize(id, role='winner'){
   await fbReady;
   if(!fb) return;
   const ref = fb.doc(fb.db,'tournaments', id);
-  let claimed = false, prizeCoins = 0, prizeCardName = null, prizeCardId = null;
+  let claimed = false, prizeCoins = 0, prizeCardName = null, prizeCardId = null, wonNow = false;
   const newCardUid = genId(); // generated up front so the transaction and the local UI update agree on the same uid
   try{
     if(fb.runTransaction && clubId){
@@ -22775,6 +22952,13 @@ async function claimTournamentPrize(id, role='winner'){
         }
         if(t.winnerUserId!==profile.userId || t.prizeClaimed) return;
         tx.update(ref, {prizeClaimed:true, prizeType:t.prizeType});
+        // "Turnier-Champion"-Erfolg (siehe ACHIEVEMENTS 'tournamentWins') - genau hier statt beim
+        // Ermitteln des Siegers (prepareHostedTournamentRun), weil DAS oft auf einem FREMDEN Client
+        // läuft (wer auch immer das Turnier zufällig gefüllt/gestartet hat) und noch nichts über den
+        // eigentlichen Sieger-Account weiß - der eigene Claim-Klick ist der erste Moment, in dem der
+        // Sieger selbst gerade online/eingeloggt ist, um seinen eigenen Zähler zu bumpen.
+        tx.update(saveRef, achievementDeltaPayload({tournamentWins:1}));
+        wonNow = true;
         if(t.prizeType==='card' && t.prizeCard){
           if(t.winnerUserId!==t.hostUserId && fb.arrayUnion && fb.arrayRemove){
             // move the card from the host's collection into the winner's own collection - atomic on
@@ -22796,6 +22980,7 @@ async function claimTournamentPrize(id, role='winner'){
       });
       if(claimed && prizeCoins>0){ profile.coins += prizeCoins; updateCoinDisplay(); }
       if(claimed && prizeCardId){ collection.push({uid:newCardUid, cardId:prizeCardId, obtainedAt:Date.now(), obtainedFrom:t.hostUserId}); }
+      if(wonNow) applyAchievementDeltas({tournamentWins:1});
     } else {
       // Fallback for a backend without transaction support - same race as before, kept only so
       // claiming still works at all rather than hard-failing.
@@ -22827,6 +23012,10 @@ async function claimTournamentPrize(id, role='winner'){
           }
           await fb.setDoc(ref, {...t, prizeClaimed:true});
           claimed = true;
+          applyAchievementDeltas({tournamentWins:1});
+          if(fb.updateDoc && clubId){
+            fb.updateDoc(fb.doc(fb.db,'saves',clubId), achievementDeltaPayload({tournamentWins:1})).catch(err=>console.warn('tournament win achievement sync failed', err));
+          }
         }
       }
     }
@@ -23154,6 +23343,16 @@ async function loadOpenTournaments(){
       return snap.docs.map(d=>normalizeTournamentDoc(d.data()));
     });
     if(!box) return;
+    // "Turnier-Leichen" gegen ihre Frist pr\u00fcfen (siehe autoStartExpiredTournament) - passiert bei
+    // jedem Laden dieser Liste, nicht nur bei einem eigenen Klick, damit ein abgelaufenes Turnier
+    // sp\u00e4testens beim n\u00e4chsten \u00d6ffnen des Tabs (egal von wem) tats\u00e4chlich verschwindet/startet statt
+    // f\u00fcr immer als "offen" stehen zu bleiben.
+    const expired = list.filter(t=>t.status==='registering' && t.deadlineAt<=Date.now());
+    if(expired.length){
+      await Promise.all(expired.map(t=>autoStartExpiredTournament(t)));
+      invalidateReadCache('open-tournaments');
+      return loadOpenTournaments();
+    }
     if(!list.length){ box.innerHTML = '<p class="hint">Momentan keine offenen Turniere \u2014 veranstalte selbst eins!</p>'; return; }
     // Live tournaments float to the top (most immediately interesting - about to finish and easy
     // to just watch), then still-registering ones, newest first within each group.
@@ -23174,7 +23373,9 @@ async function loadOpenTournaments(){
       const formatName = TOURNAMENT_FORMATS[t.format]?.name || 'Einfach-K.o.';
       const botTag = t.botStrength && t.botStrength!=='auto' ? ` \u00b7 CPU: ${botStrengthTierLabel(t)}` : '';
       const feeTag = t.entryFee>0 ? ` \u00b7 Geb\u00fchr: ${formatCoins(t.entryFee)}` : '';
-      info.innerHTML = `${isRunning ? liveBadgeHtml() : ''}<b>${t.hostName}</b>s Turnier (${formatName}${botTag}${feeTag}) \u2014 <span class="mono" style="color:var(--gold);">${tournamentPrizeLabel(t)}</span> \u2014 `;
+      const capTag = t.maxJoinRating!=null ? ` \u00b7 Max. Rating: ${t.maxJoinRating}` : '';
+      const deadlineTag = !isRunning ? ` \u00b7 Startet sp\u00e4testens in ${formatCountdown(Math.max(0,t.deadlineAt-Date.now())) || 'K\u00fcrze'}` : '';
+      info.innerHTML = `${isRunning ? liveBadgeHtml() : ''}<b>${t.hostName}</b>s Turnier (${formatName}${botTag}${feeTag}${capTag}${deadlineTag}) \u2014 <span class="mono" style="color:var(--gold);">${tournamentPrizeLabel(t)}</span> \u2014 `;
       const participantsSpan = document.createElement('span');
       participantsSpan.className = 'mono';
       participantsSpan.style.cssText = 'text-decoration:underline;cursor:pointer;';
@@ -23189,7 +23390,11 @@ async function loadOpenTournaments(){
       info.appendChild(progress);
       const btns = document.createElement('div');
       btns.style.cssText = 'display:flex;gap:8px;margin-top:6px;width:100%;';
-      if(!joined && t.status==='registering' && t.participants.length<t.maxSlots){
+      const myRatingTooHigh = t.maxJoinRating!=null && squadRating().rating>t.maxJoinRating;
+      if(!joined && t.status==='registering' && t.participants.length<t.maxSlots && myRatingTooHigh){
+        const tag = document.createElement('span'); tag.className='mono'; tag.style.cssText='color:var(--danger);align-self:center;font-size:11.5px;'; tag.textContent=`Rating zu hoch (max. ${t.maxJoinRating})`;
+        btns.appendChild(tag);
+      } else if(!joined && t.status==='registering' && t.participants.length<t.maxSlots){
         const joinBtn = document.createElement('button'); joinBtn.className='action-btn'; joinBtn.style.cssText='width:auto;padding:6px 12px;font-size:12px;'; joinBtn.textContent='Beitreten';
         joinBtn.addEventListener('click', ()=>{ joinBtn.disabled=true; joinHostedTournament(t.id, t.entryFee||0).finally(()=>{ if(joinBtn.isConnected) joinBtn.disabled=false; }); });
         btns.appendChild(joinBtn);
@@ -23236,6 +23441,10 @@ async function loadMyTournamentResults(){
       return snap.docs.map(d=>normalizeTournamentDoc(d.data())).filter(t=>t.status==='running'||t.status==='completed');
     });
     if(!box) return;
+    // Reuses this same fetch for the "play" nav badge (see refreshTournamentClaimBadge) instead of a
+    // second query - the data's already here every time this function runs.
+    tournamentClaimCount = mine.filter(t=>t.status==='completed' && ((t.winnerUserId===profile.userId && !t.prizeClaimed) || (t.runnerUpUserId===profile.userId && !t.runnerUpPrizeClaimed && t.runnerUpPrizeCoins>0))).length;
+    renderNavBadges();
     if(!mine.length){ box.innerHTML = '<p class="hint">Noch keine Turniere \u2014 tritt einem bei oder veranstalte selbst eins!</p>'; return; }
     // Live tournaments you're part of surface first - they're the ones that still need you to
     // check in (watch, or claim a prize once they finish); completed ones follow, newest first.
@@ -25833,6 +26042,32 @@ const ACHIEVEMENTS = [
       {coins:80000, packs:['kronjuwelen']},
       {coins:200000, packs:['kronjuwelen'], card:'wepTrophy', nametag:'pokalkoenig'},
     ]},
+  // Turniere (siehe hostTournamentPrompt/claimTournamentPrize) - zwei bewusst unterschiedliche Anreize:
+  // tournamentWins belohnt das GEWINNEN (klassisch), tournamentPrizeOffered dagegen das VERANSTALTEN
+  // mit echtem eigenem Preisgeld - eigens gewünscht, um das Ausloben großzügiger Preise selbst zu einem
+  // erstrebenswerten Ziel zu machen, statt Turniere nur aus Sicht der Gewinner zu belohnen. Beide bumpen
+  // nur bei einem ECHTEN, vom Spieler selbst ausgelösten Vorgang (Preis abholen bzw. Turnier
+  // erfolgreich erstellt) - nie bei einem CPU-Sieg oder einer erstatteten/fehlgeschlagenen Erstellung.
+  {id:'tournamentWins', name:'Turnier-Champion', desc:'Gewinne von dir oder anderen veranstaltete Turniere.', icon:'🥇', stat:'tournamentWins',
+    cond:n=>`${n}x Turnier gewonnen`,
+    tiers:[1,3,10,25,50],
+    rewards:[
+      {coins:4000},
+      {coins:12000},
+      {coins:40000, packs:['zeitgeist']},
+      {coins:100000, packs:['ratings27']},
+      {coins:250000, packs:['kronjuwelen'], nametag:'cupmeister'},
+    ]},
+  {id:'tournamentPrizeOffered', name:'Turnier-Mäzen', desc:'Lobe Preisgeld für von dir veranstaltete Turniere aus.', icon:'🎖️', stat:'tournamentPrizeOffered',
+    cond:n=>`${formatCoins(n)} Coins ausgelobt`,
+    tiers:[50000,250000,1000000,5000000,20000000],
+    rewards:[
+      {coins:5000},
+      {coins:20000},
+      {coins:75000},
+      {coins:200000, packs:['ratings27']},
+      {coins:500000, packs:['kronjuwelen'], nametag:'maezen'},
+    ]},
   // Icon Swap: Remastered event-only achievement lines - eventOnly:true hides both entirely (see
   // renderAchievementsPanel/achievementsClaimableCount) once iconSwap2Active() goes false, so they only
   // ever show up while the event itself is live. Rewards deliberately pay out Icon Swap Tokens instead
@@ -25901,6 +26136,10 @@ const NAMETAGS = {
   // rather than the shop titles' full rays/particles/slash package.
   tokenjaeger: {label:'Tokenjäger', symbol:'⬦', cls:'nt-tokenjaeger', accent:'#4a9eff'},
   komplettist: {label:'Komplettist', symbol:'❋', cls:'nt-komplettist', accent:'#8bd0ff'},
+  // Turnier-Achievements (siehe ACHIEVEMENTS tournamentWins/tournamentPrizeOffered) - eigene, klar von
+  // Pokalkönig (Wochenendpokal) unterschiedene Farbe/Symbole, da es ein komplett separates Feature ist.
+  cupmeister: {label:'Cupmeister', symbol:'⛊', cls:'nt-cupmeister', accent:'#3dc482'},
+  maezen: {label:'Mäzen', symbol:'❁', cls:'nt-maezen', accent:'#c78bf5'},
 };
 // Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
 // card types currently in the collection - captures every source (packs, Handel, Belohnungen, Admin-
@@ -29917,7 +30156,7 @@ function renderPlay(view){
           <h3 style="font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0;">Offene Turniere</h3>
           <button class="action-btn secondary" id="host-tournament-btn" style="width:auto;padding:7px 14px;font-size:12px;">Turnier veranstalten</button>
         </div>
-        <p class="hint" style="margin-top:0;margin-bottom:10px;">Preis in Coins oder einer Karte aus deinem Verein. Vier Formate (Einfach-K.o., Doppel-K.o., Gruppenphase + K.o., Jeder-gegen-jeden) mit 4 bis 64 Teilnehmern je nach Format. Startet automatisch, sobald es voll ist; freie Pl\u00e4tze werden mit echten CPU-Vereinen aufgef\u00fcllt.</p>
+        <p class="hint" style="margin-top:0;margin-bottom:10px;">Preis in Coins oder einer Karte aus deinem Verein. Vier Formate (Einfach-K.o., Doppel-K.o., Gruppenphase + K.o., Jeder-gegen-jeden) mit 4 bis 64 Teilnehmern je nach Format. Startet automatisch, sobald es voll ist, sp\u00e4testens aber zur gesetzten Frist; freie Pl\u00e4tze werden dann mit echten CPU-Vereinen aufgef\u00fcllt. Optional mit maximalem Rating f\u00fcr Beitretende \u2014 ideal, um ein Turnier gezielt f\u00fcr schw\u00e4chere Vereine auszurichten.</p>
         <div class="leader-list" id="open-tournaments-list" style="margin-bottom:20px;"><p class="hint">L\u00e4dt...</p></div>
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Meine Turniere</h3>
         <div class="leader-list" id="my-tournament-results"><p class="hint">L\u00e4dt...</p></div>
