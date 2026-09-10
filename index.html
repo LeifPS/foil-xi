@@ -12523,8 +12523,16 @@ async function renderChallengeGrid(){
 async function renderSBCList(view){
   view.innerHTML = `
     <div class="view-head"><h2>Herausforderungen</h2><p>W\u00e4hle eine Karte: Match-Herausforderungen gegen harte Fantasie-Gegner oder SBCs, die einen Kader aus deinem Verein verlangen, der die Anforderungen erf\u00fcllt. Jede zeigt sofort, ob sie mit deinem aktuellen Kader erf\u00fcllbar ist.</p></div>
+    <div class="vs-panel" style="margin-bottom:16px;border-color:var(--gold);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+      <div>
+        <h3 style="font-size:14px;margin-bottom:4px;color:var(--gold);">\u26a1 PlayStyle-Training</h3>
+        <p class="hint" style="margin:0;">Gegen Coins + XP der Karte selbst: eine neue PlayStyle hinzuf\u00fcgen oder eine vorhandene zu "+" aufwerten.</p>
+      </div>
+      <button class="action-btn secondary" id="open-ps-training" style="width:auto;padding:9px 16px;white-space:nowrap;">\u00d6ffnen</button>
+    </div>
     <input id="challenge-search" placeholder="Herausforderung suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:14px;margin-bottom:14px;">
     <div class="sbc-grid" id="challenge-grid"></div>`;
+  document.getElementById('open-ps-training').addEventListener('click', openPlaystyleTrainingModal);
   await renderChallengeGrid();
   document.getElementById('challenge-search').addEventListener('input', e=>{
     const q = e.target.value.trim().toLowerCase();
@@ -13868,7 +13876,7 @@ async function buyMarketListing(listing){
 
     if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
     else if(isPack){ packCollection.push({uid:genId(), packId:listing.cardId}); await sSet('packCollection', packCollection); }
-    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp, obtainedAt:soldEntry.obtainedAt||Date.now(), obtainedFrom:soldEntry.obtainedFrom||listing.sellerUserId}); await sSet('collection', collection); }
+    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp, obtainedAt:soldEntry.obtainedAt||Date.now(), obtainedFrom:soldEntry.obtainedFrom||listing.sellerUserId, ...(soldEntry.psOverride ? {psOverride:soldEntry.psOverride} : {})}); await sSet('collection', collection); }
     await atomicCoinChange(-listing.price);
     if(!isPack) recordSale(listing.cardId, listing.price);
     closeModal();
@@ -14321,7 +14329,7 @@ async function finalizeLiveTrade(tradeId){
         toast('Tausch ungültig geworden — mindestens ein Item ist nicht mehr verfügbar.');
         await cleanupLiveTradeMessages(tradeId);
       } else {
-        const buildPaymentEntries = (entries)=>entries.map(c=>({uid:genId(), cardId:c.cardId, xp:c.xp||0, obtainedAt:c.obtainedAt, obtainedFrom:c.obtainedFrom}));
+        const buildPaymentEntries = (entries)=>entries.map(c=>({uid:genId(), cardId:c.cardId, xp:c.xp||0, obtainedAt:c.obtainedAt, obtainedFrom:c.obtainedFrom, ...(c.psOverride ? {psOverride:c.psOverride} : {})}));
         const myCoinDelta = (oppOffer.coins||0) - (myOffer.coins||0);
         const oppCoinGain = -myCoinDelta;
         if(fb.updateDoc && fb.increment && fb.arrayRemove && fb.arrayUnion){
@@ -14957,7 +14965,7 @@ function cardLevelProgress(xp){
 // mutated - every owned copy needs its own independently-boosted view) and uid/xp/level stashed on the
 // clone so cardEl and the rest of the UI can show the badge and open the XP modal without a separate
 // lookup.
-function applyCardLevel(base, xp, uid, forceUntradable, favorited){
+function applyCardLevel(base, xp, uid, forceUntradable, favorited, traitsOverride){
   const level = base.isManager ? 0 : cardLevelForXp(xp||0);
   const out = level>0 ? {...base, ov:base.ov+level} : {...base};
   if(level>0) BLACK_HOLE_STAT_KEYS.forEach(k=>{ if(typeof out[k]==='number') out[k] = out[k]+level; });
@@ -14970,11 +14978,17 @@ function applyCardLevel(base, xp, uid, forceUntradable, favorited){
   // accidentally lose this card" paths (SBCs, trading, selling, tournament staking - see every
   // `!x.card.favorited` check) so a player can protect a card they simply don't want to risk.
   if(favorited) out.favorited = true;
+  // PlayStyle-Training (see psTrainingAdd/psTrainingUpgrade): this specific owned copy's traits, once
+  // ever touched by training, permanently replace whatever the shared card type/auto-tier rule would
+  // otherwise compute - manualTraits:true makes resolveCardTraits use them exactly as stored, with no
+  // further OV-based re-tiering (that would otherwise silently "fix" a manually-added/upgraded trait
+  // back to what the printed rating implies).
+  if(traitsOverride && traitsOverride.length){ out.traits = traitsOverride; out.manualTraits = true; }
   return out;
 }
 function leveledOwnedCard(entry){
   const base = BY_ID.get(entry.cardId);
-  return base ? applyCardLevel(base, entry.xp, entry.uid, entry.untradable, entry.favorite) : null;
+  return base ? applyCardLevel(base, entry.xp, entry.uid, entry.untradable, entry.favorite, entry.psOverride) : null;
 }
 function ownedCard(uid){
   const entry = collection.find(c=>c.uid===uid);
@@ -31009,6 +31023,158 @@ const PLAYSTYLE_ELITE_OF = (()=>{
   Object.values(byStem).forEach(pair=>{ if(pair.normal && pair.elite) map[pair.normal] = pair.elite; });
   return map;
 })();
+// Reverse of PLAYSTYLE_ELITE_OF (elite label -> its base label) - needed by PlayStyle-Training
+// (psTrainingUpgrade) to find which base trait a given elite label came from, and by the UI to only
+// ever offer upgrading traits that actually HAVE an elite tier at all.
+const PLAYSTYLE_BASE_OF = Object.fromEntries(Object.entries(PLAYSTYLE_ELITE_OF).map(([base,elite])=>[elite,base]));
+
+// ===== PlayStyle-Training: pay to permanently add a base PlayStyle or upgrade one to "+" on ONE owned
+// card copy (not the shared card type - see psOverride/applyCardLevel's traitsOverride param). Applies
+// to every card, including hand-authored ones (Icons/Legenden) - deliberately no exception, per design.
+// Cost is spent from the TARGET CARD'S OWN leveling XP (can drop its Bronze/Silber/Gold/Diamant tier
+// back down - that's the intended trade-off, not a bug) plus a flat Coins fee.
+const PS_TRAINING_COST_COINS = 10000;
+const PS_TRAINING_COST_XP = 10000;
+// Max already-elite traits a card may have BEFORE an upgrade is allowed (i.e. upgrades only ever take
+// a card from 0->1 or 1->2 elite traits, never 1 elite copy short of the natural 3-trait cap already
+// producing 3 elite via the automatic 105+ OVR rule elsewhere - this manual path stops one short of
+// that by explicit design).
+const PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE = 1;
+const PS_TRAINING_MAX_TRAITS = 3;
+// Current traits for training purposes: the entry's own override if it's ever been touched before,
+// otherwise whatever the card naturally has right now (base card / auto-tier rule) - this is always the
+// correct "starting point" to mutate further, whether this is the first-ever training action on this
+// specific copy or the second.
+function psTrainingCurrentTraits(entry){
+  if(entry.psOverride) return entry.psOverride.slice();
+  const card = leveledOwnedCard(entry);
+  return card ? resolveCardTraits(card).slice() : [];
+}
+function psTrainingEliteCount(traits){ return traits.filter(t=>PLAYSTYLE_INFO[t] && PLAYSTYLE_INFO[t].elite).length; }
+// Whether `label` (a base, non-elite PlayStyle) can be freshly added to a card that currently has
+// `traits` - not already present in either tier, and under the flat 3-trait cap.
+function psTrainingCanAdd(traits, label){
+  if(traits.length>=PS_TRAINING_MAX_TRAITS) return false;
+  const elite = PLAYSTYLE_ELITE_OF[label];
+  return !traits.includes(label) && !(elite && traits.includes(elite));
+}
+function psTrainingCanAfford(entry){ return profile.coins>=PS_TRAINING_COST_COINS && (entry.xp||0)>=PS_TRAINING_COST_XP; }
+async function psTrainingSpend(entry){
+  entry.xp = Math.max(0, (entry.xp||0) - PS_TRAINING_COST_XP);
+  await atomicCoinChange(-PS_TRAINING_COST_COINS);
+  await sSet('collection', collection);
+}
+async function psTrainingAddBase(uid, label){
+  const entry = collection.find(c=>c.uid===uid);
+  if(!entry) return {ok:false, reason:'not-found'};
+  const traits = psTrainingCurrentTraits(entry);
+  if(!psTrainingCanAfford(entry)) return {ok:false, reason:'afford'};
+  if(!psTrainingCanAdd(traits, label)) return {ok:false, reason:'invalid'};
+  traits.push(label);
+  entry.psOverride = traits;
+  await psTrainingSpend(entry);
+  return {ok:true};
+}
+async function psTrainingUpgrade(uid, baseLabel){
+  const entry = collection.find(c=>c.uid===uid);
+  if(!entry) return {ok:false, reason:'not-found'};
+  const traits = psTrainingCurrentTraits(entry);
+  const idx = traits.indexOf(baseLabel);
+  const elite = PLAYSTYLE_ELITE_OF[baseLabel];
+  if(idx===-1 || !elite) return {ok:false, reason:'invalid'};
+  if(psTrainingEliteCount(traits)>PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE) return {ok:false, reason:'too-many-elite'};
+  if(!psTrainingCanAfford(entry)) return {ok:false, reason:'afford'};
+  traits[idx] = elite;
+  entry.psOverride = traits;
+  await psTrainingSpend(entry);
+  return {ok:true};
+}
+let psTrainingSelectedUid = null;
+function openPlaystyleTrainingModal(){
+  psTrainingSelectedUid = null;
+  renderPlaystyleTrainingModal();
+}
+function renderPlaystyleTrainingModal(){
+  const eligible = collection.map(c=>({entry:c, card:leveledOwnedCard(c)})).filter(x=>x.card).sort((a,b)=>b.card.ov-a.card.ov);
+  const selected = psTrainingSelectedUid ? eligible.find(x=>x.entry.uid===psTrainingSelectedUid) : null;
+  openModal(`
+    <h2 style="margin-bottom:4px;">PlayStyle-Training</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:14px;">Für je ${formatCoins(PS_TRAINING_COST_COINS)} Coins + ${formatCoins(PS_TRAINING_COST_XP)} XP DIESER Karte: eine neue Basis-PlayStyle hinzufügen (bis max. 3 insgesamt) oder eine vorhandene zu "+" aufwerten (nur solange die Karte höchstens ${PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE} Elite-PlayStyle hat). Die XP kommt von der Karte selbst und kann ihr Level dadurch senken.</p>
+    <input id="ps-training-search" placeholder="Karte suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
+    <div class="club-grid" id="ps-training-grid" style="max-height:220px;overflow:auto;margin-bottom:14px;"></div>
+    <div id="ps-training-detail"></div>
+    <button class="action-btn secondary" id="ps-training-close" style="width:100%;margin-top:10px;">Schließen</button>
+  `);
+  document.getElementById('ps-training-close').addEventListener('click', closeModal);
+  const grid = document.getElementById('ps-training-grid');
+  const renderGrid = (q)=>{
+    grid.innerHTML = '';
+    eligible.filter(x=>!q || x.card.n.toLowerCase().includes(q)).slice(0,60).forEach(({entry,card})=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'club-card-wrap';
+      wrap.style.cursor = 'pointer';
+      if(entry.uid===psTrainingSelectedUid) wrap.style.outline = '3px solid var(--gold)';
+      wrap.appendChild(cardEl(card,'mini'));
+      wrap.addEventListener('click', ()=>{ psTrainingSelectedUid = entry.uid; renderPlaystyleTrainingModal(); });
+      grid.appendChild(wrap);
+    });
+  };
+  renderGrid('');
+  document.getElementById('ps-training-search').addEventListener('input', e=>renderGrid(e.target.value.trim().toLowerCase()));
+  const detail = document.getElementById('ps-training-detail');
+  if(!selected){ detail.innerHTML = '<p class="hint">Wähle oben eine Karte aus.</p>'; return; }
+  const {entry, card} = selected;
+  const traits = psTrainingCurrentTraits(entry);
+  const eliteCount = psTrainingEliteCount(traits);
+  const canAfford = psTrainingCanAfford(entry);
+  const traitRows = traits.map(label=>{
+    const info = PLAYSTYLE_INFO[label];
+    const isElite = info && info.elite;
+    const canUpgrade = !isElite && PLAYSTYLE_ELITE_OF[label] && eliteCount<=PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE && canAfford;
+    const upgradeDisabledReason = isElite ? null : !PLAYSTYLE_ELITE_OF[label] ? 'Keine Elite-Stufe verfügbar' : eliteCount>PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE ? `Schon ${eliteCount}× PS+ (Limit ${PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE})` : !canAfford ? 'Zu wenig Coins/XP' : null;
+    return `<div class="leader-row" style="justify-content:space-between;">
+      <span>${isElite?'⭐ ':''}${label}${isElite?' (+)':''}</span>
+      ${isElite ? '' : canUpgrade
+        ? `<button class="action-btn secondary" data-upgrade="${escapeHtml(label)}" style="width:auto;padding:6px 12px;font-size:11.5px;">Zu PS+ aufwerten</button>`
+        : `<span class="hint" style="margin:0;font-size:11px;">${upgradeDisabledReason}</span>`}
+    </div>`;
+  }).join('') || '<p class="hint">Diese Karte hat noch keine PlayStyles.</p>';
+  const addableList = Object.entries(PLAYSTYLE_INFO).filter(([label,info])=>!info.elite && psTrainingCanAdd(traits,label));
+  const canAddMore = traits.length<PS_TRAINING_MAX_TRAITS;
+  detail.innerHTML = `
+    <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:10px;">
+      <div style="flex-shrink:0;">${cardEl(card,'mini').outerHTML}</div>
+      <div style="flex:1;">
+        <div style="font-weight:700;margin-bottom:4px;">${card.n} <span class="mono hint" style="font-size:11px;">(${traits.length}/${PS_TRAINING_MAX_TRAITS} PlayStyles, ${eliteCount}× PS+)</span></div>
+        <div class="hint" style="margin:0;">Diese Karte: ${formatCoins(entry.xp||0)} XP · Konto: ${formatCoins(profile.coins)} Coins</div>
+      </div>
+    </div>
+    <div style="margin-bottom:10px;">${traitRows}</div>
+    ${canAddMore ? `
+      <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue PlayStyle hinzufügen (${formatCoins(PS_TRAINING_COST_COINS)} Coins + ${formatCoins(PS_TRAINING_COST_XP)} XP)</div>
+      <select id="ps-training-add-select" style="width:100%;margin-bottom:8px;">
+        ${addableList.map(([label])=>`<option value="${escapeHtml(label)}">${label}</option>`).join('')}
+      </select>
+      <button class="action-btn" id="ps-training-add-btn" style="width:100%;" ${canAfford?'':'disabled'}>${canAfford?'Hinzufügen':'Zu wenig Coins/XP'}</button>
+    ` : '<p class="hint">Bereits 3/3 PlayStyles - keine weitere kann hinzugefügt werden.</p>'}
+  `;
+  detail.querySelectorAll('[data-upgrade]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      btn.disabled = true;
+      const res = await psTrainingUpgrade(entry.uid, btn.dataset.upgrade);
+      if(res.ok){ toast(`${btn.dataset.upgrade} zu PS+ aufgewertet!`); renderPlaystyleTrainingModal(); }
+      else { toast('Aufwertung fehlgeschlagen.'); btn.disabled = false; }
+    });
+  });
+  const addBtn = document.getElementById('ps-training-add-btn');
+  if(addBtn) addBtn.addEventListener('click', async ()=>{
+    addBtn.disabled = true;
+    const label = document.getElementById('ps-training-add-select').value;
+    const res = await psTrainingAddBase(entry.uid, label);
+    if(res.ok){ toast(`${label} hinzugefügt!`); renderPlaystyleTrainingModal(); }
+    else { toast('Hinzufügen fehlgeschlagen.'); addBtn.disabled = false; }
+  });
+}
 // Some PlayStyles matter more in a 90-minute match than others (a set-piece specialist's Ruhender
 // Ball only ever fires from a dead ball, while Anticipate/Slide Tackle/Finesse Shot/Power Shot/Rapid/
 // Aerial Fortress shape almost every phase of play) - this multiplies the flat 0.3/0.6 bonus below so
