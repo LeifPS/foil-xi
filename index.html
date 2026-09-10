@@ -1508,6 +1508,33 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .pcard.mini .playstyle-plus-row{left:-8px;top:44%;gap:4px;}
 .pcard.mini .playstyle-plus-icon,.pcard.xs .playstyle-plus-icon{width:17px;height:17px;}
 .pcard.xs .playstyle-plus-row{left:-7px;top:44%;gap:4px;}
+/* PlayStyle-Training modal (openPlaystyleTrainingModal) - icon-first: each of the card's up-to-3
+   PlayStyle slots is its own tile with the real PlayStyle icon, not a text row. Elite (gold ring) vs
+   normal (blue ring) vs empty (dashed, "+") reads at a glance without any label; a small circular
+   badge overlays a normal tile only when it's actually upgradeable right now (green ⬆) or blocked
+   (grey 🔒) - the WHY for a locked one lives in the title tooltip, not inline text. */
+.ps-slot-row{display:flex;gap:14px;margin:4px 0 16px;flex-wrap:wrap;}
+.ps-slot{position:relative;width:76px;height:92px;border-radius:14px;background:var(--panel2);border:2px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px 4px;text-align:center;}
+.ps-slot img{width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6));}
+.ps-slot-cap{font-size:9px;line-height:1.15;color:var(--muted);word-break:break-word;}
+.ps-slot-elite{border-color:#ffd76a;box-shadow:0 0 14px -3px rgba(255,215,106,.65);}
+.ps-slot-elite .ps-slot-cap{color:#ffd76a;}
+.ps-slot-normal{border-color:#4a9eff;}
+.ps-upgradeable{cursor:pointer;transition:transform .12s, box-shadow .12s;}
+.ps-upgradeable:hover{transform:translateY(-3px);box-shadow:0 8px 16px -6px rgba(74,158,255,.55);}
+.ps-slot-badge{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:var(--turf-bright);
+  color:#06140f;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+.ps-slot-badge-locked{background:var(--panel);color:var(--muted);border:1px solid var(--line);}
+.ps-slot-empty{border-style:dashed;border-color:var(--muted);color:var(--muted);font-size:30px;line-height:1;cursor:pointer;transition:transform .12s, border-color .12s, color .12s;}
+.ps-slot-empty:hover{border-color:var(--turf-bright);color:var(--turf-bright);transform:translateY(-3px);}
+.ps-kind-label{font-size:10.5px;color:var(--muted);letter-spacing:.05em;margin:12px 0 6px;}
+.ps-add-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(48px,1fr));gap:8px;}
+.ps-add-tile{width:48px;height:48px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s, border-color .12s;}
+.ps-add-tile img{width:28px;height:28px;object-fit:contain;}
+.ps-add-tile:hover{border-color:var(--turf-bright);transform:translateY(-3px);}
+.ps-cost-pill{display:inline-flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--line);border-radius:100px;padding:4px 11px;font-size:12px;font-weight:600;color:var(--chalk);white-space:nowrap;}
 .pcard .nc-flag{width:20px;height:14px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.15);}
 .pcard .nc-flag-mono{width:20px;height:14px;border-radius:2px;background:rgba(255,255,255,.12);color:var(--muted);
   font-family:'JetBrains Mono';font-size:6.5px;font-weight:700;display:flex;align-items:center;justify-content:center;}
@@ -31092,18 +31119,20 @@ async function psTrainingUpgrade(uid, baseLabel){
 let psTrainingSelectedUid = null;
 function openPlaystyleTrainingModal(){
   psTrainingSelectedUid = null;
+  psAddPickerOpen = false;
   renderPlaystyleTrainingModal();
 }
+let psAddPickerOpen = false;
 function renderPlaystyleTrainingModal(){
   const eligible = collection.map(c=>({entry:c, card:leveledOwnedCard(c)})).filter(x=>x.card).sort((a,b)=>b.card.ov-a.card.ov);
   const selected = psTrainingSelectedUid ? eligible.find(x=>x.entry.uid===psTrainingSelectedUid) : null;
   openModal(`
-    <h2 style="margin-bottom:4px;">PlayStyle-Training</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:14px;">Für je ${formatCoins(PS_TRAINING_COST_COINS)} Coins + ${formatCoins(PS_TRAINING_COST_XP)} XP DIESER Karte: eine neue Basis-PlayStyle hinzufügen (bis max. 3 insgesamt) oder eine vorhandene zu "+" aufwerten (nur solange die Karte höchstens ${PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE} Elite-PlayStyle hat). Die XP kommt von der Karte selbst und kann ihr Level dadurch senken.</p>
-    <input id="ps-training-search" placeholder="Karte suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
-    <div class="club-grid" id="ps-training-grid" style="max-height:220px;overflow:auto;margin-bottom:14px;"></div>
+    <h2 style="margin-bottom:2px;">⚡ PlayStyle-Training</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Pro Aktion: <span class="ps-cost-pill">🪙 ${formatCoins(PS_TRAINING_COST_COINS)}</span> <span class="ps-cost-pill">✦ ${formatCoins(PS_TRAINING_COST_XP)} XP</span> — von der Karte selbst, kann ihr Level senken.</p>
+    <input id="ps-training-search" placeholder="🔍 Karte suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
+    <div class="club-grid" id="ps-training-grid" style="max-height:200px;overflow:auto;margin-bottom:14px;"></div>
     <div id="ps-training-detail"></div>
-    <button class="action-btn secondary" id="ps-training-close" style="width:100%;margin-top:10px;">Schließen</button>
+    <button class="modal-close" id="ps-training-close" style="width:100%;margin-top:12px;">✕ Schließen</button>
   `);
   document.getElementById('ps-training-close').addEventListener('click', closeModal);
   const grid = document.getElementById('ps-training-grid');
@@ -31115,64 +31144,80 @@ function renderPlaystyleTrainingModal(){
       wrap.style.cursor = 'pointer';
       if(entry.uid===psTrainingSelectedUid) wrap.style.outline = '3px solid var(--gold)';
       wrap.appendChild(cardEl(card,'mini'));
-      wrap.addEventListener('click', ()=>{ psTrainingSelectedUid = entry.uid; renderPlaystyleTrainingModal(); });
+      wrap.addEventListener('click', ()=>{ psTrainingSelectedUid = entry.uid; psAddPickerOpen = false; renderPlaystyleTrainingModal(); });
       grid.appendChild(wrap);
     });
   };
   renderGrid('');
   document.getElementById('ps-training-search').addEventListener('input', e=>renderGrid(e.target.value.trim().toLowerCase()));
   const detail = document.getElementById('ps-training-detail');
-  if(!selected){ detail.innerHTML = '<p class="hint">Wähle oben eine Karte aus.</p>'; return; }
+  if(!selected){ detail.innerHTML = '<p class="hint" style="text-align:center;padding:24px 0;">👆 Wähle oben eine Karte aus.</p>'; return; }
   const {entry, card} = selected;
   const traits = psTrainingCurrentTraits(entry);
   const eliteCount = psTrainingEliteCount(traits);
   const canAfford = psTrainingCanAfford(entry);
-  const traitRows = traits.map(label=>{
-    const info = PLAYSTYLE_INFO[label];
-    const isElite = info && info.elite;
-    const canUpgrade = !isElite && PLAYSTYLE_ELITE_OF[label] && eliteCount<=PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE && canAfford;
-    const upgradeDisabledReason = isElite ? null : !PLAYSTYLE_ELITE_OF[label] ? 'Keine Elite-Stufe verfügbar' : eliteCount>PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE ? `Schon ${eliteCount}× PS+ (Limit ${PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE})` : !canAfford ? 'Zu wenig Coins/XP' : null;
-    return `<div class="leader-row" style="justify-content:space-between;">
-      <span>${isElite?'⭐ ':''}${label}${isElite?' (+)':''}</span>
-      ${isElite ? '' : canUpgrade
-        ? `<button class="action-btn secondary" data-upgrade="${escapeHtml(label)}" style="width:auto;padding:6px 12px;font-size:11.5px;">Zu PS+ aufwerten</button>`
-        : `<span class="hint" style="margin:0;font-size:11px;">${upgradeDisabledReason}</span>`}
-    </div>`;
-  }).join('') || '<p class="hint">Diese Karte hat noch keine PlayStyles.</p>';
-  const addableList = Object.entries(PLAYSTYLE_INFO).filter(([label,info])=>!info.elite && psTrainingCanAdd(traits,label));
   const canAddMore = traits.length<PS_TRAINING_MAX_TRAITS;
+
+  const filledSlotHTML = (label)=>{
+    const info = PLAYSTYLE_INFO[label];
+    const desc = playstyleDescFor(label);
+    if(info && info.elite){
+      return `<div class="ps-slot ps-slot-elite" title="${escapeHtml(label)} — ${escapeHtml(desc)}">
+        <img src="${info.icon}" alt="">
+        <div class="ps-slot-cap">${escapeHtml(label.replace(/\+$/,''))}</div>
+      </div>`;
+    }
+    const eliteLabel = PLAYSTYLE_ELITE_OF[label];
+    const canUpgrade = !!eliteLabel && eliteCount<=PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE && canAfford;
+    const reason = !eliteLabel ? 'Keine Elite-Stufe verfügbar'
+      : eliteCount>PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE ? `Limit erreicht (max. ${PS_TRAINING_MAX_ELITE_BEFORE_UPGRADE}× PS+)`
+      : !canAfford ? 'Zu wenig Coins/XP' : '';
+    return `<div class="ps-slot ps-slot-normal${canUpgrade?' ps-upgradeable':''}" ${canUpgrade?`data-upgrade="${escapeHtml(label)}"`:''} title="${escapeHtml(label)} — ${escapeHtml(desc)}${canUpgrade?' · Klicken zum Aufwerten':' · '+escapeHtml(reason)}">
+      <img src="${info?info.icon:''}" alt="">
+      <div class="ps-slot-cap">${escapeHtml(label)}</div>
+      ${canUpgrade ? `<div class="ps-slot-badge">⬆</div>` : eliteLabel ? `<div class="ps-slot-badge ps-slot-badge-locked">🔒</div>` : ''}
+    </div>`;
+  };
+  const emptySlotHTML = `<div class="ps-slot ps-slot-empty" id="ps-slot-add" title="Neue PlayStyle hinzufügen">+</div>`;
+  const slotsHTML = Array.from({length:PS_TRAINING_MAX_TRAITS}, (_,i)=> traits[i] ? filledSlotHTML(traits[i]) : emptySlotHTML).join('');
+
+  const addPickerHTML = (['attack','defense']).map(kind=>{
+    const list = Object.entries(PLAYSTYLE_INFO).filter(([label,info])=>!info.elite && info.kind===kind && psTrainingCanAdd(traits,label));
+    if(!list.length) return '';
+    return `<div class="ps-kind-label">${kind==='attack'?'🥅 ANGRIFF':'🧤 ABWEHR'}</div>
+      <div class="ps-add-grid">${list.map(([label,info])=>`<div class="ps-add-tile" data-add="${escapeHtml(label)}" title="${escapeHtml(label)} — ${escapeHtml(playstyleDescFor(label))}"><img src="${info.icon}" alt=""></div>`).join('')}</div>`;
+  }).join('');
+
   detail.innerHTML = `
-    <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:10px;">
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:12px;">
       <div style="flex-shrink:0;">${cardEl(card,'mini').outerHTML}</div>
       <div style="flex:1;">
-        <div style="font-weight:700;margin-bottom:4px;">${card.n} <span class="mono hint" style="font-size:11px;">(${traits.length}/${PS_TRAINING_MAX_TRAITS} PlayStyles, ${eliteCount}× PS+)</span></div>
-        <div class="hint" style="margin:0;">Diese Karte: ${formatCoins(entry.xp||0)} XP · Konto: ${formatCoins(profile.coins)} Coins</div>
+        <div style="font-weight:700;font-size:15px;">${card.n}</div>
+        <div class="hint" style="margin:2px 0 0;">🪙 ${formatCoins(profile.coins)} · ✦ ${formatCoins(entry.xp||0)} XP auf dieser Karte</div>
       </div>
     </div>
-    <div style="margin-bottom:10px;">${traitRows}</div>
-    ${canAddMore ? `
-      <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;text-transform:uppercase;">Neue PlayStyle hinzufügen (${formatCoins(PS_TRAINING_COST_COINS)} Coins + ${formatCoins(PS_TRAINING_COST_XP)} XP)</div>
-      <select id="ps-training-add-select" style="width:100%;margin-bottom:8px;">
-        ${addableList.map(([label])=>`<option value="${escapeHtml(label)}">${label}</option>`).join('')}
-      </select>
-      <button class="action-btn" id="ps-training-add-btn" style="width:100%;" ${canAfford?'':'disabled'}>${canAfford?'Hinzufügen':'Zu wenig Coins/XP'}</button>
-    ` : '<p class="hint">Bereits 3/3 PlayStyles - keine weitere kann hinzugefügt werden.</p>'}
+    <div class="ps-slot-row">${slotsHTML}</div>
+    ${canAddMore ? `<div id="ps-add-picker" style="${psAddPickerOpen?'':'display:none;'}">${addPickerHTML}</div>` : '<p class="hint">🔒 3/3 PlayStyles — voll.</p>'}
   `;
-  detail.querySelectorAll('[data-upgrade]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      btn.disabled = true;
-      const res = await psTrainingUpgrade(entry.uid, btn.dataset.upgrade);
-      if(res.ok){ toast(`${btn.dataset.upgrade} zu PS+ aufgewertet!`); renderPlaystyleTrainingModal(); }
-      else { toast('Aufwertung fehlgeschlagen.'); btn.disabled = false; }
+  detail.querySelectorAll('[data-upgrade]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      el.style.pointerEvents = 'none';
+      const label = el.dataset.upgrade;
+      const res = await psTrainingUpgrade(entry.uid, label);
+      if(res.ok){ toast(`⬆ ${label} zu PS+ aufgewertet!`); renderPlaystyleTrainingModal(); }
+      else { toast('Aufwertung fehlgeschlagen.'); el.style.pointerEvents = ''; }
     });
   });
-  const addBtn = document.getElementById('ps-training-add-btn');
-  if(addBtn) addBtn.addEventListener('click', async ()=>{
-    addBtn.disabled = true;
-    const label = document.getElementById('ps-training-add-select').value;
-    const res = await psTrainingAddBase(entry.uid, label);
-    if(res.ok){ toast(`${label} hinzugefügt!`); renderPlaystyleTrainingModal(); }
-    else { toast('Hinzufügen fehlgeschlagen.'); addBtn.disabled = false; }
+  const addSlot = document.getElementById('ps-slot-add');
+  if(addSlot) addSlot.addEventListener('click', ()=>{ psAddPickerOpen = !psAddPickerOpen; renderPlaystyleTrainingModal(); });
+  detail.querySelectorAll('[data-add]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      el.style.pointerEvents = 'none';
+      const label = el.dataset.add;
+      const res = await psTrainingAddBase(entry.uid, label);
+      if(res.ok){ toast(`✚ ${label} hinzugefügt!`); psAddPickerOpen = false; renderPlaystyleTrainingModal(); }
+      else { toast('Hinzufügen fehlgeschlagen.'); el.style.pointerEvents = ''; }
+    });
   });
 }
 // Some PlayStyles matter more in a 90-minute match than others (a set-piece specialist's Ruhender
