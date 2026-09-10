@@ -12550,16 +12550,17 @@ async function renderChallengeGrid(){
 async function renderSBCList(view){
   view.innerHTML = `
     <div class="view-head"><h2>Herausforderungen</h2><p>W\u00e4hle eine Karte: Match-Herausforderungen gegen harte Fantasie-Gegner oder SBCs, die einen Kader aus deinem Verein verlangen, der die Anforderungen erf\u00fcllt. Jede zeigt sofort, ob sie mit deinem aktuellen Kader erf\u00fcllbar ist.</p></div>
+    ${PS_TRAINING_ENABLED ? `
     <div class="vs-panel" style="margin-bottom:16px;border-color:var(--gold);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
       <div>
         <h3 style="font-size:14px;margin-bottom:4px;color:var(--gold);">\u26a1 PlayStyle-Training</h3>
         <p class="hint" style="margin:0;">Gegen Coins + XP der Karte selbst: eine neue PlayStyle hinzuf\u00fcgen oder eine vorhandene zu "+" aufwerten.</p>
       </div>
       <button class="action-btn secondary" id="open-ps-training" style="width:auto;padding:9px 16px;white-space:nowrap;">\u00d6ffnen</button>
-    </div>
+    </div>` : ''}
     <input id="challenge-search" placeholder="Herausforderung suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:14px;margin-bottom:14px;">
     <div class="sbc-grid" id="challenge-grid"></div>`;
-  document.getElementById('open-ps-training').addEventListener('click', openPlaystyleTrainingModal);
+  if(PS_TRAINING_ENABLED) document.getElementById('open-ps-training').addEventListener('click', openPlaystyleTrainingModal);
   await renderChallengeGrid();
   document.getElementById('challenge-search').addEventListener('input', e=>{
     const q = e.target.value.trim().toLowerCase();
@@ -31060,6 +31061,11 @@ const PLAYSTYLE_BASE_OF = Object.fromEntries(Object.entries(PLAYSTYLE_ELITE_OF).
 // to every card, including hand-authored ones (Icons/Legenden) - deliberately no exception, per design.
 // Cost is spent from the TARGET CARD'S OWN leveling XP (can drop its Bronze/Silber/Gold/Diamant tier
 // back down - that's the intended trade-off, not a bug) plus a flat Coins fee.
+// Feature-complete and tested, but deliberately held back from players for now - hard-disabled here
+// rather than removed, so it can be switched back on later with a single flag flip instead of
+// re-implementing it. Gates the entry point (the "PlayStyle-Training" panel in Herausforderungen) AND
+// openPlaystyleTrainingModal itself as a defensive second layer, in case something else ever calls it.
+const PS_TRAINING_ENABLED = false;
 const PS_TRAINING_COST_COINS = 10000;
 const PS_TRAINING_COST_XP = 10000;
 // Max already-elite traits a card may have BEFORE an upgrade is allowed (i.e. upgrades only ever take
@@ -31118,6 +31124,7 @@ async function psTrainingUpgrade(uid, baseLabel){
 }
 let psTrainingSelectedUid = null;
 function openPlaystyleTrainingModal(){
+  if(!PS_TRAINING_ENABLED) return;
   psTrainingSelectedUid = null;
   psAddPickerOpen = false;
   renderPlaystyleTrainingModal();
