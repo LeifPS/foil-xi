@@ -19276,6 +19276,12 @@ async function loadAdminUserPanel(targetId){
       const newProfile = {...p, coins:(p.coins||0)+amount};
       try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
       catch(e){ console.warn('admin give coins failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
+      // This writes straight to the TARGET account's Firestore doc, bypassing atomicCoinChange/the local
+      // `profile` object entirely - correct when targeting someone else's account (no live session of
+      // theirs to animate), but when the admin targets their OWN currently-logged-in account (a common
+      // way to grant yourself test coins) that same bypass left the header pill silently stale until the
+      // next reload, with no burst - exactly the "Coins geben" case reported as broken/invisible.
+      if(targetId===clubId){ profile.coins = newProfile.coins; updateCoinDisplay(amount>0); }
       toast(`${amount>=0?'+':''}${formatCoins(amount)} Coins f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
     }, 12);
