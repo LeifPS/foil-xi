@@ -24177,6 +24177,15 @@ function wireLigaRewardsBtn(box, letter){
   const btn = box.querySelector('.liga-rewards-btn');
   if(btn) btn.addEventListener('click', ()=>openLigaRewardsModal(letter));
 }
+// Wires up every "Live spielen" button on a 2. Aufstiegsplatz Finale card (see ligaPromoTieHTML) -
+// called alongside wireLigaRewardsBtn wherever the weekend recap's historyBox might contain one.
+function wireLigaPromoLiveButtons(box){
+  box.querySelectorAll('[data-liga-promo-leg]').forEach(btn=>{
+    btn.addEventListener('click', ()=> playLigaPromoLiveMatch(
+      btn.dataset.ligaPromoColl, btn.dataset.ligaPromoDoc, btn.dataset.ligaPromoField,
+      btn.dataset.ligaPromoLetter, btn.dataset.ligaPromoLeg));
+  });
+}
 // ===== Liga-Meister-Karte: the automatic weekly reward for winning Liga A specifically - a rotating
 // cast of players (a new one most weeks, supplied as the season goes on), always boosted to 104 OVR
 // and untradable. Two entry shapes: `custom` for a brand-new player that doesn't exist anywhere else
@@ -24950,6 +24959,19 @@ function ligaTwoLegLeg1(teamA, teamB){
 function ligaTwoLegLeg2(teamA, teamB){
   return buildDecisiveMatch(teamB.rating, teamA.rating, teamB.players, teamA.players, null, null, {allowDraw:true});
 }
+// Same idea as wepPlayMatch (see its comment): the leg is fully decided the instant this runs, but a
+// PARTICIPANT must watch it live (playLigaPromoLiveMatch) before they see the score, instead of it just
+// showing up already-finished the moment the weekly commissioner pass computes it - see the "Relegation-
+// Hin-/Rückspiele" fix. mid/revealedBy/md/nativeMeIsA carry everything playLigaPromoLiveMatch needs to
+// replay the SAME already-decided leg instead of secretly re-simulating a new one.
+function ligaBuildLeg1(teamA, teamB){
+  const md = ligaTwoLegLeg1(teamA, teamB);
+  return {mid:genId(), aGoals:md.myGoals, bGoals:md.oppGoals, revealedBy:[], nativeMeIsA:true, md};
+}
+function ligaBuildLeg2(teamA, teamB){
+  const md = ligaTwoLegLeg2(teamA, teamB);
+  return {mid:genId(), aGoals:md.oppGoals, bGoals:md.myGoals, revealedBy:[], nativeMeIsA:false, md};
+}
 // leg1/leg2 are already in the {aGoals,bGoals} shape (teamA's perspective) - same aggregate/decider
 // logic as ligaRelegationTie above, just fed two already-played legs instead of playing both right here.
 function ligaTwoLegAggregate(teamA, teamB, leg1, leg2){
@@ -25281,8 +25303,9 @@ async function ligaPromoSemiLeg1(weekStart, ref){
   for(const p of pairs){
     const teamThird = await ligaFreshTeam(p.thirdRow.userId, p.thirdRow.name);
     const teamFourth = await ligaFreshTeam(p.fourthRow.userId, p.fourthRow.name);
-    const leg1 = ligaTwoLegLeg1(teamThird, teamFourth);
-    legs.push({letter:p.letter, thirdUserId:teamThird.userId, thirdName:teamThird.name, fourthUserId:teamFourth.userId, fourthName:teamFourth.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+    legs.push({letter:p.letter, thirdUserId:teamThird.userId, thirdName:teamThird.name, thirdNametag:teamThird.nametag||null,
+      fourthUserId:teamFourth.userId, fourthName:teamFourth.name, fourthNametag:teamFourth.nametag||null,
+      leg1: ligaBuildLeg1(teamThird, teamFourth)});
   }
   try{ await fb.setDoc(ref, {status:'done', at:Date.now(), tables, legs}); }
   catch(e){ console.warn('promo semi leg1 write failed', e); return null; }
@@ -25294,18 +25317,23 @@ async function ligaPromoSemiLeg1(weekStart, ref){
 async function ligaPromoSemiLeg2(weekStart, leg1Data, ref){
   if(!(await ligaV2ClaimStage(ref))) return null;
   const winners = [];
+  const legs = [];
   for(const leg of leg1Data.legs){
     const teamThird = await ligaFreshTeam(leg.thirdUserId, leg.thirdName);
     const teamFourth = await ligaFreshTeam(leg.fourthUserId, leg.fourthName);
-    const leg2Raw = ligaTwoLegLeg2(teamThird, teamFourth);
-    const tie = ligaTwoLegAggregate(teamThird, teamFourth, leg.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const leg2 = ligaBuildLeg2(teamThird, teamFourth);
+    const tie = ligaTwoLegAggregate(teamThird, teamFourth, leg.leg1, leg2);
     const winnerId = tie.winner==='A' ? teamThird.userId : teamFourth.userId;
     const winnerName = tie.winner==='A' ? teamThird.name : teamFourth.name;
     winners.push({letter:leg.letter, winnerId, winnerName});
+    // Carries the full tie (both legs + aggregate/decider) forward into THIS stage's own doc, same
+    // "once the return leg has run, its doc is the authoritative copy of both legs" pattern as
+    // wepRunSemi2 - the Hinspiel-only doc (leg1Data/ref of ligaPromoSemiLeg1) is never read again.
+    legs.push({...leg, leg2, aggA:tie.aggA, aggB:tie.aggB, decider:tie.decider, winnerId, winnerName});
   }
-  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), winners}); }
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), winners, legs}); }
   catch(e){ console.warn('promo semi leg2 write failed', e); return null; }
-  return {stage:'semiLeg2', winners};
+  return {stage:'semiLeg2', winners, legs};
 }
 // Stage 3 (Samstag ab 15:00): pairs each league's Halbfinale winner against that league's own 2nd
 // place for the Finale (deciding who actually gets the league's 2nd promotion spot), plays the Hinspiel.
@@ -25317,8 +25345,9 @@ async function ligaPromoFinalLeg1(weekStart, semiLeg1Data, semiLeg2Data, ref){
     const secondRow = table[1];
     const teamSemiWinner = await ligaFreshTeam(w.winnerId, w.winnerName);
     const teamSecond = await ligaFreshTeam(secondRow.userId, secondRow.name);
-    const leg1 = ligaTwoLegLeg1(teamSemiWinner, teamSecond);
-    legs.push({letter:w.letter, semiWinnerUserId:teamSemiWinner.userId, semiWinnerName:teamSemiWinner.name, secondUserId:teamSecond.userId, secondName:teamSecond.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+    legs.push({letter:w.letter, semiWinnerUserId:teamSemiWinner.userId, semiWinnerName:teamSemiWinner.name, semiWinnerNametag:teamSemiWinner.nametag||null,
+      secondUserId:teamSecond.userId, secondName:teamSecond.name, secondNametag:teamSecond.nametag||null,
+      leg1: ligaBuildLeg1(teamSemiWinner, teamSecond)});
   }
   try{ await fb.setDoc(ref, {status:'done', at:Date.now(), legs}); }
   catch(e){ console.warn('promo final leg1 write failed', e); return null; }
@@ -25351,12 +25380,13 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
   for(const leg of finalLeg1Data.legs){
     const teamSemiWinner = await ligaFreshTeam(leg.semiWinnerUserId, leg.semiWinnerName);
     const teamSecond = await ligaFreshTeam(leg.secondUserId, leg.secondName);
-    const leg2Raw = ligaTwoLegLeg2(teamSemiWinner, teamSecond);
-    const tie = ligaTwoLegAggregate(teamSemiWinner, teamSecond, leg.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const leg2 = ligaBuildLeg2(teamSemiWinner, teamSecond);
+    const tie = ligaTwoLegAggregate(teamSemiWinner, teamSecond, leg.leg1, leg2);
     const winnerId = tie.winner==='A' ? teamSemiWinner.userId : teamSecond.userId;
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(leg.letter)-1];
     nextLeagueOf[winnerId] = upperLetter;
-    relegationResults.push({letter:leg.letter, upperLetter, semiWinner:teamSemiWinner.name, second:teamSecond.name, ...tie, winnerId});
+    relegationResults.push({letter:leg.letter, upperLetter, semiWinnerUserId:teamSemiWinner.userId, semiWinner:teamSemiWinner.name, semiWinnerNametag:leg.semiWinnerNametag||null,
+      secondUserId:teamSecond.userId, second:teamSecond.name, secondNametag:leg.secondNametag||null, ...tie, winnerId});
   }
   // Every league except the very bottom one (no lowerLetter below it) must always end up with exactly
   // 8 members again - a league that never runs the real Halbfinale/Finale-Bracket for its 2nd promotion
@@ -25400,12 +25430,13 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
   for(const s of smallLeagueSecondSpots){
     const teamSecond = await ligaFreshTeam(s.secondRow.userId, s.secondRow.name);
     const teamThird = await ligaFreshTeam(s.thirdRow.userId, s.thirdRow.name);
-    const leg1 = ligaTwoLegLeg1(teamSecond, teamThird);
-    const leg2Raw = ligaTwoLegLeg2(teamSecond, teamThird);
-    const tie = ligaTwoLegAggregate(teamSecond, teamThird, {aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const leg1 = ligaBuildLeg1(teamSecond, teamThird);
+    const leg2 = ligaBuildLeg2(teamSecond, teamThird);
+    const tie = ligaTwoLegAggregate(teamSecond, teamThird, leg1, leg2);
     const winnerId = tie.winner==='A' ? teamSecond.userId : teamThird.userId;
     nextLeagueOf[winnerId] = s.upperLetter;
-    relegationResults.push({letter:s.letter, upperLetter:s.upperLetter, semiWinner:teamSecond.name, second:teamThird.name, ...tie, winnerId});
+    relegationResults.push({letter:s.letter, upperLetter:s.upperLetter, semiWinnerUserId:teamSecond.userId, semiWinner:teamSecond.name, semiWinnerNametag:teamSecond.nametag||null,
+      secondUserId:teamThird.userId, second:teamThird.name, secondNametag:teamThird.nametag||null, ...tie, winnerId});
   }
   const nextMembers = {};
   lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
@@ -26669,6 +26700,91 @@ async function refreshLigaProfileFields(){
     if('nametag' in p) profile.nametag = p.nametag;
   }catch(e){ console.warn('refresh liga profile fields failed', e); }
 }
+// Reveal-gated Hin-/Rückspiel display for the Liga's 2. Aufstiegsplatz Finale (see ligaBuildLeg1/
+// ligaBuildLeg2 and playLigaPromoLiveMatch below) - fixes "Relegationsspiele" (the promo-playoff Finale)
+// showing its result to everyone the instant the weekly commissioner pass computes it, with no live
+// watch step. Reuses wepFixtureRowHTML's per-leg fixture card (generic, not WEP-specific) but with its
+// own Aufstieg/kein-Aufstieg outcome wording instead of WEP's "Wochenendpokal-Sieger" text.
+function ligaPromoTieHTML(tie, viewerUserId, collection, docId, arrayField, letter){
+  const leg1M = {...tie.leg1, aUserId:tie.aUserId, aName:tie.aName, aNametag:tie.aNametag, bUserId:tie.bUserId, bName:tie.bName, bNametag:tie.bNametag};
+  const attrs = legKey => ({'liga-promo-coll':collection, 'liga-promo-doc':docId, 'liga-promo-field':arrayField, 'liga-promo-letter':letter, 'liga-promo-leg':legKey});
+  let html = `<div class="lbl" style="margin:12px 0 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase;">Hinspiel</div>`;
+  html += wepFixtureRowHTML(leg1M, viewerUserId, attrs('leg1'));
+  const isMine = viewerUserId && (tie.aUserId===viewerUserId || tie.bUserId===viewerUserId);
+  const leg1Revealed = !isMine || (tie.leg1.revealedBy||[]).includes(viewerUserId);
+  const leg2M = {...tie.leg2, aUserId:tie.aUserId, aName:tie.aName, aNametag:tie.aNametag, bUserId:tie.bUserId, bName:tie.bName, bNametag:tie.bNametag};
+  html += `<div class="lbl" style="margin:12px 0 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase;">Rückspiel</div>`;
+  html += wepFixtureRowHTML(leg2M, viewerUserId, attrs('leg2'));
+  const leg2Revealed = !isMine || (tie.leg2.revealedBy||[]).includes(viewerUserId);
+  if(leg1Revealed && leg2Revealed){
+    const deciderText = tie.decider ? `, Entscheidung ${tie.decider.aGoals}:${tie.decider.bGoals}${tie.decider.wentToPK?' n.E.':''}` : '';
+    const winnerNametag = tie.winnerId===tie.aUserId ? tie.aNametag : tie.bNametag;
+    const outcome = tie.winnerId===viewerUserId ? 'Aufstieg für dich!'
+      : isMine ? 'kein Aufstieg, du bleibst in dieser Liga.'
+      : `Aufstieg für ${nametagHTML(tie.winnerName, winnerNametag)}.`;
+    html += `<p class="hint" style="margin:8px 0 0;">Aggregat ${tie.aggA}:${tie.aggB}${deciderText} — <b>${outcome}</b></p>`;
+  }
+  return html;
+}
+// Shared "watch the already-decided leg live, then mark it revealed for me" flow for the Liga promo-
+// playoff Finale - same idea as playWepLiveMatch, but the authoritative doc's Firestore collection
+// varies by caller (leagueMeta before the weekly rollover finishes, leagueHistory once it has) rather
+// than always leagueMeta, and legs live in a `letter`-keyed array instead of a flat matches list or a
+// fixed `semis`/`final` shape.
+async function playLigaPromoLiveMatch(collection, docId, arrayField, letter, legKey){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  await fbReady;
+  if(!fb) return;
+  const ref = fb.doc(fb.db, collection, docId);
+  let snap;
+  try{ snap = await fb.getDoc(ref); }catch(e){ toast('Konnte nicht geladen werden.'); return; }
+  if(!snap.exists()) return;
+  const getEntry = data => (data[arrayField]||[]).find(x=>x.letter===letter);
+  const entry = getEntry(snap.data());
+  if(!entry) return;
+  const leg = entry[legKey];
+  if(!leg) return;
+  const aUserId = entry.semiWinnerUserId, bUserId = entry.secondUserId;
+  const viewerIsA = aUserId===clubId, viewerIsB = bUserId===clubId;
+  if(!viewerIsA && !viewerIsB) return;
+  const md = (viewerIsA===leg.nativeMeIsA) ? {...leg.md} : flipMatchDataSides(leg.md);
+  md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+  md.allowDraw = true; // Relegations-Legs sind wie Liga-/Wochenendpokal-Matches immer 3-way
+  const myName = viewerIsA ? entry.semiWinner : entry.second;
+  const oppName = viewerIsA ? entry.second : entry.semiWinner;
+  const oppNametag = viewerIsA ? entry.secondNametag : entry.semiWinnerNametag;
+  inMatch = true;
+  openModal(`<h2 style="margin-bottom:4px;">Relegation — 2. Aufstiegsplatz</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${nametagHTML(myName, profile.nametag)} vs ${nametagHTML(oppName, oppNametag)}</p><button type="button" id="liga-promo-skip-btn" class="action-btn secondary" style="width:auto;padding:9px 16px;margin-bottom:10px;">Zum Ergebnis springen ⏭</button>`);
+  const box = document.querySelector('#modal-root .modal-box');
+  ensureMatchAreaHost(box);
+  const skipBtn = document.getElementById('liga-promo-skip-btn');
+  if(skipBtn) skipBtn.addEventListener('click', ()=>{ liveMatchSkipAll = true; skipBtn.disabled = true; skipBtn.textContent = 'Wird übersprungen …'; });
+  try{ await playFullMatch(md, myName, oppName, ligaTeamAbbr(oppName), oppNametag); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
+  finally{ inMatch = false; }
+  try{
+    if(fb.runTransaction){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const freshSnap = await tx.get(ref);
+        if(!freshSnap.exists()) return;
+        const cur = freshSnap.data();
+        const curEntry = getEntry(cur);
+        if(!curEntry) return;
+        const curLeg = curEntry[legKey];
+        if(!curLeg) return;
+        const updatedLeg = {...curLeg, revealedBy:[...new Set([...(curLeg.revealedBy||[]), clubId])]};
+        const updatedArr = (cur[arrayField]||[]).map(x=> x.letter!==letter ? x : {...x, [legKey]:updatedLeg});
+        tx.update(ref, {[arrayField]: updatedArr});
+      });
+    } else {
+      const data = snap.data();
+      const updatedLeg = {...leg, revealedBy:[...new Set([...(leg.revealedBy||[]), clubId])]};
+      const updatedArr = (data[arrayField]||[]).map(x=> x.letter!==letter ? x : {...x, [legKey]:updatedLeg});
+      await fb.setDoc(ref, {[arrayField]: updatedArr}, {merge:true});
+    }
+  }catch(e){ console.warn('mark liga promo leg revealed failed', e); }
+  closeModal();
+  renderView('ligen');
+}
 function renderLigenPanel(view){
   ligaFixturesShowAll = false;
   view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Wochenendpokal. Auf- und Abstieg jede Woche.</p></div>
@@ -26803,22 +26919,38 @@ function renderLigenPanel(view){
           // put rather than moving to a "lowerLetter" that doesn't exist for this shape.
           const myPlayoff = (hist.relegationResults||[]).find(r=>r.upperLetter===membership.letter || r.lowerLetter===membership.letter || r.letter===membership.letter);
           if(myPlayoff){
-            const won = myPlayoff.winnerId===clubId;
             const isNewStyle = myPlayoff.semiWinner!=null;
-            // the new Finale's loser simply stays put (no promotion, not a demotion) - a neutral icon
-            // and "kein Aufstieg" instead of the old tie's binary "up/down", since only the OLD
-            // cross-league shape ever actually moved its loser to a different league.
-            const icon = won ? '⬆️' : (isNewStyle ? '➖' : '⬇️');
-            const bg = won ? 'rgba(61,196,130,.12)' : (isNewStyle ? 'rgba(150,150,150,.12)' : 'rgba(226,86,79,.12)');
-            const border = won ? '#3dc482' : (isNewStyle ? '#8a8a8a' : '#e2564f');
-            const outcome = won ? 'Aufstieg für dich!' : (isNewStyle ? 'kein Aufstieg, du bleibst in Liga '+myPlayoff.letter+'.' : 'Aufstieg für '+myPlayoff.winnerId+'.');
-            const label = isNewStyle
-              ? `2. Aufstiegsplatz Liga ${myPlayoff.letter}: <b>${myPlayoff.semiWinner}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.second}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`
-              : `Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: <b>${myPlayoff.challenger}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.defender}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`;
-            historyBox += `<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1px solid ${border};border-radius:6px;padding:10px 12px;margin-bottom:8px;">
-              <span style="font-size:20px;">${icon}</span>
-              <span>${label}</span>
-            </div>`;
+            // New-style ties written after the "must actually watch Hin-/Rückspiel" fix carry
+            // mid/revealedBy/md on each leg (see ligaBuildLeg1/ligaBuildLeg2) - older already-finished
+            // weeks never had this and fall back to the old plain-text summary unchanged below, since
+            // there's no reveal state to gate on for data that predates the fix.
+            const hasReveal = isNewStyle && myPlayoff.leg1 && myPlayoff.leg1.mid;
+            if(hasReveal){
+              const tie = {aUserId:myPlayoff.semiWinnerUserId, aName:myPlayoff.semiWinner, aNametag:myPlayoff.semiWinnerNametag,
+                bUserId:myPlayoff.secondUserId, bName:myPlayoff.second, bNametag:myPlayoff.secondNametag,
+                leg1:myPlayoff.leg1, leg2:myPlayoff.leg2, aggA:myPlayoff.aggA, aggB:myPlayoff.aggB, decider:myPlayoff.decider,
+                winnerId:myPlayoff.winnerId, winnerName: myPlayoff.winnerId===myPlayoff.semiWinnerUserId ? myPlayoff.semiWinner : myPlayoff.second};
+              historyBox += `<div class="vs-panel" style="margin-bottom:8px;text-align:left;">
+                <h3 style="font-size:13px;margin-bottom:2px;">2. Aufstiegsplatz Liga ${myPlayoff.letter}</h3>
+                ${ligaPromoTieHTML(tie, clubId, 'leagueHistory', weekStartBefore+'', 'relegationResults', myPlayoff.letter)}
+              </div>`;
+            } else {
+              const won = myPlayoff.winnerId===clubId;
+              // the new Finale's loser simply stays put (no promotion, not a demotion) - a neutral icon
+              // and "kein Aufstieg" instead of the old tie's binary "up/down", since only the OLD
+              // cross-league shape ever actually moved its loser to a different league.
+              const icon = won ? '⬆️' : (isNewStyle ? '➖' : '⬇️');
+              const bg = won ? 'rgba(61,196,130,.12)' : (isNewStyle ? 'rgba(150,150,150,.12)' : 'rgba(226,86,79,.12)');
+              const border = won ? '#3dc482' : (isNewStyle ? '#8a8a8a' : '#e2564f');
+              const outcome = won ? 'Aufstieg für dich!' : (isNewStyle ? 'kein Aufstieg, du bleibst in Liga '+myPlayoff.letter+'.' : 'Aufstieg für '+myPlayoff.winnerId+'.');
+              const label = isNewStyle
+                ? `2. Aufstiegsplatz Liga ${myPlayoff.letter}: <b>${myPlayoff.semiWinner}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.second}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`
+                : `Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: <b>${myPlayoff.challenger}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.defender}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`;
+              historyBox += `<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1px solid ${border};border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+                <span style="font-size:20px;">${icon}</span>
+                <span>${label}</span>
+              </div>`;
+            }
           }
           const oldLetter = Object.keys(hist.tables||{}).find(l=>(hist.tables[l]||[]).some(row=>row.userId===clubId));
           if(oldLetter){
@@ -26859,6 +26991,7 @@ function renderLigenPanel(view){
     if(isWeekendRecap && !showNextPreview){
       box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Die Tabelle der neuen Liga wird ab Sonntag 00:00 Uhr angezeigt.</p>`;
       wireLigaRewardsBtn(box, membership.letter);
+      wireLigaPromoLiveButtons(box);
       return;
     }
     LIGA_LAST_ERROR = null;
@@ -26867,7 +27000,7 @@ function renderLigenPanel(view){
     let week = isWeekendRecap
       ? await ligaSyncedWeek(membership.letter, membership.members, targetWeekStart)
       : await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
-    if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; wireLigaRewardsBtn(box, membership.letter); return; }
+    if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; wireLigaRewardsBtn(box, membership.letter); wireLigaPromoLiveButtons(box); return; }
     // Whoever's tab hits a match first after its own reveal moment simulates it, using both sides'
     // CURRENT squad right then - not during the weekend preview week, where nothing is due yet anyway.
     if(!isWeekendRecap) week = await resolveLigaMatchIfNeeded(membership.letter, targetWeekStart, week);
@@ -26943,6 +27076,7 @@ function renderLigenPanel(view){
     <div id="liga-fixtures-days">${fixturesHtml}</div>`;
     box.innerHTML = html;
     wireLigaRewardsBtn(box, membership.letter);
+    wireLigaPromoLiveButtons(box);
     const wireFixtureLiveButtons = ()=>{
       box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
         btn.addEventListener('click', ()=> playLigaLiveMatch(membership.letter, targetWeekStart, btn.dataset.ligaLiveMid));
