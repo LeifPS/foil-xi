@@ -70,20 +70,6 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .coin-pill{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);padding:7px 14px;border-radius:100px;}
 .coin-dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);}
 .coin-pill b{font-family:'JetBrains Mono';font-size:14px;}
-/* Gems (premium currency) - ADMIN-ONLY prototype, see PAID_SHOP tab/renderPaidShop - same pill shape
-   as coins, purple instead of gold so the two currencies stay visually distinct at a glance. */
-.gem-pill{display:none;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);padding:7px 14px;border-radius:100px;}
-.gem-dot{width:9px;height:9px;border-radius:50%;background:#b98bff;box-shadow:0 0 8px #b98bff;}
-.gem-pill b{font-family:'JetBrains Mono';font-size:14px;color:#c9a6ff;}
-.paidshop-section{margin-bottom:30px;}
-.paidshop-section h3{font-size:15px;margin-bottom:4px;}
-.paidshop-section .hint{margin-top:0;margin-bottom:14px;}
-.paidshop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;}
-.paidshop-tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;position:relative;}
-.paidshop-tile.best{border-color:#c78bf5;box-shadow:0 0 18px -9px #c78bf5;}
-.paidshop-tile .paidshop-bonus{position:absolute;top:10px;right:10px;background:#c78bf5;color:#1b1424;font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;}
-.paidshop-tile .paidshop-amount{font-family:'Anton';font-size:26px;line-height:1;}
-.paidshop-tile .paidshop-price{color:var(--muted);font-size:12.5px;}
 
 /* ---- nav ---- */
 #nav{display:flex;gap:2px;padding:0 20px;background:var(--void);border-bottom:1px solid var(--line);overflow-x:auto;}
@@ -2782,7 +2768,6 @@ body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
       <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Verein wechseln</button>
       <button id="sound-toggle" title="Sound an/aus" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">\u{1F50A}</button>
       <div class="coin-pill"><div class="coin-dot"></div><b class="mono" id="coin-display">0</b></div>
-      <div class="gem-pill" id="gem-pill" title="Gems (Premium-Währung) - Prototyp, nur für Admin sichtbar"><div class="gem-dot"></div><b class="mono" id="gem-display">0</b></div>
     </div>
   </div>
   <div id="nav"></div>
@@ -15487,10 +15472,6 @@ async function init(){
     if(profile.graphicsPreset===undefined) profile.graphicsPreset = 'full';
     if(profile.showDecimalEffOv===undefined) profile.showDecimalEffOv = false;
     if(!profile.pendingLigaPacks) profile.pendingLigaPacks = [];
-    // Gems: premium currency for the admin-only "Shop (Paid)" prototype (see PAID_SHOP_TAB/renderPaidShop
-    // below) - test-purchases only, never a real payment, and the whole tab is isAdmin()-gated the same
-    // way the earlier Elfmeterschießen-Prototyp was, so this never reaches a real player's account.
-    if(profile.gems===undefined) profile.gems = 0;
   }
   applyGraphicsPreset();
   if(ensureWeekPassQuestsFresh()) await sSet('profile', profile);
@@ -15594,7 +15575,6 @@ async function init(){
   renderNav();
   renderView(currentTab);
   updateCoinDisplay();
-  updateGemDisplay();
   hideBootLoader();
   if(!fb) showOfflineBanner();
   refreshLigaPendingBadge();
@@ -15707,14 +15687,6 @@ function parseCoinInput(str){
   return parseFloat(m[1]) * mult;
 }
 function updateCoinDisplay(){ document.getElementById('coin-display').textContent = formatCoins(profile.coins); }
-// Gems pill only ever shows for isAdmin() - see PAID_SHOP prototype (renderPaidShop) - so a normal
-// player's topbar never even reveals that a premium currency exists in the code.
-function updateGemDisplay(){
-  const pill = document.getElementById('gem-pill');
-  if(pill) pill.style.display = isAdmin() ? 'flex' : 'none';
-  const disp = document.getElementById('gem-display');
-  if(disp) disp.textContent = formatCoins(profile.gems||0);
-}
 
 // ===== toast =====
 function toast(msg){
@@ -16268,8 +16240,6 @@ const TAB_ICON = {
   trade_locked: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   index: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
   admin: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V19a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 17.35a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.65 13 1.7 1.7 0 0 0 3.09 12H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.65 7a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 2.65 1.7 1.7 0 0 0 10.09 1H10a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 2.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 7a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51.96Z"/>',
-  // Gem outline - ADMIN-ONLY "Shop (Paid)" prototype tab, see renderPaidShop.
-  shop_paid: '<path d="M6 3h12l3 5-9 13L3 8Z"/><path d="M3 8h18M9 3l1.5 5L9 21M15 3l-1.5 5L15 21"/>',
 };
 // One fitting accent color per tab for the mobile icon nav (see renderNav/hexToRgba) - previously every
 // active icon shared the exact same green, which is also how "Turniere" (Ligen, a trophy cup) and
@@ -16278,7 +16248,7 @@ const TAB_ICON = {
 const TAB_COLOR = {
   store: '#e8c468', club: '#3ddc84', squad: '#4da8ff', sbc: '#ff9d4d', trade: '#b98bff',
   play: '#e2564f', ligen: '#f0a83c', week: '#5fe1c9', achievements: '#ff6fae', admin: '#ff5f5f',
-  index: '#8fb8ff', shop_paid: '#c78bf5',
+  index: '#8fb8ff',
 };
 function hexToRgba(hex, alpha){
   const h = hex.replace('#','');
@@ -16545,7 +16515,6 @@ function maybeShowNavSwipeHint(){
 function renderNav(){
   const nav = document.getElementById('nav');
   nav.innerHTML = TABS.map(([id,label])=>`<button class="nav-btn ${id===currentTab?'active':''}" data-tab="${id}">${id==='trade' && !tradeUnlocked() ? '\ud83d\udd12 ' : ''}${label}</button>`).join('')
-    + (isAdmin() ? `<button class="nav-btn ${currentTab==='shop_paid'?'active':''}" data-tab="shop_paid" style="color:#c78bf5;">\ud83d\udc8e Shop (Paid)</button>` : '')
     + (isAdmin() ? `<button class="nav-btn ${currentTab==='admin'?'active':''}" data-tab="admin" style="color:#ff5f5f;">\u2699 Admin</button>` : '');
   nav.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click', ()=>{
     currentTab=b.dataset.tab; persistLastTab(currentTab); renderNav(); renderView(currentTab); renderMatchMiniWidget();
@@ -16558,7 +16527,6 @@ function renderNav(){
     const style = active && TAB_COLOR[id] ? `color:${TAB_COLOR[id]};background:${hexToRgba(TAB_COLOR[id],0.14)};` : '';
     return `<button class="nav-btn-m ${active?'active':''}" data-tab="${id}" title="${label}" aria-label="${label}" style="${style}">${iconSvg(icon)}</button>`;
   }).join('')
-    + (isAdmin() ? `<button class="nav-btn-m ${currentTab==='shop_paid'?'active':''}" data-tab="shop_paid" title="Shop (Paid)" aria-label="Shop (Paid)" style="${currentTab==='shop_paid'?`color:${TAB_COLOR.shop_paid};background:${hexToRgba(TAB_COLOR.shop_paid,0.14)};`:''}">${iconSvg(TAB_ICON.shop_paid)}</button>` : '')
     + (isAdmin() ? `<button class="nav-btn-m ${currentTab==='admin'?'active':''}" data-tab="admin" title="Admin" aria-label="Admin" style="${currentTab==='admin'?`color:${TAB_COLOR.admin};background:${hexToRgba(TAB_COLOR.admin,0.14)};`:''}">${iconSvg(TAB_ICON.admin)}</button>` : '');
   navMobile.querySelectorAll('.nav-btn-m').forEach(b=>b.addEventListener('click', ()=>{
     currentTab=b.dataset.tab; persistLastTab(currentTab); renderNav(); renderView(currentTab); renderMatchMiniWidget();
@@ -16568,7 +16536,6 @@ function renderNav(){
   const adminBtn = document.getElementById('admin-fab');
   if(adminBtn) adminBtn.remove();
   renderNavBadges();
-  updateGemDisplay();
 }
 
 function renderView(tab){
@@ -16586,167 +16553,6 @@ function renderView(tab){
   if(tab==='achievements') return renderAchievementsPanel(view);
   if(tab==='admin') return isAdmin() ? renderAdminPanel(view) : renderPlay(view);
   if(tab==='iconswap2') return renderIconSwap2Hub(view);
-  if(tab==='shop_paid') return isAdmin() ? renderPaidShop(view) : renderPlay(view);
-}
-
-// ===== Shop (Paid) - PROTOTYPE, ADMIN-ONLY (isAdmin() gate everywhere, same pattern as the earlier
-// Elfmeterschießen-Prototyp) - explores what a premium-currency ("Gems") monetization layer could look
-// like without ever touching a real player's account or a real payment provider. Every "purchase" here
-// is fake: buying Gems just grants them directly (see grantTestGems), clearly labeled as a test-only
-// simulated transaction. Never wired into TABS (see restoredLastTab's guard) so it can't leak into a
-// normal player's session even via a stale localStorage lastTab value.
-const GEM_PACKAGES = [
-  {id:'gem_s', gems:500, priceLabel:'4,99 €'},
-  {id:'gem_m', gems:1200, bonusPct:10, priceLabel:'9,99 €'},
-  {id:'gem_l', gems:2600, bonusPct:15, priceLabel:'19,99 €'},
-  {id:'gem_xl', gems:7000, bonusPct:20, priceLabel:'49,99 €'},
-  {id:'gem_xxl', gems:15000, bonusPct:25, priceLabel:'99,99 €'},
-];
-const GEM_TO_COINS_OFFERS = [
-  {id:'coins_s', gems:50, coins:5000},
-  {id:'coins_m', gems:200, coins:22000},
-  {id:'coins_l', gems:800, coins:100000},
-];
-const GEM_PACK_OFFERS = [
-  {id:'gempack_raregold', packId:'raregold', gems:120},
-  {id:'gempack_mystery', packId:'mystery', gems:320},
-  {id:'gempack_blackout', packId:'blackout', gems:600},
-];
-const GEM_COSMETIC_OFFERS = [
-  {id:'gem_auserwaehlt', nametagId:'auserwaehlt', gems:450},
-];
-async function grantTestGems(pkg){
-  profile.gems = (profile.gems||0) + pkg.gems;
-  updateGemDisplay();
-  await sSet('profile', profile);
-  toast(`Testkauf simuliert: +${formatCoins(pkg.gems)} Gems (kein echtes Geld wurde abgebucht).`);
-  renderView('shop_paid');
-}
-function openGemPurchaseConfirm(pkg){
-  const bonusText = pkg.bonusPct ? ` (inkl. ${pkg.bonusPct}% Bonus)` : '';
-  openModal(`
-    <h2 style="margin-bottom:4px;">Testkauf bestätigen</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">${formatCoins(pkg.gems)} Gems${bonusText} für ${pkg.priceLabel}. Dies ist ein <b>Testkauf</b> — es wird kein echtes Geld abgebucht, kein Zahlungsanbieter wird kontaktiert.</p>
-    <div style="display:flex;gap:10px;">
-      <button class="action-btn secondary" id="gem-buy-cancel" style="flex:1;">Abbrechen</button>
-      <button class="action-btn" id="gem-buy-go" style="flex:1;">Testkauf abschließen</button>
-    </div>`);
-  document.getElementById('gem-buy-cancel').addEventListener('click', closeModal);
-  document.getElementById('gem-buy-go').addEventListener('click', ()=>{ closeModal(); grantTestGems(pkg); });
-}
-async function buyCoinsWithGems(offer){
-  if((profile.gems||0) < offer.gems){ toast('Nicht genug Gems.'); return; }
-  profile.gems -= offer.gems;
-  updateGemDisplay();
-  await atomicCoinChange(offer.coins);
-  await sSet('profile', profile);
-  toast(`+${formatCoins(offer.coins)} Coins für ${formatCoins(offer.gems)} Gems.`);
-  renderView('shop_paid');
-}
-async function buyPackWithGems(offer){
-  if((profile.gems||0) < offer.gems){ toast('Nicht genug Gems.'); return; }
-  const pack = PACKS.find(p=>p.id===offer.packId);
-  if(!pack) return;
-  profile.gems -= offer.gems;
-  updateGemDisplay();
-  await sSet('profile', profile);
-  const drawn = pack.draw();
-  showPackOpening(pack, drawn, {untradable:true});
-}
-async function buyCosmeticWithGems(item){
-  if((profile.unlockedNametags||[]).includes(item.nametagId)){ toast('Bereits freigeschaltet.'); return; }
-  if((profile.gems||0) < item.gems){ toast('Nicht genug Gems.'); return; }
-  profile.gems -= item.gems;
-  profile.unlockedNametags = [...(profile.unlockedNametags||[]), item.nametagId];
-  if(!profile.nametag) profile.nametag = item.nametagId;
-  updateGemDisplay();
-  await sSet('profile', profile);
-  toast(`${NAMETAGS[item.nametagId].label}-Nametag freigeschaltet!`);
-  renderView('shop_paid');
-}
-function renderPaidShop(view){
-  view.innerHTML = `
-    <div class="view-head"><h2>💎 Shop (Paid) <span class="mono" style="font-size:11px;color:var(--danger);font-weight:400;">PROTOTYP — nur Testkäufe, kein echtes Geld</span></h2><p>Erkundet, wie eine Premium-Währung ("Gems") aussehen könnte: Gems gegen (simuliertes) Geld, Gems gegen Coins, Gems gegen exklusive Packs/Kosmetik. Nur für dich als Admin sichtbar, nie für echte Spieler.</p></div>
-
-    <div class="paidshop-section">
-      <h3>💎 Gems kaufen (Testkauf)</h3>
-      <p class="hint">Klick simuliert einen Kauf und schreibt die Gems sofort gut — es wird nichts abgebucht.</p>
-      <div class="paidshop-grid" id="gem-packages"></div>
-    </div>
-
-    <div class="paidshop-section">
-      <h3>🪙 Coins gegen Gems</h3>
-      <p class="hint">Premium-Währung direkt in die normale Spielwährung umtauschen.</p>
-      <div class="paidshop-grid" id="gem-coin-offers"></div>
-    </div>
-
-    <div class="paidshop-section">
-      <h3>📦 Premium-Packs (nur mit Gems)</h3>
-      <p class="hint">Bestehende Packs, aber gegen Gems statt Coins — überspringt das Coins-Verdienen komplett.</p>
-      <div class="paidshop-grid" id="gem-pack-offers"></div>
-    </div>
-
-    <div class="paidshop-section">
-      <h3>✨ Exklusive Kosmetik</h3>
-      <p class="hint">Rein kosmetisch, kein Gameplay-Vorteil — z.B. Nametags, die sonst nur der Admin manuell vergibt.</p>
-      <div class="paidshop-grid" id="gem-cosmetic-offers"></div>
-    </div>`;
-
-  const gemGrid = document.getElementById('gem-packages');
-  GEM_PACKAGES.forEach((pkg,i)=>{
-    const tile = document.createElement('div');
-    tile.className = 'paidshop-tile' + (i===GEM_PACKAGES.length-2 ? ' best' : '');
-    tile.innerHTML = `
-      ${pkg.bonusPct ? `<div class="paidshop-bonus">+${pkg.bonusPct}%</div>` : ''}
-      <div class="paidshop-amount">💎 ${formatCoins(pkg.gems)}</div>
-      <div class="paidshop-price">${pkg.priceLabel}</div>
-      <button class="action-btn secondary" style="width:100%;">Kaufen (Test)</button>`;
-    tile.querySelector('button').addEventListener('click', ()=>openGemPurchaseConfirm(pkg));
-    gemGrid.appendChild(tile);
-  });
-
-  const coinGrid = document.getElementById('gem-coin-offers');
-  GEM_TO_COINS_OFFERS.forEach(offer=>{
-    const tile = document.createElement('div');
-    tile.className = 'paidshop-tile';
-    tile.innerHTML = `
-      <div class="paidshop-amount">🪙 ${formatCoins(offer.coins)}</div>
-      <div class="paidshop-price">💎 ${formatCoins(offer.gems)}</div>
-      <button class="action-btn secondary" style="width:100%;" ${(profile.gems||0)<offer.gems?'disabled':''}>Umtauschen</button>`;
-    tile.querySelector('button').addEventListener('click', ()=>buyCoinsWithGems(offer));
-    coinGrid.appendChild(tile);
-  });
-
-  const packGrid = document.getElementById('gem-pack-offers');
-  GEM_PACK_OFFERS.forEach(offer=>{
-    const pack = PACKS.find(p=>p.id===offer.packId);
-    if(!pack) return;
-    const tile = document.createElement('div');
-    tile.className = 'paidshop-tile';
-    tile.innerHTML = `
-      <div style="font-weight:700;font-size:14px;">${pack.name}</div>
-      <div class="hint" style="margin:0;font-size:11.5px;">${pack.count} Karten</div>
-      <div class="paidshop-price">💎 ${formatCoins(offer.gems)}</div>
-      <button class="action-btn secondary" style="width:100%;" ${(profile.gems||0)<offer.gems?'disabled':''}>Öffnen</button>`;
-    tile.querySelector('button').addEventListener('click', ()=>buyPackWithGems(offer));
-    packGrid.appendChild(tile);
-  });
-
-  const cosmeticGrid = document.getElementById('gem-cosmetic-offers');
-  GEM_COSMETIC_OFFERS.forEach(item=>{
-    const nt = NAMETAGS[item.nametagId];
-    if(!nt) return;
-    const owned = (profile.unlockedNametags||[]).includes(item.nametagId);
-    const tile = document.createElement('div');
-    tile.className = 'paidshop-tile';
-    tile.innerHTML = `
-      <div style="font-weight:700;font-size:14px;">${nt.symbol} ${nt.label}</div>
-      <div class="hint" style="margin:0;font-size:11.5px;">Nametag</div>
-      <div class="paidshop-price">${owned ? 'Freigeschaltet' : `💎 ${formatCoins(item.gems)}`}</div>
-      <button class="action-btn secondary" style="width:100%;" ${owned || (profile.gems||0)<item.gems?'disabled':''}>${owned?'Besitzt du':'Kaufen'}</button>`;
-    if(!owned) tile.querySelector('button').addEventListener('click', ()=>buyCosmeticWithGems(item));
-    cosmeticGrid.appendChild(tile);
-  });
 }
 
 // ===== STORE =====
