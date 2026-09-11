@@ -68,8 +68,17 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .brand span{color:var(--teal);}
 .wallet{display:flex;align-items:center;gap:16px;}
 .coin-pill{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);padding:7px 14px;border-radius:100px;}
-.coin-dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);}
 .coin-pill b{font-family:'JetBrains Mono';font-size:14px;}
+/* Coins symbol (see coinIcon()) - same subtle glint loop as the Icon Swap token, same graphics-
+   preference gate (badgeanim) so it stays consistent with every other small looping icon animation. */
+@keyframes coinGlint{0%,100%{filter:brightness(1) drop-shadow(0 0 0 transparent);transform:rotate(0deg);}50%{filter:brightness(1.3) drop-shadow(0 0 3px rgba(232,196,104,.7));transform:rotate(-4deg);}}
+.coin-icon{animation:coinGlint 2.6s ease-in-out infinite;}
+body.gfx-no-badgeanim .coin-icon{animation:none !important;}
+/* Coin-gain "burst and collect" animation (see playCoinBurst) - same fixed full-screen overlay +
+   scatter/fly mechanic as the Icon Swap token burst above, just landing on the coin pill instead. */
+.coin-burst-layer{position:fixed;inset:0;z-index:9999;pointer-events:none;}
+.coin-burst-token{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;will-change:transform,opacity;}
+.coin-pill.coin-pill-pop{animation:is2BalancePop .28s ease-out;}
 
 /* ---- nav ---- */
 #nav{display:flex;gap:2px;padding:0 20px;background:var(--void);border-bottom:1px solid var(--line);overflow-x:auto;}
@@ -2767,7 +2776,14 @@ body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
     <div class="wallet">
       <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Verein wechseln</button>
       <button id="sound-toggle" title="Sound an/aus" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">\u{1F50A}</button>
-      <div class="coin-pill"><div class="coin-dot"></div><b class="mono" id="coin-display">0</b></div>
+      <div class="coin-pill"><svg class="coin-icon" width="18" height="18" viewBox="0 0 20 20" style="vertical-align:-3px;margin-right:3px;flex-shrink:0;" aria-hidden="true">
+        <circle cx="10" cy="10" r="9" fill="#e8c468"/>
+        <circle cx="10" cy="10" r="9" fill="none" stroke="#8a6414" stroke-width="1"/>
+        <circle cx="10" cy="10" r="6.6" fill="none" stroke="#8a6414" stroke-width="1"/>
+        <path d="M6.2 6.9c1.4-2.3 3.4-3.1 5.8-2.3" fill="none" stroke="#f7e2a4" stroke-width="1.3" stroke-linecap="round" opacity=".85"/>
+        <path d="M12 7.4c-.5-.7-1.4-1-2.3-1-1.3 0-2.3.7-2.3 1.6 0 2 4.4 1.3 4.4 3.4 0 1-1 1.7-2.3 1.7-1 0-1.9-.4-2.4-1.2" fill="none" stroke="#8a6414" stroke-width="1.15" stroke-linecap="round"/>
+        <path d="M10 4.9v1.1M10 13.1v1" stroke="#8a6414" stroke-width="1.15" stroke-linecap="round"/>
+      </svg><b class="mono" id="coin-display">0</b></div>
     </div>
   </div>
   <div id="nav"></div>
@@ -8602,17 +8618,17 @@ function weekPassReward(level){
   if(level%3===0) return {type:'pack', packId: level<9?'gold':(level<13?'sevenof88':(level<24?'zeitgeist':'kronjuwelen'))};
   return {type:'coins', amount: 900 + level*80};
 }
-function weekPassRewardIcon(reward){
+function weekPassRewardIcon(reward, size=24){
   if(reward.type==='card') return '🏆';
   if(reward.type==='pack') return '🎁';
-  return '🪙';
+  return coinIcon(size);
 }
 function weekPassRewardClass(reward){ return `reward-${reward.type==='card'?'card':reward.type==='pack'?'pack':'coins'}`; }
 const WEEK_PASS_QUEST_ICON = {
-  winMatches:'🏆', playMatches:'⚽', scoreGoals:'🥅', earnCoins:'🪙', openPack:'🎁',
+  winMatches:'🏆', playMatches:'⚽', scoreGoals:'🥅', openPack:'🎁',
   cleanSheet:'🧤', bigWin:'🔥', shootoutWin:'🎯',
 };
-function weekPassQuestIcon(def){ return WEEK_PASS_QUEST_ICON[def.type] || '⭐'; }
+function weekPassQuestIcon(def){ return def.type==='earnCoins' ? coinIcon(16) : (WEEK_PASS_QUEST_ICON[def.type] || '⭐'); }
 // icon markup shared by the untradable badge on cards - reused here (without needing a card object)
 // for the Wochen-Pass pack tiles/labels, since every card those packs grant is untradable
 const UT_PACK_ICON = `<img src="https://images.zenithfcm.com/untradable-flag-player-card.png" alt="" title="Alle Karten aus diesem Pack sind nicht handelbar" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;">`;
@@ -8947,7 +8963,7 @@ function openWeekPassChoiceModal(level){
   if(!options) return;
   const cardsHTML = options.map((opt,i)=>`
     <div class="wp-choice-card" data-choice-index="${i}">
-      <div class="wp-choice-icon">${weekPassRewardIcon(opt)}</div>
+      <div class="wp-choice-icon">${weekPassRewardIcon(opt, 28)}</div>
       <div class="wp-choice-label">${weekPassRewardLabel(opt)}</div>
     </div>`).join('');
   openModal(`
@@ -13052,7 +13068,7 @@ async function resyncOwnCollectionFromServer(){
     if(data.collection) collection = data.collection;
     if(data.managerCollection) managerCollection = data.managerCollection;
     if(data.packCollection) packCollection = data.packCollection;
-    if(data.profile && typeof data.profile.coins==='number'){ profile.coins = data.profile.coins; updateCoinDisplay(); }
+    if(data.profile && typeof data.profile.coins==='number'){ const gained = data.profile.coins>profile.coins; profile.coins = data.profile.coins; updateCoinDisplay(gained); }
   }catch(e){ console.warn('own-collection resync after market sale failed', e); }
 }
 // Dedicated listener scoped to ONLY my own active listings (not the full market like
@@ -13206,7 +13222,7 @@ function drawMarketGrid(){
     const tier = marketValueTier(listing.price, rapValue);
     const chip = document.createElement('div');
     chip.className = 'market-chip';
-    chip.innerHTML = `<span class="market-chip-price"><span class="pdot"></span>${formatCoins(listing.price)}</span>${tier?`<span class="market-value-badge ${tier.cls}">${tier.label}</span>`:''}`;
+    chip.innerHTML = `<span class="market-chip-price">${coinIcon(12)}${formatCoins(listing.price)}</span>${tier?`<span class="market-value-badge ${tier.cls}">${tier.label}</span>`:''}`;
     wrap.appendChild(chip);
     const item = card || pack;
     if(listing.sellerUserId===profile.userId){
@@ -14218,12 +14234,12 @@ function renderLiveTradeRoom(el, trade){
         <div class="livetrade-side mine">
           <div class="livetrade-side-head"><span class="livetrade-side-title mine">Dein Angebot</span>${myAccepted?'<span class="mono" style="color:var(--turf-bright);font-size:11px;">✓ Akzeptiert</span>':''}</div>
           <div class="livetrade-grid" id="lt-my-grid"></div>
-          <div class="livetrade-coinbox">🪙 <input id="lt-coin-input" type="text" inputmode="decimal" placeholder="0" value="${myOffer.coins||''}"></div>
+          <div class="livetrade-coinbox">${coinIcon(16)} <input id="lt-coin-input" type="text" inputmode="decimal" placeholder="0" value="${myOffer.coins||''}"></div>
         </div>
         <div class="livetrade-side">
           <div class="livetrade-side-head"><span class="livetrade-side-title">${escapeHtml(oppName)}s Angebot</span>${oppAccepted?'<span class="mono" style="color:var(--turf-bright);font-size:11px;">✓ Akzeptiert</span>':''}</div>
           <div class="livetrade-grid" id="lt-opp-grid"></div>
-          <div class="livetrade-coinbox">🪙 <span class="mono" style="color:var(--gold);font-weight:700;">${formatCoins(oppOffer.coins||0)}</span></div>
+          <div class="livetrade-coinbox">${coinIcon(16)} <span class="mono" style="color:var(--gold);font-weight:700;">${formatCoins(oppOffer.coins||0)}</span></div>
         </div>
       </div>
       <div class="livetrade-actionbar">
@@ -14820,7 +14836,7 @@ async function atomicCoinChange(delta, extraSets={}, opts={}){
   // Pass quest just above, since this is the one truly central chokepoint every coin gain already
   // passes through.
   if(delta>0) applyAchievementDeltas({coinsEarned:delta});
-  if(!opts.silentDisplay) updateCoinDisplay();
+  if(!opts.silentDisplay) updateCoinDisplay(delta>0);
   await fbReady;
   if(fb && clubId && fb.updateDoc && fb.increment){
     try{
@@ -15651,6 +15667,83 @@ function formatCoins(n){
   }
   return rounded.toFixed(decimals)+suffix;
 }
+// Bespoke Coins symbol - flat-shaded facets (no gradients, same philosophy as iconSwap2TokenIcon so it
+// stays crisp at small sizes): a beveled gold disc with a raised rim and an embossed "S"-swoosh, used
+// everywhere Coins are shown as an icon (header wallet, reward previews, cost pills, ...) instead of
+// the old plain .coin-dot circle / 🪙 emoji.
+function coinIcon(size=16){
+  return `<svg class="coin-icon" width="${size}" height="${size}" viewBox="0 0 20 20" style="vertical-align:-3px;margin-right:3px;flex-shrink:0;" aria-hidden="true">
+    <circle cx="10" cy="10" r="9" fill="#e8c468"/>
+    <circle cx="10" cy="10" r="9" fill="none" stroke="#8a6414" stroke-width="1"/>
+    <circle cx="10" cy="10" r="6.6" fill="none" stroke="#8a6414" stroke-width="1"/>
+    <path d="M6.2 6.9c1.4-2.3 3.4-3.1 5.8-2.3" fill="none" stroke="#f7e2a4" stroke-width="1.3" stroke-linecap="round" opacity=".85"/>
+    <path d="M12 7.4c-.5-.7-1.4-1-2.3-1-1.3 0-2.3.7-2.3 1.6 0 2 4.4 1.3 4.4 3.4 0 1-1 1.7-2.3 1.7-1 0-1.9-.4-2.4-1.2" fill="none" stroke="#8a6414" stroke-width="1.15" stroke-linecap="round"/>
+    <path d="M10 4.9v1.1M10 13.1v1" stroke="#8a6414" stroke-width="1.15" stroke-linecap="round"/>
+  </svg>`;
+}
+// glint (same mechanic/timing as .is2-token-icon, see its CSS comment) + graphics-preference gate live
+// in the CSS block near .coin-pill.
+// ===== Coin-gain "burst and collect" animation - same mechanic as playIconSwap2TokenBurst (see its
+// comment): a handful of coin icons scatter out then fly back in and land on the header wallet pill,
+// ticking the visible balance up as each one lands, instead of the number just silently jumping. Since
+// Coins are earned from dozens of different places across the whole game (match rewards, packs, SBCs,
+// quests, admin grants, ...) this deliberately bursts FROM the pill itself rather than from a per-call-
+// site origin element (which would need threading a rect through every single call site) - see
+// updateCoinDisplay(animateGain), the one shared chokepoint this hooks into.
+let coinDisplayValue = 0;
+const COIN_BURST_MAX_PARTICLES = 12;
+function playCoinBurst(amount, onDone){
+  const pillEl = document.querySelector('.coin-pill');
+  const disp = document.getElementById('coin-display');
+  const targetValue = coinDisplayValue + amount;
+  // Respect the existing "confetti" graphics preference (same one-off-celebration category as the
+  // WM-Pokal confetti) - and fall back the same way if the pill isn't even on screen right now.
+  if(!pillEl || !disp || amount<=0 || document.body.classList.contains('gfx-no-confetti')){
+    coinDisplayValue = targetValue;
+    if(disp) disp.textContent = formatCoins(coinDisplayValue);
+    if(onDone) onDone();
+    return;
+  }
+  const rect = pillEl.getBoundingClientRect();
+  const originX = rect.left+rect.width/2, originY = rect.top+rect.height/2;
+  const count = Math.min(amount, COIN_BURST_MAX_PARTICLES);
+  const layer = document.createElement('div');
+  layer.className = 'coin-burst-layer';
+  document.body.appendChild(layer);
+  let landed = 0;
+  for(let i=0;i<count;i++){
+    const el = document.createElement('div');
+    el.className = 'coin-burst-token';
+    el.innerHTML = coinIcon(20);
+    el.style.left = originX+'px'; el.style.top = originY+'px';
+    const angle = Math.random()*Math.PI*2, dist = 28+Math.random()*44;
+    el.style.setProperty('--sx', (Math.cos(angle)*dist)+'px');
+    el.style.setProperty('--sy', (Math.sin(angle)*dist)+'px');
+    el.style.setProperty('--tx', '0px');
+    el.style.setProperty('--ty', '0px');
+    const scatterDelay = i*12, scatterDur = 200, flyDelay = 100+Math.random()*120, flyDur = 380+Math.random()*180;
+    el.style.animation = `is2ScatterOut ${scatterDur}ms ease-out ${scatterDelay}ms both, is2FlyToTarget ${flyDur}ms cubic-bezier(.3,.6,.3,1) ${scatterDelay+scatterDur+flyDelay}ms both`;
+    layer.appendChild(el);
+    // telescoping split, same trick as playIconSwap2TokenBurst - guarantees the per-particle shares
+    // sum to exactly `amount` regardless of how unevenly Math.round distributes them.
+    const share = Math.round(amount*(i+1)/count) - Math.round(amount*i/count);
+    setTimeout(()=>{
+      el.remove();
+      landed++;
+      coinDisplayValue += share;
+      disp.textContent = formatCoins(coinDisplayValue);
+      pillEl.classList.remove('coin-pill-pop');
+      void pillEl.offsetWidth; // restart the pop animation on every landing
+      pillEl.classList.add('coin-pill-pop');
+      if(landed===count){
+        layer.remove();
+        coinDisplayValue = targetValue; // guards against any float/rounding drift across shares
+        disp.textContent = formatCoins(coinDisplayValue);
+        if(onDone) onDone();
+      }
+    }, scatterDelay+scatterDur+flyDelay+flyDur);
+  }
+}
 // multi-position cards: `pos` is a comma-separated list ordered most-natural-first (real FIFA data).
 // rankIndex 0 = the card's primary position. Bonus tier depends on both rank and the card's base OV.
 function cardPositions(pos){ return String(pos||'').split(',').map(s=>s.trim()).filter(Boolean); }
@@ -15686,7 +15779,21 @@ function parseCoinInput(str){
   const mult = COIN_SUFFIX_MULT[(m[2]||'').toLowerCase()] || 1;
   return parseFloat(m[1]) * mult;
 }
-function updateCoinDisplay(){ document.getElementById('coin-display').textContent = formatCoins(profile.coins); }
+// animateGain:true plays the burst-and-collect animation (see playCoinBurst) up from whatever's
+// currently displayed to profile.coins - only meaningful for an actual gain (target>current); anything
+// else (a spend, a resync from another tab/device, initial boot) just sets the number immediately, same
+// as before this animation existed.
+function updateCoinDisplay(animateGain=false){
+  const disp = document.getElementById('coin-display');
+  if(!disp) return;
+  const target = profile.coins;
+  if(!animateGain || target<=coinDisplayValue){
+    coinDisplayValue = target;
+    disp.textContent = formatCoins(target);
+    return;
+  }
+  playCoinBurst(target-coinDisplayValue);
+}
 
 // ===== toast =====
 function toast(msg){
@@ -17047,7 +17154,7 @@ function renderStore(view){
           <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
           ${pack.cost>0 && pack.count>0 ? `<div class="hint" style="margin:0;font-size:10.5px;">~${formatCoins(Math.round(pack.cost/pack.count))} pro Karte</div>` : ''}
           <div class="buyrow">
-            <div class="price-pill"><div class="pdot"></div>${formatCoins(pack.cost)}</div>
+            <div class="price-pill">${coinIcon(14)}${formatCoins(pack.cost)}</div>
             <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
           </div>
         </div>`;
@@ -19169,6 +19276,12 @@ async function loadAdminUserPanel(targetId){
       const newProfile = {...p, coins:(p.coins||0)+amount};
       try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
       catch(e){ console.warn('admin give coins failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
+      // This writes straight to the TARGET account's Firestore doc, bypassing atomicCoinChange/the local
+      // `profile` object entirely - correct when targeting someone else's account (no live session of
+      // theirs to animate), but when the admin targets their OWN currently-logged-in account (a common
+      // way to grant yourself test coins) that same bypass left the header pill silently stale until the
+      // next reload, with no burst - exactly the "Coins geben" case reported as broken/invisible.
+      if(targetId===clubId){ profile.coins = newProfile.coins; updateCoinDisplay(amount>0); }
       toast(`${amount>=0?'+':''}${formatCoins(amount)} Coins f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
     }, 12);
@@ -19967,7 +20080,7 @@ function drawPackClubGrid(){
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:26px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:3px 0;font-size:10px;';
-    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computePackRAP(pack))}`;
+    rapTag.innerHTML = `${coinIcon(11)}RAP ~${formatCoins(computePackRAP(pack))}`;
     wrap.appendChild(rapTag);
     const openBtn = document.createElement('button');
     openBtn.className = 'action-btn';
@@ -20011,7 +20124,7 @@ function drawManagerClubGrid(){
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
-    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computeRAP(mgr))}`;
+    rapTag.innerHTML = `${coinIcon(11)}RAP ~${formatCoins(computeRAP(mgr))}`;
     wrap.appendChild(rapTag);
     return wrap;
   });
@@ -20063,7 +20176,7 @@ function drawClubGrid(){
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
-    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computeRAP(card))}`;
+    rapTag.innerHTML = `${coinIcon(11)}RAP ~${formatCoins(computeRAP(card))}`;
     wrap.appendChild(rapTag);
     wrap.addEventListener('click', ()=>showCardInfoModal(card, uid));
     return wrap;
@@ -22942,7 +23055,7 @@ async function cancelHostedTournament(id){
         tx.delete(ref);
         result='cancelled';
       });
-      if(refundedCoins>0){ profile.coins += refundedCoins; updateCoinDisplay(); }
+      if(refundedCoins>0){ profile.coins += refundedCoins; updateCoinDisplay(true); }
     } else {
       const snap = await fb.getDoc(ref);
       if(!snap.exists()){ result='gone'; }
@@ -23020,7 +23133,7 @@ async function claimTournamentPrize(id, role='winner'){
           claimed = true; prizeCoins = t.winnerPrizeCoins;
         }
       });
-      if(claimed && prizeCoins>0){ profile.coins += prizeCoins; updateCoinDisplay(); }
+      if(claimed && prizeCoins>0){ profile.coins += prizeCoins; updateCoinDisplay(true); }
       if(claimed && prizeCardId){ collection.push({uid:newCardUid, cardId:prizeCardId, obtainedAt:Date.now(), obtainedFrom:t.hostUserId}); }
       if(wonNow) applyAchievementDeltas({tournamentWins:1});
     } else {
@@ -24064,6 +24177,15 @@ function wireLigaRewardsBtn(box, letter){
   const btn = box.querySelector('.liga-rewards-btn');
   if(btn) btn.addEventListener('click', ()=>openLigaRewardsModal(letter));
 }
+// Wires up every "Live spielen" button on a 2. Aufstiegsplatz Finale card (see ligaPromoTieHTML) -
+// called alongside wireLigaRewardsBtn wherever the weekend recap's historyBox might contain one.
+function wireLigaPromoLiveButtons(box){
+  box.querySelectorAll('[data-liga-promo-leg]').forEach(btn=>{
+    btn.addEventListener('click', ()=> playLigaPromoLiveMatch(
+      btn.dataset.ligaPromoColl, btn.dataset.ligaPromoDoc, btn.dataset.ligaPromoField,
+      btn.dataset.ligaPromoLetter, btn.dataset.ligaPromoLeg));
+  });
+}
 // ===== Liga-Meister-Karte: the automatic weekly reward for winning Liga A specifically - a rotating
 // cast of players (a new one most weeks, supplied as the season goes on), always boosted to 104 OVR
 // and untradable. Two entry shapes: `custom` for a brand-new player that doesn't exist anywhere else
@@ -24837,6 +24959,19 @@ function ligaTwoLegLeg1(teamA, teamB){
 function ligaTwoLegLeg2(teamA, teamB){
   return buildDecisiveMatch(teamB.rating, teamA.rating, teamB.players, teamA.players, null, null, {allowDraw:true});
 }
+// Same idea as wepPlayMatch (see its comment): the leg is fully decided the instant this runs, but a
+// PARTICIPANT must watch it live (playLigaPromoLiveMatch) before they see the score, instead of it just
+// showing up already-finished the moment the weekly commissioner pass computes it - see the "Relegation-
+// Hin-/Rückspiele" fix. mid/revealedBy/md/nativeMeIsA carry everything playLigaPromoLiveMatch needs to
+// replay the SAME already-decided leg instead of secretly re-simulating a new one.
+function ligaBuildLeg1(teamA, teamB){
+  const md = ligaTwoLegLeg1(teamA, teamB);
+  return {mid:genId(), aGoals:md.myGoals, bGoals:md.oppGoals, revealedBy:[], nativeMeIsA:true, md};
+}
+function ligaBuildLeg2(teamA, teamB){
+  const md = ligaTwoLegLeg2(teamA, teamB);
+  return {mid:genId(), aGoals:md.oppGoals, bGoals:md.myGoals, revealedBy:[], nativeMeIsA:false, md};
+}
 // leg1/leg2 are already in the {aGoals,bGoals} shape (teamA's perspective) - same aggregate/decider
 // logic as ligaRelegationTie above, just fed two already-played legs instead of playing both right here.
 function ligaTwoLegAggregate(teamA, teamB, leg1, leg2){
@@ -25168,8 +25303,9 @@ async function ligaPromoSemiLeg1(weekStart, ref){
   for(const p of pairs){
     const teamThird = await ligaFreshTeam(p.thirdRow.userId, p.thirdRow.name);
     const teamFourth = await ligaFreshTeam(p.fourthRow.userId, p.fourthRow.name);
-    const leg1 = ligaTwoLegLeg1(teamThird, teamFourth);
-    legs.push({letter:p.letter, thirdUserId:teamThird.userId, thirdName:teamThird.name, fourthUserId:teamFourth.userId, fourthName:teamFourth.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+    legs.push({letter:p.letter, thirdUserId:teamThird.userId, thirdName:teamThird.name, thirdNametag:teamThird.nametag||null,
+      fourthUserId:teamFourth.userId, fourthName:teamFourth.name, fourthNametag:teamFourth.nametag||null,
+      leg1: ligaBuildLeg1(teamThird, teamFourth)});
   }
   try{ await fb.setDoc(ref, {status:'done', at:Date.now(), tables, legs}); }
   catch(e){ console.warn('promo semi leg1 write failed', e); return null; }
@@ -25181,18 +25317,23 @@ async function ligaPromoSemiLeg1(weekStart, ref){
 async function ligaPromoSemiLeg2(weekStart, leg1Data, ref){
   if(!(await ligaV2ClaimStage(ref))) return null;
   const winners = [];
+  const legs = [];
   for(const leg of leg1Data.legs){
     const teamThird = await ligaFreshTeam(leg.thirdUserId, leg.thirdName);
     const teamFourth = await ligaFreshTeam(leg.fourthUserId, leg.fourthName);
-    const leg2Raw = ligaTwoLegLeg2(teamThird, teamFourth);
-    const tie = ligaTwoLegAggregate(teamThird, teamFourth, leg.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const leg2 = ligaBuildLeg2(teamThird, teamFourth);
+    const tie = ligaTwoLegAggregate(teamThird, teamFourth, leg.leg1, leg2);
     const winnerId = tie.winner==='A' ? teamThird.userId : teamFourth.userId;
     const winnerName = tie.winner==='A' ? teamThird.name : teamFourth.name;
     winners.push({letter:leg.letter, winnerId, winnerName});
+    // Carries the full tie (both legs + aggregate/decider) forward into THIS stage's own doc, same
+    // "once the return leg has run, its doc is the authoritative copy of both legs" pattern as
+    // wepRunSemi2 - the Hinspiel-only doc (leg1Data/ref of ligaPromoSemiLeg1) is never read again.
+    legs.push({...leg, leg2, aggA:tie.aggA, aggB:tie.aggB, decider:tie.decider, winnerId, winnerName});
   }
-  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), winners}); }
+  try{ await fb.setDoc(ref, {status:'done', at:Date.now(), winners, legs}); }
   catch(e){ console.warn('promo semi leg2 write failed', e); return null; }
-  return {stage:'semiLeg2', winners};
+  return {stage:'semiLeg2', winners, legs};
 }
 // Stage 3 (Samstag ab 15:00): pairs each league's Halbfinale winner against that league's own 2nd
 // place for the Finale (deciding who actually gets the league's 2nd promotion spot), plays the Hinspiel.
@@ -25204,8 +25345,9 @@ async function ligaPromoFinalLeg1(weekStart, semiLeg1Data, semiLeg2Data, ref){
     const secondRow = table[1];
     const teamSemiWinner = await ligaFreshTeam(w.winnerId, w.winnerName);
     const teamSecond = await ligaFreshTeam(secondRow.userId, secondRow.name);
-    const leg1 = ligaTwoLegLeg1(teamSemiWinner, teamSecond);
-    legs.push({letter:w.letter, semiWinnerUserId:teamSemiWinner.userId, semiWinnerName:teamSemiWinner.name, secondUserId:teamSecond.userId, secondName:teamSecond.name, leg1:{aGoals:leg1.myGoals, bGoals:leg1.oppGoals}});
+    legs.push({letter:w.letter, semiWinnerUserId:teamSemiWinner.userId, semiWinnerName:teamSemiWinner.name, semiWinnerNametag:teamSemiWinner.nametag||null,
+      secondUserId:teamSecond.userId, secondName:teamSecond.name, secondNametag:teamSecond.nametag||null,
+      leg1: ligaBuildLeg1(teamSemiWinner, teamSecond)});
   }
   try{ await fb.setDoc(ref, {status:'done', at:Date.now(), legs}); }
   catch(e){ console.warn('promo final leg1 write failed', e); return null; }
@@ -25238,12 +25380,13 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
   for(const leg of finalLeg1Data.legs){
     const teamSemiWinner = await ligaFreshTeam(leg.semiWinnerUserId, leg.semiWinnerName);
     const teamSecond = await ligaFreshTeam(leg.secondUserId, leg.secondName);
-    const leg2Raw = ligaTwoLegLeg2(teamSemiWinner, teamSecond);
-    const tie = ligaTwoLegAggregate(teamSemiWinner, teamSecond, leg.leg1, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const leg2 = ligaBuildLeg2(teamSemiWinner, teamSecond);
+    const tie = ligaTwoLegAggregate(teamSemiWinner, teamSecond, leg.leg1, leg2);
     const winnerId = tie.winner==='A' ? teamSemiWinner.userId : teamSecond.userId;
     const upperLetter = LIGA_LETTERS[LIGA_LETTERS.indexOf(leg.letter)-1];
     nextLeagueOf[winnerId] = upperLetter;
-    relegationResults.push({letter:leg.letter, upperLetter, semiWinner:teamSemiWinner.name, second:teamSecond.name, ...tie, winnerId});
+    relegationResults.push({letter:leg.letter, upperLetter, semiWinnerUserId:teamSemiWinner.userId, semiWinner:teamSemiWinner.name, semiWinnerNametag:leg.semiWinnerNametag||null,
+      secondUserId:teamSecond.userId, second:teamSecond.name, secondNametag:leg.secondNametag||null, ...tie, winnerId});
   }
   // Every league except the very bottom one (no lowerLetter below it) must always end up with exactly
   // 8 members again - a league that never runs the real Halbfinale/Finale-Bracket for its 2nd promotion
@@ -25287,12 +25430,13 @@ async function ligaPromoFinalize(weekStart, semiLeg1Data, finalLeg1Data, rollove
   for(const s of smallLeagueSecondSpots){
     const teamSecond = await ligaFreshTeam(s.secondRow.userId, s.secondRow.name);
     const teamThird = await ligaFreshTeam(s.thirdRow.userId, s.thirdRow.name);
-    const leg1 = ligaTwoLegLeg1(teamSecond, teamThird);
-    const leg2Raw = ligaTwoLegLeg2(teamSecond, teamThird);
-    const tie = ligaTwoLegAggregate(teamSecond, teamThird, {aGoals:leg1.myGoals, bGoals:leg1.oppGoals}, {aGoals:leg2Raw.oppGoals, bGoals:leg2Raw.myGoals});
+    const leg1 = ligaBuildLeg1(teamSecond, teamThird);
+    const leg2 = ligaBuildLeg2(teamSecond, teamThird);
+    const tie = ligaTwoLegAggregate(teamSecond, teamThird, leg1, leg2);
     const winnerId = tie.winner==='A' ? teamSecond.userId : teamThird.userId;
     nextLeagueOf[winnerId] = s.upperLetter;
-    relegationResults.push({letter:s.letter, upperLetter:s.upperLetter, semiWinner:teamSecond.name, second:teamThird.name, ...tie, winnerId});
+    relegationResults.push({letter:s.letter, upperLetter:s.upperLetter, semiWinnerUserId:teamSecond.userId, semiWinner:teamSecond.name, semiWinnerNametag:teamSecond.nametag||null,
+      secondUserId:teamThird.userId, second:teamThird.name, secondNametag:teamThird.nametag||null, ...tie, winnerId});
   }
   const nextMembers = {};
   lettersInUse.forEach(letter=>{ nextMembers[letter] = []; });
@@ -25692,6 +25836,7 @@ function renderWochenendpokalPendingRewards(box){
       if(pack) showPackOpening(pack, pack.draw(), {});
       else toast('Unbekanntes Pack übersprungen.');
     } else {
+      updateCoinDisplay(true);
       toast(`+${formatCoins(next.amount)} Coins!`);
     }
     renderWochenendpokalPendingRewards(box);
@@ -26302,6 +26447,7 @@ async function claimAchievementTier(achId, tier){
   }
   await sSet('profile', profile);
   if(grantedCard) await sSet('collection', collection);
+  if(reward.coins) updateCoinDisplay(true);
   let msg = reward.iconSwap2Tokens
     ? `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${reward.iconSwap2Tokens} Icon Swap Tokens`
     : `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${formatCoins(reward.coins||0)} Coins`;
@@ -26544,7 +26690,7 @@ async function refreshLigaProfileFields(){
     const p = snap.data().profile || {};
     if('pendingLigaPacks' in p) profile.pendingLigaPacks = p.pendingLigaPacks;
     if('pendingWochenendpokalRewards' in p) profile.pendingWochenendpokalRewards = p.pendingWochenendpokalRewards;
-    if('coins' in p) profile.coins = p.coins;
+    if('coins' in p && p.coins!==profile.coins){ profile.coins = p.coins; updateCoinDisplay(true); }
     // Erfolge/Nametags have the exact same staleness problem ligaBadge used to (see this function's own
     // comment above) - a Liga-placement achievement tier crossed by the weekend rollover, or an
     // achievement claimed from a DIFFERENT session, needs the same forced resync here.
@@ -26553,6 +26699,91 @@ async function refreshLigaProfileFields(){
     if('unlockedNametags' in p) profile.unlockedNametags = p.unlockedNametags;
     if('nametag' in p) profile.nametag = p.nametag;
   }catch(e){ console.warn('refresh liga profile fields failed', e); }
+}
+// Reveal-gated Hin-/Rückspiel display for the Liga's 2. Aufstiegsplatz Finale (see ligaBuildLeg1/
+// ligaBuildLeg2 and playLigaPromoLiveMatch below) - fixes "Relegationsspiele" (the promo-playoff Finale)
+// showing its result to everyone the instant the weekly commissioner pass computes it, with no live
+// watch step. Reuses wepFixtureRowHTML's per-leg fixture card (generic, not WEP-specific) but with its
+// own Aufstieg/kein-Aufstieg outcome wording instead of WEP's "Wochenendpokal-Sieger" text.
+function ligaPromoTieHTML(tie, viewerUserId, collection, docId, arrayField, letter){
+  const leg1M = {...tie.leg1, aUserId:tie.aUserId, aName:tie.aName, aNametag:tie.aNametag, bUserId:tie.bUserId, bName:tie.bName, bNametag:tie.bNametag};
+  const attrs = legKey => ({'liga-promo-coll':collection, 'liga-promo-doc':docId, 'liga-promo-field':arrayField, 'liga-promo-letter':letter, 'liga-promo-leg':legKey});
+  let html = `<div class="lbl" style="margin:12px 0 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase;">Hinspiel</div>`;
+  html += wepFixtureRowHTML(leg1M, viewerUserId, attrs('leg1'));
+  const isMine = viewerUserId && (tie.aUserId===viewerUserId || tie.bUserId===viewerUserId);
+  const leg1Revealed = !isMine || (tie.leg1.revealedBy||[]).includes(viewerUserId);
+  const leg2M = {...tie.leg2, aUserId:tie.aUserId, aName:tie.aName, aNametag:tie.aNametag, bUserId:tie.bUserId, bName:tie.bName, bNametag:tie.bNametag};
+  html += `<div class="lbl" style="margin:12px 0 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase;">Rückspiel</div>`;
+  html += wepFixtureRowHTML(leg2M, viewerUserId, attrs('leg2'));
+  const leg2Revealed = !isMine || (tie.leg2.revealedBy||[]).includes(viewerUserId);
+  if(leg1Revealed && leg2Revealed){
+    const deciderText = tie.decider ? `, Entscheidung ${tie.decider.aGoals}:${tie.decider.bGoals}${tie.decider.wentToPK?' n.E.':''}` : '';
+    const winnerNametag = tie.winnerId===tie.aUserId ? tie.aNametag : tie.bNametag;
+    const outcome = tie.winnerId===viewerUserId ? 'Aufstieg für dich!'
+      : isMine ? 'kein Aufstieg, du bleibst in dieser Liga.'
+      : `Aufstieg für ${nametagHTML(tie.winnerName, winnerNametag)}.`;
+    html += `<p class="hint" style="margin:8px 0 0;">Aggregat ${tie.aggA}:${tie.aggB}${deciderText} — <b>${outcome}</b></p>`;
+  }
+  return html;
+}
+// Shared "watch the already-decided leg live, then mark it revealed for me" flow for the Liga promo-
+// playoff Finale - same idea as playWepLiveMatch, but the authoritative doc's Firestore collection
+// varies by caller (leagueMeta before the weekly rollover finishes, leagueHistory once it has) rather
+// than always leagueMeta, and legs live in a `letter`-keyed array instead of a flat matches list or a
+// fixed `semis`/`final` shape.
+async function playLigaPromoLiveMatch(collection, docId, arrayField, letter, legKey){
+  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
+  await fbReady;
+  if(!fb) return;
+  const ref = fb.doc(fb.db, collection, docId);
+  let snap;
+  try{ snap = await fb.getDoc(ref); }catch(e){ toast('Konnte nicht geladen werden.'); return; }
+  if(!snap.exists()) return;
+  const getEntry = data => (data[arrayField]||[]).find(x=>x.letter===letter);
+  const entry = getEntry(snap.data());
+  if(!entry) return;
+  const leg = entry[legKey];
+  if(!leg) return;
+  const aUserId = entry.semiWinnerUserId, bUserId = entry.secondUserId;
+  const viewerIsA = aUserId===clubId, viewerIsB = bUserId===clubId;
+  if(!viewerIsA && !viewerIsB) return;
+  const md = (viewerIsA===leg.nativeMeIsA) ? {...leg.md} : flipMatchDataSides(leg.md);
+  md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+  md.allowDraw = true; // Relegations-Legs sind wie Liga-/Wochenendpokal-Matches immer 3-way
+  const myName = viewerIsA ? entry.semiWinner : entry.second;
+  const oppName = viewerIsA ? entry.second : entry.semiWinner;
+  const oppNametag = viewerIsA ? entry.secondNametag : entry.semiWinnerNametag;
+  inMatch = true;
+  openModal(`<h2 style="margin-bottom:4px;">Relegation — 2. Aufstiegsplatz</h2><p class="hint" style="margin-top:0;margin-bottom:10px;">${nametagHTML(myName, profile.nametag)} vs ${nametagHTML(oppName, oppNametag)}</p><button type="button" id="liga-promo-skip-btn" class="action-btn secondary" style="width:auto;padding:9px 16px;margin-bottom:10px;">Zum Ergebnis springen ⏭</button>`);
+  const box = document.querySelector('#modal-root .modal-box');
+  ensureMatchAreaHost(box);
+  const skipBtn = document.getElementById('liga-promo-skip-btn');
+  if(skipBtn) skipBtn.addEventListener('click', ()=>{ liveMatchSkipAll = true; skipBtn.disabled = true; skipBtn.textContent = 'Wird übersprungen …'; });
+  try{ await playFullMatch(md, myName, oppName, ligaTeamAbbr(oppName), oppNametag); toast(`Endstand: ${myName} ${md.myGoals}:${md.oppGoals} ${oppName}`); }
+  finally{ inMatch = false; }
+  try{
+    if(fb.runTransaction){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const freshSnap = await tx.get(ref);
+        if(!freshSnap.exists()) return;
+        const cur = freshSnap.data();
+        const curEntry = getEntry(cur);
+        if(!curEntry) return;
+        const curLeg = curEntry[legKey];
+        if(!curLeg) return;
+        const updatedLeg = {...curLeg, revealedBy:[...new Set([...(curLeg.revealedBy||[]), clubId])]};
+        const updatedArr = (cur[arrayField]||[]).map(x=> x.letter!==letter ? x : {...x, [legKey]:updatedLeg});
+        tx.update(ref, {[arrayField]: updatedArr});
+      });
+    } else {
+      const data = snap.data();
+      const updatedLeg = {...leg, revealedBy:[...new Set([...(leg.revealedBy||[]), clubId])]};
+      const updatedArr = (data[arrayField]||[]).map(x=> x.letter!==letter ? x : {...x, [legKey]:updatedLeg});
+      await fb.setDoc(ref, {[arrayField]: updatedArr}, {merge:true});
+    }
+  }catch(e){ console.warn('mark liga promo leg revealed failed', e); }
+  closeModal();
+  renderView('ligen');
 }
 function renderLigenPanel(view){
   ligaFixturesShowAll = false;
@@ -26688,22 +26919,38 @@ function renderLigenPanel(view){
           // put rather than moving to a "lowerLetter" that doesn't exist for this shape.
           const myPlayoff = (hist.relegationResults||[]).find(r=>r.upperLetter===membership.letter || r.lowerLetter===membership.letter || r.letter===membership.letter);
           if(myPlayoff){
-            const won = myPlayoff.winnerId===clubId;
             const isNewStyle = myPlayoff.semiWinner!=null;
-            // the new Finale's loser simply stays put (no promotion, not a demotion) - a neutral icon
-            // and "kein Aufstieg" instead of the old tie's binary "up/down", since only the OLD
-            // cross-league shape ever actually moved its loser to a different league.
-            const icon = won ? '⬆️' : (isNewStyle ? '➖' : '⬇️');
-            const bg = won ? 'rgba(61,196,130,.12)' : (isNewStyle ? 'rgba(150,150,150,.12)' : 'rgba(226,86,79,.12)');
-            const border = won ? '#3dc482' : (isNewStyle ? '#8a8a8a' : '#e2564f');
-            const outcome = won ? 'Aufstieg für dich!' : (isNewStyle ? 'kein Aufstieg, du bleibst in Liga '+myPlayoff.letter+'.' : 'Aufstieg für '+myPlayoff.winnerId+'.');
-            const label = isNewStyle
-              ? `2. Aufstiegsplatz Liga ${myPlayoff.letter}: <b>${myPlayoff.semiWinner}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.second}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`
-              : `Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: <b>${myPlayoff.challenger}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.defender}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`;
-            historyBox += `<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1px solid ${border};border-radius:6px;padding:10px 12px;margin-bottom:8px;">
-              <span style="font-size:20px;">${icon}</span>
-              <span>${label}</span>
-            </div>`;
+            // New-style ties written after the "must actually watch Hin-/Rückspiel" fix carry
+            // mid/revealedBy/md on each leg (see ligaBuildLeg1/ligaBuildLeg2) - older already-finished
+            // weeks never had this and fall back to the old plain-text summary unchanged below, since
+            // there's no reveal state to gate on for data that predates the fix.
+            const hasReveal = isNewStyle && myPlayoff.leg1 && myPlayoff.leg1.mid;
+            if(hasReveal){
+              const tie = {aUserId:myPlayoff.semiWinnerUserId, aName:myPlayoff.semiWinner, aNametag:myPlayoff.semiWinnerNametag,
+                bUserId:myPlayoff.secondUserId, bName:myPlayoff.second, bNametag:myPlayoff.secondNametag,
+                leg1:myPlayoff.leg1, leg2:myPlayoff.leg2, aggA:myPlayoff.aggA, aggB:myPlayoff.aggB, decider:myPlayoff.decider,
+                winnerId:myPlayoff.winnerId, winnerName: myPlayoff.winnerId===myPlayoff.semiWinnerUserId ? myPlayoff.semiWinner : myPlayoff.second};
+              historyBox += `<div class="vs-panel" style="margin-bottom:8px;text-align:left;">
+                <h3 style="font-size:13px;margin-bottom:2px;">2. Aufstiegsplatz Liga ${myPlayoff.letter}</h3>
+                ${ligaPromoTieHTML(tie, clubId, 'leagueHistory', weekStartBefore+'', 'relegationResults', myPlayoff.letter)}
+              </div>`;
+            } else {
+              const won = myPlayoff.winnerId===clubId;
+              // the new Finale's loser simply stays put (no promotion, not a demotion) - a neutral icon
+              // and "kein Aufstieg" instead of the old tie's binary "up/down", since only the OLD
+              // cross-league shape ever actually moved its loser to a different league.
+              const icon = won ? '⬆️' : (isNewStyle ? '➖' : '⬇️');
+              const bg = won ? 'rgba(61,196,130,.12)' : (isNewStyle ? 'rgba(150,150,150,.12)' : 'rgba(226,86,79,.12)');
+              const border = won ? '#3dc482' : (isNewStyle ? '#8a8a8a' : '#e2564f');
+              const outcome = won ? 'Aufstieg für dich!' : (isNewStyle ? 'kein Aufstieg, du bleibst in Liga '+myPlayoff.letter+'.' : 'Aufstieg für '+myPlayoff.winnerId+'.');
+              const label = isNewStyle
+                ? `2. Aufstiegsplatz Liga ${myPlayoff.letter}: <b>${myPlayoff.semiWinner}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.second}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`
+                : `Relegation Liga ${myPlayoff.upperLetter}/${myPlayoff.lowerLetter}: <b>${myPlayoff.challenger}</b> ${myPlayoff.aggA}:${myPlayoff.aggB} <b>${myPlayoff.defender}</b> (Hin ${myPlayoff.leg1.aGoals}:${myPlayoff.leg1.bGoals}, Rück ${myPlayoff.leg2.aGoals}:${myPlayoff.leg2.bGoals}${myPlayoff.decider?`, Entscheidung ${myPlayoff.decider.aGoals}:${myPlayoff.decider.bGoals}${myPlayoff.decider.wentToPK?' n.E.':''}`:''}) — <b>${outcome}</b>`;
+              historyBox += `<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1px solid ${border};border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+                <span style="font-size:20px;">${icon}</span>
+                <span>${label}</span>
+              </div>`;
+            }
           }
           const oldLetter = Object.keys(hist.tables||{}).find(l=>(hist.tables[l]||[]).some(row=>row.userId===clubId));
           if(oldLetter){
@@ -26744,6 +26991,7 @@ function renderLigenPanel(view){
     if(isWeekendRecap && !showNextPreview){
       box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Die Tabelle der neuen Liga wird ab Sonntag 00:00 Uhr angezeigt.</p>`;
       wireLigaRewardsBtn(box, membership.letter);
+      wireLigaPromoLiveButtons(box);
       return;
     }
     LIGA_LAST_ERROR = null;
@@ -26752,7 +27000,7 @@ function renderLigenPanel(view){
     let week = isWeekendRecap
       ? await ligaSyncedWeek(membership.letter, membership.members, targetWeekStart)
       : await getOrCreateLeagueWeek(membership.letter, membership.members, targetWeekStart);
-    if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; wireLigaRewardsBtn(box, membership.letter); return; }
+    if(!week){ box.innerHTML = header + historyBox + oldSectionHtml + `<p class="hint">Spielplan konnte nicht geladen werden.${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}</p>`; wireLigaRewardsBtn(box, membership.letter); wireLigaPromoLiveButtons(box); return; }
     // Whoever's tab hits a match first after its own reveal moment simulates it, using both sides'
     // CURRENT squad right then - not during the weekend preview week, where nothing is due yet anyway.
     if(!isWeekendRecap) week = await resolveLigaMatchIfNeeded(membership.letter, targetWeekStart, week);
@@ -26828,6 +27076,7 @@ function renderLigenPanel(view){
     <div id="liga-fixtures-days">${fixturesHtml}</div>`;
     box.innerHTML = html;
     wireLigaRewardsBtn(box, membership.letter);
+    wireLigaPromoLiveButtons(box);
     const wireFixtureLiveButtons = ()=>{
       box.querySelectorAll('[data-liga-live-mid]').forEach(btn=>{
         btn.addEventListener('click', ()=> playLigaLiveMatch(membership.letter, targetWeekStart, btn.dataset.ligaLiveMid));
@@ -27109,7 +27358,7 @@ async function wm26FinishRun(exitStage, won){
     profile.wm26 = {...t, stage:'done', wonCup:true};
     await sSet('profile', profile);
     await atomicCoinChange(WM26_WIN_REWARD, {}, {silentDisplay:true});
-    updateCoinDisplay();
+    updateCoinDisplay(true);
     await showWM26TrophyCutscene();
     toast('Öffne dein Pack…');
     const pack = PACKS.find(p=>p.id==='worldcuppack');
@@ -27122,7 +27371,7 @@ async function wm26FinishRun(exitStage, won){
     profile.wm26 = {...t, stage:'done', eliminatedAt:exitStage};
     await sSet('profile', profile);
     const reward = WM26_EXIT_REWARD[exitStage]||0;
-    if(reward>0){ await atomicCoinChange(reward, {}, {silentDisplay:true}); updateCoinDisplay(); }
+    if(reward>0){ await atomicCoinChange(reward, {}, {silentDisplay:true}); updateCoinDisplay(true); }
     toast(`Ausgeschieden — ${WM26_STAGE_LABEL[exitStage]}. +${formatCoins(reward)} Coins.`);
   }
   renderWM26Panel();
@@ -29404,7 +29653,7 @@ async function playOReiChallenge(){
       }
     },
     onComplete: ()=>{
-      updateCoinDisplay(); // O Rei's win rewards go through atomicCoinChange's silentDisplay before the animation - reveal now
+      updateCoinDisplay(true); // O Rei's win rewards go through atomicCoinChange's silentDisplay before the animation - reveal now
       if(oreiOutcome.type==='blackoutPack'){
         const blackoutPack = PACKS.find(p=>p.id==='blackout');
         toast(`Sieg 2/3!${oreiOutcome.extra} Einmalige Belohnung: ein Blackout Pack!`);
@@ -29527,7 +29776,7 @@ async function playWinStreakMatch(){
       }
     },
     onComplete: ()=>{
-      updateCoinDisplay(); // the 5-win bonus goes through atomicCoinChange's silentDisplay before the animation - reveal now
+      updateCoinDisplay(true); // the 5-win bonus goes through atomicCoinChange's silentDisplay before the animation - reveal now
       if(streakOutcome.type==='fiveWin'){
         const pack = PACKS.find(p=>p.id==='iconmoment');
         toast('\ud83d\udd25 5 Siege in Folge! +3.000 Coins, \u00f6ffne dein Pack\u2026');
@@ -31135,7 +31384,7 @@ function renderPlaystyleTrainingModal(){
   const selected = psTrainingSelectedUid ? eligible.find(x=>x.entry.uid===psTrainingSelectedUid) : null;
   openModal(`
     <h2 style="margin-bottom:2px;">⚡ PlayStyle-Training</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:12px;">Pro Aktion: <span class="ps-cost-pill">🪙 ${formatCoins(PS_TRAINING_COST_COINS)}</span> <span class="ps-cost-pill">✦ ${formatCoins(PS_TRAINING_COST_XP)} XP</span> — von der Karte selbst, kann ihr Level senken.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Pro Aktion: <span class="ps-cost-pill">${coinIcon(14)} ${formatCoins(PS_TRAINING_COST_COINS)}</span> <span class="ps-cost-pill">✦ ${formatCoins(PS_TRAINING_COST_XP)} XP</span> — von der Karte selbst, kann ihr Level senken.</p>
     <input id="ps-training-search" placeholder="🔍 Karte suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
     <div class="club-grid" id="ps-training-grid" style="max-height:200px;overflow:auto;margin-bottom:14px;"></div>
     <div id="ps-training-detail"></div>
@@ -31200,7 +31449,7 @@ function renderPlaystyleTrainingModal(){
       <div style="flex-shrink:0;">${cardEl(card,'mini').outerHTML}</div>
       <div style="flex:1;">
         <div style="font-weight:700;font-size:15px;">${card.n}</div>
-        <div class="hint" style="margin:2px 0 0;">🪙 ${formatCoins(profile.coins)} · ✦ ${formatCoins(entry.xp||0)} XP auf dieser Karte</div>
+        <div class="hint" style="margin:2px 0 0;">${coinIcon(14)} ${formatCoins(profile.coins)} · ✦ ${formatCoins(entry.xp||0)} XP auf dieser Karte</div>
       </div>
     </div>
     <div class="ps-slot-row">${slotsHTML}</div>
@@ -32221,7 +32470,7 @@ function revealMatchResultUI(committed, wentToET, wentToPK){
     }
     return;
   }
-  updateCoinDisplay(); // the visible coin counter only ticks up/down here, at reveal time - see commitMatchResult
+  updateCoinDisplay(true); // the visible coin counter only ticks up/down here, at reveal time - see commitMatchResult
   renderNavBadges(); // a match is the main way most Erfolge-Linien progress - refresh the "claimable" badge right away, not just on the next tab switch
   const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses'), winrateEl=document.getElementById('stat-winrate');
   if(winsEl) winsEl.textContent = profile.wins;
