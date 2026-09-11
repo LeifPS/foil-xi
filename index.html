@@ -2440,6 +2440,7 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .sbc-card.tier-promoquest{border-left-color:#7ad9ff;background:radial-gradient(circle at 0% 0%, rgba(122,217,255,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #7ad9ff;}
 .sbc-card.tier-marceloquest{border-left-color:#ffdf00;background:radial-gradient(circle at 0% 0%, rgba(0,156,59,.14), var(--panel) 65%);box-shadow:0 0 18px -9px #009c3b;}
 .sbc-card.tier-viniciusquest{border-left-color:#00c8ff;background:radial-gradient(circle at 0% 0%, rgba(255,255,255,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #00c8ff;}
+.sbc-card.tier-daily{border-left-color:var(--gold);background:radial-gradient(circle at 0% 0%, rgba(255,215,100,.1), var(--panel) 65%);box-shadow:0 0 18px -9px var(--gold);}
 .sbc-card-head{display:flex;justify-content:space-between;align-items:center;}
 .sbc-tier-pill, .sbc-size-pill{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-family:'JetBrains Mono';}
 .sbc-card .sbc-name{font-family:'Anton';font-size:16px;letter-spacing:.01em;margin:0;font-weight:400;}
@@ -9062,6 +9063,25 @@ const KAPITAENE_SPECIALS = KAPITAENE_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KAPITAENE_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// ===== Meilenstein: reward roster for the "Startelf 99" daily SBC's 100+ Spieler Pick Pack - own
+// small roster (same findBaseCard/boostBaseToOv mechanism as Kapitäne/Kronjuwelen above) so it doesn't
+// dilute either of those packs' "highest cards in the game" pool or their exclusivity claims.
+const SBC_MEILENSTEIN_ROSTER = [
+  {baseId:231747, ov:100}, // K. Mbappé
+  {baseId:212622, ov:101}, // J. Kimmich
+  {baseId:222665, ov:102}, // M. Ødegaard
+  {baseId:207865, ov:103}, // Marquinhos
+  {baseId:203376, ov:104}, // V. van Dijk
+  {baseId:232293, ov:105}, // V. Osimhen
+  {baseId:215441, ov:106}, // S. Guirassy
+  {baseId:188567, ov:107}, // P. Aubameyang
+];
+const SBC_MEILENSTEIN_SPECIALS = SBC_MEILENSTEIN_ROSTER.map((r,i)=>{
+  const base = findBaseCard(r.baseId);
+  if(!base) return null;
+  return boostBaseToOv(base, r.ov, 9763000+i, 'meilenstein', 'Meilenstein', 'meilenstein');
+}).filter(Boolean);
+SBC_MEILENSTEIN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 // ===== Icon Swap: Remastered (limited event) - give away cards from your own collection for Icon
 // Swap Tokens (payout scales with the given-away card's OVR, see iconSwap2TokensForCard), then spend
 // tokens in a rotating shop: always exactly 3 items showing at once, refreshed globally (same 3 for
@@ -10822,6 +10842,9 @@ const PACKS = [
   {id:'wmwinners',name:'WM Winners Pack',cost:15000,tier:'premium',count:5,
     desc:'5 Karten rund um die echte WM 2026 (Spanien \u2013 Argentinien 1:0 n.V.): meist Viertelfinalisten (Marokko, Belgien, Norwegen, Schweiz \u2014 Rating 85-89) und Halbfinalisten (Spanien, Frankreich, Argentinien, England \u2014 90-94), selten die spanische Weltmeister-Startelf (99) und extrem selten eine der 3 echten Auszeichnungs-Karten (101: Rodri Goldener Ball, Unai Sim\u00f3n Goldener Handschuh, Cubars\u00ed Bester Junger Spieler). Super selten (unter 1\u00a0%): Trainer Luis de la Fuente pers\u00f6nlich, mit +8\u00a0% Team-Bonus.',
     draw(){ return Array.from({length:5},()=>Math.random()<0.008 ? WM_MANAGER : pick(WM_SPECIALS)); }},
+  {id:'meilenstein100',name:'Pick 1 of 2: 100+ Spieler Pack',cost:0,tier:'ultimate',count:2,pickCount:1,hidden:true,
+    desc:'2 Karten, alle garantiert Rating 100 oder höher. Wähle 1 davon zum Behalten. Nicht käuflich, nur über die "Startelf 99"-Herausforderung erhältlich.',
+    draw(){ return Array.from({length:2},()=>pick(SBC_MEILENSTEIN_SPECIALS)); }},
   {id:'rivalry',name:'Rivalry Pack',cost:8500,tier:'premium',count:4,
     desc:'4 Derby-Ikonen aus den gr\u00f6\u00dften Rivalit\u00e4ten des Fu\u00dfballs (El Cl\u00e1sico, Superclasico, Merseyside- und Manchester-Derby, Der Klassiker u. a.). Jede Karte tr\u00e4gt den Feuer-Bonus der Lokalrivalit\u00e4t.',
     draw(){ return Array.from({length:4},()=>pick(DERBY_SPECIALS)); }},
@@ -11410,6 +11433,13 @@ if(JACKPOT_PELE_CARD) BY_ID.set(JACKPOT_PELE_CARD.id, JACKPOT_PELE_CARD);
 const SBC_DEFAULT_MAX_COMPLETIONS = 5;
 function sbcCompletions(id){ return (profile.completedSBCs && profile.completedSBCs[id]) || 0; }
 function sbcMaxCompletions(sbc){ return sbc.maxCompletions || SBC_DEFAULT_MAX_COMPLETIONS; }
+// dailyLimit SBCs (see 'startelf_99' below) ignore completedSBCs/maxCompletions for gating - they're
+// repeatable every single day instead of a fixed lifetime count, tracked separately per Berlin day.
+function sbcDailyAvailable(sbc){
+  if(!sbc.dailyLimit) return true;
+  const today = localDateStr(new Date());
+  return (profile.sbcDailyDate||{})[sbc.id] !== today;
+}
 const SBC_DEFS = [
   // --- entry level (3-4 players) ---
   {id:'first_kit', name:'Erster Kader', reward:'bronze', size:3, tier:'Einsteiger',
@@ -11507,6 +11537,14 @@ const SBC_DEFS = [
     desc:'Erstmals gefragt: Spieler UND Trainer zusammen. 10 Spieler, Durchschnittsrating 90+, plus ein Trainer der Stufe Legend\u00e4r \u2014 beides wird verbraucht.',
     managerReq:{minTier:'Legend\u00e4r'},
     reqs:[ req('Durchschnittsrating 90+', c=>avgOv(c)>=90, c=>`${avgOv(c)} / 90`) ]},
+  // --- Startelf 99: unique among all SBCs above - formationFill:true routes it to openFormationFillSBC()
+  // instead of the normal free-pick pool builder, since it demands an exact 4-3-3 (one card per position,
+  // not just "11 players") rather than an unordered set. dailyLimit:true also means it ignores the usual
+  // completedSBCs/maxCompletions cap entirely (see sbcDailyAvailable) and instead resets every day.
+  {id:'startelf_99', name:'Startelf 99', reward:'meilenstein100', size:11, tier:'T\u00e4glich',
+    formationFill:true, formation:'433', dailyLimit:true,
+    desc:'F\u00fclle eine komplette 4-3-3-Startelf: jede der 11 Positionen einmal, nur mit Spielern, die dort tats\u00e4chlich spielen k\u00f6nnen. Durchschnittsrating 99+. Nur 1x pro Tag machbar.',
+    reqs:[ req('Durchschnittsrating 99+', c=>avgOv(c)>=99, c=>`${avgOv(c)} / 99`) ]},
   // --- WM-Sonderaufgaben limited event (see WM_QUEST_DEADLINE): 3 of the event's 5 quests. Each is
   // one-time-only and grants a WM Winners Pack; completing all 3 plus the 2 match quests in
   // WM_QUEST_MATCHES unlocks the WM_QUEST_MBAPPE_CARD claim - see openWmQuestDetail().
@@ -12142,7 +12180,7 @@ async function claimDraftReward(maxed){
   draftState = null;
   renderDraftPanel();
 }
-const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest', 'Vinicius-Quest':'viniciusquest'};
+const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest', 'Vinicius-Quest':'viniciusquest', 'Täglich':'daily'};
 // every SBC not already folded into a WM/PROMO quest event - each now gets its own tile in the unified
 // Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
 // opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
@@ -12165,7 +12203,8 @@ const FEAS_INFO = {
 function buildSbcTile(sbc, poolFree, poolWithSquad){
   const completions = sbcCompletions(sbc.id);
   const maxC = sbcMaxCompletions(sbc);
-  const done = completions>=maxC;
+  const doneToday = sbc.dailyLimit && !sbcDailyAvailable(sbc);
+  const done = sbc.dailyLimit ? doneToday : completions>=maxC;
   const locked = sbc.requires && sbcCompletions(sbc.requires)<=0;
   const rewardInfo = sbcRewardDisplay(sbc);
   const feas = (done||locked) ? null : sbcFeasibility(sbc, poolFree, poolWithSquad);
@@ -12173,10 +12212,14 @@ function buildSbcTile(sbc, poolFree, poolWithSquad){
   const card = document.createElement('div');
   card.className = `sbc-card tier-${tierSlug}`;
   if(locked) card.style.opacity = '.5';
-  const progressHTML = maxC>1
-    ? `<div class="sbc-progress-dots" title="${completions} / ${maxC} abgeschlossen">${Array.from({length:maxC},(_,i)=>`<span class="sbc-dot ${i<completions?'filled':''}"></span>`).join('')}</div>`
-    : (completions>0 ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : '');
-  const btnLabel = done ? (maxC>1?'Maximal erreicht':'Abgeschlossen') : (completions>0?`Erneut bauen (${completions}/${maxC})`:'Bauen');
+  const progressHTML = sbc.dailyLimit
+    ? (doneToday ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Heute abgeschlossen</div>` : '')
+    : (maxC>1
+      ? `<div class="sbc-progress-dots" title="${completions} / ${maxC} abgeschlossen">${Array.from({length:maxC},(_,i)=>`<span class="sbc-dot ${i<completions?'filled':''}"></span>`).join('')}</div>`
+      : (completions>0 ? `<div class="mono" style="font-size:10.5px;color:var(--turf-bright);">\u2713 Abgeschlossen</div>` : ''));
+  const btnLabel = sbc.dailyLimit
+    ? (doneToday ? 'Erst morgen wieder' : 'Bauen')
+    : (done ? (maxC>1?'Maximal erreicht':'Abgeschlossen') : (completions>0?`Erneut bauen (${completions}/${maxC})`:'Bauen'));
   card.innerHTML = `
     <div class="sbc-card-head">
       <span class="sbc-tier-pill">${sbc.tier}</span>
@@ -12587,6 +12630,7 @@ function sbcRewardDisplay(sbc){
 }
 let sbcManagerSelection = null;
 async function openSBCBuilder(sbc){
+  if(sbc.formationFill){ return openFormationFillSBC(sbc); }
   activeSBC = sbc; sbcSelection = new Set(); sbcManagerSelection = null;
   const view = document.getElementById('view');
   view.innerHTML = `<div class="view-head"><h2>${sbc.name}</h2><p class="hint">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p></div>`;
@@ -12782,6 +12826,112 @@ async function openSBCBuilder(sbc){
     toast('Automatisch ausgef\u00fcllt.');
   });
 }
+// ===== formationFill SBCs (currently only 'startelf_99') - a distinct builder from openSBCBuilder
+// above: instead of an unordered pool of `size` cards checked against `reqs`, the player fills an
+// actual pitch (one FORMATIONS[sbc.formation] slot at a time), and only a card that can really play
+// that exact slot's position (positionEligibility) is offered - reusing the same .squad-layout/.pitch
+// CSS as the Kader-Editor (renderSquad) rather than inventing new layout rules. Feeds into the same
+// sbcSelection/activeSBC globals and openSbcConfirmModal()/submitSBC() as the normal builder once all
+// 11 slots are filled, so consumption/reward-granting stays identical between both SBC flavors.
+let sbcFillSlots = {};
+async function openFormationFillSBC(sbc){
+  activeSBC = sbc; sbcManagerSelection = null;
+  sbcFillSlots = {};
+  sbcSelection = new Set();
+  const view = document.getElementById('view');
+  view.innerHTML = `<div class="view-head"><h2>${sbc.name}</h2><p class="hint">Verf\u00fcgbarkeit wird gepr\u00fcft\u2026</p></div>`;
+  const form = FORMATIONS[sbc.formation];
+  const squadLocked = new Set(Object.values(squad.slots));
+  const externalLocked = await getExternalLockedUids();
+  view.innerHTML = `
+    <div class="view-head"><h2>${sbc.name}</h2><p>${sbc.desc} Tippe auf eine Position, um einen Spieler aus deinem Verein zuzuweisen \u2014 nur Karten, die diese Position tats\u00e4chlich spielen k\u00f6nnen, werden angeboten. Spieler, die aktuell in deiner Kader-Editor-Aufstellung stehen, im Transfermarkt gelistet sind oder in einem Handelsangebot stecken, sind nicht verf\u00fcgbar.</p></div>
+    <div class="toolbar"><button class="action-btn secondary" id="sbc-back" style="width:auto;padding:9px 16px;">\u2190 Zur\u00fcck zu den Herausforderungen</button></div>
+    <div class="squad-layout">
+      <div class="pitch" id="sbc-fill-pitch"></div>
+      <div class="side-panel">
+        <div class="rating-hero"><div class="num">${sbcFillFilledCount()?sbcFillAvgOv():'--'}</div><div><div class="lbl">Durchschnittsrating</div><div class="lbl">${sbcFillFilledCount()}/${form.slots.length} besetzt</div></div></div>
+        <div id="sbc-fill-reqs"></div>
+        <button class="action-btn" id="sbc-fill-submit" disabled style="opacity:.4;">Kader abgeben</button>
+      </div>
+    </div>`;
+  document.getElementById('sbc-back').addEventListener('click', ()=>{ currentTab='sbc'; renderNav(); renderView('sbc'); });
+  function refresh(){
+    sbcSelection = new Set(Object.values(sbcFillSlots));
+    const pitch = document.getElementById('sbc-fill-pitch');
+    pitch.innerHTML = '';
+    form.slots.forEach(slot=>{
+      const uid = sbcFillSlots[slot.id];
+      const card = uid ? ownedCard(uid) : null;
+      const el = document.createElement('div');
+      el.className = 'pitch-slot';
+      el.style.left = slot.x+'%'; el.style.top = slot.y+'%';
+      if(card){
+        el.appendChild(cardEl(card, 'xs', null, slot.label));
+      } else {
+        el.innerHTML = `<div class="empty-slot-inner"><span class="empty-slot-plus">+</span>${posDE(slot.label)}</div>`;
+      }
+      el.addEventListener('click', ()=>openFormationFillPicker(slot, squadLocked, externalLocked, refresh));
+      pitch.appendChild(el);
+    });
+    const filled = sbcFillFilledCount();
+    const avgHero = document.querySelector('.side-panel .rating-hero');
+    avgHero.querySelector('.num').textContent = filled ? sbcFillAvgOv() : '--';
+    avgHero.querySelectorAll('.lbl')[1].textContent = `${filled}/${form.slots.length} besetzt`;
+    const ok = filled===form.slots.length && activeSBC.reqs.every(r=>r.check(Object.values(sbcFillSlots).map(u=>ownedCard(u))));
+    document.getElementById('sbc-fill-reqs').innerHTML = activeSBC.reqs.map(r=>{
+      const cards = Object.values(sbcFillSlots).map(u=>ownedCard(u));
+      const reqOk = filled===form.slots.length && r.check(cards);
+      return `<div class="leader-row" style="margin-bottom:6px;"><span style="flex:1;">${r.label}</span><span class="mono" style="color:${reqOk?'var(--turf-bright)':'var(--danger)'};">${filled?r.progress(cards):'\u2014'}</span></div>`;
+    }).join('');
+    const btn = document.getElementById('sbc-fill-submit');
+    btn.disabled = !ok; btn.style.opacity = ok ? '1' : '.4';
+  }
+  document.getElementById('sbc-fill-submit').addEventListener('click', ()=>{ sbcSelection = new Set(Object.values(sbcFillSlots)); openSbcConfirmModal(); });
+  refresh();
+}
+function sbcFillFilledCount(){ return Object.keys(sbcFillSlots).length; }
+function sbcFillAvgOv(){ return avgOv(Object.values(sbcFillSlots).map(uid=>ownedCard(uid))); }
+async function openFormationFillPicker(slot, squadLocked, externalLocked, onChange){
+  const usedElsewhere = new Set(Object.entries(sbcFillSlots).filter(([sId])=>sId!==slot.id).map(([,uid])=>uid));
+  const currentUid = sbcFillSlots[slot.id];
+  let items = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited);
+  items = items.filter(x=>positionEligibility(x.card, slot.label));
+  items.sort((a,b)=>b.card.ov-a.card.ov);
+  openModal(`
+    <h2 style="margin-bottom:4px;">${posDE(slot.label)} ausw\u00e4hlen</h2>
+    <p style="color:var(--muted);font-size:12.5px;margin-bottom:12px;">Nur Spieler, die ${posDE(slot.label)} tats\u00e4chlich spielen k\u00f6nnen, werden angezeigt.</p>
+    ${currentUid?`<button class="action-btn secondary" id="clear-fill-slot" style="margin-bottom:14px;width:180px;">Spieler entfernen</button>`:''}
+    <div class="picker-list" id="fill-picker-list"></div>
+    ${!items.length?'<p class="hint">Noch keine passenden Spieler in deinem Verein f\u00fcr diese Position.</p>':''}`);
+  if(currentUid){
+    document.getElementById('clear-fill-slot').addEventListener('click', ()=>{
+      delete sbcFillSlots[slot.id];
+      closeModal(); onChange();
+    });
+  }
+  renderLazyGrid(document.getElementById('fill-picker-list'), items, ({uid,card})=>{
+    const inSquad = squadLocked.has(uid);
+    const isListed = externalLocked.has(uid);
+    const usedHere = usedElsewhere.has(uid);
+    const unavailable = inSquad || isListed || usedHere;
+    const wrap = document.createElement('div');
+    wrap.style.cursor = unavailable ? 'not-allowed' : 'pointer';
+    wrap.style.opacity = uid===currentUid ? '1' : (unavailable ? '.35' : '1');
+    wrap.appendChild(cardEl(card, 'mini', null, slot.label));
+    if(unavailable){
+      const badge = document.createElement('div');
+      badge.className = 'sbc-inuse-badge';
+      badge.textContent = inSquad ? 'IM KADER' : (isListed ? 'IM ANGEBOT' : 'ANDERE POSITION');
+      wrap.appendChild(badge);
+    }
+    wrap.addEventListener('click', ()=>{
+      if(unavailable){ toast(inSquad ? 'Dieser Spieler ist in deiner aktiven Kader-Editor-Aufstellung. Entferne ihn dort zuerst.' : (isListed ? 'Diese Karte ist gerade im Transfermarkt gelistet oder in einem Handelsangebot.' : 'Dieser Spieler steht schon auf einer anderen Position dieser Startelf.')); return; }
+      sbcFillSlots[slot.id] = uid;
+      closeModal(); onChange();
+    });
+    return wrap;
+  });
+}
 function updateSBCState(){
   const selectedCards = [...sbcSelection].map(uid=>ownedCard(uid));
   const full = sbcSelection.size===activeSBC.size;
@@ -12829,7 +12979,9 @@ function openSbcConfirmModal(){
   });
 }
 async function submitSBC(){
-  if(sbcCompletions(activeSBC.id)>=sbcMaxCompletions(activeSBC)){ toast('Diese Herausforderung wurde bereits maximal oft abgeschlossen.'); return; }
+  if(activeSBC.dailyLimit){
+    if(!sbcDailyAvailable(activeSBC)){ toast('Diese Herausforderung ist heute schon abgeschlossen — komm morgen wieder.'); return; }
+  } else if(sbcCompletions(activeSBC.id)>=sbcMaxCompletions(activeSBC)){ toast('Diese Herausforderung wurde bereits maximal oft abgeschlossen.'); return; }
   const uids = [...sbcSelection];
   const squadLockedUids = new Set(Object.values(squad.slots));
   if(uids.length!==activeSBC.size || uids.some(uid=>!collection.some(c=>c.uid===uid) || squadLockedUids.has(uid))){
@@ -12867,6 +13019,10 @@ async function submitSBC(){
   }
   profile.completedSBCs = profile.completedSBCs || {};
   profile.completedSBCs[activeSBC.id] = (profile.completedSBCs[activeSBC.id]||0) + 1;
+  if(activeSBC.dailyLimit){
+    profile.sbcDailyDate = profile.sbcDailyDate || {};
+    profile.sbcDailyDate[activeSBC.id] = localDateStr(new Date());
+  }
   applyAchievementDeltas({sbcsCompleted:1});
   await sSet('collection', collection);
   await sSet('profile', profile);
