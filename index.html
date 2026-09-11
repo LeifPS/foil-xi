@@ -68,8 +68,17 @@ button{font-family:'Inter',sans-serif;cursor:pointer;border:none;}
 .brand span{color:var(--teal);}
 .wallet{display:flex;align-items:center;gap:16px;}
 .coin-pill{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);padding:7px 14px;border-radius:100px;}
-.coin-dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);}
 .coin-pill b{font-family:'JetBrains Mono';font-size:14px;}
+/* Coins symbol (see coinIcon()) - same subtle glint loop as the Icon Swap token, same graphics-
+   preference gate (badgeanim) so it stays consistent with every other small looping icon animation. */
+@keyframes coinGlint{0%,100%{filter:brightness(1) drop-shadow(0 0 0 transparent);transform:rotate(0deg);}50%{filter:brightness(1.3) drop-shadow(0 0 3px rgba(232,196,104,.7));transform:rotate(-4deg);}}
+.coin-icon{animation:coinGlint 2.6s ease-in-out infinite;}
+body.gfx-no-badgeanim .coin-icon{animation:none !important;}
+/* Coin-gain "burst and collect" animation (see playCoinBurst) - same fixed full-screen overlay +
+   scatter/fly mechanic as the Icon Swap token burst above, just landing on the coin pill instead. */
+.coin-burst-layer{position:fixed;inset:0;z-index:9999;pointer-events:none;}
+.coin-burst-token{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;will-change:transform,opacity;}
+.coin-pill.coin-pill-pop{animation:is2BalancePop .28s ease-out;}
 
 /* ---- nav ---- */
 #nav{display:flex;gap:2px;padding:0 20px;background:var(--void);border-bottom:1px solid var(--line);overflow-x:auto;}
@@ -2767,7 +2776,14 @@ body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
     <div class="wallet">
       <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Verein wechseln</button>
       <button id="sound-toggle" title="Sound an/aus" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">\u{1F50A}</button>
-      <div class="coin-pill"><div class="coin-dot"></div><b class="mono" id="coin-display">0</b></div>
+      <div class="coin-pill"><svg class="coin-icon" width="18" height="18" viewBox="0 0 20 20" style="vertical-align:-3px;margin-right:3px;flex-shrink:0;" aria-hidden="true">
+        <circle cx="10" cy="10" r="9" fill="#e8c468"/>
+        <circle cx="10" cy="10" r="9" fill="none" stroke="#8a6414" stroke-width="1"/>
+        <circle cx="10" cy="10" r="6.6" fill="none" stroke="#8a6414" stroke-width="1"/>
+        <path d="M6.2 6.9c1.4-2.3 3.4-3.1 5.8-2.3" fill="none" stroke="#f7e2a4" stroke-width="1.3" stroke-linecap="round" opacity=".85"/>
+        <path d="M12 7.4c-.5-.7-1.4-1-2.3-1-1.3 0-2.3.7-2.3 1.6 0 2 4.4 1.3 4.4 3.4 0 1-1 1.7-2.3 1.7-1 0-1.9-.4-2.4-1.2" fill="none" stroke="#8a6414" stroke-width="1.15" stroke-linecap="round"/>
+        <path d="M10 4.9v1.1M10 13.1v1" stroke="#8a6414" stroke-width="1.15" stroke-linecap="round"/>
+      </svg><b class="mono" id="coin-display">0</b></div>
     </div>
   </div>
   <div id="nav"></div>
@@ -8602,17 +8618,17 @@ function weekPassReward(level){
   if(level%3===0) return {type:'pack', packId: level<9?'gold':(level<13?'sevenof88':(level<24?'zeitgeist':'kronjuwelen'))};
   return {type:'coins', amount: 900 + level*80};
 }
-function weekPassRewardIcon(reward){
+function weekPassRewardIcon(reward, size=24){
   if(reward.type==='card') return '🏆';
   if(reward.type==='pack') return '🎁';
-  return '🪙';
+  return coinIcon(size);
 }
 function weekPassRewardClass(reward){ return `reward-${reward.type==='card'?'card':reward.type==='pack'?'pack':'coins'}`; }
 const WEEK_PASS_QUEST_ICON = {
-  winMatches:'🏆', playMatches:'⚽', scoreGoals:'🥅', earnCoins:'🪙', openPack:'🎁',
+  winMatches:'🏆', playMatches:'⚽', scoreGoals:'🥅', openPack:'🎁',
   cleanSheet:'🧤', bigWin:'🔥', shootoutWin:'🎯',
 };
-function weekPassQuestIcon(def){ return WEEK_PASS_QUEST_ICON[def.type] || '⭐'; }
+function weekPassQuestIcon(def){ return def.type==='earnCoins' ? coinIcon(16) : (WEEK_PASS_QUEST_ICON[def.type] || '⭐'); }
 // icon markup shared by the untradable badge on cards - reused here (without needing a card object)
 // for the Wochen-Pass pack tiles/labels, since every card those packs grant is untradable
 const UT_PACK_ICON = `<img src="https://images.zenithfcm.com/untradable-flag-player-card.png" alt="" title="Alle Karten aus diesem Pack sind nicht handelbar" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;">`;
@@ -8947,7 +8963,7 @@ function openWeekPassChoiceModal(level){
   if(!options) return;
   const cardsHTML = options.map((opt,i)=>`
     <div class="wp-choice-card" data-choice-index="${i}">
-      <div class="wp-choice-icon">${weekPassRewardIcon(opt)}</div>
+      <div class="wp-choice-icon">${weekPassRewardIcon(opt, 28)}</div>
       <div class="wp-choice-label">${weekPassRewardLabel(opt)}</div>
     </div>`).join('');
   openModal(`
@@ -13052,7 +13068,7 @@ async function resyncOwnCollectionFromServer(){
     if(data.collection) collection = data.collection;
     if(data.managerCollection) managerCollection = data.managerCollection;
     if(data.packCollection) packCollection = data.packCollection;
-    if(data.profile && typeof data.profile.coins==='number'){ profile.coins = data.profile.coins; updateCoinDisplay(); }
+    if(data.profile && typeof data.profile.coins==='number'){ const gained = data.profile.coins>profile.coins; profile.coins = data.profile.coins; updateCoinDisplay(gained); }
   }catch(e){ console.warn('own-collection resync after market sale failed', e); }
 }
 // Dedicated listener scoped to ONLY my own active listings (not the full market like
@@ -13206,7 +13222,7 @@ function drawMarketGrid(){
     const tier = marketValueTier(listing.price, rapValue);
     const chip = document.createElement('div');
     chip.className = 'market-chip';
-    chip.innerHTML = `<span class="market-chip-price"><span class="pdot"></span>${formatCoins(listing.price)}</span>${tier?`<span class="market-value-badge ${tier.cls}">${tier.label}</span>`:''}`;
+    chip.innerHTML = `<span class="market-chip-price">${coinIcon(12)}${formatCoins(listing.price)}</span>${tier?`<span class="market-value-badge ${tier.cls}">${tier.label}</span>`:''}`;
     wrap.appendChild(chip);
     const item = card || pack;
     if(listing.sellerUserId===profile.userId){
@@ -14218,12 +14234,12 @@ function renderLiveTradeRoom(el, trade){
         <div class="livetrade-side mine">
           <div class="livetrade-side-head"><span class="livetrade-side-title mine">Dein Angebot</span>${myAccepted?'<span class="mono" style="color:var(--turf-bright);font-size:11px;">✓ Akzeptiert</span>':''}</div>
           <div class="livetrade-grid" id="lt-my-grid"></div>
-          <div class="livetrade-coinbox">🪙 <input id="lt-coin-input" type="text" inputmode="decimal" placeholder="0" value="${myOffer.coins||''}"></div>
+          <div class="livetrade-coinbox">${coinIcon(16)} <input id="lt-coin-input" type="text" inputmode="decimal" placeholder="0" value="${myOffer.coins||''}"></div>
         </div>
         <div class="livetrade-side">
           <div class="livetrade-side-head"><span class="livetrade-side-title">${escapeHtml(oppName)}s Angebot</span>${oppAccepted?'<span class="mono" style="color:var(--turf-bright);font-size:11px;">✓ Akzeptiert</span>':''}</div>
           <div class="livetrade-grid" id="lt-opp-grid"></div>
-          <div class="livetrade-coinbox">🪙 <span class="mono" style="color:var(--gold);font-weight:700;">${formatCoins(oppOffer.coins||0)}</span></div>
+          <div class="livetrade-coinbox">${coinIcon(16)} <span class="mono" style="color:var(--gold);font-weight:700;">${formatCoins(oppOffer.coins||0)}</span></div>
         </div>
       </div>
       <div class="livetrade-actionbar">
@@ -14820,7 +14836,7 @@ async function atomicCoinChange(delta, extraSets={}, opts={}){
   // Pass quest just above, since this is the one truly central chokepoint every coin gain already
   // passes through.
   if(delta>0) applyAchievementDeltas({coinsEarned:delta});
-  if(!opts.silentDisplay) updateCoinDisplay();
+  if(!opts.silentDisplay) updateCoinDisplay(delta>0);
   await fbReady;
   if(fb && clubId && fb.updateDoc && fb.increment){
     try{
@@ -15651,6 +15667,83 @@ function formatCoins(n){
   }
   return rounded.toFixed(decimals)+suffix;
 }
+// Bespoke Coins symbol - flat-shaded facets (no gradients, same philosophy as iconSwap2TokenIcon so it
+// stays crisp at small sizes): a beveled gold disc with a raised rim and an embossed "S"-swoosh, used
+// everywhere Coins are shown as an icon (header wallet, reward previews, cost pills, ...) instead of
+// the old plain .coin-dot circle / 🪙 emoji.
+function coinIcon(size=16){
+  return `<svg class="coin-icon" width="${size}" height="${size}" viewBox="0 0 20 20" style="vertical-align:-3px;margin-right:3px;flex-shrink:0;" aria-hidden="true">
+    <circle cx="10" cy="10" r="9" fill="#e8c468"/>
+    <circle cx="10" cy="10" r="9" fill="none" stroke="#8a6414" stroke-width="1"/>
+    <circle cx="10" cy="10" r="6.6" fill="none" stroke="#8a6414" stroke-width="1"/>
+    <path d="M6.2 6.9c1.4-2.3 3.4-3.1 5.8-2.3" fill="none" stroke="#f7e2a4" stroke-width="1.3" stroke-linecap="round" opacity=".85"/>
+    <path d="M12 7.4c-.5-.7-1.4-1-2.3-1-1.3 0-2.3.7-2.3 1.6 0 2 4.4 1.3 4.4 3.4 0 1-1 1.7-2.3 1.7-1 0-1.9-.4-2.4-1.2" fill="none" stroke="#8a6414" stroke-width="1.15" stroke-linecap="round"/>
+    <path d="M10 4.9v1.1M10 13.1v1" stroke="#8a6414" stroke-width="1.15" stroke-linecap="round"/>
+  </svg>`;
+}
+// glint (same mechanic/timing as .is2-token-icon, see its CSS comment) + graphics-preference gate live
+// in the CSS block near .coin-pill.
+// ===== Coin-gain "burst and collect" animation - same mechanic as playIconSwap2TokenBurst (see its
+// comment): a handful of coin icons scatter out then fly back in and land on the header wallet pill,
+// ticking the visible balance up as each one lands, instead of the number just silently jumping. Since
+// Coins are earned from dozens of different places across the whole game (match rewards, packs, SBCs,
+// quests, admin grants, ...) this deliberately bursts FROM the pill itself rather than from a per-call-
+// site origin element (which would need threading a rect through every single call site) - see
+// updateCoinDisplay(animateGain), the one shared chokepoint this hooks into.
+let coinDisplayValue = 0;
+const COIN_BURST_MAX_PARTICLES = 12;
+function playCoinBurst(amount, onDone){
+  const pillEl = document.querySelector('.coin-pill');
+  const disp = document.getElementById('coin-display');
+  const targetValue = coinDisplayValue + amount;
+  // Respect the existing "confetti" graphics preference (same one-off-celebration category as the
+  // WM-Pokal confetti) - and fall back the same way if the pill isn't even on screen right now.
+  if(!pillEl || !disp || amount<=0 || document.body.classList.contains('gfx-no-confetti')){
+    coinDisplayValue = targetValue;
+    if(disp) disp.textContent = formatCoins(coinDisplayValue);
+    if(onDone) onDone();
+    return;
+  }
+  const rect = pillEl.getBoundingClientRect();
+  const originX = rect.left+rect.width/2, originY = rect.top+rect.height/2;
+  const count = Math.min(amount, COIN_BURST_MAX_PARTICLES);
+  const layer = document.createElement('div');
+  layer.className = 'coin-burst-layer';
+  document.body.appendChild(layer);
+  let landed = 0;
+  for(let i=0;i<count;i++){
+    const el = document.createElement('div');
+    el.className = 'coin-burst-token';
+    el.innerHTML = coinIcon(20);
+    el.style.left = originX+'px'; el.style.top = originY+'px';
+    const angle = Math.random()*Math.PI*2, dist = 28+Math.random()*44;
+    el.style.setProperty('--sx', (Math.cos(angle)*dist)+'px');
+    el.style.setProperty('--sy', (Math.sin(angle)*dist)+'px');
+    el.style.setProperty('--tx', '0px');
+    el.style.setProperty('--ty', '0px');
+    const scatterDelay = i*12, scatterDur = 200, flyDelay = 100+Math.random()*120, flyDur = 380+Math.random()*180;
+    el.style.animation = `is2ScatterOut ${scatterDur}ms ease-out ${scatterDelay}ms both, is2FlyToTarget ${flyDur}ms cubic-bezier(.3,.6,.3,1) ${scatterDelay+scatterDur+flyDelay}ms both`;
+    layer.appendChild(el);
+    // telescoping split, same trick as playIconSwap2TokenBurst - guarantees the per-particle shares
+    // sum to exactly `amount` regardless of how unevenly Math.round distributes them.
+    const share = Math.round(amount*(i+1)/count) - Math.round(amount*i/count);
+    setTimeout(()=>{
+      el.remove();
+      landed++;
+      coinDisplayValue += share;
+      disp.textContent = formatCoins(coinDisplayValue);
+      pillEl.classList.remove('coin-pill-pop');
+      void pillEl.offsetWidth; // restart the pop animation on every landing
+      pillEl.classList.add('coin-pill-pop');
+      if(landed===count){
+        layer.remove();
+        coinDisplayValue = targetValue; // guards against any float/rounding drift across shares
+        disp.textContent = formatCoins(coinDisplayValue);
+        if(onDone) onDone();
+      }
+    }, scatterDelay+scatterDur+flyDelay+flyDur);
+  }
+}
 // multi-position cards: `pos` is a comma-separated list ordered most-natural-first (real FIFA data).
 // rankIndex 0 = the card's primary position. Bonus tier depends on both rank and the card's base OV.
 function cardPositions(pos){ return String(pos||'').split(',').map(s=>s.trim()).filter(Boolean); }
@@ -15686,7 +15779,21 @@ function parseCoinInput(str){
   const mult = COIN_SUFFIX_MULT[(m[2]||'').toLowerCase()] || 1;
   return parseFloat(m[1]) * mult;
 }
-function updateCoinDisplay(){ document.getElementById('coin-display').textContent = formatCoins(profile.coins); }
+// animateGain:true plays the burst-and-collect animation (see playCoinBurst) up from whatever's
+// currently displayed to profile.coins - only meaningful for an actual gain (target>current); anything
+// else (a spend, a resync from another tab/device, initial boot) just sets the number immediately, same
+// as before this animation existed.
+function updateCoinDisplay(animateGain=false){
+  const disp = document.getElementById('coin-display');
+  if(!disp) return;
+  const target = profile.coins;
+  if(!animateGain || target<=coinDisplayValue){
+    coinDisplayValue = target;
+    disp.textContent = formatCoins(target);
+    return;
+  }
+  playCoinBurst(target-coinDisplayValue);
+}
 
 // ===== toast =====
 function toast(msg){
@@ -17047,7 +17154,7 @@ function renderStore(view){
           <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
           ${pack.cost>0 && pack.count>0 ? `<div class="hint" style="margin:0;font-size:10.5px;">~${formatCoins(Math.round(pack.cost/pack.count))} pro Karte</div>` : ''}
           <div class="buyrow">
-            <div class="price-pill"><div class="pdot"></div>${formatCoins(pack.cost)}</div>
+            <div class="price-pill">${coinIcon(14)}${formatCoins(pack.cost)}</div>
             <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
           </div>
         </div>`;
@@ -19967,7 +20074,7 @@ function drawPackClubGrid(){
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:26px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:3px 0;font-size:10px;';
-    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computePackRAP(pack))}`;
+    rapTag.innerHTML = `${coinIcon(11)}RAP ~${formatCoins(computePackRAP(pack))}`;
     wrap.appendChild(rapTag);
     const openBtn = document.createElement('button');
     openBtn.className = 'action-btn';
@@ -20011,7 +20118,7 @@ function drawManagerClubGrid(){
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
-    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computeRAP(mgr))}`;
+    rapTag.innerHTML = `${coinIcon(11)}RAP ~${formatCoins(computeRAP(mgr))}`;
     wrap.appendChild(rapTag);
     return wrap;
   });
@@ -20063,7 +20170,7 @@ function drawClubGrid(){
     const rapTag = document.createElement('div');
     rapTag.className = 'price-pill';
     rapTag.style.cssText = 'position:absolute;bottom:6px;left:6px;right:6px;justify-content:center;background:rgba(6,8,12,.75);border-radius:8px;padding:4px 0;font-size:10.5px;';
-    rapTag.innerHTML = `<div class="pdot"></div>RAP ~${formatCoins(computeRAP(card))}`;
+    rapTag.innerHTML = `${coinIcon(11)}RAP ~${formatCoins(computeRAP(card))}`;
     wrap.appendChild(rapTag);
     wrap.addEventListener('click', ()=>showCardInfoModal(card, uid));
     return wrap;
@@ -22942,7 +23049,7 @@ async function cancelHostedTournament(id){
         tx.delete(ref);
         result='cancelled';
       });
-      if(refundedCoins>0){ profile.coins += refundedCoins; updateCoinDisplay(); }
+      if(refundedCoins>0){ profile.coins += refundedCoins; updateCoinDisplay(true); }
     } else {
       const snap = await fb.getDoc(ref);
       if(!snap.exists()){ result='gone'; }
@@ -23020,7 +23127,7 @@ async function claimTournamentPrize(id, role='winner'){
           claimed = true; prizeCoins = t.winnerPrizeCoins;
         }
       });
-      if(claimed && prizeCoins>0){ profile.coins += prizeCoins; updateCoinDisplay(); }
+      if(claimed && prizeCoins>0){ profile.coins += prizeCoins; updateCoinDisplay(true); }
       if(claimed && prizeCardId){ collection.push({uid:newCardUid, cardId:prizeCardId, obtainedAt:Date.now(), obtainedFrom:t.hostUserId}); }
       if(wonNow) applyAchievementDeltas({tournamentWins:1});
     } else {
@@ -25692,6 +25799,7 @@ function renderWochenendpokalPendingRewards(box){
       if(pack) showPackOpening(pack, pack.draw(), {});
       else toast('Unbekanntes Pack übersprungen.');
     } else {
+      updateCoinDisplay(true);
       toast(`+${formatCoins(next.amount)} Coins!`);
     }
     renderWochenendpokalPendingRewards(box);
@@ -26302,6 +26410,7 @@ async function claimAchievementTier(achId, tier){
   }
   await sSet('profile', profile);
   if(grantedCard) await sSet('collection', collection);
+  if(reward.coins) updateCoinDisplay(true);
   let msg = reward.iconSwap2Tokens
     ? `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${reward.iconSwap2Tokens} Icon Swap Tokens`
     : `Erfolg "${ach.name}" Stufe ${ACHIEVEMENT_TIER_LABEL[tier-1]}: +${formatCoins(reward.coins||0)} Coins`;
@@ -26544,7 +26653,7 @@ async function refreshLigaProfileFields(){
     const p = snap.data().profile || {};
     if('pendingLigaPacks' in p) profile.pendingLigaPacks = p.pendingLigaPacks;
     if('pendingWochenendpokalRewards' in p) profile.pendingWochenendpokalRewards = p.pendingWochenendpokalRewards;
-    if('coins' in p) profile.coins = p.coins;
+    if('coins' in p && p.coins!==profile.coins){ profile.coins = p.coins; updateCoinDisplay(true); }
     // Erfolge/Nametags have the exact same staleness problem ligaBadge used to (see this function's own
     // comment above) - a Liga-placement achievement tier crossed by the weekend rollover, or an
     // achievement claimed from a DIFFERENT session, needs the same forced resync here.
@@ -27109,7 +27218,7 @@ async function wm26FinishRun(exitStage, won){
     profile.wm26 = {...t, stage:'done', wonCup:true};
     await sSet('profile', profile);
     await atomicCoinChange(WM26_WIN_REWARD, {}, {silentDisplay:true});
-    updateCoinDisplay();
+    updateCoinDisplay(true);
     await showWM26TrophyCutscene();
     toast('Öffne dein Pack…');
     const pack = PACKS.find(p=>p.id==='worldcuppack');
@@ -27122,7 +27231,7 @@ async function wm26FinishRun(exitStage, won){
     profile.wm26 = {...t, stage:'done', eliminatedAt:exitStage};
     await sSet('profile', profile);
     const reward = WM26_EXIT_REWARD[exitStage]||0;
-    if(reward>0){ await atomicCoinChange(reward, {}, {silentDisplay:true}); updateCoinDisplay(); }
+    if(reward>0){ await atomicCoinChange(reward, {}, {silentDisplay:true}); updateCoinDisplay(true); }
     toast(`Ausgeschieden — ${WM26_STAGE_LABEL[exitStage]}. +${formatCoins(reward)} Coins.`);
   }
   renderWM26Panel();
@@ -29404,7 +29513,7 @@ async function playOReiChallenge(){
       }
     },
     onComplete: ()=>{
-      updateCoinDisplay(); // O Rei's win rewards go through atomicCoinChange's silentDisplay before the animation - reveal now
+      updateCoinDisplay(true); // O Rei's win rewards go through atomicCoinChange's silentDisplay before the animation - reveal now
       if(oreiOutcome.type==='blackoutPack'){
         const blackoutPack = PACKS.find(p=>p.id==='blackout');
         toast(`Sieg 2/3!${oreiOutcome.extra} Einmalige Belohnung: ein Blackout Pack!`);
@@ -29527,7 +29636,7 @@ async function playWinStreakMatch(){
       }
     },
     onComplete: ()=>{
-      updateCoinDisplay(); // the 5-win bonus goes through atomicCoinChange's silentDisplay before the animation - reveal now
+      updateCoinDisplay(true); // the 5-win bonus goes through atomicCoinChange's silentDisplay before the animation - reveal now
       if(streakOutcome.type==='fiveWin'){
         const pack = PACKS.find(p=>p.id==='iconmoment');
         toast('\ud83d\udd25 5 Siege in Folge! +3.000 Coins, \u00f6ffne dein Pack\u2026');
@@ -31135,7 +31244,7 @@ function renderPlaystyleTrainingModal(){
   const selected = psTrainingSelectedUid ? eligible.find(x=>x.entry.uid===psTrainingSelectedUid) : null;
   openModal(`
     <h2 style="margin-bottom:2px;">⚡ PlayStyle-Training</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:12px;">Pro Aktion: <span class="ps-cost-pill">🪙 ${formatCoins(PS_TRAINING_COST_COINS)}</span> <span class="ps-cost-pill">✦ ${formatCoins(PS_TRAINING_COST_XP)} XP</span> — von der Karte selbst, kann ihr Level senken.</p>
+    <p class="hint" style="margin-top:0;margin-bottom:12px;">Pro Aktion: <span class="ps-cost-pill">${coinIcon(14)} ${formatCoins(PS_TRAINING_COST_COINS)}</span> <span class="ps-cost-pill">✦ ${formatCoins(PS_TRAINING_COST_XP)} XP</span> — von der Karte selbst, kann ihr Level senken.</p>
     <input id="ps-training-search" placeholder="🔍 Karte suchen..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;">
     <div class="club-grid" id="ps-training-grid" style="max-height:200px;overflow:auto;margin-bottom:14px;"></div>
     <div id="ps-training-detail"></div>
@@ -31200,7 +31309,7 @@ function renderPlaystyleTrainingModal(){
       <div style="flex-shrink:0;">${cardEl(card,'mini').outerHTML}</div>
       <div style="flex:1;">
         <div style="font-weight:700;font-size:15px;">${card.n}</div>
-        <div class="hint" style="margin:2px 0 0;">🪙 ${formatCoins(profile.coins)} · ✦ ${formatCoins(entry.xp||0)} XP auf dieser Karte</div>
+        <div class="hint" style="margin:2px 0 0;">${coinIcon(14)} ${formatCoins(profile.coins)} · ✦ ${formatCoins(entry.xp||0)} XP auf dieser Karte</div>
       </div>
     </div>
     <div class="ps-slot-row">${slotsHTML}</div>
@@ -32221,7 +32330,7 @@ function revealMatchResultUI(committed, wentToET, wentToPK){
     }
     return;
   }
-  updateCoinDisplay(); // the visible coin counter only ticks up/down here, at reveal time - see commitMatchResult
+  updateCoinDisplay(true); // the visible coin counter only ticks up/down here, at reveal time - see commitMatchResult
   renderNavBadges(); // a match is the main way most Erfolge-Linien progress - refresh the "claimable" badge right away, not just on the next tab switch
   const winsEl=document.getElementById('stat-wins'), lossesEl=document.getElementById('stat-losses'), winrateEl=document.getElementById('stat-winrate');
   if(winsEl) winsEl.textContent = profile.wins;
