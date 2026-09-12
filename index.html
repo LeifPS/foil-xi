@@ -2789,7 +2789,16 @@ body.is-offline #offline-overlay{display:flex;}
 /* Startup loading screen - see the HTML comment next to #boot-loader for why this exists and when
    it's removed. Sits above everything (z-index above the topbar's own sticky 40) until then. */
 #boot-loader{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:18px;background:var(--void);}
+  justify-content:center;gap:18px;background:var(--void);overflow:hidden;}
+/* Stadium photo fills the whole screen behind everything else - plain <img> with onerror (not a CSS
+   background-image) so a hotlink failure just falls back to the existing plain --void background
+   instead of silently showing nothing, same pattern already used for every other external image in
+   the game (club logos, player photos). A dark gradient scrim on top keeps the mark/bar readable
+   against a bright/busy photo without needing to know its exact colors ahead of time. */
+.boot-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;}
+.boot-scrim{position:absolute;inset:0;z-index:1;
+  background:linear-gradient(180deg, rgba(5,8,14,.55) 0%, rgba(5,8,14,.75) 60%, rgba(5,8,14,.92) 100%);}
+.boot-mark, .boot-spinner, .boot-label, .boot-progress{position:relative;z-index:2;}
 .boot-mark{width:56px;height:56px;border-radius:14px;background:linear-gradient(145deg,var(--turf-bright),var(--turf));
   display:flex;align-items:center;justify-content:center;font-family:'Anton';font-size:26px;color:#eafff2;
   box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;animation:bootMarkPulse 1.8s ease-in-out infinite;}
@@ -2798,6 +2807,13 @@ body.is-offline #offline-overlay{display:flex;}
   border-top-color:var(--turf-bright);animation:bootSpin .8s linear infinite;}
 @keyframes bootSpin{to{transform:rotate(360deg);}}
 .boot-label{font-size:12.5px;color:var(--muted);letter-spacing:.03em;}
+/* Real progress, not a fake looping animation - see setBootProgress()/BOOT_PROGRESS_STEPS. Width is
+   only ever set to the percentage of actual boot work genuinely completed so far. */
+.boot-progress{width:180px;}
+.boot-progress-track{width:100%;height:6px;border-radius:4px;background:rgba(255,255,255,.15);overflow:hidden;}
+.boot-progress-fill{width:4%;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--turf),var(--turf-bright));
+  transition:width .35s ease;}
+.boot-progress-pct{display:block;text-align:center;margin-top:6px;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
 body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
 
 /* Maintenance kill-switch screen - see MAINTENANCE_MODE. Its own full-bleed page rather than the
@@ -2841,9 +2857,15 @@ body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
      by hideBootLoader() the moment there's something real to look at instead (the entry gate, or the
      fully rendered app after init()) - see its call sites for exactly when each happens. -->
 <div id="boot-loader">
+  <img class="boot-bg" src="https://www.tapeten.com/media/catalog/product/cache/167fd96b42bf2e2766b1c0e4dedff321/b/e/behang-met-een-voetbalstadion_6.jpg" alt="" onerror="this.remove();">
+  <div class="boot-scrim"></div>
   <div class="boot-mark">FE</div>
   <div class="boot-spinner"></div>
   <div class="boot-label">FOIL ELEVEN wird geladen …</div>
+  <div class="boot-progress">
+    <div class="boot-progress-track"><div class="boot-progress-fill" id="boot-progress-fill"></div></div>
+    <span class="boot-progress-pct" id="boot-progress-pct">4%</span>
+  </div>
 </div>
 <div id="app">
   <div id="topbar">
@@ -2880,6 +2902,19 @@ body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
      Placed here (not in <head>) so the plain-HTML #boot-loader above still paints instantly first. -->
 <script src="players_data.js"></script>
 <script>
+// Real boot progress bar (#boot-loader) - each percentage only ever gets set once the work it stands
+// for has ACTUALLY finished, never on a timer/animation guessing how long something "usually" takes.
+// Monotonic (Math.max) so a late-resolving step can never visually rewind the bar past an already-
+// reached later one (e.g. a stalled network step recovering after some unrelated sync work already
+// nudged it further along would otherwise make it jump backwards, which reads as broken, not "honest").
+let bootProgressPct = 4; // script started executing + players_data.js already loaded (see the <script> tag right above this one) - genuinely true the instant this line runs
+function setBootProgress(pct){
+  bootProgressPct = Math.max(bootProgressPct, pct);
+  const fill = document.getElementById('boot-progress-fill');
+  const pctEl = document.getElementById('boot-progress-pct');
+  if(fill) fill.style.width = bootProgressPct+'%';
+  if(pctEl) pctEl.textContent = bootProgressPct+'%';
+}
 // Blocks every interaction the instant the browser reports itself offline, instead of letting clicks
 // through to Firestore calls that would just fail or (worse) half-succeed and desync state between
 // clients. Deliberately placed first, standalone, and dependent on nothing else in this script (not
@@ -9700,6 +9735,7 @@ async function initFirebase(){
   }
 }
 const fbReady = initFirebase();
+fbReady.then(()=>setBootProgress(30)); // real Firebase/auth handshake actually finished (or genuinely gave up, see initFirebase's catch) - not a guess
 // If the INITIAL connectivity probe above fails entirely, fb stays null for the rest of the session
 // with no later retry - the game keeps running on the local/offline fallback (empty on a fresh page
 // load) until the player notices the offline banner and manually reloads. On a real mobile network a
@@ -15236,6 +15272,7 @@ function gateMarkHTML(){
 // something real on screen instead: here, right as the entry gate itself appears, and again after
 // init() finishes rendering the actual app for a restored session (that path skips the gate entirely).
 function hideBootLoader(){
+  setBootProgress(100); // whatever path got us here, boot is genuinely finished the moment this runs
   document.body.classList.add('boot-loader-done');
   setTimeout(()=>{ const el = document.getElementById('boot-loader'); if(el) el.remove(); }, 400);
 }
@@ -15516,8 +15553,10 @@ async function init(){
   // squad/squadPresets all live in the same Firestore doc, and none of them depends on another's value
   // below, so there's nothing to lose by fetching them together up front.
   let _boot;
+  setBootProgress(50); // about to start the one real network round-trip that actually dominates boot time
   try{
     _boot = await sGetMany(['profile','collection','managerCollection','packCollection','squad','squadPresets']);
+    setBootProgress(85); // the slow part is genuinely done now - only local processing/rendering left
   }catch(e){
     // A connected-but-failed boot read must never be treated as "new account" (see sGetMany) - block
     // here instead of falling through to the account-creation code below, which would otherwise write
