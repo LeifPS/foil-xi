@@ -23932,15 +23932,17 @@ const BOT_ELITE_MANAGER_POOL = MANAGERS.filter(m=>m.tier==='Elite'||m.tier==='Le
 function boostBotXI(xi, slots, forceManager){
   const mgr = forceManager || (BOT_ELITE_MANAGER_POOL.length ? pick(BOT_ELITE_MANAGER_POOL) : null);
   const list = xi.map((card,i)=>{
-    let ov = card.ov;
+    // level:4 (Diamant) heißt nicht nur der Badge/die FX (siehe unten), sondern genau der +4-OVR/+4-je-
+    // Unterstat-Bonus, den eine eigene komplett hochgelevelte Karte über applyCardLevel auch bekäme -
+    // sonst zeigt die Karte zwar das Diamant-Abzeichen, spielt aber mit den blanken Grundwerten. Zuerst
+    // angewendet, genau wie bei einer echten Karte, bevor Trainer-/Positions-Bonus obendrauf kommen.
+    let ov = card.ov+4;
+    const boostedSubstats = {};
+    BLACK_HOLE_STAT_KEYS.forEach(k=>{ boostedSubstats[k] = (typeof card[k]==='number' ? card[k]+4 : card[k]); });
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
-    // level:4 (Diamant) - jede gegnerische Bot-Karte im ganzen Spiel gilt als voll ausgespielt, genau wie
-    // eine eigene komplett hochgelevelte Karte es wäre; ohne das blieb card.level unset und der ganze
-    // Diamant-Level-Badge/-FX-Mechanismus (siehe cardEl's isDiamondLevel/levelBadge, extra dafür
-    // vorgesehen: "ein Gegner ... ohne uid, sollte trotzdem sein Badge zeigen") lief für Gegner immer leer.
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card), level:4};
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, ...boostedSubstats, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card), level:4};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
@@ -28169,15 +28171,8 @@ function uclClubXI(club){
     nameCount.set(key, (nameCount.get(key)||0)+1);
     return candidate;
   });
-  // Jede Karte hier zählt als voll ausgespielt (Level 4/Diamant) - genau der +4-OVR/+4-je-Substat-Bonus,
-  // den eine eigene, komplett hochgelevelte Karte im Spieler-Kader auch bekäme (siehe applyCardLevel).
-  // Ohne das wirkten selbst Top-Klubs wie Bayern nur mit ihren blanken Grundwerten spürbar schwächer,
-  // als eine echte Spieler-Elf aus denselben Karten je wäre.
-  const leveledXi = xi.map(c=>{
-    const out = {...c, ov:c.ov+4};
-    BLACK_HOLE_STAT_KEYS.forEach(k=>{ if(typeof out[k]==='number') out[k] = out[k]+4; });
-    return out;
-  });
+  // Das Level-4/Diamant-+4-OVR/+4-je-Substat gibt jetzt boostBotXI() selbst jeder Karte (siehe dort) -
+  // kein eigener leveledXi-Zwischenschritt mehr nötig, sonst würde der Bonus hier doppelt gezählt.
   // Jeder Klub bekommt IMMER einen Trainer-Bonus von exakt +8% - einen echten Namen aus MANAGERS, falls
   // für diesen Klub hinterlegt (nur der Name, der Bonus-Wert wird trotzdem auf +8% vereinheitlicht),
   // sonst ein generischer "Cheftrainer". Nie einfach null wie ursprünglich, und nie ein schwächerer/
@@ -28185,7 +28180,7 @@ function uclClubXI(club){
   const mgrPool = MANAGERS.filter(m=>m.club===club);
   const chosenMgr = mgrPool.length ? pick(mgrPool) : {n:'Cheftrainer'};
   const mgr = {...chosenMgr, boostType:'percent', boostValue:8, isManager:true};
-  const {players, managerName} = boostBotXI(leveledXi, slots, mgr);
+  const {players, managerName} = boostBotXI(xi, slots, mgr);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
   const result = {owner:club, rating, players, isBot:true, managerName, club};
   UCL_XI_CACHE.set(club, result);
