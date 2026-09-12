@@ -26442,8 +26442,8 @@ const ACHIEVEMENTS = [
       {coins:200000, packs:['ratings27']},
       {coins:500000, packs:['kronjuwelen'], nametag:'maezen'},
     ]},
-  {id:'uclTrophies', name:'Kontinental-Krone', desc:'Gewinne die Champions League oder die Europa League.', icon:'🏆', stat:'uclTrophies',
-    cond:n=>`${n}x Champions/Europa League gewonnen`,
+  {id:'uclTrophies', name:'Kontinental-Krone', desc:'Gewinne die Champions League.', icon:'🏆', stat:'uclTrophies',
+    cond:n=>`${n}x Champions League gewonnen`,
     tiers:[1,3,10,25,50],
     rewards:[
       {coins:8000},
@@ -28655,7 +28655,10 @@ async function uclFinishRun(comp, exitStage, won){
   if(won){
     profile[uclKey(comp)] = {...t, stage:'done', wonCup:true};
     if(comp==='uel') profile.uclFreeEntryAvailable = true;
-    applyAchievementDeltas({uclTrophies:1});
+    // "Kontinental-Krone" zählt bewusst nur echte Champions-League-Titel - ein UEL-Sieg bringt zwar den
+    // Gratis-UCL-Startplatz (siehe oben) und die eigene UEL-Belohnung, aber keinen Fortschritt bei diesem
+    // Erfolg.
+    if(comp==='ucl') applyAchievementDeltas({uclTrophies:1});
     await sSet('profile', profile);
     const winReward = uclWinReward(comp);
     await atomicCoinChange(winReward, {}, {silentDisplay:true});
