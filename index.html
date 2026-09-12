@@ -340,7 +340,8 @@ body.gfx-no-fxlayers .pcard .legikone-fx,
 body.gfx-no-fxlayers .pcard .wm26k-fx,
 body.gfx-no-fxlayers .pcard .breakout-fx,
 body.gfx-no-fxlayers .pcard .iconpromo-fx,
-body.gfx-no-fxlayers .pcard .iconswap2-fx{ display:none !important; }
+body.gfx-no-fxlayers .pcard .iconswap2-fx,
+body.gfx-no-fxlayers .pcard .uclchamp-fx{ display:none !important; }
 body.gfx-no-confetti .wm26-trophy-cutscene *{ animation:none !important; }
 body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
@@ -353,10 +354,22 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 /* Champions-/Europa-League-Sieger-Variante (siehe uclRewardCardsForClub): eigenes Navy/Gold bzw.
    Orange/Schwarz, klar von jedem anderen Kartentyp im Spiel unterschieden - passend zur echten
    UCL/UEL-Optik statt eines generischen Akzents. */
-.pcard.theme-uclchamp{--acc:#8fa6ff;background:linear-gradient(155deg,#0a1040 0%,#101a5c 55%,#0a1040 100%);border-color:rgba(143,166,255,.5);}
-.pcard.theme-uclchamp .name{color:#eef1ff;text-shadow:0 0 8px rgba(143,166,255,.55);}
-.pcard.theme-uelchamp{--acc:#ff9a3c;background:linear-gradient(155deg,#3a1400 0%,#5c2400 55%,#3a1400 100%);border-color:rgba(255,154,60,.5);}
-.pcard.theme-uelchamp .name{color:#fff1e2;text-shadow:0 0 8px rgba(255,154,60,.55);}
+.pcard.theme-uclchamp{--acc:#8fa6ff;background:#0a0d14;border-color:rgba(143,166,255,.5);}
+.pcard.theme-uclchamp .name{color:#eef1ff;text-shadow:0 1px 4px rgba(0,0,0,.7);}
+.pcard.theme-uelchamp{--acc:#ff9a3c;background:#0a0d14;border-color:rgba(255,154,60,.5);}
+.pcard.theme-uelchamp .name{color:#fff1e2;text-shadow:0 1px 4px rgba(0,0,0,.7);}
+/* Sieger-Karten-FX (uclChampFxHTML in cardEl): echter Klub-Farbverlauf + Slashes des besiegten Klubs,
+   Konfetti aus dessen Vereinslogo, Wettbewerbs-Emblem als Wasserzeichen oben links - siehe uclClubColors. */
+.pcard .uclchamp-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .uclchamp-bg-gradient{position:absolute;inset:0;opacity:.6;}
+.pcard .uclchamp-slashes{position:absolute;inset:0;}
+.pcard .uclchamp-slashes i{position:absolute;width:190%;height:5px;opacity:0;
+  animation:iconpromoSlashFlash 3.8s ease-in-out infinite;}
+.pcard .uclchamp-confetti{position:absolute;inset:0;}
+.pcard .uclchamp-confetti i{position:absolute;top:-12%;opacity:0;background-size:contain;background-repeat:no-repeat;background-position:center;
+  border-radius:2px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));animation:confettiFall linear infinite;}
+.pcard .uclchamp-comp-logo{position:absolute;top:5%;left:5%;width:16%;aspect-ratio:1;z-index:2;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7));}
+.pcard .uclchamp-comp-logo img, .pcard .uclchamp-comp-logo svg{width:100%;height:100%;}
 /* WM-Kapitän (World Cup Pack, rare pull): gold trophy foil, distinct from the plain-steel Kapitäne
    Pack look above - this one's tied to actually winning the WM 2026, so it reads as championship gold
    rather than authority-grey. */
@@ -16128,6 +16141,37 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="admin-hack-stamp">ADMIN ACCESS</div>
     </div>`;
   })() : '';
+  // Champions-/Europa-League-Sieger-Variante (uclRewardCardsForClub): Hintergrund-Verlauf und Slashes
+  // in den echten Farben des im Finale besiegten Klubs (UCL_CLUB_COLORS), Konfetti aus dessen eigenem
+  // Vereinslogo statt generischer Farbbalken, plus das echte Wettbewerbs-Emblem oben links als Wasserzeichen.
+  const isUclChampTier = card.theme==='uclchamp' || card.theme==='uelchamp';
+  const uclChampFxHTML = isUclChampTier ? (()=>{
+    const [c1,c2] = uclClubColors(card.club);
+    const logo = CLUB_LOGO[card.club];
+    const compBadge = card.theme==='uelchamp' ? uclUelDrawnBadge(26) : `<img src="${UCL_REAL_LOGO_URL}" alt="" style="width:100%;height:100%;object-fit:contain;" loading="lazy" onerror="this.style.display='none';">`;
+    const confettiHTML = Array.from({length:14},(_,i)=>{
+      const left = (2 + Math.random()*96).toFixed(1);
+      const dur = (3 + Math.random()*2.5).toFixed(2);
+      const delay = (Math.random()*4).toFixed(2);
+      const sz = (10 + Math.random()*8).toFixed(0);
+      return logo
+        ? `<i style="left:${left}%;width:${sz}px;height:${sz}px;background-image:url('${logo}');animation-duration:${dur}s;animation-delay:${delay}s;"></i>`
+        : `<i style="left:${left}%;width:6px;height:12px;background:${c2};animation-duration:${dur}s;animation-delay:${delay}s;"></i>`;
+    }).join('');
+    const slashesHTML = Array.from({length:5},(_,i)=>{
+      const top = (4 + Math.random()*90).toFixed(1);
+      const left = (-55 + Math.random()*25).toFixed(1);
+      const rot = (-40 + Math.random()*28).toFixed(1);
+      const delay = (i*3.8/5 + Math.random()*0.5).toFixed(2);
+      return `<i style="top:${top}%;left:${left}%;transform:rotate(${rot}deg);animation-delay:${delay}s;background:${c1};"></i>`;
+    }).join('');
+    return `<div class="uclchamp-fx">
+      <div class="uclchamp-bg-gradient" style="background:linear-gradient(155deg,${c1} 0%,${c2} 100%);"></div>
+      <div class="uclchamp-slashes">${slashesHTML}</div>
+      <div class="uclchamp-confetti">${confettiHTML}</div>
+      <div class="uclchamp-comp-logo">${compBadge}</div>
+    </div>`;
+  })() : '';
   const div = document.createElement('div');
   const isDiamondLevel = !card.isManager && card.level===4;
   const iconswap2TierClass = card.theme==='iconswap2' && card.iconswap2Tier ? `iconswap2-tier-${card.iconswap2Tier}` : '';
@@ -16237,6 +16281,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${ogiconFxHTML}
     ${iconpromoFxHTML}
     ${adminFxHTML}
+    ${uclChampFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
@@ -27739,6 +27784,40 @@ const UEL_POTS = {
 const UCL_ALL_CLUBS = Object.values(UCL_POTS).flat();
 const UEL_ALL_CLUBS = Object.values(UEL_POTS).flat();
 function uclPotOf(club, comp){ const pots = comp==='uel' ? UEL_POTS : UCL_POTS; return Object.keys(pots).find(p=>pots[p].includes(club)) || null; }
+// Echte (recherchierte, teils leicht angepasste) Vereinsfarben [Primär, Sekundär] für alle 72 UCL/UEL-
+// Teilnehmer - nur für das Sieger-Karten-Design (Hintergrund-Verlauf, Slashes, siehe cardEl weiter oben),
+// keine allgemeine Klubfarben-Datenbank fürs restliche Spiel.
+const UCL_CLUB_COLORS = {
+  'Paris Saint-Germain':['#004170','#DA291C'], 'FC Bayern München':['#DC052D','#0066B2'], 'Real Madrid':['#FEBE10','#00529F'],
+  'Liverpool':['#C8102E','#F6EB61'], 'Inter':['#010E80','#000000'], 'Manchester City':['#6CABDD','#1C2C5B'],
+  'Arsenal':['#EF0107','#063672'], 'FC Barcelona':['#A50044','#004D98'], 'Atlético Madrid':['#CB3524','#272E61'],
+  'Borussia Dortmund':['#FDE100','#000000'], 'Roma':['#8E1F2F','#F0BC42'], 'Sporting CP':['#007A33','#000000'],
+  'Aston Villa':['#670E36','#95BFE5'], 'FC Porto':['#003872','#FFFFFF'], 'Manchester United':['#DA291C','#FBE122'],
+  'Club Brugge KV':['#0032A0','#000000'], 'Real Betis Balompié':['#00954C','#005A2B'], 'PSV':['#ED1C24','#000000'],
+  'Feyenoord':['#E23F27','#000000'], 'Lille OSC':['#E01E13','#002F6C'], 'FK Bodø/Glimt':['#FFD100','#000000'],
+  'Napoli':['#00A0DC','#003C7D'], 'RB Leipzig':['#DD0741','#001A57'], 'Villarreal CF':['#FFE667','#003DA5'],
+  'Fenerbahçe':['#0A3B7C','#FFDD02'], 'Shakhtar Donetsk':['#FF5100','#000000'], 'Galatasaray':['#A90432','#FDB913'],
+  'Slavia Prag':['#B90E31','#003DA5'], 'Slovan Bratislava':['#00529B','#FFD100'], 'VfB Stuttgart':['#E32219','#000000'],
+  'AEK Athen':['#FFD200','#000000'], 'LASK Linz':['#111111','#FFFFFF'], 'Como':['#003399','#87CEEB'],
+  'RC Lens':['#FFD400','#C8102E'], 'Viking FK':['#003DA5','#FFFFFF'], 'Sabah':['#6A0DAD','#FFFFFF'],
+  'Bayer 04 Leverkusen':['#E32221','#000000'], 'SL Benfica':['#E32119','#000000'], 'Juventus':['#000000','#FFFFFF'],
+  'AC Milan':['#FB090B','#000000'], 'Olympique Lyonnais':['#C41E3A','#002B7F'], 'AZ Alkmaar':['#D2122E','#000000'],
+  'Olympiacos FC':['#DA2128','#FFFFFF'], 'Real Sociedad':['#0033A0','#FFFFFF'], 'Olympique de Marseille':['#2FAEE0','#000000'],
+  'Ferencvárosi TC':['#4CA82A','#000000'], 'Viktoria Plzeň':['#C8102E','#000000'], 'Union Saint-Gilloise':['#FFD100','#002169'],
+  'Dinamo Zagreb':['#002A5C','#FFFFFF'], 'RB Salzburg':['#D50032','#FFFFFF'], 'Celtic':['#018749','#FFFFFF'],
+  'Sparta Praha':['#A6192E','#000000'], 'Stade Rennes':['#E2001A','#000000'], 'RSC Anderlecht':['#6C1D45','#FFFFFF'],
+  'Sturm Graz':['#000000','#FFFFFF'], 'Lech Poznań':['#002F87','#FFFFFF'], 'Crystal Palace':['#1B458F','#C4122E'],
+  'AFC Bournemouth':['#DA291C','#000000'], 'Sunderland':['#E01A22','#000000'], 'Celje':['#FF6600','#000000'],
+  'Jagiellonia Białystok':['#B60000','#FFDD00'], 'Omonia':['#007A3D','#FFFFFF'], 'RC Celta':['#8AC3EE','#000000'],
+  'TSG 1899 Hoffenheim':['#1961B5','#FFFFFF'], 'Beşiktaş JK':['#000000','#FFFFFF'], 'Torreense':['#1a1a1a','#FFFFFF'],
+  'Hapoel Beer Sheva':['#C8102E','#000000'], 'N.E.C.':['#00953B','#FFFFFF'], 'OFI Kreta':['#003893','#FFFFFF'],
+  'Lillestrøm':['#FFD100','#000000'], 'Levski Sofia':['#00539F','#FFFFFF'], 'Ararat-Armenia':['#E52421','#000000'],
+};
+function uclClubColors(club){ return UCL_CLUB_COLORS[club] || ['#0a1040','#8fa6ff']; }
+// Echtes UEFA-Champions-League-Emblem (kein Text) - vom Nutzer bereitgestellte, hotlink-fähige URL
+// derselben CDN, die die restlichen Klublogos im Spiel schon benutzt (CLUB_LOGO). Für die Europa League
+// gibt es keine entsprechende URL - bleibt beim selbst gezeichneten Emblem (uclCompetitionBadge).
+const UCL_REAL_LOGO_URL = 'https://assets.football-logos.cc/logos/tournaments/512x512/uefa-champions-league--no-text.aa9190d8.png';
 // Klubs komplett ohne echte Kartendaten in dieser Datenbank (auch das übliche Kontrahent-Boosting der
 // eigenen Basiskarten hilft hier nichts, weil es gar keine Basiskarten gibt) - beim Finalsieg gegen
 // einen dieser Klubs gibt's einen Coin-Bonus statt einer Spieler-Karte (siehe uclRewardCardsForClub).
@@ -27790,6 +27869,14 @@ const UCL_REWARD_ODDS_BY_POT = {
   C: [{ov:105,w:80},{ov:107,w:20}],
   D: [{ov:105,w:100}],
 };
+// Europa-League-Sieger-Karten sind bewusst deutlich schwächer als die Champions-League-Variante
+// (99/101/103/105 statt 105/107/109/111) - gleiches Odds-Gerüst pro Pot, nur auf niedrigerem Niveau.
+const UEL_REWARD_ODDS_BY_POT = {
+  A: [{ov:99,w:40},{ov:101,w:30},{ov:103,w:20},{ov:105,w:10}],
+  B: [{ov:99,w:60},{ov:101,w:30},{ov:103,w:10}],
+  C: [{ov:99,w:80},{ov:101,w:20}],
+  D: [{ov:99,w:100}],
+};
 function uclTopPlayersForClub(club, n){
   const pool = ALL_BASE.concat(UCL_FILLER_PLAYERS).filter(c=>c.club===club && !c.isManager && (!c.variant || c.variant==='base'));
   return pool.slice().sort((a,b)=>b.ov-a.ov).slice(0,n);
@@ -27801,7 +27888,7 @@ function uclRewardCardsForClub(club, comp){
   const key = comp+':'+club;
   if(UCL_REWARD_CACHE.has(key)) return UCL_REWARD_CACHE.get(key);
   const pot = uclPotOf(club, comp);
-  const odds = pot ? UCL_REWARD_ODDS_BY_POT[pot] : null;
+  const odds = pot ? (comp==='uel' ? UEL_REWARD_ODDS_BY_POT : UCL_REWARD_ODDS_BY_POT)[pot] : null;
   let result = null;
   if(odds && !UCL_DATALESS_CLUBS.has(club)){
     const tops = uclTopPlayersForClub(club, odds.length);
@@ -27889,12 +27976,13 @@ function uclClubXI(club){
     BLACK_HOLE_STAT_KEYS.forEach(k=>{ if(typeof out[k]==='number') out[k] = out[k]+4; });
     return out;
   });
-  // Jeder Klub bekommt IMMER einen Trainer-Bonus - einen echten aus MANAGERS, falls für diesen Klub
-  // hinterlegt, sonst pauschal +5% (nie einfach null wie vorher), analog zum garantierten Trainer-Bonus
-  // in einer echten Spieler-Elf.
+  // Jeder Klub bekommt IMMER einen Trainer-Bonus von exakt +8% - einen echten Namen aus MANAGERS, falls
+  // für diesen Klub hinterlegt (nur der Name, der Bonus-Wert wird trotzdem auf +8% vereinheitlicht),
+  // sonst ein generischer "Cheftrainer". Nie einfach null wie ursprünglich, und nie ein schwächerer/
+  // stärkerer Wert als bei jedem anderen Klub.
   const mgrPool = MANAGERS.filter(m=>m.club===club);
-  const GENERIC_UCL_MANAGER = {n:'Cheftrainer', boostType:'percent', boostValue:5, isManager:true};
-  const mgr = mgrPool.length ? pick(mgrPool) : GENERIC_UCL_MANAGER;
+  const chosenMgr = mgrPool.length ? pick(mgrPool) : {n:'Cheftrainer'};
+  const mgr = {...chosenMgr, boostType:'percent', boostValue:8, isManager:true};
   const {players, managerName} = boostBotXI(leveledXi, slots, mgr);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
   const result = {owner:club, rating, players, isBot:true, managerName, club};
@@ -28348,12 +28436,15 @@ function uclClubChip(club, size=18){
   return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:${Math.round(size*.22)}px;background:var(--panel3,#1c2333);color:var(--muted);font-size:${Math.round(size*.4)}px;font-weight:800;align-items:center;justify-content:center;vertical-align:middle;margin-right:5px;">${initialsOf2(club)}</span>`;
 }
 // Der Spieler ERSETZT nur den Platz eines Klubs, er IST nicht dieser Klub - überall wo eine Seite die
-// eigene ist, muss also der eigene Spielername stehen, nicht der übernommene Klubname (der bleibt als
-// Kontext in Klammern dran). Exakt dasselbe Prinzip wie WM26s teamLabel (dort: profile.displayName statt
-// des Nationalnamens für die eigene Seite).
+// eigene ist, steht NUR NOCH der eigene Spielername, komplett ohne jede Spur des übernommenen Klubs
+// (kein Name, kein Logo, keine Klammer) - exakt dasselbe Prinzip wie WM26s teamLabel (dort:
+// profile.displayName statt Nationalname für die eigene Seite, ohne die Nation danebenzustellen).
 function uclSideLabel(club, isPlayer){
-  if(!isPlayer) return club || 'TBD';
-  return `${escBracketName(profile.displayName||'Du')} <span style="font-weight:400;color:var(--muted);">(${club})</span>`;
+  return isPlayer ? escBracketName(profile.displayName||'Du') : (club || 'TBD');
+}
+// Gleiches Prinzip fürs Klublogo daneben - für die eigene Seite gibt's auch da keins mehr.
+function uclSideChip(club, isPlayer, size){
+  return isPlayer ? '' : uclClubChip(club, size);
 }
 // Stilisiertes Wettbewerbs-Emblem (nicht das echte UEFA-Logo - keine verlässlich hotlinkbare Quelle in
 // dieser Sandbox erreichbar, siehe Antwort dazu) - für UCL ein "Starball" aus 8 Sternen ums Zentrum,
@@ -28368,15 +28459,15 @@ function uclStarSVG(cx, cy, r, color){
   }
   return `<polygon points="${pts.join(' ')}" fill="${color}"/>`;
 }
-function uclCompetitionBadge(comp, size=40){
-  if(comp==='uel'){
-    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
+function uclUelDrawnBadge(size){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
       <circle cx="50" cy="50" r="47" fill="#2a1000" stroke="#ff9a3c" stroke-width="4"/>
       <path d="M32 32 L15 50 L32 68" fill="none" stroke="#ff9a3c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M68 32 L85 50 L68 68" fill="none" stroke="#ff9a3c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="50" cy="50" r="13" fill="#ff9a3c"/>
     </svg>`;
-  }
+}
+function uclStarballFallback(size){
   const stars = Array.from({length:8},(_,i)=>{
     const angle = (i/8)*2*Math.PI - Math.PI/2;
     return uclStarSVG(50+34*Math.cos(angle), 50+34*Math.sin(angle), 8, '#ffd76a');
@@ -28387,6 +28478,15 @@ function uclCompetitionBadge(comp, size=40){
     <circle cx="50" cy="50" r="11" fill="#8fa6ff"/>
   </svg>`;
 }
+// Echtes UEFA-Champions-League-Emblem überall dort, wo ein Wettbewerbs-Symbol gebraucht wird - für die
+// Europa League gibt's keine entsprechende URL, da bleibt es beim selbst gezeichneten Emblem.
+function uclCompetitionBadge(comp, size=40){
+  if(comp==='uel') return uclUelDrawnBadge(size);
+  return `<span style="display:inline-block;width:${size}px;height:${size}px;position:relative;">
+    <img src="${UCL_REAL_LOGO_URL}" alt="" style="width:100%;height:100%;object-fit:contain;position:absolute;inset:0;" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+    <span style="display:none;position:absolute;inset:0;">${uclStarballFallback(size)}</span>
+  </span>`;
+}
 // Ligaphasen-Tabelle (alle 36 Klubs, siehe uclComputeLiveTable) - Platz 1-8 (direkt Achtelfinale) und
 // 9-24 (Playoff) farblich markiert wie bei WM26, nur eigenes 5-Spalten-Grid ohne S/U/N.
 function uclStandingsTableHTML(table){
@@ -28394,7 +28494,7 @@ function uclStandingsTableHTML(table){
     const qCls = i<8 ? 'q-direct' : (i<24 ? 'q-third' : '');
     return `<div class="ucl-lg-row ${qCls}${r.isPlayer?' wm26-row-me':''}">
       <div class="wm26-c-rank">${i+1}</div>
-      <div class="wm26-c-team">${uclClubChip(r.club,18)}<span class="wm26-c-team-name" style="color:${r.isPlayer?'var(--turf-bright)':'var(--chalk)'};font-weight:${r.isPlayer?'700':'400'};">${uclSideLabel(r.club, r.isPlayer)}</span></div>
+      <div class="wm26-c-team">${uclSideChip(r.club,r.isPlayer,18)}<span class="wm26-c-team-name" style="color:${r.isPlayer?'var(--turf-bright)':'var(--chalk)'};font-weight:${r.isPlayer?'700':'400'};">${uclSideLabel(r.club, r.isPlayer)}</span></div>
       <div class="wm26-c-gf">${r.gf}:${r.ga}</div>
       <div class="mono" style="color:var(--muted);">${r.gd>=0?'+':''}${r.gd}</div>
       <div class="wm26-c-pts">${r.pts}</div>
@@ -28418,13 +28518,14 @@ function uclTieCardHTML(tie, playLabel, canPlay, comp){
   const aggB = (tie.leg1?tie.leg1.bGoals:0)+(tie.leg2?tie.leg2.bGoals:0);
   const heroCls = comp==='uel' ? 'uel-hero' : 'ucl-hero';
   const aLabel = uclSideLabel(tie.aClub, tie.aIsPlayer), bLabel = uclSideLabel(tie.bClub, tie.bIsPlayer);
-  const legRow = (leg,label) => leg ? `<div class="hint">${label}: ${uclClubChip(tie.aClub)}${aLabel} ${leg.aGoals}:${leg.bGoals} ${bLabel}${uclClubChip(tie.bClub)}</div>` : '';
+  const aChip = uclSideChip(tie.aClub, tie.aIsPlayer), bChip = uclSideChip(tie.bClub, tie.bIsPlayer);
+  const legRow = (leg,label) => leg ? `<div class="hint">${label}: ${aChip}${aLabel} ${leg.aGoals}:${leg.bGoals} ${bLabel}${bChip}</div>` : '';
   const winnerLabel = tie.winnerClub===tie.aClub ? aLabel : bLabel;
   return `<div class="wm26-hero ${heroCls}" style="flex-direction:column;align-items:flex-start;gap:6px;">
-    <div style="font-weight:700;">${uclClubChip(tie.aClub, 26)}${aLabel} <span style="color:var(--muted);">vs</span> ${uclClubChip(tie.bClub, 26)}${bLabel}</div>
+    <div style="font-weight:700;">${uclSideChip(tie.aClub, tie.aIsPlayer, 26)}${aLabel} <span style="color:var(--muted);">vs</span> ${uclSideChip(tie.bClub, tie.bIsPlayer, 26)}${bLabel}</div>
     ${legRow(tie.leg1,'Hinspiel')}
     ${legRow(tie.leg2,'Rückspiel')}
-    ${tie.leg1&&tie.leg2?`<div class="hint">Aggregat: ${aggA}:${aggB}${tie.decider?' (Entscheidung nach Verlängerung/Elfmeterschießen)':''}</div>`:''}
+    ${tie.leg1?`<div class="hint">Aggregat: ${aggA}:${aggB}${tie.decider?' (Entscheidung nach Verlängerung/Elfmeterschießen)':''}</div>`:''}
     ${tie.winnerClub ? `<div style="color:var(--gold);font-weight:700;">${winnerLabel} zieht weiter</div>` : (canPlay?`<button class="action-btn" id="ucl-play-tie-btn" style="margin-top:6px;">${playLabel}</button>`:'')}
   </div>`;
 }
@@ -28454,7 +28555,7 @@ function uclBracketHTML(rounds, comp){
       const involvesPlayer = m.aIsPlayer || m.bIsPlayer;
       const aAgg = (m.leg1?m.leg1.aGoals:0)+(m.leg2?m.leg2.aGoals:0);
       const bAgg = (m.leg1?m.leg1.bGoals:0)+(m.leg2?m.leg2.bGoals:0);
-      const sideName = (club, isPlayer) => `<span class="bracket-side-name">${uclClubChip(club,14)}${uclSideLabel(club, isPlayer)}</span>`;
+      const sideName = (club, isPlayer) => `<span class="bracket-side-name">${uclSideChip(club,isPlayer,14)}${uclSideLabel(club, isPlayer)}</span>`;
       let inner;
       if(m.pending){
         inner = `<div class="bracket-side">${sideName(m.aClub, m.aIsPlayer)}<span class="bracket-score">${m.leg1?aAgg:''}</span></div>
