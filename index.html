@@ -426,6 +426,10 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .wm26-trophy-confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
 .wm26-trophy-confetti i{position:absolute;top:-10%;width:6px;height:12px;border-radius:1px;opacity:0;
   animation:wm26TrophyConfettiFall linear infinite;}
+/* Champions-/Europa-League-Sieg: Konfetti aus dem Vereinslogo des im Finale besiegten Klubs statt
+   schlichter Farbbalken (siehe showUclTrophyCutscene) - gleiche Fall-Animation, nur als kleines
+   quadratisches Wappen mit eigener Dreh-Geschwindigkeit pro Partikel. */
+.wm26-trophy-confetti i.ucl-logo-confetti{width:18px;height:18px;border-radius:3px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));}
 @keyframes wm26TrophyConfettiFall{
   0%{top:-10%;opacity:0;transform:rotate(0deg);}
   8%{opacity:1;}
@@ -2339,6 +2343,8 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 /* Turnier-Achievement-Nametags (Cupmeister/Mäzen) - selbe schlichte Gradient+Puls-Behandlung. */
 .nt-cupmeister{--glow:#3dc482;background:linear-gradient(90deg,#3dc482,#a0f0c8,#3dc482);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagFlash 2.6s ease-in-out infinite;}
 .nt-maezen{--glow:#c78bf5;background:linear-gradient(90deg,#c78bf5,#ecd3ff,#c78bf5);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.8s linear infinite, nametagGlow 2.4s ease-in-out infinite;}
+/* Champions-/Europa-League-Achievement-Nametag (Kontinentalkönig) - navy/gold, gleiche Gradient+Puls-Behandlung. */
+.nt-kontinentalkoenig{--glow:#ffd76a;background:linear-gradient(90deg,#4a6fff,#ffd76a,#4a6fff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagGlow 2.2s ease-in-out infinite;}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
 .ach-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .ach-icon{font-size:24px;flex-shrink:0;width:40px;height:40px;border-radius:10px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;}
@@ -26259,6 +26265,16 @@ const ACHIEVEMENTS = [
       {coins:200000, packs:['ratings27']},
       {coins:500000, packs:['kronjuwelen'], nametag:'maezen'},
     ]},
+  {id:'uclTrophies', name:'Kontinental-Krone', desc:'Gewinne die Champions League oder die Europa League.', icon:'🏆', stat:'uclTrophies',
+    cond:n=>`${n}x Champions/Europa League gewonnen`,
+    tiers:[1,3,10,25,50],
+    rewards:[
+      {coins:8000},
+      {coins:25000},
+      {coins:80000, packs:['ratings27']},
+      {coins:200000, packs:['zeitgeist']},
+      {coins:500000, packs:['kronjuwelen'], nametag:'kontinentalkoenig'},
+    ]},
   // Icon Swap: Remastered event-only achievement lines - eventOnly:true hides both entirely (see
   // renderAchievementsPanel/achievementsClaimableCount) once iconSwap2Active() goes false, so they only
   // ever show up while the event itself is live. Rewards deliberately pay out Icon Swap Tokens instead
@@ -26331,6 +26347,9 @@ const NAMETAGS = {
   // Pokalkönig (Wochenendpokal) unterschiedene Farbe/Symbole, da es ein komplett separates Feature ist.
   cupmeister: {label:'Cupmeister', symbol:'⛊', cls:'nt-cupmeister', accent:'#3dc482'},
   maezen: {label:'Mäzen', symbol:'❁', cls:'nt-maezen', accent:'#c78bf5'},
+  // Champions-/Europa-League-Achievement (siehe ACHIEVEMENTS' uclTrophies-Linie) - eigenes Navy/Gold,
+  // klar von Pokalkönig (Wochenendpokal) und Cupmeister (Turnier-Modus) unterschieden.
+  kontinentalkoenig: {label:'Kontinentalkönig', symbol:'⚜', cls:'nt-kontinentalkoenig', accent:'#ffd76a'},
 };
 // Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
 // card types currently in the collection - captures every source (packs, Handel, Belohnungen, Admin-
@@ -28164,12 +28183,18 @@ async function playUclKnockoutLeg(comp){
   await sSet('profile', profile);
   renderUclPanel(comp);
 }
-function showUclTrophyCutscene(comp, reward){
+function showUclTrophyCutscene(comp, reward, beatenClub){
   return new Promise(resolve=>{
     const title = comp==='uel' ? 'EUROPA-LEAGUE-SIEGER!' : 'CHAMPIONS-LEAGUE-SIEGER!';
+    // Vereinslogo des im Finale besiegten Klubs als Konfetti (siehe Anfrage "Vereinslogo als Konfetti") -
+    // fällt auf die generischen Farbbalken zurück, falls für diesen Klub kein Logo hinterlegt ist.
+    const logoUrl = beatenClub && CLUB_LOGO[beatenClub];
+    const confetti = logoUrl
+      ? Array.from({length:12},(_,i)=>`<i class="c${i+1} ucl-logo-confetti" style="background-image:url('${logoUrl}');"></i>`).join('')
+      : Array.from({length:12},(_,i)=>`<i class="c${i+1}"></i>`).join('');
     openModal(`<div class="wm26-trophy-cutscene">
         <div class="wm26-trophy-halo"></div>
-        <div class="wm26-trophy-confetti">${Array.from({length:12},(_,i)=>`<i class="c${i+1}"></i>`).join('')}</div>
+        <div class="wm26-trophy-confetti">${confetti}</div>
         <div class="wm26-trophy-icon">🏆</div>
         <div class="wm26-trophy-title">${title}</div>
         <p class="hint" style="position:relative;margin:4px 0 18px;">+${formatCoins(reward)} Coins</p>
@@ -28184,6 +28209,7 @@ async function uclFinishRun(comp, exitStage, won){
   if(won){
     profile[uclKey(comp)] = {...t, stage:'done', wonCup:true};
     if(comp==='uel') profile.uclFreeEntryAvailable = true;
+    applyAchievementDeltas({uclTrophies:1});
     await sSet('profile', profile);
     const winReward = uclWinReward(comp);
     await atomicCoinChange(winReward, {}, {silentDisplay:true});
@@ -28191,7 +28217,7 @@ async function uclFinishRun(comp, exitStage, won){
     const finalMatch = t.knockout.rounds[t.knockout.rounds.length-1].matches[0];
     const finalOpp = finalMatch.aClub===t.myClub ? finalMatch.bClub : finalMatch.aClub;
     const rewardCard = uclDrawRewardCard(finalOpp, comp);
-    await showUclTrophyCutscene(comp, winReward);
+    await showUclTrophyCutscene(comp, winReward, finalOpp);
     if(rewardCard){
       toast('Öffne deine Sieger-Karte…');
       showPackOpening({name: comp==='uel'?'Europa-League-Sieger-Pack':'Champions-League-Sieger-Pack', tier:'legendary', img:null}, [rewardCard], {untradable:true});
