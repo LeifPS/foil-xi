@@ -12348,8 +12348,12 @@ const CHALLENGE_DEFS = [
     desc:'Die echte WM 2026 nachgespielt — 48 Teams, 12 Gruppen, K.o.-Runde ab den letzten 32. Preise je nach Abschneiden, Pokalsieg bringt das World Cup Pack.'},
   {id:'ucl', name:'Champions League', pill:'Match', accent:'#0a1a4d', contentId:'ucl-content', renderFn:()=>renderUclPanel('ucl'),
     desc:'Die echte Champions League 26/27 nachgespielt — 36 Klubs, Ligaphase, Playoff, K.o.-Runde ab dem Achtelfinale (Hin-/Rückspiel). Sieg bringt eine Sieger-Kartenvariante des besiegten Finalgegners.'},
+  // Vorübergehend deaktiviert (siehe CHALLENGE_DEFS.forEach unten, das disabled-Kacheln überspringt) -
+  // der Modus selbst (renderUclPanel/startUcl/uclFinishRun etc.) bleibt vollständig im Code, nur der
+  // Einstiegspunkt über die Herausforderungen-Kachel ist weg, bis daran weitergearbeitet wird.
   {id:'uel', name:'Europa League', pill:'Match', accent:'#ff6b00', contentId:'uel-content', renderFn:()=>renderUclPanel('uel'),
-    desc:'Wie die Champions League, aber mit den echten Europa-League-26/27-Teilnehmern — günstigerer Eintritt, geringere Belohnungen. Sieg schaltet einen Gratis-Startplatz für die Champions League frei.'},
+    desc:'Wie die Champions League, aber mit den echten Europa-League-26/27-Teilnehmern — günstigerer Eintritt, geringere Belohnungen. Sieg schaltet einen Gratis-Startplatz für die Champions League frei.',
+    disabled:true},
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
     desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
@@ -12661,6 +12665,7 @@ async function renderChallengeGrid(){
     grid.appendChild(tile);
   }
   CHALLENGE_DEFS.forEach(def=>{
+    if(def.disabled) return;
     const done = challengeIsDone(def);
     const requiredDef = def.requires ? CHALLENGE_DEFS.find(d=>d.id===def.requires) : null;
     const requiredDefDone = requiredDef ? challengeIsDone(requiredDef) : true;
@@ -28252,12 +28257,13 @@ const UCL_SCHEMA_VERSION = 1;
 const UCL_ROUND_LABEL = {league:'Ligaphase', playoff:'Playoff', ro16:'Achtelfinale', qf:'Viertelfinale', sf:'Halbfinale', final:'Finale'};
 const UCL_KO_ORDER = ['ro16','qf','sf','final'];
 const UCL_DAILY_LIMIT = 5;
-const UCL_ENTRY_FEE = 15000, UEL_ENTRY_FEE = 6000;
-// Trostpreis je nach höchster erreichter Stufe (nicht kumulativ) - ab Viertelfinale ungefähr kostenneutral
-// zum Startgeld, wie gewünscht; darunter ein echter Verlust, darüber ein echter Gewinn.
-const UCL_EXIT_REWARD = {league:1000, playoff:3000, ro16:8000, qf:15000, sf:25000, final:35000};
+const UCL_ENTRY_FEE = 20000, UEL_ENTRY_FEE = 6000;
+// Trostpreis je nach höchster erreichter Stufe (nicht kumulativ) - Gruppenphase bringt bewusst nichts
+// zurück (reiner Verlust des Startgelds), ab dem Achtelfinale wächst der Trostpreis Richtung Startgeld,
+// Finaleinzug und Turniersieg zahlen beide 40.000 (der Sieg zusätzlich die Sieger-Karte).
+const UCL_EXIT_REWARD = {league:0, playoff:3000, ro16:8000, qf:15000, sf:25000, final:40000};
 const UEL_EXIT_REWARD = {league:500, playoff:1500, ro16:3500, qf:6000, sf:10000, final:15000};
-const UCL_WIN_REWARD = 50000, UEL_WIN_REWARD = 20000;
+const UCL_WIN_REWARD = 40000, UEL_WIN_REWARD = 20000;
 function uclKey(comp){ return comp==='uel' ? 'uel' : 'ucl'; }
 function uclClubsFor(comp){ return comp==='uel' ? UEL_ALL_CLUBS : UCL_ALL_CLUBS; }
 function uclPotsFor(comp){ return comp==='uel' ? UEL_POTS : UCL_POTS; }
@@ -28358,6 +28364,9 @@ function uclStartsUsedToday(comp){
   return profile[dateKey]===todayStr ? (profile[countKey]||0) : 0;
 }
 async function startUcl(comp){
+  // Europa League vorübergehend deaktiviert (siehe CHALLENGE_DEFS' uel-Eintrag) - Guard hier zusätzlich,
+  // falls startUcl('uel') je über einen anderen Weg als die (jetzt ausgeblendete) Kachel erreicht wird.
+  if(comp==='uel'){ toast('Die Europa League ist aktuell deaktiviert.'); return; }
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
