@@ -370,10 +370,11 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
    zu rendern. */
 .pcard .uclchamp-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
 .pcard .uclchamp-bg-gradient{position:absolute;inset:0;opacity:.7;}
-.pcard .uclchamp-foil{position:absolute;top:0;left:-30%;width:22%;height:100%;
-  background:linear-gradient(100deg, transparent 0%, rgba(255,255,255,.35) 50%, transparent 100%);
-  animation:uclchampFoilSweep 3.4s ease-in-out infinite;}
-@keyframes uclchampFoilSweep{0%,15%{left:-30%;}85%,100%{left:120%;}}
+/* Großes, leicht transparentes Klubwappen mittig als Wasserzeichen - liegt (wie der ganze .uclchamp-fx-
+   Block) hinter Foto und Namen/Werten, die erst später im Karten-Template folgen, kostet aber nichts
+   Neues an Animation (ein einzelnes statisches Bild). */
+.pcard .uclchamp-club-bg{position:absolute;top:50%;left:50%;width:78%;aspect-ratio:1;transform:translate(-50%,-50%);
+  opacity:.16;object-fit:contain;filter:drop-shadow(0 0 10px rgba(0,0,0,.4));}
 .pcard.theme-uclchamp::before, .pcard.theme-uelchamp::before{animation:autoShine 1.6s ease-in-out infinite;}
 .pcard .uclchamp-comp-logo{position:absolute;top:5%;left:5%;width:16%;aspect-ratio:1;z-index:2;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7));}
 .pcard .uclchamp-comp-logo img, .pcard .uclchamp-comp-logo svg{width:100%;height:100%;}
@@ -16232,20 +16233,23 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="admin-hack-stamp">ADMIN ACCESS</div>
     </div>`;
   })() : '';
-  // Champions-/Europa-League-Sieger-Variante (uclRewardCardsForClub): Hintergrund-Verlauf und Slashes
-  // in den echten Farben des im Finale besiegten Klubs (UCL_CLUB_COLORS), Konfetti aus dessen eigenem
-  // Vereinslogo statt generischer Farbbalken, plus das echte Wettbewerbs-Emblem oben links als Wasserzeichen.
+  // Champions-/Europa-League-Sieger-Variante (uclRewardCardsForClub): Hintergrund-Verlauf in den echten
+  // Farben des im Finale besiegten Klubs (UCL_CLUB_COLORS), dessen Wappen groß und transparent mittig
+  // als Wasserzeichen hinter Foto/Name/Werten, plus das echte Wettbewerbs-Emblem oben links.
   const isUclChampTier = card.theme==='uclchamp' || card.theme==='uelchamp';
   // Neugestaltung: statt 14 Konfetti- + 5 Slash-Elementen (19 dauerhaft laufende Animationen pro Karte -
-  // auf einem vollen Kartenraster spürbar teuer) jetzt nur noch EIN hart geschnittener Trikot-Verlauf
-  // (statisch, kein Motion-Cost) + EIN schmales Foil-Band (1 Animation) + das Emblem-Wasserzeichen.
+  // auf einem vollen Kartenraster spürbar teuer) jetzt nur noch ein hart geschnittener Trikot-Verlauf,
+  // das transparente Klubwappen mittig und das Emblem-Wasserzeichen - alles statische Bilder/Verläufe,
+  // keine einzige eigene Animation mehr (der freie .pcard::before-Glanz-Sweep bleibt als einzige Bewegung).
   const uclChampFxHTML = isUclChampTier ? (()=>{
     const [c1,c2] = uclClubColors(card.club);
+    const clubLogo = CLUB_LOGO[card.club];
     const compBadgeUrl = card.theme==='uelchamp' ? UEL_REAL_LOGO_URL : UCL_REAL_LOGO_URL;
     const compBadge = `<img src="${compBadgeUrl}" alt="" style="width:100%;height:100%;object-fit:contain;" loading="lazy" onerror="this.style.display='none';">`;
+    const clubBg = clubLogo ? `<img class="uclchamp-club-bg" src="${clubLogo}" alt="" loading="lazy" onerror="this.remove();">` : '';
     return `<div class="uclchamp-fx">
       <div class="uclchamp-bg-gradient" style="background:linear-gradient(115deg, ${c1} 0%, ${c1} 46%, ${c2} 54%, ${c2} 100%);"></div>
-      <div class="uclchamp-foil"></div>
+      ${clubBg}
       <div class="uclchamp-comp-logo">${compBadge}</div>
     </div>`;
   })() : '';
