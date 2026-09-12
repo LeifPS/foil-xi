@@ -2536,6 +2536,13 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .wm26-legend i{width:8px;height:8px;border-radius:2px;display:inline-block;}
 .wm26-legend i.q-direct{background:var(--turf-bright);}
 .wm26-legend i.q-third{background:var(--gold);}
+/* UCL/UEL-Ligaphasen-Tabelle: eigenes 5-Spalten-Grid (Platz/Klub/Tore/Diff/Pkt, keine S/U/N-Spalten wie
+   bei WM26) - sonst dieselbe .wm26-table-Optik/Farblogik (q-direct/q-third/wm26-row-me wiederverwendet). */
+.ucl-lg-thead, .ucl-lg-row{display:grid;grid-template-columns:22px 1fr 46px 34px 30px;gap:0;align-items:center;}
+.ucl-lg-thead{padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;background:rgba(255,255,255,.03);}
+.ucl-lg-thead > div, .ucl-lg-row > div{text-align:center;}
+.ucl-lg-thead .wm26-c-team, .ucl-lg-row .wm26-c-team{text-align:left;}
+.ucl-lg-row{padding:6px 10px;font-size:11.5px;border-top:1px solid var(--line);position:relative;}
 .wm26-hero{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:14px;border-radius:12px;background:radial-gradient(120% 160% at 0% 0%,rgba(95,225,201,.14),transparent 60%),var(--panel2);border:1px solid var(--line);}
 /* Champions-/Europa-League: eigene Navy/Gold- bzw. Orange/Schwarz-Optik statt des generischen
    WM26-Grüns, passend zur echten UCL/UEL-Markenfarbe - reine Farbvariante desselben .wm26-hero-Layouts. */
@@ -27898,45 +27905,76 @@ function uclMatchResultClubs(clubA, clubB, allowDraw){
 function uclDrawLeagueOpponents(myClub, comp){
   const pots = uclPotsFor(comp);
   const opponents = [];
-  Object.values(pots).forEach(list=>{
+  // Reihenfolge A/B/C/D bewusst NICHT mehr durchmischt (anders als vorher) - das sind jetzt auch die
+  // 4 Ziehungs-Schritte der Draw-Zeremonie (siehe uclRevealNextDrawSlot) UND die Spieltag-Reihenfolge
+  // 1-8, genau wie bei einer echten Auslosung Topf für Topf gezogen wird.
+  Object.entries(pots).forEach(([pot, list])=>{
     const candidates = uclShuffle(list.filter(c=>c!==myClub));
-    candidates.slice(0,2).forEach((club,i)=> opponents.push({oppClub:club, home:i===0, pending:true}));
+    candidates.slice(0,2).forEach((club,i)=> opponents.push({oppClub:club, home:i===0, pending:true, pot}));
   });
-  return uclShuffle(opponents);
+  return opponents;
 }
-// Die restlichen 35 Klubs bekommen KEINE einzeln nachvollziehbare 8-Spiele-Historie simuliert (ein
-// exakt gültiger Spielplan mit 2 Gegnern je Topf für alle 36 Klubs gleichzeitig ist ein eigenes
-// Constraint-Solving-Problem) - stattdessen 8 "virtuelle" Spiele je Klub, deren Ausgang nur von der
-// eigenen uclClubXI-Stärke relativ zum Feld-Durchschnitt abhängt. Der Spieler bekommt seine ECHTEN
-// Punkte/Tore aus den selbst gespielten 8 Spielen eingesetzt - nur das Endergebnis (die Tabelle) zählt
-// ohnehin für Qualifikation/Setzliste, einzelne fremde Ergebnisse werden nie angezeigt.
-function uclSimulateFieldStandings(comp, myClub, myPts, myGf, myGa){
+// Ein exakt gültiger, gemeinsamer Spielplan (2 Gegner je Topf für alle 36 Klubs GLEICHZEITIG, ohne
+// dass sich zwei Klubs gegenseitig widersprechen) ist ein eigenes Constraint-Solving-Problem - bewusst
+// nicht nachgebaut. Stattdessen zieht sich JEDER der 36 Klubs (Spieler eingeschlossen) unabhängig
+// voneinander seine eigenen 8 Gegner (uclDrawLeagueOpponents), und für die anderen 35 werden alle 8
+// "Spieltag-Slots" SOFORT mit dem echten Spielmotor durchgespielt (uclMatchResultClubs) - also echte,
+// zum jeweiligen Klub passende Ergebnisse, kein abstraktes Wahrscheinlichkeitsmodell mehr. Der Spieler
+// bekommt seine eigenen 8 Spiele natürlich weiterhin live gespielt. Die Spieltag-Nummer (0-7) ist der
+// Index im jeweils eigenen Gegner-Array - zwei Klubs am "selben Spieltag" spielen so nicht zwingend
+// gegeneinander, aber das ist für Tabelle/Ticker unsichtbar und irrelevant.
+function uclBuildFullSchedule(myClub, comp){
   const allClubs = uclClubsFor(comp);
-  const others = allClubs.filter(c=>c!==myClub);
-  const ratings = {}; others.forEach(c=>{ ratings[c] = uclClubXI(c).rating; });
-  const avg = others.reduce((s,c)=>s+ratings[c],0)/others.length;
-  const table = allClubs.map(club=>{
-    if(club===myClub) return {club, pts:myPts, gf:myGf, ga:myGa, gd:myGf-myGa, isPlayer:true};
-    let pts=0, gf=0, ga=0;
-    const winP = clamp(0.46 + (ratings[club]-avg)*0.018, 0.12, 0.85);
-    for(let i=0;i<8;i++){
-      const r = Math.random();
-      if(r < winP){ const w=1+Math.floor(Math.random()*3), l=Math.floor(Math.random()*w); gf+=w; ga+=l; pts+=3; }
-      else if(r < winP+0.24){ const x=Math.floor(Math.random()*3); gf+=x; ga+=x; pts+=1; }
-      else { const w=1+Math.floor(Math.random()*3), l=Math.floor(Math.random()*w); gf+=l; ga+=w; }
-    }
-    return {club, pts, gf, ga, gd:gf-ga, isPlayer:false};
+  const leagueMatches = uclDrawLeagueOpponents(myClub, comp);
+  const otherResults = [];
+  allClubs.filter(c=>c!==myClub).forEach(club=>{
+    const opponents = uclDrawLeagueOpponents(club, comp);
+    opponents.forEach((o, matchday)=>{
+      const md = uclMatchResultClubs(club, o.oppClub, true);
+      otherResults.push({matchday, club, oppClub:o.oppClub, home:o.home, goals:md.myGoals, oppGoals:md.oppGoals});
+    });
   });
-  return table.sort((a,b)=> b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || (Math.random()-0.5));
+  return { leagueMatches, otherResults };
+}
+// Tabelle nach Spieltag `uptoMatchday` (1-8, wie viele Spieltage schon "passiert" sind) - der Spieler
+// zählt nur seine tatsächlich bereits gespielten eigenen Partien, alle anderen Klubs ihre schon
+// simulierten Slots bis zu diesem Spieltag.
+function uclComputeLiveTable(t, uptoMatchday){
+  const allClubs = uclClubsFor(t.comp);
+  const table = allClubs.map(club=>{
+    if(club===t.myClub){
+      const played = t.leagueMatches.slice(0, uptoMatchday).filter(m=>!m.pending);
+      const pts = played.reduce((s,m)=>s+(m.winnerSide==='me'?3:m.winnerSide==='draw'?1:0),0);
+      const gf = played.reduce((s,m)=>s+(m.myGoals||0),0), ga = played.reduce((s,m)=>s+(m.oppGoals||0),0);
+      return {club, pts, gf, ga, gd:gf-ga, isPlayer:true, played:played.length};
+    }
+    const rows = t.otherResults.filter(r=>r.club===club && r.matchday<uptoMatchday);
+    let pts=0, gf=0, ga=0;
+    rows.forEach(r=>{ gf+=r.goals; ga+=r.oppGoals; pts += r.goals>r.oppGoals?3:(r.goals===r.oppGoals?1:0); });
+    return {club, pts, gf, ga, gd:gf-ga, isPlayer:false, played:rows.length};
+  });
+  return table.sort((a,b)=> b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || (a.club<b.club?-1:1));
+}
+// Ein paar Beispielergebnisse anderer Klubs vom selben Spieltag - reine Ticker-Deko (siehe
+// renderUclPanel), damit sich die Ligaphase nicht wie ein Vakuum anfühlt, in dem nur der Spieler
+// überhaupt spielt.
+function uclMatchdayTicker(t, matchdayIdx, n=5){
+  const rows = t.otherResults.filter(r=>r.matchday===matchdayIdx);
+  return uclShuffle(rows).slice(0,n);
 }
 // Gewinner einer Paarung, an der der Spieler NICHT beteiligt ist - rein Rating-gewichtet, ohne Live-Spiel.
 function uclOtherTieWinner(clubA, clubB){
   const ra = uclClubXI(clubA).rating, rb = uclClubXI(clubB).rating;
   return Math.random() < clamp(0.5+(ra-rb)*0.02, 0.1, 0.9) ? clubA : clubB;
 }
-function uclStartsUsedToday(){
+// Champions League und Europa League haben getrennte Tageslimits (je 5), keinen gemeinsamen Topf -
+// eigene Datums-/Zähler-Felder je Wettbewerb (profile.uclStartDate/uclStartCount vs.
+// profile.uelStartDate/uelStartCount).
+function uclStartsUsedToday(comp){
+  const dateKey = comp==='uel' ? 'uelStartDate' : 'uclStartDate';
+  const countKey = comp==='uel' ? 'uelStartCount' : 'uclStartCount';
   const todayStr = localDateStr(new Date());
-  return profile.uclStartDate===todayStr ? (profile.uclStartCount||0) : 0;
+  return profile[dateKey]===todayStr ? (profile[countKey]||0) : 0;
 }
 async function startUcl(comp){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
@@ -27944,7 +27982,8 @@ async function startUcl(comp){
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
   const existing = uclCurrentRun(comp);
   if(existing && existing.stage!=='done'){ toast('Du hast bereits einen laufenden Lauf in diesem Modus.'); return; }
-  if(uclStartsUsedToday()>=UCL_DAILY_LIMIT){ toast(`Tageslimit erreicht: maximal ${UCL_DAILY_LIMIT} Teilnahmen pro Tag (Champions + Europa League zusammen).`); return; }
+  const label0 = comp==='uel' ? 'Europa League' : 'Champions League';
+  if(uclStartsUsedToday(comp)>=UCL_DAILY_LIMIT){ toast(`Tageslimit erreicht: maximal ${UCL_DAILY_LIMIT} ${label0}-Teilnahmen pro Tag.`); return; }
   const useFreeEntry = comp==='ucl' && !!profile.uclFreeEntryAvailable;
   const fee = useFreeEntry ? 0 : uclEntryFee(comp);
   if(fee>0 && (profile.coins||0)<fee){ toast(`Du brauchst ${formatCoins(fee)} Coins Startgeld.`); return; }
@@ -27952,12 +27991,30 @@ async function startUcl(comp){
   if(useFreeEntry) profile.uclFreeEntryAvailable = false;
   const clubs = uclClubsFor(comp);
   const myClub = clubs[Math.floor(Math.random()*clubs.length)];
-  const leagueMatches = uclDrawLeagueOpponents(myClub, comp);
-  profile.uclStartDate = localDateStr(new Date());
-  profile.uclStartCount = uclStartsUsedToday()+1;
-  profile[uclKey(comp)] = {schemaVersion:UCL_SCHEMA_VERSION, comp, stage:'league', myClub, myRating:rating, leagueMatches, eliminatedAt:null, wonCup:false};
+  const { leagueMatches, otherResults } = uclBuildFullSchedule(myClub, comp);
+  if(comp==='uel'){ profile.uelStartDate = localDateStr(new Date()); profile.uelStartCount = uclStartsUsedToday('uel')+1; }
+  else { profile.uclStartDate = localDateStr(new Date()); profile.uclStartCount = uclStartsUsedToday('ucl')+1; }
+  // Neue Stage 'draw' vor der Ligaphase: der Spielplan steht schon fest (leagueMatches/otherResults),
+  // aber der Spieler deckt die eigenen 8 Gegner erst Pot für Pot per Klick auf (siehe uclRevealNextDrawSlot).
+  profile[uclKey(comp)] = {schemaVersion:UCL_SCHEMA_VERSION, comp, stage:'draw', myClub, myRating:rating,
+    leagueMatches, otherResults, drawRevealed:0, eliminatedAt:null, wonCup:false};
   await sSet('profile', profile);
-  toast(`${fee>0?formatCoins(fee)+' Coins Startgeld bezahlt. ':'Gratis-Startplatz eingelöst! '}Du übernimmst ${myClub} in der ${comp==='uel'?'Europa League':'Champions League'}.`);
+  toast(`${fee>0?formatCoins(fee)+' Coins Startgeld bezahlt. ':'Gratis-Startplatz eingelöst! '}Du übernimmst ${myClub} in der ${label0}.`);
+  renderUclPanel(comp);
+}
+// Ziehungs-Zeremonie: deckt Topf für Topf (A/B/C/D) die je 2 gezogenen Gegner auf, bevor es in die
+// eigentliche Ligaphase geht - rein kosmetisch (der Spielplan steht schon fest, siehe startUcl), aber
+// genau das macht eine echte Auslosung erlebbar statt einfach nur den fertigen Spielplan hinzuklatschen.
+function uclRevealNextDrawSlot(comp){
+  const t = uclCurrentRun(comp);
+  if(!t || t.stage!=='draw') return;
+  const revealed = (t.drawRevealed||0)+1;
+  if(revealed>=4){
+    profile[uclKey(comp)] = {...t, stage:'league', drawRevealed:4};
+  } else {
+    profile[uclKey(comp)] = {...t, drawRevealed:revealed};
+  }
+  sSet('profile', profile);
   renderUclPanel(comp);
 }
 async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel){
@@ -28017,10 +28074,7 @@ async function playUclLeagueMatch(idx, comp){
 async function uclResolveLeagueIfDone(comp){
   const t = uclCurrentRun(comp);
   if(!t || t.stage!=='league' || t.leagueMatches.some(m=>m.pending)) return;
-  const pts = t.leagueMatches.reduce((s,m)=>s+(m.winnerSide==='me'?3:m.winnerSide==='draw'?1:0),0);
-  const gf = t.leagueMatches.reduce((s,m)=>s+m.myGoals,0);
-  const ga = t.leagueMatches.reduce((s,m)=>s+m.oppGoals,0);
-  const table = uclSimulateFieldStandings(comp, t.myClub, pts, gf, ga);
+  const table = uclComputeLiveTable(t, 8);
   const myRank = table.findIndex(r=>r.isPlayer)+1;
   if(myRank>24){ profile[uclKey(comp)] = {...t, stage:'league', table}; await sSet('profile', profile); await uclFinishRun(comp,'league',false); return; }
   const band = table.slice(8,24); // Plätze 9-24 (0-indiziert 8..23), Paarung stärkster gegen schwächsten im Band
@@ -28247,9 +28301,71 @@ async function uclFinishRun(comp, exitStage, won){
   }
   renderUclPanel(comp);
 }
+// Logos immer, auch für die paar Klubs ohne hinterlegtes CLUB_LOGO - dann ein kleines Monogramm-Badge
+// statt einer leeren Lücke (gleiches Fallback-Prinzip wie Flaggen/Klublogos anderswo im Spiel).
 function uclClubChip(club, size=18){
   const logo = CLUB_LOGO[club];
-  return logo ? `<img src="${logo}" alt="" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;margin-right:5px;" loading="lazy" onerror="this.style.display='none'">` : '';
+  if(logo) return `<img src="${logo}" alt="" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;margin-right:5px;" loading="lazy" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='inline-flex');">
+    <span style="display:none;width:${size}px;height:${size}px;border-radius:${Math.round(size*.22)}px;background:var(--panel3,#1c2333);color:var(--muted);font-size:${Math.round(size*.4)}px;font-weight:800;align-items:center;justify-content:center;vertical-align:middle;margin-right:5px;">${initialsOf2(club)}</span>`;
+  return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:${Math.round(size*.22)}px;background:var(--panel3,#1c2333);color:var(--muted);font-size:${Math.round(size*.4)}px;font-weight:800;align-items:center;justify-content:center;vertical-align:middle;margin-right:5px;">${initialsOf2(club)}</span>`;
+}
+// Stilisiertes Wettbewerbs-Emblem (nicht das echte UEFA-Logo - keine verlässlich hotlinkbare Quelle in
+// dieser Sandbox erreichbar, siehe Antwort dazu) - für UCL ein "Starball" aus 8 Sternen ums Zentrum,
+// für UEL ein Pokal-Chevron-Motiv, beide in der jeweiligen Wettbewerbsfarbe.
+function uclStarSVG(cx, cy, r, color){
+  const pts = [];
+  for(let i=0;i<5;i++){
+    const oa = (i/5)*2*Math.PI - Math.PI/2;
+    pts.push(`${(cx+r*Math.cos(oa)).toFixed(1)},${(cy+r*Math.sin(oa)).toFixed(1)}`);
+    const ia = oa + Math.PI/5;
+    pts.push(`${(cx+r*0.45*Math.cos(ia)).toFixed(1)},${(cy+r*0.45*Math.sin(ia)).toFixed(1)}`);
+  }
+  return `<polygon points="${pts.join(' ')}" fill="${color}"/>`;
+}
+function uclCompetitionBadge(comp, size=40){
+  if(comp==='uel'){
+    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="47" fill="#2a1000" stroke="#ff9a3c" stroke-width="4"/>
+      <path d="M32 32 L15 50 L32 68" fill="none" stroke="#ff9a3c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M68 32 L85 50 L68 68" fill="none" stroke="#ff9a3c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="50" cy="50" r="13" fill="#ff9a3c"/>
+    </svg>`;
+  }
+  const stars = Array.from({length:8},(_,i)=>{
+    const angle = (i/8)*2*Math.PI - Math.PI/2;
+    return uclStarSVG(50+34*Math.cos(angle), 50+34*Math.sin(angle), 8, '#ffd76a');
+  }).join('');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="47" fill="#0a1040" stroke="#8fa6ff" stroke-width="4"/>
+    ${stars}
+    <circle cx="50" cy="50" r="11" fill="#8fa6ff"/>
+  </svg>`;
+}
+// Ligaphasen-Tabelle (alle 36 Klubs, siehe uclComputeLiveTable) - Platz 1-8 (direkt Achtelfinale) und
+// 9-24 (Playoff) farblich markiert wie bei WM26, nur eigenes 5-Spalten-Grid ohne S/U/N.
+function uclStandingsTableHTML(table){
+  const rows = table.map((r,i)=>{
+    const qCls = i<8 ? 'q-direct' : (i<24 ? 'q-third' : '');
+    return `<div class="ucl-lg-row ${qCls}${r.isPlayer?' wm26-row-me':''}">
+      <div class="wm26-c-rank">${i+1}</div>
+      <div class="wm26-c-team">${uclClubChip(r.club,18)}<span class="wm26-c-team-name" style="color:${r.isPlayer?'var(--turf-bright)':'var(--chalk)'};font-weight:${r.isPlayer?'700':'400'};">${r.club}</span></div>
+      <div class="wm26-c-gf">${r.gf}:${r.ga}</div>
+      <div class="mono" style="color:var(--muted);">${r.gd>=0?'+':''}${r.gd}</div>
+      <div class="wm26-c-pts">${r.pts}</div>
+    </div>`;
+  }).join('');
+  return `<div class="wm26-table">
+    <div class="ucl-lg-thead"><div></div><div class="wm26-c-team">Klub</div><div>Tore</div><div>Diff</div><div>Pkt</div></div>
+    ${rows}
+    <div class="wm26-legend"><span><i class="q-direct"></i>Direkt Achtelfinale (1-8)</span><span><i class="q-third"></i>Playoff (9-24)</span></div>
+  </div>`;
+}
+// Ein paar Beispielergebnisse anderer Klubs vom selben Spieltag, als kleiner Ticker unter der Tabelle.
+function uclMatchdayTickerHTML(t, matchdayIdx){
+  const rows = uclMatchdayTicker(t, matchdayIdx, 5);
+  if(!rows.length) return '';
+  return `<div class="hint" style="margin:8px 0 2px;font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.04em;">Spieltag ${matchdayIdx+1} · weitere Ergebnisse</div>
+    ${rows.map(r=>`<div class="hint">${uclClubChip(r.club,16)}${r.club} ${r.goals}:${r.oppGoals} ${r.oppClub}${uclClubChip(r.oppClub,16)}</div>`).join('')}`;
 }
 function uclTieCardHTML(tie, playLabel, canPlay, comp){
   const aggA = (tie.leg1?tie.leg1.aGoals:0)+(tie.leg2?tie.leg2.aGoals:0);
@@ -28282,31 +28398,60 @@ function renderUclPanel(comp){
           <div class="wm26-hero-text"><p style="margin:0;">Dein letzter Lauf als ${t.myClub} endete: <b style="color:var(--chalk);">Aus ${t.eliminatedAt==='league'?'in der Ligaphase':'im '+UCL_ROUND_LABEL[t.eliminatedAt]}</b></p></div>
         </div>`) : '';
     box.innerHTML = `
+      <div class="wm26-hero ${heroCls}" style="justify-content:center;">
+        <div class="wm26-hero-crest" style="width:46px;height:46px;">${uclCompetitionBadge(comp,46)}</div>
+        <div class="wm26-hero-text"><p style="margin:0;font-weight:800;font-size:15px;letter-spacing:.02em;">${label.toUpperCase()}</p></div>
+      </div>
       ${banner}
       <p class="hint" style="margin-top:0;">Die echte ${label} 26/27 nachgespielt: 36 Klubs, Ligaphase (8 Spiele gegen je 2 Gegner pro Topf), Playoff für Platz 9-24, danach K.o.-Runde ab dem Achtelfinale (Hin-/Rückspiel mit Aggregat). Du übernimmst zufällig den Platz eines echten Klubs. Startgeld: <b style="color:var(--gold);">${formatCoins(feeNow)} Coins</b>${feeNow===0?' (Gratis-Startplatz aus deinem Europa-League-Sieg!)':''}. Ab dem Viertelfinale bist du ungefähr kostenneutral, Sieg bringt eine Sieger-Kartenvariante des im Finale besiegten Klubs.</p>
-      <p class="hint">Tageslimit: ${uclStartsUsedToday()}/${UCL_DAILY_LIMIT} Teilnahmen heute (Champions + Europa League zusammen).</p>
+      <p class="hint">Tageslimit: ${uclStartsUsedToday(comp)}/${UCL_DAILY_LIMIT} ${label}-Teilnahmen heute.</p>
       <button class="action-btn" id="ucl-start-${comp}" style="width:220px;">${label} starten</button>
       <div id="ucl-match-area-${comp}" style="margin-top:14px;"></div>`;
     document.getElementById('ucl-start-'+comp).addEventListener('click', ()=>startUcl(comp));
     return;
   }
+  if(t.stage==='draw'){
+    const revealed = t.drawRevealed||0;
+    const potOrder = comp==='uel' ? ['A','B','C','D'] : ['A','B','C','D'];
+    const revealedMatches = t.leagueMatches.filter(m=>potOrder.indexOf(m.pot)<revealed);
+    const rows = revealedMatches.map((m,i)=>`<div class="hint" style="animation:wm26TrophyConfettiFall 0s;">${i+1}. Topf ${m.pot} — ${uclClubChip(m.oppClub,20)}${m.oppClub} (${m.home?'Heim':'Auswärts'})</div>`).join('');
+    box.innerHTML = `
+      <div class="wm26-hero ${heroCls}">
+        <div class="wm26-hero-crest">${uclCompetitionBadge(comp,40)}</div>
+        <div class="wm26-hero-text">
+          <p style="margin:0;font-weight:800;">${label}-Auslosung</p>
+          <p class="hint" style="margin:2px 0 0;">${uclClubChip(t.myClub,18)}<b>${t.myClub}</b> (Topf ${uclPotOf(t.myClub,comp)}) zieht seine Gegner</p>
+        </div>
+      </div>
+      ${rows}
+      ${revealed<4 ? `<button class="action-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Topf ${potOrder[revealed]} ziehen</button>` : `<button class="action-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Zur Ligaphase</button>`}`;
+    const btn = document.getElementById('ucl-draw-next');
+    if(btn) btn.addEventListener('click', ()=>uclRevealNextDrawSlot(comp));
+    return;
+  }
   if(t.stage==='league'){
     const nextIdx = t.leagueMatches.findIndex(m=>m.pending);
     const playedCount = t.leagueMatches.filter(m=>!m.pending).length;
+    const table = uclComputeLiveTable(t, playedCount);
+    const myRank = table.findIndex(r=>r.isPlayer)+1;
     const rows = t.leagueMatches.map((m,i)=> m.pending
       ? `<div class="hint">${i+1}. ${uclClubChip(m.oppClub)}${m.oppClub} (${m.home?'Heim':'Auswärts'}) — ausstehend</div>`
       : `<div class="hint">${i+1}. ${uclClubChip(m.oppClub)}${m.oppClub} (${m.home?'Heim':'Auswärts'}): ${m.myGoals}:${m.oppGoals}</div>`
     ).join('');
+    const ticker = playedCount>0 ? uclMatchdayTickerHTML(t, playedCount-1) : '';
     box.innerHTML = `
       <div class="wm26-hero ${heroCls}">
         <div class="wm26-hero-crest">${uclClubChip(t.myClub, 40)}</div>
         <div class="wm26-hero-text">
           <p class="hint" style="margin:0;">${label} — du übernimmst <b>${t.myClub}</b></p>
-          <p class="hint" style="margin:2px 0 0;">Ligaphase-Spiel ${Math.min(playedCount+1,8)} von 8</p>
+          <p class="hint" style="margin:2px 0 0;">Ligaphase-Spiel ${Math.min(playedCount+1,8)} von 8${playedCount>0?` · aktuell Platz ${myRank} von 36`:''}</p>
         </div>
       </div>
-      ${nextIdx>=0 ? `<button class="action-btn" id="ucl-play-league" style="width:220px;">Spiel starten</button>` : ''}
+      ${nextIdx>=0 ? `<button class="action-btn" id="ucl-play-league" style="width:220px;">Spieltag ${nextIdx+1} spielen</button>` : ''}
       <div id="ucl-match-area-${comp}" style="margin:14px 0;"></div>
+      ${ticker}
+      ${uclStandingsTableHTML(table)}
+      <p class="hint" style="font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.04em;margin:12px 0 4px;">Dein Spielplan</p>
       ${rows}`;
     const btn = document.getElementById('ucl-play-league');
     if(btn) btn.addEventListener('click', ()=>playUclLeagueMatch(nextIdx, comp));
@@ -28314,7 +28459,10 @@ function renderUclPanel(comp){
   }
   if(t.stage==='playoff'){
     box.innerHTML = `
-      <p class="hint" style="margin-top:0;">Playoff-Runde (Platz 9-24 der Ligaphase) — Hin-/Rückspiel, der Gewinner zieht ins Achtelfinale ein.</p>
+      <div class="wm26-hero ${heroCls}">
+        <div class="wm26-hero-crest">${uclCompetitionBadge(comp,40)}</div>
+        <div class="wm26-hero-text"><p style="margin:0;font-weight:800;">${label} · Playoff</p><p class="hint" style="margin:2px 0 0;">Platz 9-24 der Ligaphase — Hin-/Rückspiel, der Gewinner zieht ins Achtelfinale ein.</p></div>
+      </div>
       <div id="ucl-match-area-${comp}" style="margin:14px 0;"></div>
       ${uclTieCardHTML(t.playoffTie, t.playoffTie.leg1?'Rückspiel spielen':'Hinspiel spielen', true, comp)}`;
     const btn = document.getElementById('ucl-play-tie-btn');
@@ -28325,7 +28473,10 @@ function renderUclPanel(comp){
   const {roundIdx, matchIdx} = t.knockout.playerLoc || {};
   const m = t.knockout.playerLoc ? t.knockout.rounds[roundIdx].matches[matchIdx] : null;
   box.innerHTML = `
-    <p class="hint" style="margin-top:0;">${m?UCL_ROUND_LABEL[UCL_KO_ORDER[roundIdx]]:''}</p>
+    <div class="wm26-hero ${heroCls}">
+      <div class="wm26-hero-crest">${uclCompetitionBadge(comp,40)}</div>
+      <div class="wm26-hero-text"><p style="margin:0;font-weight:800;">${label} · ${m?UCL_ROUND_LABEL[UCL_KO_ORDER[roundIdx]]:''}</p></div>
+    </div>
     <div id="ucl-match-area-${comp}" style="margin-bottom:14px;"></div>
     ${m ? uclTieCardHTML(m, m.leg1?'Rückspiel spielen':'Hinspiel spielen', true, comp) : ''}`;
   const btn = document.getElementById('ucl-play-tie-btn');
