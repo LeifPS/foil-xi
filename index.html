@@ -28481,7 +28481,7 @@ function uclRevealNextDrawSlot(comp){
   sSet('profile', profile);
   renderUclPanel(comp);
 }
-async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel){
+async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel, aggMyExtra=0, aggOppExtra=0){
   const {rating} = squadRating();
   const myPlayers = getMySquadPlayers();
   const opp = uclClubXI(oppClub);
@@ -28499,6 +28499,11 @@ async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel){
     <div id="result-area"></div>`;
   const md = buildDecisiveMatch(rating, opp.rating, myPlayers, opp.players, squad.tactics, null, {allowDraw});
   md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
+  // Rückspiel-Aggregat als reiner Vorsprung für die angezeigte Siegchance (siehe animateTimedMatch) -
+  // fließt NICHT in den tatsächlichen Spielstand/das Ergebnis dieses einzelnen Legs ein (md.myGoals/
+  // md.oppGoals bleiben unverändert nur die 90/120 Minuten dieses Legs), nur monteCarloWinProb bekommt
+  // den bereits mitgebrachten Vorsprung aus dem Hinspiel dazugerechnet.
+  md.aggMyExtra = aggMyExtra; md.aggOppExtra = aggOppExtra;
   await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner, oppClub);
   const myScorers = [], myAssists = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
@@ -28577,10 +28582,15 @@ async function playUclPlayoffLeg(comp){
   const oppClub = tie.aIsPlayer ? tie.bClub : tie.aClub;
   const area = document.getElementById('ucl-match-area-'+comp);
   if(!area) return;
+  // Rückspiel: die im Hinspiel bereits erzielten Tore als Aggregat-Vorsprung an uclPlayLegCore
+  // durchreichen, damit die live angezeigte Siegchance das Aggregat berücksichtigt statt nur diese
+  // einzelnen 90 Minuten zu bewerten (siehe uclPlayLegCore/animateTimedMatch).
+  const aggMyExtra = legNum===2 ? (tie.aIsPlayer ? tie.leg1.aGoals : tie.leg1.bGoals) : 0;
+  const aggOppExtra = legNum===2 ? (tie.aIsPlayer ? tie.leg1.bGoals : tie.leg1.aGoals) : 0;
   inMatch = true;
   let md;
   try{
-    md = await uclPlayLegCore(oppClub, true, area, `Playoff · ${legNum===1?'Hinspiel':'Rückspiel'}`);
+    md = await uclPlayLegCore(oppClub, true, area, `Playoff · ${legNum===1?'Hinspiel':'Rückspiel'}`, aggMyExtra, aggOppExtra);
     toast(`${md.winnerSide==='draw'?'Unentschieden':md.winnerSide==='me'?'Sieg':'Niederlage'} gegen ${oppClub}: ${md.myGoals}:${md.oppGoals}`);
   } finally { inMatch = false; }
   const legResult = tie.aIsPlayer ? {aGoals:md.myGoals,bGoals:md.oppGoals} : {aGoals:md.oppGoals,bGoals:md.myGoals};
@@ -28668,10 +28678,18 @@ async function playUclKnockoutLeg(comp){
   const legNum = !m.leg1 ? 1 : 2;
   const area = document.getElementById('ucl-match-area-'+comp);
   if(!area) return;
+  // Bugfix: das Rückspiel selbst lief bisher mit allowDraw:false, also löste JEDES 90-Minuten-
+  // Unentschieden in diesem einzelnen Leg sofort dessen eigene Verlängerung/Elfmeterschießen aus -
+  // komplett unabhängig vom Aggregat (z.B. Verlängerung bei 1:1 im Rückspiel trotz 4:0 aus dem
+  // Hinspiel). Verlängerung/Elfmeterschießen sollen nur greifen, wenn das AGGREGAT nach 90 Minuten
+  // Rückspiel noch unentschieden ist - das übernimmt bereits der "decider" weiter unten (aAgg===bAgg).
+  // Beide Legs laufen daher jetzt mit allowDraw:true, wie auch schon beim Playoff.
+  const aggMyExtra = legNum===2 ? (m.aIsPlayer ? m.leg1.aGoals : m.leg1.bGoals) : 0;
+  const aggOppExtra = legNum===2 ? (m.aIsPlayer ? m.leg1.bGoals : m.leg1.aGoals) : 0;
   inMatch = true;
   let md;
   try{
-    md = await uclPlayLegCore(oppClub, legNum===1, area, `${UCL_ROUND_LABEL[roundKey]} · ${legNum===1?'Hinspiel':'Rückspiel'}`);
+    md = await uclPlayLegCore(oppClub, true, area, `${UCL_ROUND_LABEL[roundKey]} · ${legNum===1?'Hinspiel':'Rückspiel'}`, aggMyExtra, aggOppExtra);
     toast(`${md.winnerSide==='draw'?'Unentschieden':md.winnerSide==='me'?'Sieg':'Niederlage'} gegen ${oppClub}: ${md.myGoals}:${md.oppGoals}`);
   } finally { inMatch = false; }
   const legResult = m.aIsPlayer ? {aGoals:md.myGoals,bGoals:md.oppGoals} : {aGoals:md.oppGoals,bGoals:md.myGoals};
@@ -33362,9 +33380,10 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   incidents.sort((a,b)=>a.minute-b.minute);
 
   let eventsET=null, shootout=null, wentToET=false, wentToPK=false;
-  // opts.allowDraw (World Cup group-stage matches): a 90-minute tie stays a tie, same as real group
-  // football - every other caller (knockout rounds, online matches, ...) needs a definite winner, so
-  // this only skips extra time/penalties when explicitly asked to.
+  // opts.allowDraw (World Cup group-stage matches, Liga fixtures, and - since a single UCL/UEL leg is
+  // never decisive on its own, the aggregate is - BOTH legs of a two-legged tie): a 90-minute tie stays
+  // a tie, same as real football. Every other caller (online matches, single-match cups, ...) needs a
+  // definite winner from this one match, so this only skips extra time/penalties when explicitly asked to.
   if(myGoals===oppGoals && !opts.allowDraw){
     wentToET = true;
     const myExpET = clamp(myExp*(30/90), 0.05, 2);
@@ -33500,10 +33519,14 @@ function pkRowHTML(round, kick, teamName, side){
       <span class="gteam">${teamName}</span>
     </div>`;
 }
-function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null, oppAbbr=null, allowDraw=false, oppNametag=null){
+function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minuteStart, minuteEnd, carryMy, carryOpp, myProfile, oppProfile, totalHorizon, incidents=[], myRedMinute=null, oppRedMinute=null, oppAbbr=null, allowDraw=false, oppNametag=null, aggMyExtra=0, aggOppExtra=0){
   // allowDraw: only ever true for the 90-minute leg of a match where a tie is a real possible final
   // result (Liga fixtures) - the win-prob bar/monteCarloWinProb call below then show/return all three
   // real shares (win/draw/loss) instead of folding the draw share into a single win-vs-loss number.
+  // aggMyExtra/aggOppExtra: a Rückspiel-Aggregat-Vorsprung aus dem Hinspiel (siehe uclPlayLegCore) -
+  // geht NUR in die angezeigte Siegchance ein (monteCarloWinProb rechnet effektiv mit dem bereits
+  // mitgebrachten Vorsprung weiter), NICHT in den echten Spielstand dieses Legs (carryMy/carryOpp,
+  // die live-score-Anzeige und der zurückgegebene finale Spielstand bleiben unangetastet).
   const wpHTML = mc => (allowDraw ? winProbRowHTML(mc.win, myName, oppName, oppAbbr, mc.draw, oppNametag) : winProbRowHTML(mc, myName, oppName, oppAbbr, null, oppNametag));
   const wpUpdate = mc => { if(allowDraw) updateWinProbEl(mc.win, mc.draw); else updateWinProbEl(mc); };
   const miniMeLabel = ligaTeamAbbr(myName, profile && profile.clubAbbr);
@@ -33532,7 +33555,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
             <div class="score" id="live-score">${carryMy} \u2013 ${carryOpp}</div>
             <div class="live-scoreboard-name opp" title="${oppName}">${nametagAbbrHTML(oppAbbr || ligaTeamAbbr(oppName), oppNametag)}</div>
           </div>
-          ${wpHTML(smoothWinProb(monteCarloWinProb(carryMy, carryOpp, totalHorizon-minuteStart, p0.my, p0.opp, allowDraw)))}
+          ${wpHTML(smoothWinProb(monteCarloWinProb(carryMy+aggMyExtra, carryOpp+aggOppExtra, totalHorizon-minuteStart, p0.my, p0.opp, allowDraw)))}
         </div>
         <div class="match-log" id="live-log"></div>`;
       playRefWhistle('start');
@@ -33591,7 +33614,7 @@ function animateTimedMatch(events, myName, oppName, startedAt, durationMs, minut
         if(minEl) minEl.textContent = minute + "'" + (minuteEnd>90 ? ' (Verl\u00e4ngerung)' : '');
         setMatchMiniState(miniMeLabel, miniOppLabel, myTally, oppTally, minute+"'"+(minuteEnd>90?' (V)':''));
         const pNow = liveProfileAt(minute);
-        wpUpdate(smoothWinProb(monteCarloWinProb(myTally, oppTally, totalHorizon-minute, pNow.my, pNow.opp, allowDraw)));
+        wpUpdate(smoothWinProb(monteCarloWinProb(myTally+aggMyExtra, oppTally+aggOppExtra, totalHorizon-minute, pNow.my, pNow.opp, allowDraw)));
       }
       if(elapsed>=durationMs){ clearInterval(timer); resolve({myTally, oppTally}); }
     }, 250);
@@ -33697,7 +33720,7 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null, oppNametag=null)
   const myScorers = []; const myAssists = [];
   md.events90.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
   const incidents = md.incidents || [];
-  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, md.allowDraw, oppNametag);
+  let {myTally, oppTally} = await animateTimedMatch(md.events90, myName, oppName, md.startedAt, md.durationMs, 0, 90, 0, 0, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, md.allowDraw, oppNametag, md.aggMyExtra||0, md.aggOppExtra||0);
   if(md.wentToET){
     toast(`Nach 90 Minuten steht es ${myTally}:${oppTally} \u2014 es geht in die Verl\u00e4ngerung!`);
     md.eventsET.filter(e=>e.side==='me').forEach(e=>{ myScorers.push(e.scorer.n); if(e.assist) myAssists.push(e.assist.n); });
@@ -33705,7 +33728,7 @@ async function playFullMatch(md, myName, oppName, oppAbbr=null, oppNametag=null)
     const startedAtET = md.startedAt + md.durationMs;
     const waitET = startedAtET - Date.now();
     if(waitET>0 && !liveMatchSkipAll) await new Promise(r=>setTimeout(r, waitET));
-    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, undefined, oppNametag));
+    ({myTally, oppTally} = await animateTimedMatch(md.eventsET, myName, oppName, startedAtET, durET, 90, 120, myTally, oppTally, md.myProfile, md.oppProfile, totalHorizon, incidents, md.myRedMinute, md.oppRedMinute, oppAbbr, undefined, oppNametag, md.aggMyExtra||0, md.aggOppExtra||0));
   }
   if(md.wentToPK){
     toast('Auch nach Verl\u00e4ngerung unentschieden \u2014 Elfmeterschie\u00dfen entscheidet!');
