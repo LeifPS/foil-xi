@@ -28227,13 +28227,13 @@ function uclClubXI(club){
   });
   // Das Level-4/Diamant-+4-OVR/+4-je-Substat gibt jetzt boostBotXI() selbst jeder Karte (siehe dort) -
   // kein eigener leveledXi-Zwischenschritt mehr nötig, sonst würde der Bonus hier doppelt gezählt.
-  // Jeder Klub bekommt IMMER einen Trainer-Bonus von exakt +8% - einen echten Namen aus MANAGERS, falls
-  // für diesen Klub hinterlegt (nur der Name, der Bonus-Wert wird trotzdem auf +8% vereinheitlicht),
+  // Jeder Klub bekommt IMMER einen Trainer-Bonus von exakt +11% - einen echten Namen aus MANAGERS, falls
+  // für diesen Klub hinterlegt (nur der Name, der Bonus-Wert wird trotzdem auf +11% vereinheitlicht),
   // sonst ein generischer "Cheftrainer". Nie einfach null wie ursprünglich, und nie ein schwächerer/
   // stärkerer Wert als bei jedem anderen Klub.
   const mgrPool = MANAGERS.filter(m=>m.club===club);
   const chosenMgr = mgrPool.length ? pick(mgrPool) : {n:'Cheftrainer'};
-  const mgr = {...chosenMgr, boostType:'percent', boostValue:8, isManager:true};
+  const mgr = {...chosenMgr, boostType:'percent', boostValue:11, isManager:true};
   const {players, managerName, mgrCard} = boostBotXI(xi, slots, mgr);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
   const result = {owner:club, rating, players, isBot:true, managerName, mgrCard, club};
