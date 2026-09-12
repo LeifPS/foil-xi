@@ -21645,15 +21645,10 @@ function renderSquad(view){
     if(card){
       // equipped card: pin the label to the slot it's actually playing, no cycling through its
       // other listed positions - the card's own pos-bonus tag already reflects this exact slot.
-      // The big OVR shown here used to be the card's plain, unboosted card.ov - completely ignoring
-      // Trainer-Boost, Positionsbonus and Chemie, even though squadRating()/getMySquadPlayers() (what
-      // actually plays the match) already factor all three in. Same fix as the UCL/Gegner-Karten: the
-      // NUMBER shown should be the same number the game actually plays with, not a different "raw"
-      // one - previewEffectiveOvAtSlot with the card's OWN uid gives exactly that (its real effective
-      // rating at its current slot, in its current squad), reusing the identical math squadRating() uses.
-      const effOv = previewEffectiveOvAtSlot(card, slot, uid);
-      const displayCard = effOv!=null ? {...card, ov:effOv} : card;
-      const cardNode = cardEl(displayCard, 'xs', null, slot.label);
+      // Deliberately shows the card's own base+Level rating here (card.ov, via ownedCard/applyCardLevel)
+      // and NOT the Trainer-/Positions-/Chemie-boosted effective rating - that full breakdown is what
+      // the Team-Rating above and the chemistry stars on the card already show separately.
+      const cardNode = cardEl(card, 'xs', null, slot.label);
       const chem = chemDetail.bySlot[slot.id];
       if(chem!==undefined){
         cardNode.style.position = 'relative';
@@ -23984,13 +23979,17 @@ function boostBotXI(xi, slots, forceManager){
     // Unterstat-Bonus, den eine eigene komplett hochgelevelte Karte über applyCardLevel auch bekäme -
     // sonst zeigt die Karte zwar das Diamant-Abzeichen, spielt aber mit den blanken Grundwerten. Zuerst
     // angewendet, genau wie bei einer echten Karte, bevor Trainer-/Positions-Bonus obendrauf kommen.
-    let ov = card.ov+4;
+    const baseLevelOv = card.ov+4;
+    let ov = baseLevelOv;
     const boostedSubstats = {};
     BLACK_HOLE_STAT_KEYS.forEach(k=>{ boostedSubstats[k] = (typeof card[k]==='number' ? card[k]+4 : card[k]); });
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, ...boostedSubstats, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card), level:4};
+    // baseLevelOv (Basis+Level, ohne Trainer/Position/Chemie) - fürs Anzeigen der einzelnen Karte, genau
+    // wie im Kader-Editor jetzt auch nur Basis+Level gezeigt wird. Das volle ov (mit allem) bleibt
+    // unverändert das, was Team-Rating und die Match-Engine tatsächlich benutzen.
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), baseLevelOv:Math.round(baseLevelOv), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, ...boostedSubstats, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card), level:4};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
@@ -27609,7 +27608,7 @@ async function playWM26GroupMatch(matchIdx){
     const myMgr = getAssignedManager();
     const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
     const oppSide = wm26OppSide(opp, oppTeam.nation);
-    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.ov, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.baseLevelOv, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
     area.innerHTML = `
       <div class="vs-teams">
         ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
@@ -27666,7 +27665,7 @@ async function playWM26KnockoutMatch(){
     const myMgr = getAssignedManager();
     const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
     const oppSide = wm26OppSide(opp, oppTeam.nation);
-    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.ov, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.baseLevelOv, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
     area.innerHTML = `
       <div class="vs-teams">
         ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
@@ -28395,7 +28394,7 @@ async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel){
   const myMgr = getAssignedManager();
   const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
   const oppSide = {name: oppClub, rating: opp.rating, managerName: opp.managerName, crest: uclCrestFor(oppClub), formation:'433'};
-  await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.ov, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
+  await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.baseLevelOv, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
   area.innerHTML = `
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
