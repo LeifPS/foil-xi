@@ -2111,6 +2111,7 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
 .team-blob .r{font-family:'Anton';font-size:34px;}
 .team-blob .tb-crest{display:flex;justify-content:center;margin-top:4px;}
 .team-blob .t{font-size:11px;color:var(--muted);margin-top:2px;word-break:break-word;}
+.team-blob .tb-manager{font-size:11px;opacity:.75;margin-top:2px;}
 .vs-x{font-family:'Anton';color:var(--muted);font-size:18px;}
 .score{font-family:'Anton';font-size:52px;letter-spacing:.05em;margin:10px 0;text-shadow:0 2px 16px rgba(0,0,0,.5);}
 
@@ -12198,7 +12199,7 @@ async function playDraftMatch(){
     <div class="vs-teams">
       ${teamBlobHTML(myRating, profile.crest, 'Draft-Elf')}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), ligaTeamAbbr(opp.owner, opp.abbr))}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), ligaTeamAbbr(opp.owner, opp.abbr), opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -18376,8 +18377,11 @@ function opponentCrest(opp){
   const letter = (opp.nation ? natDE(opp.nation) : (opp.owner || opp.name || '?'))[0].toUpperCase();
   return {shape:'shield', primary:'#ffb84d', secondary:'#0a0d12', letter};
 }
-function teamBlobHTML(rating, crest, nameHtml){
-  return `<div class="team-blob"><div class="r">${rating}</div><div class="tb-crest">${renderCrestSVG(crest, 26)}</div><div class="t">${nameHtml}</div></div>`;
+// managerName optional (4. Parameter) - überall, wo ein Gegner-Team-Blob gerendert wird, soll dessen
+// Trainer sichtbar sein, nicht nur im Match-Intro-Cutscene (siehe showMatchIntroCutscene) - hier zentral
+// statt an jeder der ~45 Aufrufstellen einzeln dieselbe Trainer-Zeile von Hand zu bauen.
+function teamBlobHTML(rating, crest, nameHtml, managerName){
+  return `<div class="team-blob"><div class="r">${rating}</div><div class="tb-crest">${renderCrestSVG(crest, 26)}</div><div class="t">${nameHtml}${managerName?`<div class="tb-manager">Trainer: ${managerName}</div>`:''}</div></div>`;
 }
 function openCrestEditor(){
   const c = {...profile.crest};
@@ -23932,7 +23936,11 @@ function boostBotXI(xi, slots, forceManager){
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card)};
+    // level:4 (Diamant) - jede gegnerische Bot-Karte im ganzen Spiel gilt als voll ausgespielt, genau wie
+    // eine eigene komplett hochgelevelte Karte es wäre; ohne das blieb card.level unset und der ganze
+    // Diamant-Level-Badge/-FX-Mechanismus (siehe cardEl's isDiamondLevel/levelBadge, extra dafür
+    // vorgesehen: "ein Gegner ... ohne uid, sollte trotzdem sein Badge zeigen") lief für Gegner immer leer.
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, sho:card.sho, defn:card.defn, pac:card.pac, dri:card.dri, phy:card.phy, pas:card.pas, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card), level:4};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   return {players, managerName: mgr ? mgr.n : null};
@@ -24057,7 +24065,7 @@ async function playTournamentRound(){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${round.name})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${round.name})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -27551,12 +27559,12 @@ async function playWM26GroupMatch(matchIdx){
     const myMgr = getAssignedManager();
     const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
     const oppSide = wm26OppSide(opp, oppTeam.nation);
-    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos})));
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level})));
     area.innerHTML = `
       <div class="vs-teams">
         ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
         <div class="vs-x">VS</div>
-        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${natCode(oppTeam.nation)} (Gruppenphase)`)}
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${natCode(oppTeam.nation)} (Gruppenphase)`, opp.managerName)}
       </div>
       <div id="match-area"></div>
       <div id="result-area"></div>`;
@@ -27608,12 +27616,12 @@ async function playWM26KnockoutMatch(){
     const myMgr = getAssignedManager();
     const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
     const oppSide = wm26OppSide(opp, oppTeam.nation);
-    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos})));
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level})));
     area.innerHTML = `
       <div class="vs-teams">
         ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
         <div class="vs-x">VS</div>
-        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${natCode(oppTeam.nation)} (${WM26_STAGE_LABEL[roundKey]})`)}
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${natCode(oppTeam.nation)} (${WM26_STAGE_LABEL[roundKey]})`, opp.managerName)}
       </div>
       <div id="match-area"></div>
       <div id="result-area"></div>`;
@@ -28344,12 +28352,12 @@ async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel){
   const myMgr = getAssignedManager();
   const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
   const oppSide = {name: oppClub, rating: opp.rating, managerName: opp.managerName, crest: uclCrestFor(oppClub), formation:'433'};
-  await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos})));
+  await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level})));
   area.innerHTML = `
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, uclCrestFor(oppClub), `${oppClub} (${stageLabel})`)}
+      ${teamBlobHTML(opp.rating, uclCrestFor(oppClub), `${oppClub} (${stageLabel})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -28917,7 +28925,7 @@ async function playBallonDorChallenge(){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Ballon d'Or Herausforderung)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Ballon d'Or Herausforderung)`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -28969,7 +28977,7 @@ async function playBallonDorRodriChallenge(){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Ballon d'Or Herausforderung: Rodri)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Ballon d'Or Herausforderung: Rodri)`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29048,7 +29056,7 @@ async function playPrimeChallenge(ch){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (PRIME ${ch.card.n})${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (PRIME ${ch.card.n})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29106,7 +29114,7 @@ async function playWmQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29245,7 +29253,7 @@ async function playOliseQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29362,7 +29370,7 @@ async function playAlissonQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29480,7 +29488,7 @@ async function playYamalQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29598,7 +29606,7 @@ async function playRudigerQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29716,7 +29724,7 @@ async function playHaalandQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29834,7 +29842,7 @@ async function playChongQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -29952,7 +29960,7 @@ async function playPinaQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30079,7 +30087,7 @@ async function playKaneQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30215,7 +30223,7 @@ async function playSyllaQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30332,7 +30340,7 @@ async function playKroosQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30449,7 +30457,7 @@ async function playNeymarQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30571,7 +30579,7 @@ async function playMarceloQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30695,7 +30703,7 @@ async function playViniciusQuestMatch(m){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (${m.label})`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30842,7 +30850,7 @@ async function playOReiChallenge(){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (O Rei)`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (O Rei)`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30938,7 +30946,7 @@ async function playKontinentalpokal(){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Kontinentalpokal)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Kontinentalpokal)`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -30976,7 +30984,7 @@ async function playWinStreakMatch(){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Serie: ${streak}/5)${opp.managerName?'<br><span style="font-size:11px;opacity:.75;">Trainer: '+opp.managerName+'</span>':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Serie: ${streak}/5)`, opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
@@ -31060,7 +31068,7 @@ async function runLeaderboardChallenge(squadData, friendly){
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, nametagAbbrHTML(ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), profile.nametag))}
       <div class="vs-x">VS</div>
-      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${nametagAbbrHTML(ligaTeamAbbr(opp.owner, opp.abbr), opp.nametag)}${friendly?' (Freundschaftsspiel)':''}`)}
+      ${teamBlobHTML(opp.rating, opponentCrest(opp), `${nametagAbbrHTML(ligaTeamAbbr(opp.owner, opp.abbr), opp.nametag)}${friendly?' (Freundschaftsspiel)':''}`, opp.managerName)}
     </div>
     <div id="result-area"></div>`;
   await runLocalMatch(rating, opp, {friendly});
@@ -33987,7 +33995,7 @@ async function startBotMatch(rating){
       <div class="vs-teams">
         ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
         <div class="vs-x">VS</div>
-        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Simulation)`)}
+        ${teamBlobHTML(opp.rating, opponentCrest(opp), `${ligaTeamAbbr(opp.owner, opp.abbr)} (Simulation)`, opp.managerName)}
       </div>
       <div id="result-area"></div>`;
     await runLocalMatch(rating, opp, {alreadyLocked:true});
