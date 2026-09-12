@@ -28227,13 +28227,22 @@ function uclClubXI(club){
   });
   // Das Level-4/Diamant-+4-OVR/+4-je-Substat gibt jetzt boostBotXI() selbst jeder Karte (siehe dort) -
   // kein eigener leveledXi-Zwischenschritt mehr nötig, sonst würde der Bonus hier doppelt gezählt.
-  // Jeder Klub bekommt IMMER einen Trainer-Bonus von exakt +11% - einen echten Namen aus MANAGERS, falls
-  // für diesen Klub hinterlegt (nur der Name, der Bonus-Wert wird trotzdem auf +11% vereinheitlicht),
-  // sonst ein generischer "Cheftrainer". Nie einfach null wie ursprünglich, und nie ein schwächerer/
-  // stärkerer Wert als bei jedem anderen Klub.
+  // Jeder Klub bekommt IMMER einen Trainer-Bonus - einen echten Namen aus MANAGERS, falls für diesen
+  // Klub hinterlegt (nur der Name, der Bonus-Wert wird trotzdem vereinheitlicht), sonst ein generischer
+  // "Cheftrainer". Nie einfach null wie ursprünglich, und nie ein schwächerer/stärkerer Wert als bei
+  // jedem anderen Klub DERSELBEN Wettbewerbsstufe - UCL (+13%) und UEL (+10%) unterscheiden sich bewusst,
+  // kein Klub steht je in beiden Töpfen (UCL_ALL_CLUBS/UEL_ALL_CLUBS sind überschneidungsfrei), daher
+  // reicht die Klubzugehörigkeit allein, ohne dass uclClubXI selbst wissen muss, für welchen Wettbewerb
+  // es gerade aufgerufen wurde.
+  const mgrBoostPct = UEL_ALL_CLUBS.includes(club) ? 10 : 13;
   const mgrPool = MANAGERS.filter(m=>m.club===club);
-  const chosenMgr = mgrPool.length ? pick(mgrPool) : {n:'Cheftrainer'};
-  const mgr = {...chosenMgr, boostType:'percent', boostValue:11, isManager:true};
+  // pos:'MGR' explizit auch am generischen Fallback - jeder echte MANAGERS-Eintrag bekommt das schon
+  // automatisch (siehe MANAGERS.forEach weiter oben), aber dieses Objekt hier existiert nur inline und
+  // hatte es bisher nicht: cardEl() braucht card.pos (über mainPos) sobald eine Trainerkarte OHNE
+  // pinnedPos gerendert wird (z.B. die neue Trainer-Karte im Cutscene-Aufstellungs-Reveal) - fehlte es,
+  // stürzte genau das für jeden Klub ohne hinterlegten echten Trainer ab.
+  const chosenMgr = mgrPool.length ? pick(mgrPool) : {n:'Cheftrainer', pos:'MGR'};
+  const mgr = {...chosenMgr, boostType:'percent', boostValue:mgrBoostPct, isManager:true};
   const {players, managerName, mgrCard} = boostBotXI(xi, slots, mgr);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
   const result = {owner:club, rating, players, isBot:true, managerName, mgrCard, club};
