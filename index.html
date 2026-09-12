@@ -207,16 +207,36 @@ body.gfx-no-badgeanim .coin-icon{animation:none !important;}
 
 /* ---- pack grid ---- */
 .liga-quickpreview-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:18px;}
-.pack-tier-section{margin-bottom:28px;}
+.pack-tier-section{margin-bottom:28px;scroll-margin-top:8px;}
 .pack-tier-section:last-child{margin-bottom:0;}
-.pack-tier-heading{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
-  margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;}
-.pack-tier-heading::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--turf-bright);box-shadow:0 0 8px var(--turf-bright);}
-.pack-tier-heading.premium{color:#c78bf5;}
+/* Etwas mehr Gewicht als vorher (nur Punkt+Text) - ein durchgehender Farbverlauf-Streifen hinter der
+   Stufe macht die 3 Abschnitte in einer inzwischen 50+ Packs langen Liste klarer als Wegpunkte lesbar. */
+.pack-tier-heading{font-size:13px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk);
+  margin:0 0 12px;padding:9px 12px;border-radius:9px;display:flex;align-items:center;gap:8px;
+  background:linear-gradient(90deg, rgba(95,225,201,.14), transparent 75%);border-left:3px solid var(--turf-bright);}
+.pack-tier-heading::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--turf-bright);box-shadow:0 0 8px var(--turf-bright);flex-shrink:0;}
+.pack-tier-heading.premium{background:linear-gradient(90deg, rgba(199,139,245,.14), transparent 75%);border-left-color:#c78bf5;}
 .pack-tier-heading.premium::before{background:#c78bf5;box-shadow:0 0 8px #c78bf5;}
-.pack-tier-heading.ultimate{color:#ffd76a;}
+.pack-tier-heading.ultimate{background:linear-gradient(90deg, rgba(255,215,106,.14), transparent 75%);border-left-color:#ffd76a;}
 .pack-tier-heading.ultimate::before{background:#ffd76a;box-shadow:0 0 8px #ffd76a;}
 .pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;}
+/* Sticky Schnellnavigation zu den 3 Stufen-Abschnitten (Standard/Premium/Ultimate) - der Kartenladen
+   ist inzwischen lang genug (50+ Packs), dass endloses Scrollen zu z.B. Ultimate lästig ist. `top`
+   wird per JS auf die tatsächliche #topbar-Höhe gesetzt, damit sie direkt darunter andockt. */
+#pack-tier-nav{display:flex;gap:8px;margin-bottom:18px;position:sticky;z-index:20;background:var(--void);
+  padding:8px 0;flex-wrap:wrap;}
+#pack-tier-nav:empty{display:none;}
+.pack-tier-nav-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:100px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--chalk);font-size:12px;font-weight:700;
+  text-decoration:none;transition:border-color .15s, transform .15s;}
+.pack-tier-nav-btn:hover{transform:translateY(-1px);}
+.pack-tier-nav-btn .cnt{font-family:'JetBrains Mono';font-size:10px;color:var(--muted);background:rgba(255,255,255,.08);
+  border-radius:20px;padding:1px 6px;}
+.pack-tier-nav-btn.premium{border-color:rgba(199,139,245,.4);}
+.pack-tier-nav-btn.premium:hover{border-color:#c78bf5;}
+.pack-tier-nav-btn.ultimate{border-color:rgba(255,215,106,.4);}
+.pack-tier-nav-btn.ultimate:hover{border-color:#ffd76a;}
+.pack-tier-nav-btn:not(.premium):not(.ultimate):hover{border-color:var(--turf-bright);}
 .daily-banner{background:linear-gradient(155deg,#171d12,#10130c 70%);border:1px solid var(--gold-dim);border-radius:14px;
   padding:16px 18px;margin-bottom:20px;}
 .daily-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
@@ -17366,6 +17386,7 @@ function renderStore(view){
       <input id="redeem-input" placeholder="Code einl\u00f6sen..." style="max-width:220px;">
       <button class="action-btn secondary" id="redeem-btn" style="width:auto;padding:9px 16px;">Einl\u00f6sen</button>
     </div>
+    <div id="pack-tier-nav"></div>
     <div id="pack-sections"></div>`;
   renderLigaQuickPreview();
   renderTournamentBanner();
@@ -17377,11 +17398,18 @@ function renderStore(view){
   const wmExpired = Date.now() >= WM_WINNERS_DEADLINE;
   const ratings27Expired = Date.now() >= RATINGS27_DEADLINE;
   const visiblePacks = PACKS.filter(pack=>(!pack.hidden || (pack.id==='legendpack' && profile.ogPackUnlocked)) && !(pack.id==='wmwinners' && wmExpired) && !(pack.id==='ratings27' && ratings27Expired));
+  // Der Kartenladen listet inzwischen 50+ Packs untereinander (auf dem Handy zwangsläufig einspaltig) -
+  // eine sticky Schnellnavigation zu den 3 Stufen-Abschnitten erspart endloses Scrollen, um z.B. direkt
+  // zu Ultimate zu springen. Nur Stufen mit tatsächlich sichtbaren Packs bekommen einen Button.
+  let tierNavHTML = '';
   TIER_ORDER.forEach(tier=>{
     const packsInTier = visiblePacks.filter(p=>(p.tier||'')===tier);
     if(!packsInTier.length) return;
+    const tierId = 'pack-tier-'+(tier||'standard');
+    tierNavHTML += `<a href="#${tierId}" class="pack-tier-nav-btn ${tier}" data-target="${tierId}">${TIER_LABEL[tier]}<span class="cnt">${packsInTier.length}</span></a>`;
     const section = document.createElement('div');
     section.className = 'pack-tier-section';
+    section.id = tierId;
     section.innerHTML = `<h3 class="pack-tier-heading ${tier}">${TIER_LABEL[tier]}</h3><div class="pack-grid"></div>`;
     const grid = section.querySelector('.pack-grid');
     packsInTier.forEach(pack=>{
@@ -17412,6 +17440,28 @@ function renderStore(view){
     });
     sectionsEl.appendChild(section);
   });
+  const tierNavEl = document.getElementById('pack-tier-nav');
+  if(tierNavEl){
+    // Nur anzeigen, wenn es überhaupt mehr als eine Stufe gibt - bei nur einer sichtbaren Stufe (z.B.
+    // ganz am Anfang eines frischen Accounts) wäre ein Ein-Button-"Sprung" bedeutungslos.
+    if((tierNavHTML.match(/pack-tier-nav-btn/g)||[]).length > 1){
+      tierNavEl.innerHTML = tierNavHTML;
+      const topbar = document.getElementById('topbar');
+      tierNavEl.style.top = (topbar ? topbar.offsetHeight : 60) + 'px';
+      tierNavEl.querySelectorAll('.pack-tier-nav-btn').forEach(a=>{
+        a.addEventListener('click', e=>{
+          e.preventDefault();
+          const target = document.getElementById(a.dataset.target);
+          if(!target) return;
+          const offset = tierNavEl.offsetHeight + 8;
+          const y = target.getBoundingClientRect().top + window.scrollY - offset;
+          window.scrollTo({top: Math.max(0,y), behavior:'smooth'});
+        });
+      });
+    } else {
+      tierNavEl.innerHTML = '';
+    }
+  }
   if(!wmExpired && PACKS.some(p=>p.id==='wmwinners')){
     const updateCountdown = ()=>{
       const el = document.getElementById('wm-countdown');
