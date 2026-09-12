@@ -28287,38 +28287,101 @@ function uclMatchResultClubs(clubA, clubB, allowDraw){
   const aXI = uclClubXI(clubA), bXI = uclClubXI(clubB);
   return buildDecisiveMatch(aXI.rating, bXI.rating, aXI.players, bXI.players, null, null, {allowDraw});
 }
-// 2 Gegner je Topf (8 insgesamt), zufällig gezogen, ohne den eigenen Klub - echte Extra-Constraints der
-// realen UEFA-Ziehung (Länder-/Verbandsschranken) bleiben bewusst weg, siehe Antwort "so wie du denkst".
-function uclDrawLeagueOpponents(myClub, comp){
+// Ein EINZIGER gemeinsamer Spielplan für alle 36 Klubs gleichzeitig, statt (wie vorher) 36 unabhängig
+// gezogener Einzel-Kalender: jeder Klub bekommt weiterhin genau 2 Gegner je Topf (8 insgesamt), aber
+// wenn Klub A gegen Klub B "gezogen" wird, ist das für BEIDE dasselbe echte Spiel, am selben Spieltag,
+// mit demselben Ergebnis aus beiden Perspektiven gespiegelt - vorher konnte es passieren, dass Bodø/
+// Glimts Kalender ein Spiel gegen Bayern zeigt, das in Bayerns eigenem (komplett unabhängig gezogenen)
+// Kalender gar nicht auftaucht, oder mit einem anderen Ergebnis. Echte Extra-Constraints der realen
+// UEFA-Ziehung (Länder-/Verbandsschranken) bleiben weiterhin bewusst weg, siehe Antwort "so wie du denkst".
+// Innerhalb eines Topfs (9 Klubs) ergibt "2 Gegner je Klub" einen 2-regulären Graphen - bei ungerader
+// Topfgröße nur als Kreis (9er-Ring) möglich, siehe uclLeaguePhaseMatchPairs. Zwischen zwei verschiedenen
+// Töpfen (je 9 Klubs) ergibt "2 Gegner je Klub aus dem jeweils anderen Topf" einen 2-regulären
+// bipartiten Graphen, gebaut aus zwei versetzten 1:1-Zuordnungen (Index i↔i und i↔i+1).
+function uclLeaguePhaseMatchPairs(comp){
   const pots = uclPotsFor(comp);
-  const opponents = [];
-  // Reihenfolge A/B/C/D bewusst NICHT mehr durchmischt (anders als vorher) - das sind jetzt auch die
-  // 4 Ziehungs-Schritte der Draw-Zeremonie (siehe uclRevealNextDrawSlot) UND die Spieltag-Reihenfolge
-  // 1-8, genau wie bei einer echten Auslosung Topf für Topf gezogen wird.
-  Object.entries(pots).forEach(([pot, list])=>{
-    const candidates = uclShuffle(list.filter(c=>c!==myClub));
-    candidates.slice(0,2).forEach((club,i)=> opponents.push({oppClub:club, home:i===0, pending:true, pot}));
+  const potNames = Object.keys(pots);
+  const pairs = [];
+  potNames.forEach(p=>{
+    const list = pots[p];
+    const n = list.length;
+    for(let i=0;i<n;i++) pairs.push({a:list[i], b:list[(i+1)%n], potA:p, potB:p});
   });
-  return opponents;
+  for(let i=0;i<potNames.length;i++){
+    for(let j=i+1;j<potNames.length;j++){
+      const P = pots[potNames[i]], Q = pots[potNames[j]];
+      const n = P.length;
+      for(let k=0;k<n;k++){
+        pairs.push({a:P[k], b:Q[k], potA:potNames[i], potB:potNames[j]});
+        pairs.push({a:P[k], b:Q[(k+1)%n], potA:potNames[i], potB:potNames[j]});
+      }
+    }
+  }
+  return pairs;
 }
-// Ein exakt gültiger, gemeinsamer Spielplan (2 Gegner je Topf für alle 36 Klubs GLEICHZEITIG, ohne
-// dass sich zwei Klubs gegenseitig widersprechen) ist ein eigenes Constraint-Solving-Problem - bewusst
-// nicht nachgebaut. Stattdessen zieht sich JEDER der 36 Klubs (Spieler eingeschlossen) unabhängig
-// voneinander seine eigenen 8 Gegner (uclDrawLeagueOpponents), und für die anderen 35 werden alle 8
-// "Spieltag-Slots" SOFORT mit dem echten Spielmotor durchgespielt (uclMatchResultClubs) - also echte,
-// zum jeweiligen Klub passende Ergebnisse, kein abstraktes Wahrscheinlichkeitsmodell mehr. Der Spieler
-// bekommt seine eigenen 8 Spiele natürlich weiterhin live gespielt. Die Spieltag-Nummer (0-7) ist der
-// Index im jeweils eigenen Gegner-Array - zwei Klubs am "selben Spieltag" spielen so nicht zwingend
-// gegeneinander, aber das ist für Tabelle/Ticker unsichtbar und irrelevant.
+// Verteilt die (bei 36 Klubs: 144) Begegnungen auf 8 Spieltage, sodass jeder Klub an jedem Spieltag
+// höchstens ein Spiel hat - ein reines Kanten-Färbungs-Problem eines 8-regulären Graphen. Statt eine
+// exakte Formel für den (wegen der ungeraden 9er-Topf-Ringe nicht ganz trivialen) Fall herzuleiten,
+// greedy mit "am stärksten eingeschränktes Spiel zuerst" plus zufälliger Neustart bei einer Sackgasse -
+// bei dieser Größe (144 Kanten, Grad 8) in der Praxis quasi immer beim ersten oder zweiten Versuch
+// erfolgreich und "ein wenig gemischt" ganz nebenbei, weil die Zuordnung Spiel→Spieltag zufällig ist,
+// statt (wie vorher) starr der Topf-Reihenfolge A/B/C/D zu folgen.
+function uclAssignMatchdays(pairs, allClubs){
+  const DAYS = 8;
+  for(let attempt=0; attempt<500; attempt++){
+    const used = new Map(allClubs.map(c=>[c, new Set()]));
+    const unassigned = uclShuffle(pairs);
+    const result = [];
+    let ok = true;
+    while(unassigned.length){
+      let bestIdx = 0, bestFree = null;
+      for(let idx=0; idx<unassigned.length; idx++){
+        const m = unassigned[idx];
+        const free = [];
+        for(let d=0; d<DAYS; d++){ if(!used.get(m.a).has(d) && !used.get(m.b).has(d)) free.push(d); }
+        if(bestFree===null || free.length<bestFree.length){ bestFree = free; bestIdx = idx; if(free.length<=1) break; }
+      }
+      if(bestFree.length===0){ ok = false; break; }
+      const m = unassigned.splice(bestIdx,1)[0];
+      const d = bestFree[Math.floor(Math.random()*bestFree.length)];
+      used.get(m.a).add(d); used.get(m.b).add(d);
+      result.push({...m, matchday:d, homeA: Math.random()<0.5});
+    }
+    if(ok) return result;
+  }
+  return null; // bei dieser Graphgröße (144 Kanten, Grad 8) praktisch ausgeschlossen
+}
 function uclBuildFullSchedule(myClub, comp){
   const allClubs = uclClubsFor(comp);
-  const leagueMatches = uclDrawLeagueOpponents(myClub, comp);
+  // uclAssignMatchdays scheitert bei dieser Graphgröße praktisch nie, aber ein erneuter Versuch mit
+  // frisch gemischten Paarungen kostet nichts und macht ein Scheitern noch unwahrscheinlicher, als hier
+  // ohne gültigen Spielplan weiterzumachen.
+  let assigned = uclAssignMatchdays(uclLeaguePhaseMatchPairs(comp), allClubs);
+  for(let i=0;i<5 && !assigned;i++) assigned = uclAssignMatchdays(uclLeaguePhaseMatchPairs(comp), allClubs);
+  if(!assigned) throw new Error('UCL-Spielplan konnte nicht erzeugt werden - bitte erneut versuchen.');
+  // pro Klub ein 8er-Array (Index = Spieltag) mit Gegner/Heim-Auswärts/Topf, aus derselben gespiegelten
+  // Zuordnung für beide Seiten befüllt - genau das stellt die Konsistenz zwischen beiden Seiten sicher.
+  const byClub = new Map(allClubs.map(c=>[c, new Array(8).fill(null)]));
+  assigned.forEach(m=>{
+    byClub.get(m.a)[m.matchday] = {opp:m.b, home:m.homeA, pot:m.potB};
+    byClub.get(m.b)[m.matchday] = {opp:m.a, home:!m.homeA, pot:m.potA};
+  });
+  const leagueMatches = byClub.get(myClub).map(slot=>({oppClub:slot.opp, home:slot.home, pending:true, pot:slot.pot}));
   const otherResults = [];
   allClubs.filter(c=>c!==myClub).forEach(club=>{
-    const opponents = uclDrawLeagueOpponents(club, comp);
-    opponents.forEach((o, matchday)=>{
-      const md = uclMatchResultClubs(club, o.oppClub, true);
-      otherResults.push({matchday, club, oppClub:o.oppClub, home:o.home, goals:md.myGoals, oppGoals:md.oppGoals});
+    byClub.get(club).forEach((slot, matchday)=>{
+      // Spiele gegen den Spieler selbst werden NICHT hier vorab simuliert (das wäre wieder ein zweites,
+      // unabhängiges Ergebnis für dasselbe Spiel) - uclComputeLiveTable liest das echte, live gespielte
+      // Ergebnis stattdessen direkt (gespiegelt) aus t.leagueMatches, sobald es gespielt wurde.
+      if(slot.opp===myClub) return;
+      // Jedes echte Spiel taucht in dieser Schleife zweimal auf (einmal pro beteiligtem Klub) - per
+      // Alphabet-Tiebreak nur einmal simulieren und beide gespiegelten Einträge gemeinsam erzeugen,
+      // statt es (wie vorher) für jede Seite unabhängig neu und potenziell widersprüchlich zu simulieren.
+      if(club < slot.opp){
+        const md = uclMatchResultClubs(club, slot.opp, true);
+        otherResults.push({matchday, club, oppClub:slot.opp, home:slot.home, goals:md.myGoals, oppGoals:md.oppGoals});
+        otherResults.push({matchday, club:slot.opp, oppClub:club, home:!slot.home, goals:md.oppGoals, oppGoals:md.myGoals});
+      }
     });
   });
   return { leagueMatches, otherResults };
@@ -28336,9 +28399,20 @@ function uclComputeLiveTable(t, uptoMatchday){
       return {club, pts, gf, ga, gd:gf-ga, isPlayer:true, played:played.length};
     }
     const rows = t.otherResults.filter(r=>r.club===club && r.matchday<uptoMatchday);
-    let pts=0, gf=0, ga=0;
+    let pts=0, gf=0, ga=0, played=rows.length;
     rows.forEach(r=>{ gf+=r.goals; ga+=r.oppGoals; pts += r.goals>r.oppGoals?3:(r.goals===r.oppGoals?1:0); });
-    return {club, pts, gf, ga, gd:gf-ga, isPlayer:false, played:rows.length};
+    // Spielt dieser Klub an einem seiner 8 Spieltage gegen den Spieler selbst, steckt das echte Ergebnis
+    // nicht in otherResults (siehe uclBuildFullSchedule), sondern gespiegelt in t.leagueMatches - erst
+    // sobald der Spieler es tatsächlich gespielt hat (pending:false), zählt es hier mit rein.
+    const vsPlayer = t.leagueMatches.find(m=>m.oppClub===club);
+    if(vsPlayer && !vsPlayer.pending){
+      const idx = t.leagueMatches.indexOf(vsPlayer);
+      if(idx<uptoMatchday){
+        const g = vsPlayer.oppGoals||0, og = vsPlayer.myGoals||0;
+        gf+=g; ga+=og; pts += g>og?3:(g===og?1:0); played++;
+      }
+    }
+    return {club, pts, gf, ga, gd:gf-ga, isPlayer:false, played};
   });
   return table.sort((a,b)=> b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || (a.club<b.club?-1:1));
 }
