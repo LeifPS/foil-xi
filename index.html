@@ -27,6 +27,7 @@ Features by Format:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="google-site-verification" content="xgvq0o5tcW8J38f0rdENJXTy6fRKsxAYDjUCU-Kmknw" />
 <title>FOIL ELEVEN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -27561,7 +27562,7 @@ async function playWM26GroupMatch(matchIdx){
     const myMgr = getAssignedManager();
     const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
     const oppSide = wm26OppSide(opp, oppTeam.nation);
-    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level})));
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.ov, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
     area.innerHTML = `
       <div class="vs-teams">
         ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
@@ -27618,7 +27619,7 @@ async function playWM26KnockoutMatch(){
     const myMgr = getAssignedManager();
     const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
     const oppSide = wm26OppSide(opp, oppTeam.nation);
-    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level})));
+    await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.ov, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
     area.innerHTML = `
       <div class="vs-teams">
         ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
@@ -28347,7 +28348,7 @@ async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel){
   const myMgr = getAssignedManager();
   const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
   const oppSide = {name: oppClub, rating: opp.rating, managerName: opp.managerName, crest: uclCrestFor(oppClub), formation:'433'};
-  await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level})));
+  await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.ov, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
   area.innerHTML = `
     <div class="vs-teams">
       ${teamBlobHTML(rating, profile.crest, ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr))}
@@ -32023,10 +32024,15 @@ function getMySquadCardRefs(){
 }
 function resolveCardRefs(refs){
   // shallow-copy each resolved card (never mutate the shared BY_ID object) so the opponent's real
-  // level can be attached for display in the pre-match lineup reveal - see cardEl's level-badge
+  // level can be attached for display in the pre-match lineup reveal - see cardEl's level-badge.
+  // A ref MAY also carry the already-boosted ov/substats (manager+position+Diamant-Level, see
+  // boostBotXI) - if it does, those override the base card's raw values, so the reveal actually shows
+  // the same stronger numbers the card plays with, not just the level badge on top of raw base stats.
   return (refs||[]).map(r=>{
     const base = BY_ID.get(r.id);
-    return base ? {card:{...base, level:r.level||0}, pos:r.pos} : null;
+    if(!base) return null;
+    const overrides = r.ov!=null ? {ov:r.ov, pac:r.pac, sho:r.sho, pas:r.pas, dri:r.dri, defn:r.defn, phy:r.phy} : {};
+    return {card:{...base, level:r.level||0, ...overrides}, pos:r.pos};
   }).filter(Boolean);
 }
 // splits a formation's outfield count into its real tactical lines, e.g. "4-2-3-1" -> [4,2,3,1] -
