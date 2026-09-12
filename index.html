@@ -370,6 +370,33 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   border-radius:2px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));animation:confettiFall linear infinite;}
 .pcard .uclchamp-comp-logo{position:absolute;top:5%;left:5%;width:16%;aspect-ratio:1;z-index:2;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7));}
 .pcard .uclchamp-comp-logo img, .pcard .uclchamp-comp-logo svg{width:100%;height:100%;}
+/* Pot-Auslosung: statt reiner Text-Zeilen ein kleiner Ziehungs-Fortschritt (Topf A-D als Punkte/Linie)
+   plus je Topf eine Gruppe "gezogener Bälle" (Klub-Wappen-Karten), die einzeln reinpoppen statt einfach
+   dazustehen - macht das eigentliche Ziehungs-Erlebnis (uclRevealNextDrawSlot deckt Topf für Topf auf)
+   auch optisch als Ereignis spürbar statt wie eine simple Ergebnisliste. */
+.ucl-draw-wrap{--dcol:#8fa6ff;}
+.ucl-draw-wrap.comp-uel{--dcol:#ff9a3c;}
+.ucl-draw-pots{display:flex;align-items:center;justify-content:center;gap:0;margin:14px 0 18px;}
+.ucl-draw-pot-step{display:flex;align-items:center;flex:0 0 auto;}
+.ucl-draw-pot-step .dot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:13px;border:2px solid rgba(255,255,255,.18);color:var(--muted);background:var(--panel3,#1c2333);
+  transition:all .3s ease;}
+.ucl-draw-pot-step.done .dot{background:var(--dcol);border-color:var(--dcol);color:#0a0d14;}
+.ucl-draw-pot-step.active .dot{border-color:var(--dcol);color:var(--dcol);box-shadow:0 0 0 4px color-mix(in srgb, var(--dcol) 25%, transparent);animation:uclDrawPulse 1.6s ease-in-out infinite;}
+.ucl-draw-pot-step .line{width:28px;height:2px;background:rgba(255,255,255,.14);}
+.ucl-draw-pot-step.done + .ucl-draw-pot-step .line, .ucl-draw-pot-step.done .line{background:var(--dcol);}
+@keyframes uclDrawPulse{0%,100%{box-shadow:0 0 0 4px color-mix(in srgb, var(--dcol) 20%, transparent);}50%{box-shadow:0 0 0 8px color-mix(in srgb, var(--dcol) 8%, transparent);}}
+.ucl-draw-group{margin-bottom:14px;}
+.ucl-draw-group-label{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--dcol);margin:0 0 6px;}
+.ucl-draw-balls{display:flex;flex-direction:column;gap:6px;}
+.ucl-draw-ball{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;
+  background:linear-gradient(120deg, color-mix(in srgb, var(--dcol) 10%, var(--panel2,#151b28)), var(--panel2,#151b28));
+  border:1px solid color-mix(in srgb, var(--dcol) 30%, transparent);
+  opacity:0;animation:uclDrawBallPop .5s cubic-bezier(.2,.9,.3,1.2) forwards;}
+.ucl-draw-ball-name{font-weight:700;font-size:13px;flex:1;}
+.ucl-draw-ball-tag{font-size:10px;font-weight:800;letter-spacing:.03em;padding:2px 8px;border-radius:20px;
+  background:rgba(255,255,255,.08);color:var(--muted);text-transform:uppercase;}
+@keyframes uclDrawBallPop{0%{opacity:0;transform:scale(.7) translateY(6px);}70%{opacity:1;transform:scale(1.04) translateY(0);}100%{opacity:1;transform:scale(1);}}
 /* WM-Kapitän (World Cup Pack, rare pull): gold trophy foil, distinct from the plain-steel Kapitäne
    Pack look above - this one's tied to actually winning the WM 2026, so it reads as championship gold
    rather than authority-grey. */
@@ -28783,19 +28810,38 @@ function renderUclPanel(comp){
   }
   if(t.stage==='draw'){
     const revealed = t.drawRevealed||0;
-    const potOrder = comp==='uel' ? ['A','B','C','D'] : ['A','B','C','D'];
-    const revealedMatches = t.leagueMatches.filter(m=>potOrder.indexOf(m.pot)<revealed);
-    const rows = revealedMatches.map((m,i)=>`<div class="hint" style="animation:wm26TrophyConfettiFall 0s;">${i+1}. Topf ${m.pot} — ${uclClubChip(m.oppClub,20)}${m.oppClub} (${m.home?'Heim':'Auswärts'})</div>`).join('');
+    const potOrder = ['A','B','C','D'];
+    const myPot = uclPotOf(t.myClub,comp);
+    const groupsHTML = potOrder.filter(p=>potOrder.indexOf(p)<revealed).map(pot=>{
+      const matches = t.leagueMatches.filter(m=>m.pot===pot);
+      const balls = matches.map((m,i)=>`
+        <div class="ucl-draw-ball" style="animation-delay:${i*0.12}s;">
+          ${uclClubChip(m.oppClub,26)}
+          <span class="ucl-draw-ball-name">${m.oppClub}</span>
+          <span class="ucl-draw-ball-tag">${m.home?'Heim':'Auswärts'}</span>
+        </div>`).join('');
+      return `<div class="ucl-draw-group">
+        <p class="ucl-draw-group-label">Topf ${pot}${pot===myPot?' (dein Topf)':''}</p>
+        <div class="ucl-draw-balls">${balls}</div>
+      </div>`;
+    }).join('');
+    const potsHTML = potOrder.map((p,i)=>{
+      const state = i<revealed ? 'done' : (i===revealed ? 'active' : '');
+      return `<div class="ucl-draw-pot-step ${state}">${i>0?'<div class="line"></div>':''}<div class="dot">${p}</div></div>`;
+    }).join('');
     box.innerHTML = `
-      <div class="wm26-hero ${heroCls}">
-        <div class="wm26-hero-crest">${uclCompetitionBadge(comp,40)}</div>
-        <div class="wm26-hero-text">
-          <p style="margin:0;font-weight:800;">${label}-Auslosung</p>
-          <p class="hint" style="margin:2px 0 0;">${uclClubChip(t.myClub,18)}<b>${t.myClub}</b> (Topf ${uclPotOf(t.myClub,comp)}) zieht seine Gegner</p>
+      <div class="ucl-draw-wrap comp-${comp}">
+        <div class="wm26-hero ${heroCls}">
+          <div class="wm26-hero-crest">${uclCompetitionBadge(comp,40)}</div>
+          <div class="wm26-hero-text">
+            <p style="margin:0;font-weight:800;">${label}-Auslosung</p>
+            <p class="hint" style="margin:2px 0 0;">${uclClubChip(t.myClub,18)}<b>${t.myClub}</b> (Topf ${myPot}) zieht seine Gegner</p>
+          </div>
         </div>
-      </div>
-      ${rows}
-      ${revealed<4 ? `<button class="action-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Topf ${potOrder[revealed]} ziehen</button>` : `<button class="action-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Zur Ligaphase</button>`}`;
+        <div class="ucl-draw-pots">${potsHTML}</div>
+        ${groupsHTML}
+        ${revealed<4 ? `<button class="action-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Topf ${potOrder[revealed]} ziehen</button>` : `<button class="action-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Zur Ligaphase</button>`}
+      </div>`;
     const btn = document.getElementById('ucl-draw-next');
     if(btn) btn.addEventListener('click', ()=>uclRevealNextDrawSlot(comp));
     return;
