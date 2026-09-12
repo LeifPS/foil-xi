@@ -350,6 +350,13 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-phenom{--acc:#6ee7d8;} .pcard.theme-setpiece{--acc:#ffcf5c;} .pcard.theme-derby{--acc:#ff8f6b;}
 .pcard.theme-iron{--acc:#7d94ad;} .pcard.theme-wonder{--acc:#8ee6a3;} .pcard.theme-hof{--acc:#e8b74a;}
 .pcard.theme-gal{--acc:#ff9ff0;} .pcard.theme-gg{--acc:#5cc9ff;} .pcard.theme-wm26v{--acc:#4dbf6f;}
+/* Champions-/Europa-League-Sieger-Variante (siehe uclRewardCardsForClub): eigenes Navy/Gold bzw.
+   Orange/Schwarz, klar von jedem anderen Kartentyp im Spiel unterschieden - passend zur echten
+   UCL/UEL-Optik statt eines generischen Akzents. */
+.pcard.theme-uclchamp{--acc:#8fa6ff;background:linear-gradient(155deg,#0a1040 0%,#101a5c 55%,#0a1040 100%);border-color:rgba(143,166,255,.5);}
+.pcard.theme-uclchamp .name{color:#eef1ff;text-shadow:0 0 8px rgba(143,166,255,.55);}
+.pcard.theme-uelchamp{--acc:#ff9a3c;background:linear-gradient(155deg,#3a1400 0%,#5c2400 55%,#3a1400 100%);border-color:rgba(255,154,60,.5);}
+.pcard.theme-uelchamp .name{color:#fff1e2;text-shadow:0 0 8px rgba(255,154,60,.55);}
 /* WM-Kapitän (World Cup Pack, rare pull): gold trophy foil, distinct from the plain-steel Kapitäne
    Pack look above - this one's tied to actually winning the WM 2026, so it reads as championship gold
    rather than authority-grey. */
@@ -2530,6 +2537,10 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .wm26-legend i.q-direct{background:var(--turf-bright);}
 .wm26-legend i.q-third{background:var(--gold);}
 .wm26-hero{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:14px;border-radius:12px;background:radial-gradient(120% 160% at 0% 0%,rgba(95,225,201,.14),transparent 60%),var(--panel2);border:1px solid var(--line);}
+/* Champions-/Europa-League: eigene Navy/Gold- bzw. Orange/Schwarz-Optik statt des generischen
+   WM26-Grüns, passend zur echten UCL/UEL-Markenfarbe - reine Farbvariante desselben .wm26-hero-Layouts. */
+.ucl-hero{background:radial-gradient(120% 160% at 0% 0%,rgba(143,166,255,.20),transparent 60%),linear-gradient(160deg,#0a0f38,#0d1550);border-color:rgba(143,166,255,.35);}
+.uel-hero{background:radial-gradient(120% 160% at 0% 0%,rgba(255,154,60,.20),transparent 60%),linear-gradient(160deg,#2a1000,#3d1800);border-color:rgba(255,154,60,.4);}
 .wm26-hero-crest{width:46px;height:46px;flex-shrink:0;}
 .wm26-hero-crest svg{width:100%;height:100%;}
 .wm26-hero-vs{font-size:11px;color:var(--muted);opacity:.7;font-weight:700;}
@@ -28236,16 +28247,17 @@ async function uclFinishRun(comp, exitStage, won){
   }
   renderUclPanel(comp);
 }
-function uclClubChip(club){
+function uclClubChip(club, size=18){
   const logo = CLUB_LOGO[club];
-  return logo ? `<img src="${logo}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" loading="lazy" onerror="this.style.display='none'">` : '';
+  return logo ? `<img src="${logo}" alt="" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;margin-right:5px;" loading="lazy" onerror="this.style.display='none'">` : '';
 }
-function uclTieCardHTML(tie, playLabel, canPlay){
+function uclTieCardHTML(tie, playLabel, canPlay, comp){
   const aggA = (tie.leg1?tie.leg1.aGoals:0)+(tie.leg2?tie.leg2.aGoals:0);
   const aggB = (tie.leg1?tie.leg1.bGoals:0)+(tie.leg2?tie.leg2.bGoals:0);
+  const heroCls = comp==='uel' ? 'uel-hero' : 'ucl-hero';
   const legRow = (leg,label) => leg ? `<div class="hint">${label}: ${uclClubChip(tie.aClub)}${tie.aClub} ${leg.aGoals}:${leg.bGoals} ${tie.bClub}${uclClubChip(tie.bClub)}</div>` : '';
-  return `<div class="wm26-hero" style="flex-direction:column;align-items:flex-start;gap:6px;">
-    <div style="font-weight:700;">${uclClubChip(tie.aClub)}${tie.aClub} <span style="color:var(--muted);">vs</span> ${uclClubChip(tie.bClub)}${tie.bClub}</div>
+  return `<div class="wm26-hero ${heroCls}" style="flex-direction:column;align-items:flex-start;gap:6px;">
+    <div style="font-weight:700;">${uclClubChip(tie.aClub, 26)}${tie.aClub} <span style="color:var(--muted);">vs</span> ${uclClubChip(tie.bClub, 26)}${tie.bClub}</div>
     ${legRow(tie.leg1,'Hinspiel')}
     ${legRow(tie.leg2,'Rückspiel')}
     ${tie.leg1&&tie.leg2?`<div class="hint">Aggregat: ${aggA}:${aggB}${tie.decider?' (Entscheidung nach Verlängerung/Elfmeterschießen)':''}</div>`:''}
@@ -28257,15 +28269,16 @@ function renderUclPanel(comp){
   if(!box) return;
   const t = uclCurrentRun(comp);
   const label = comp==='uel' ? 'Europa League' : 'Champions League';
+  const heroCls = comp==='uel' ? 'uel-hero' : 'ucl-hero';
   if(!t || t.stage==='done'){
     const feeNow = (comp==='ucl' && profile.uclFreeEntryAvailable) ? 0 : uclEntryFee(comp);
     const banner = t && t.stage==='done' ? (t.wonCup
-      ? `<div class="wm26-hero" style="background:radial-gradient(120% 160% at 0% 0%,rgba(255,215,0,.16),transparent 60%),var(--panel2);border-color:rgba(255,215,0,.35);">
-          <div class="wm26-hero-crest">${renderCrestSVG(profile.crest,46)}</div>
+      ? `<div class="wm26-hero ${heroCls}" style="border-color:rgba(255,215,0,.5);">
+          <div class="wm26-hero-crest">${uclClubChip(t.myClub, 46)}</div>
           <div class="wm26-hero-text"><p style="margin:0;font-weight:700;">🏆 Dein letzter Lauf als ${t.myClub}: <b style="color:var(--gold);">${label}-Sieger!</b></p></div>
         </div>`
-      : `<div class="wm26-hero">
-          <div class="wm26-hero-crest">${renderCrestSVG(profile.crest,46)}</div>
+      : `<div class="wm26-hero ${heroCls}">
+          <div class="wm26-hero-crest">${uclClubChip(t.myClub, 46)}</div>
           <div class="wm26-hero-text"><p style="margin:0;">Dein letzter Lauf als ${t.myClub} endete: <b style="color:var(--chalk);">Aus ${t.eliminatedAt==='league'?'in der Ligaphase':'im '+UCL_ROUND_LABEL[t.eliminatedAt]}</b></p></div>
         </div>`) : '';
     box.innerHTML = `
@@ -28285,8 +28298,8 @@ function renderUclPanel(comp){
       : `<div class="hint">${i+1}. ${uclClubChip(m.oppClub)}${m.oppClub} (${m.home?'Heim':'Auswärts'}): ${m.myGoals}:${m.oppGoals}</div>`
     ).join('');
     box.innerHTML = `
-      <div class="wm26-hero">
-        <div class="wm26-hero-crest">${uclClubChip(t.myClub)}</div>
+      <div class="wm26-hero ${heroCls}">
+        <div class="wm26-hero-crest">${uclClubChip(t.myClub, 40)}</div>
         <div class="wm26-hero-text">
           <p class="hint" style="margin:0;">${label} — du übernimmst <b>${t.myClub}</b></p>
           <p class="hint" style="margin:2px 0 0;">Ligaphase-Spiel ${Math.min(playedCount+1,8)} von 8</p>
@@ -28303,7 +28316,7 @@ function renderUclPanel(comp){
     box.innerHTML = `
       <p class="hint" style="margin-top:0;">Playoff-Runde (Platz 9-24 der Ligaphase) — Hin-/Rückspiel, der Gewinner zieht ins Achtelfinale ein.</p>
       <div id="ucl-match-area-${comp}" style="margin:14px 0;"></div>
-      ${uclTieCardHTML(t.playoffTie, t.playoffTie.leg1?'Rückspiel spielen':'Hinspiel spielen', true)}`;
+      ${uclTieCardHTML(t.playoffTie, t.playoffTie.leg1?'Rückspiel spielen':'Hinspiel spielen', true, comp)}`;
     const btn = document.getElementById('ucl-play-tie-btn');
     if(btn) btn.addEventListener('click', ()=>playUclPlayoffLeg(comp));
     return;
@@ -28314,7 +28327,7 @@ function renderUclPanel(comp){
   box.innerHTML = `
     <p class="hint" style="margin-top:0;">${m?UCL_ROUND_LABEL[UCL_KO_ORDER[roundIdx]]:''}</p>
     <div id="ucl-match-area-${comp}" style="margin-bottom:14px;"></div>
-    ${m ? uclTieCardHTML(m, m.leg1?'Rückspiel spielen':'Hinspiel spielen', true) : ''}`;
+    ${m ? uclTieCardHTML(m, m.leg1?'Rückspiel spielen':'Hinspiel spielen', true, comp) : ''}`;
   const btn = document.getElementById('ucl-play-tie-btn');
   if(btn) btn.addEventListener('click', ()=>playUclKnockoutLeg(comp));
 }
