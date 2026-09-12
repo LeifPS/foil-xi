@@ -27950,17 +27950,35 @@ const UCL_XI_CACHE = new Map();
 // Kartendaten fallen auf denselben moderaten 68-OV-Ziel-Pool zurück wie wm26NationXI (siehe dort für die
 // ausführliche Begründung) - ein daten­loser Klub soll ein unauffälliges Mittelfeldteam sein, nicht durch
 // Zufall die stärkste Elf des ganzen Spiels bekommen.
+// Einmal berechnet, dann gecacht: exakt derselbe Karten-Pool wie der Karten-Index (adminFullCardPool),
+// nur ohne die UCL/UEL-Sieger-Karten selbst (siehe uclIndexPool). Vorher hatte uclClubXI eine von Hand
+// gepflegte Liste einzelner Kartenquellen-Arrays - die verpasste bei jeder neuen Pack-Einführung (27
+// Ratings, Breakout, Mystery Elite, Liga-Meister, Icon Swap 2, ...) zuverlässig genau diese neue Quelle,
+// weshalb selbst Top-Klubs oft nicht ihre wirklich stärkstmögliche Elf aus ALLEN existierenden Karten
+// bekamen. adminFullCardPool() ist bereits "jede jemals erwerbbare Karte" (siehe dessen eigener
+// Kommentar) und wird für den Karten-Index sowieso gepflegt - hier einfach denselben nehmen, statt eine
+// zweite, zwangsläufig wieder veraltende Liste danebenzustellen.
+let UCL_INDEX_POOL_CACHE = null;
+function uclIndexPool(){
+  if(!UCL_INDEX_POOL_CACHE){
+    // Sieger-Karten ausgeschlossen: sonst könnte ein Klub in der Ligaphase mit dem visuellen Champions-
+    // /Europa-League-Sieger-Kartendesign eines noch gar nicht gewonnenen Titels auflaufen.
+    UCL_INDEX_POOL_CACHE = adminFullCardPool().filter(c=>c.variant!=='ucl_champion' && c.variant!=='uel_champion');
+  }
+  return UCL_INDEX_POOL_CACHE;
+}
+// "Hans Vanaken" (hand-authored UCL_FILLER_PLAYERS-Eintrag, aus einer Zeit ohne echte Brügge-Kader-
+// Daten) und "H. Vanaken" (dieselbe reale Person, jetzt regulär in players_data.js/adminFullCardPool)
+// sind exakt dieselbe Person unter zwei verschiedenen Namensschreibweisen - eine reine String-
+// Gleichheitsprüfung auf c.n erkennt das nicht und würde ihn versehentlich zweimal in dieselbe Elf
+// stellen. Auf den Nachnamen normalisieren (letztes Wort, kleingeschrieben, ohne Akzente) behebt das.
+function uclPlayerKey(n){
+  const parts = String(n||'').trim().split(/\s+/);
+  return parts[parts.length-1].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
 function uclClubXI(club){
   if(UCL_XI_CACHE.has(club)) return UCL_XI_CACHE.get(club);
-  // gleiche breite Kartenbasis wie wm26NationXI (jede reguläre Kartenquelle im Spiel), nur nach Klub
-  // statt Nation gefiltert - bewusst OHNE getKontrahentRoster: dessen künstliche Extra-Boosts sind für
-  // einen eigenen, anderen Zweck (ein absichtlich übermächtiger Bot-Gegner) gedacht und würden hier
-  // jede "stärkste echte Elf" mit unrealistisch aufgeblähten Ratings überdecken.
-  const broadPool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS,
-    KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS, KAPITAENE_SPECIALS, UCLW_SPECIALS, OGICON_CARDS, LEGENDS_SPECIALS,
-    DERBY_SPECIALS, UNDERDOG_SPECIALS, SIGNATURE_SEASON_CARDS, POETEN_CARDS, ICONSWAP_CARDS,
-    WEEK_PASS_CARDS.flatMap(w=>[w.lvl15, w.lvl30]), UCL_FILLER_PLAYERS
-  ).filter(c=>c && !c.isManager);
+  const broadPool = uclIndexPool();
   const clubCards = broadPool.filter(c=>c.club===club);
   const hasOwnCards = clubCards.length>0;
   const pool = hasOwnCards ? clubCards : broadPool;
@@ -27982,12 +28000,13 @@ function uclClubXI(club){
   const usedNames = new Set(), usedIds = new Set(), nameCount = new Map();
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
-    const candidate = byGroup[group].find(c=>!usedNames.has(c.n))
-      || pool.filter(c=>!usedNames.has(c.n)).sort(rank)[0]
-      || pool.filter(c=>!usedIds.has(c.id)).sort((a,b)=> (nameCount.get(a.n)||0)-(nameCount.get(b.n)||0) || rank(a,b))[0]
-      || pool.slice().sort((a,b)=> (nameCount.get(a.n)||0)-(nameCount.get(b.n)||0) || rank(a,b))[0];
-    usedNames.add(candidate.n); usedIds.add(candidate.id);
-    nameCount.set(candidate.n, (nameCount.get(candidate.n)||0)+1);
+    const candidate = byGroup[group].find(c=>!usedNames.has(uclPlayerKey(c.n)))
+      || pool.filter(c=>!usedNames.has(uclPlayerKey(c.n))).sort(rank)[0]
+      || pool.filter(c=>!usedIds.has(c.id)).sort((a,b)=> (nameCount.get(uclPlayerKey(a.n))||0)-(nameCount.get(uclPlayerKey(b.n))||0) || rank(a,b))[0]
+      || pool.slice().sort((a,b)=> (nameCount.get(uclPlayerKey(a.n))||0)-(nameCount.get(uclPlayerKey(b.n))||0) || rank(a,b))[0];
+    const key = uclPlayerKey(candidate.n);
+    usedNames.add(key); usedIds.add(candidate.id);
+    nameCount.set(key, (nameCount.get(key)||0)+1);
     return candidate;
   });
   // Jede Karte hier zählt als voll ausgespielt (Level 4/Diamant) - genau der +4-OVR/+4-je-Substat-Bonus,
