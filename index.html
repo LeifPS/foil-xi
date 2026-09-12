@@ -27760,6 +27760,18 @@ const UCL_FILLER_PLAYERS = [
   {id:73000014,n:'Alaa Ghram',pos:'CB',ov:67,nat:'Tunisia',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:72,sho:42,pas:57,dri:63,defn:67,phy:69,foot:'Right',img:'',gk:false,variant:'base'},
   {id:73000015,n:'Lucas Ferreira',pos:'RW',ov:67,nat:'Brazil',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:81,sho:57,pas:60,dri:71,defn:27,phy:61,foot:'Right',img:'',gk:false,variant:'base'},
   {id:73000016,n:'Oleg Ocheretko',pos:'CAM',ov:66,nat:'Ukraine',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:65,sho:61,pas:62,dri:69,defn:43,phy:63,foot:'Right',img:'',gk:false,variant:'base'},
+  // Die tatsächlich stärksten aktuellen Spieler dieser 3 Klubs (namentlich bekannt, siehe Chat-Recherche),
+  // aber ohne exakte EA-Werte verfügbar - realistisch geschätzt, damit PSV/Feyenoord/Schachtar nicht nur
+  // aus Ersatzbank-Spielern (s.o., alle <75 OV) bestehen und sich spürbar stärker/glaubwürdiger anfühlen.
+  {id:73000017,n:'Ivan Perišić',pos:'LM, LW',ov:82,nat:'Croatia',lg:'Eredivisie',club:'PSV',pac:75,sho:78,pas:80,dri:82,defn:40,phy:72,foot:'Left',img:'',gk:false,variant:'base'},
+  {id:73000018,n:'Jerdy Schouten',pos:'CDM',ov:80,nat:'Netherlands',lg:'Eredivisie',club:'PSV',pac:65,sho:62,pas:82,dri:76,defn:78,phy:74,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000019,n:'Mauro Júnior',pos:'LB',ov:78,nat:'Brazil',lg:'Eredivisie',club:'PSV',pac:78,sho:55,pas:75,dri:74,defn:76,phy:70,foot:'Left',img:'',gk:false,variant:'base'},
+  {id:73000020,n:'Ayase Ueda',pos:'ST',ov:79,nat:'Japan',lg:'Eredivisie',club:'Feyenoord',pac:78,sho:80,pas:62,dri:74,defn:30,phy:75,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000021,n:'Tsuyoshi Watanabe',pos:'CB',ov:77,nat:'Japan',lg:'Eredivisie',club:'Feyenoord',pac:68,sho:30,pas:65,dri:60,defn:79,phy:78,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000022,n:'Luciano Valente',pos:'CAM, CM',ov:76,nat:'Netherlands',lg:'Eredivisie',club:'Feyenoord',pac:72,sho:68,pas:78,dri:77,defn:55,phy:62,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000023,n:'Mykola Matviienko',pos:'CB',ov:79,nat:'Ukraine',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:70,sho:35,pas:68,dri:62,defn:80,phy:78,foot:'Left',img:'',gk:false,variant:'base'},
+  {id:73000024,n:'Valeriy Bondar',pos:'CB',ov:77,nat:'Ukraine',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:68,sho:32,pas:65,dri:60,defn:78,phy:77,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000025,n:'Dmytro Riznyk',pos:'GK',ov:76,nat:'Ukraine',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:60,sho:60,pas:65,dri:65,defn:30,phy:70,foot:'Right',img:'',gk:true,variant:'base'},
 ];
 UCL_FILLER_PLAYERS.forEach(p=>BY_ID.set(p.id,p));
 // Pro Pot die Kartenanzahl+Ziehungschancen für die Sieger-Belohnung nach dem Finale (Rating fix
@@ -27844,13 +27856,20 @@ function uclClubXI(club){
   const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
   pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
   Object.values(byGroup).forEach(arr=>arr.sort(rank));
+  // Wichtig für Klubs mit sehr kleinem echten Kader (z.B. die handverlesenen Zusatzspieler für Brügge/
+  // PSV/Feyenoord/Schachtar, je nur 7-8 einzigartige Karten für 11 Plätze): der alte allerletzte
+  // Rückfall ("pool.slice().sort(rank)[0]") ignorierte usedNames/usedIds komplett und lieferte IMMER
+  // dieselbe eine bestbewertete Karte - bei so einem kleinen Kader landete dadurch z.B. der Torwart auf
+  // 7 von 11 Positionen (auch im Sturm!), was die ganze Elf absurd schwach wirken ließ. Jetzt verteilen
+  // sich unvermeidliche Wiederholungen gleichmäßig über den TATSÄCHLICHEN Kader (wer bisher am
+  // wenigsten wiederholt wurde, kommt zuerst dran), bevor überhaupt eine einzelne Karte doppelt gezogen wird.
   const usedNames = new Set(), usedIds = new Set(), nameCount = new Map();
   const xi = slots.map(slot=>{
     const group = posGroup2(slot.label);
     const candidate = byGroup[group].find(c=>!usedNames.has(c.n))
       || pool.filter(c=>!usedNames.has(c.n)).sort(rank)[0]
       || pool.filter(c=>!usedIds.has(c.id)).sort((a,b)=> (nameCount.get(a.n)||0)-(nameCount.get(b.n)||0) || rank(a,b))[0]
-      || pool.slice().sort(rank)[0];
+      || pool.slice().sort((a,b)=> (nameCount.get(a.n)||0)-(nameCount.get(b.n)||0) || rank(a,b))[0];
     usedNames.add(candidate.n); usedIds.add(candidate.id);
     nameCount.set(candidate.n, (nameCount.get(candidate.n)||0)+1);
     return candidate;
@@ -28380,6 +28399,59 @@ function uclTieCardHTML(tie, playLabel, canPlay, comp){
     ${tie.winnerClub ? `<div style="color:var(--gold);font-weight:700;">${tie.winnerClub} zieht weiter</div>` : (canPlay?`<button class="action-btn" id="ucl-play-tie-btn" style="margin-top:6px;">${playLabel}</button>`:'')}
   </div>`;
 }
+// Kompletter K.o.-Baum (Achtelfinale bis Finale) mit allen Paarungen und Ergebnissen, nicht nur der
+// aktuellen - gleiche Geometrie/CSS-Klassen wie renderWM26BracketHTML (BRACKET_MATCH_H etc.,
+// .bracket-*), aber eigener Renderer: die Datenform ist hier {aClub,bClub,leg1,leg2,decider,
+// winnerClub} statt WM26s {aTeam,bTeam,aGoals,bGoals} - zwei Spiele plus Aggregat pro Paarung statt
+// nur einem einzelnen Ergebnis.
+function uclBracketHTML(rounds, comp){
+  const totalRounds = rounds.length;
+  const centers = [];
+  centers[0] = rounds[0].matches.map((_,i)=> i*(BRACKET_MATCH_H+BRACKET_ROW_GAP) + BRACKET_MATCH_H/2);
+  for(let r=1;r<totalRounds;r++){
+    const prev = centers[r-1];
+    centers[r] = rounds[r].matches.map((_,i)=> (prev[2*i]+prev[2*i+1])/2);
+  }
+  const totalHeight = BRACKET_TITLE_H + centers[0][centers[0].length-1] + BRACKET_MATCH_H/2 + 6;
+  const totalWidth = totalRounds*BRACKET_COL_W + (totalRounds-1)*BRACKET_COL_GAP;
+  const roundIcon = ri => ri===totalRounds-1 ? '🏆' : (ri===totalRounds-2 ? '🥉' : '⚽');
+  let cols = '', lines = '';
+  for(let r=0;r<totalRounds;r++){
+    const colLeft = r*(BRACKET_COL_W+BRACKET_COL_GAP);
+    cols += `<div class="bracket-col-title" style="left:${colLeft}px;width:${BRACKET_COL_W}px;"><span class="bct-ico">${roundIcon(r)}</span>${UCL_ROUND_LABEL[UCL_KO_ORDER[r]]}</div>`;
+    rounds[r].matches.forEach((m,i)=>{
+      const cy = BRACKET_TITLE_H + centers[r][i];
+      const top = cy - BRACKET_MATCH_H/2;
+      const involvesPlayer = m.aIsPlayer || m.bIsPlayer;
+      const aAgg = (m.leg1?m.leg1.aGoals:0)+(m.leg2?m.leg2.aGoals:0);
+      const bAgg = (m.leg1?m.leg1.bGoals:0)+(m.leg2?m.leg2.bGoals:0);
+      const sideName = club => `<span class="bracket-side-name">${uclClubChip(club,14)}${club||'TBD'}</span>`;
+      let inner;
+      if(m.pending){
+        inner = `<div class="bracket-side">${sideName(m.aClub)}<span class="bracket-score">${m.leg1?aAgg:''}</span></div>
+          <div class="bracket-side">${sideName(m.bClub)}<span class="bracket-score">${m.leg1?bAgg:''}</span></div>`;
+      } else {
+        const aWon = m.winnerClub===m.aClub;
+        inner = `<div class="bracket-side${aWon?' bracket-winner':''}">${sideName(m.aClub)}<span class="bracket-score">${aAgg}</span></div>
+          <div class="bracket-side${!aWon?' bracket-winner':''}">${sideName(m.bClub)}<span class="bracket-score">${bAgg}</span></div>`;
+      }
+      const isFinal = r===totalRounds-1;
+      const cls = ['bracket-match', involvesPlayer?'bracket-match-me':'', isFinal?'bracket-match-final':''].filter(Boolean).join(' ');
+      cols += `<div class="${cls}" style="left:${colLeft}px;top:${top}px;width:${BRACKET_COL_W}px;height:${BRACKET_MATCH_H}px;">${inner}</div>`;
+      if(r<totalRounds-1){
+        lines += `<div class="bracket-line-h" style="left:${colLeft+BRACKET_COL_W}px;top:${cy}px;width:${BRACKET_COL_GAP/2}px;"></div>`;
+        if(i%2===1){
+          const topC = BRACKET_TITLE_H+centers[r][i-1], botC = cy;
+          const midX = colLeft+BRACKET_COL_W+BRACKET_COL_GAP/2;
+          lines += `<div class="bracket-line-v" style="left:${midX}px;top:${topC}px;height:${botC-topC}px;"></div>`;
+          const parentCy = BRACKET_TITLE_H+centers[r+1][(i-1)/2];
+          lines += `<div class="bracket-line-h" style="left:${midX}px;top:${parentCy}px;width:${BRACKET_COL_GAP/2}px;"></div>`;
+        }
+      }
+    });
+  }
+  return `<div class="bracket-wrap"><div class="bracket-rounds" style="width:${totalWidth}px;height:${totalHeight}px;">${cols}<div class="bracket-lines">${lines}</div></div></div>`;
+}
 function renderUclPanel(comp){
   const box = document.getElementById(comp+'-content');
   if(!box) return;
@@ -28478,7 +28550,9 @@ function renderUclPanel(comp){
       <div class="wm26-hero-text"><p style="margin:0;font-weight:800;">${label} · ${m?UCL_ROUND_LABEL[UCL_KO_ORDER[roundIdx]]:''}</p></div>
     </div>
     <div id="ucl-match-area-${comp}" style="margin-bottom:14px;"></div>
-    ${m ? uclTieCardHTML(m, m.leg1?'Rückspiel spielen':'Hinspiel spielen', true, comp) : ''}`;
+    ${m ? uclTieCardHTML(m, m.leg1?'Rückspiel spielen':'Hinspiel spielen', true, comp) : ''}
+    <p class="hint" style="font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.04em;margin:14px 0 4px;">Turnierbaum</p>
+    ${uclBracketHTML(t.knockout.rounds, comp)}`;
   const btn = document.getElementById('ucl-play-tie-btn');
   if(btn) btn.addEventListener('click', ()=>playUclKnockoutLeg(comp));
 }
