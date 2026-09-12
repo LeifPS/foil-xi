@@ -23,6 +23,66 @@ Features by Format:
   - Round Robin: Full round-robin with standings (4/6/8 players)
 
 -->
+<!--
+FOIL ELEVEN - Inhaltsverzeichnis (für Entwickler/Claude, nicht spielrelevant)
+=============================================================================
+Diese Datei ist eine reine Static-Site (kein Build-Schritt, kein Modul-System) - EIN <style>-Block
+und EIN sehr großer <script>-Block mit allen globalen Funktionen/Variablen. Die Zeilennummern unten
+sind der Stand vom 2026-09 und WERDEN mit jeder Änderung leicht abdriften - falls eine Nummer nicht
+mehr stimmt, direkt nach dem fett markierten Such-Text unten grep'en (`grep -n "<Text>" index.html`),
+der bleibt stabil, solange der jeweilige Abschnitts-Kommentar nicht umformuliert wird.
+
+  CSS (ein einzelner <style>-Block)
+  ~92      Start des <style>-Blocks (Farbvariablen, Grundlayout)
+  ~413     UCL/UEL-Siegerkarten-Theme + FX (.pcard.theme-uclchamp/.uelchamp, .uclchamp-fx)
+
+  JavaScript (ein einzelner <script>-Block, ab hier alles Zeilennummern IM Script)
+  ~2973    Script-Start (players_data.js + eigenes <script>), Boot-Sequenz, Firebase-Init
+  ~8029    "===== data prep =====" - Kartendatenbank-Aufbereitung (PLAYERS_REAL_DB etc.)
+  ~9698    "===== online backend" - Firestore-Zugriff (sSet/sGet), Read-Cache
+  ~9943    "===== RAP" - Recent-Average-Price-Bewertungssystem für den Markt
+  ~10895   "===== pack definitions" - alle PACKS (Shop-Inhalt)
+  ~11373   "===== SBCs" - Squad Building Challenges
+  ~13111   "===== TRADING" - Angebote/Handel zwischen Spielern
+  ~14804   "===== single-device session lock"
+  ~15142   "===== state" - globaler Spielzustand (profile, collection, squad, ...)
+  ~15173   "===== player leveling" - Karten-XP/Level (Bronze/Silber/Gold/Diamant), applyCardLevel
+  ~16006   "===== modal" - generisches Modal-System (openModal/closeModal)
+  ~16044   "===== card rendering" - cardEl() und alles rund um die Kartendarstellung
+  ~16548   "===== nav & routing" - Tab-/Ansichts-Navigation
+  ~16883   "===== STORE" - Kartenshop/Paketkauf-UI
+  ~16945   "===== pack odds" - Monte-Carlo-Simulation der Pack-Ziehungschancen
+  ~18876   "===== CLUB" - Vereinsverwaltung (Name, Wappen, Farben, ...)
+  ~20413   "===== INDEX" - durchsuchbares Karten-/Trainer-Lexikon
+  ~21187   "===== SQUAD BUILDER" - Kader-Editor (Formation, Slots, Chemie)
+  ~22102   "===== PLAY / ONLINE" - Matchmaking/Ranked
+  ~22239   "===== FRIENDS & DUELS"
+  ~24027   "===== TOURNAMENT / CUP MODE" - Turnier-Modus
+  ~24225   "===== Ligen: weekly league system" - wöchentliches Liga-System (Tabellen, Auf-/Abstieg)
+  ~25761   "===== Wochenendpokal"
+  ~26336   "===== Erfolge (Achievements) + Nametags"
+  ~27362   "===== WM 2026: the real 48-team format end to end" - kompletter WM-Modus
+  ~27939   "===== Champions League Modus (+ Europa League)" - Datenmodell/Klub-XI-Builder
+  ~28311   "===== Champions League / Europa League: Turnier-Ablauf" - Ziehung/Ligaphase/K.o.
+  ~29128   "===== Ballon d'Or Challenge: the single hardest one-off match" (Achtung: derselbe
+           Kommentartext taucht bei ~31849 versehentlich nochmal vor einer unrelated Funktion auf -
+           bestehender Copy-Paste-Fehler, nicht Teil dieses Inhaltsverzeichnisses)
+  ~32543   "===== TACTICS" - Mentalität/Pressing vor dem Match
+  ~32766   "===== PlayStyle-Training"
+  ~33182   function computeLambda(...) - ab hier die eigentliche Match-Engine (kein eigener
+           Abschnitts-Header): computeLambda/computeTeamProfile/playerImpactRating führen zu
+  ~33382   function buildDecisiveMatch(...) - der zentrale Match-Simulator, von praktisch jedem
+           Modus (Liga/WM26/UCL/Ranked/Turnier/...) aufgerufen
+  ~34056   "===== Kontrahent" - bot-only Gegner-Variante
+
+  Zwischen den obigen Kern-Systemen liegen viele einzelne, ähnlich aufgebaute Zeitevent-Abschnitte
+  ("X-Sonderaufgaben", "PROMO-Sonderaufgaben" 1.-11.) - bewusst NICHT einzeln aufgeführt, da laufend
+  neue dazukommen und sie alle demselben Muster folgen (SBCs + Match-Quests, siehe eine beliebige
+  davon als Vorlage). `grep -n "Sonderaufgaben" index.html` findet sie alle auf einen Blick.
+
+  tests/ (siehe tests/README.md) enthält Playwright-Regressionstests gegen einen Teil der obigen
+  Systeme (aktuell: UCL/UEL-Klub-Elfen, Ligaphasen-Spielplan, K.o.-Rückspiel-Aggregat-Logik).
+-->
 <html lang="de">
 <head>
 <meta charset="UTF-8">
