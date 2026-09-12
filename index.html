@@ -465,6 +465,11 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .ucl-draw-ball-name{font-weight:700;font-size:13px;flex:1;}
 .ucl-draw-ball-tag{font-size:10px;font-weight:800;letter-spacing:.03em;padding:2px 8px;border-radius:20px;
   background:rgba(255,255,255,.08);color:var(--muted);text-transform:uppercase;}
+.ucl-draw-my-pot-tag{background:var(--dcol);color:#0a0d14;border-radius:20px;padding:1px 8px;margin-left:6px;font-size:9px;font-weight:800;letter-spacing:.02em;vertical-align:1px;}
+/* CTA in der Wettbewerbsfarbe statt dem generischen Grün von .action-btn - passt zur restlichen
+   Ziehungs-Optik (Pot-Punkte/Ball-Reveals nutzen dieselbe --dcol-Variable). */
+.ucl-draw-next-btn{background:var(--dcol);color:#0a0d14;box-shadow:0 6px 18px -6px color-mix(in srgb, var(--dcol) 70%, transparent);}
+.ucl-draw-next-btn:hover{filter:brightness(1.08);}
 @keyframes uclDrawBallPop{0%{opacity:0;transform:scale(.7) translateY(6px);}70%{opacity:1;transform:scale(1.04) translateY(0);}100%{opacity:1;transform:scale(1);}}
 /* WM-Kapitän (World Cup Pack, rare pull): gold trophy foil, distinct from the plain-steel Kapitäne
    Pack look above - this one's tied to actually winning the WM 2026, so it reads as championship gold
@@ -2625,6 +2630,7 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .bracket-match.bracket-match-final{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 16px -4px var(--gold);background:linear-gradient(180deg,rgba(255,215,0,.08),var(--panel2));}
 @keyframes tableRowIn{0%{opacity:0;transform:translateX(-8px);}100%{opacity:1;transform:translateX(0);}}
 .bracket-fresh-row{animation:tableRowIn .35s ease both;}
+.bracket-scroll-hint{text-align:center;font-size:10px;color:var(--muted);padding:4px 0 0;}
 /* ---- WM 2026: unscoped flag icons (the .nc-flag equivalents are .pcard-scoped, WM26 tables/bracket
    live outside any .pcard) + redesigned group table + bracket side crest/flag chip ---- */
 .wm26-flag{width:20px;height:14px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.15);flex-shrink:0;}
@@ -2660,17 +2666,39 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .wm26-legend i.q-direct{background:var(--turf-bright);}
 .wm26-legend i.q-third{background:var(--gold);}
 /* UCL/UEL-Ligaphasen-Tabelle: eigenes 5-Spalten-Grid (Platz/Klub/Tore/Diff/Pkt, keine S/U/N-Spalten wie
-   bei WM26) - sonst dieselbe .wm26-table-Optik/Farblogik (q-direct/q-third/wm26-row-me wiederverwendet). */
-.ucl-lg-thead, .ucl-lg-row{display:grid;grid-template-columns:22px 1fr 46px 34px 30px;gap:0;align-items:center;}
-.ucl-lg-thead{padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;background:rgba(255,255,255,.03);}
+   bei WM26) - sonst dieselbe .wm26-table-Optik/Farblogik (q-direct/q-third/wm26-row-me wiederverwendet).
+   Die reine 3px-Randlinie von q-direct/q-third war im Vergleich zur restlichen Tabelle zu unauffällig,
+   um die drei Zonen (Top 8 = direkt K.o., 9-24 = Playoff, 25-36 = raus) auf einen Blick lesbar zu
+   machen - daher zusätzlich eine flächige Farbtönung je Zone plus echte Zwischenüberschriften
+   (.ucl-lg-zone-divider) an den beiden Zonengrenzen statt nur einer Legende am Tabellenende. */
+.ucl-lg-thead, .ucl-lg-row{display:grid;grid-template-columns:26px 1fr 46px 34px 34px;gap:0;align-items:center;}
+.ucl-lg-thead{padding:7px 10px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;background:rgba(255,255,255,.03);border-bottom:1px solid var(--line);}
 .ucl-lg-thead > div, .ucl-lg-row > div{text-align:center;}
 .ucl-lg-thead .wm26-c-team, .ucl-lg-row .wm26-c-team{text-align:left;}
-.ucl-lg-row{padding:6px 10px;font-size:11.5px;border-top:1px solid var(--line);position:relative;}
+.ucl-lg-row{padding:7px 10px;font-size:11.5px;border-top:1px solid var(--line);position:relative;transition:background .15s;}
+.ucl-lg-row.q-direct{background:linear-gradient(90deg, rgba(95,225,201,.10), rgba(95,225,201,.02) 65%);}
+.ucl-lg-row.q-third{background:linear-gradient(90deg, rgba(255,215,0,.07), rgba(255,215,0,.015) 65%);}
+.ucl-lg-row.q-out{opacity:.5;}
+.ucl-lg-row.wm26-row-me{background:linear-gradient(90deg, rgba(95,225,201,.24), rgba(95,225,201,.05) 70%);box-shadow:inset 3px 0 0 var(--turf-bright);opacity:1;}
+.ucl-lg-row .wm26-c-rank{font-weight:700;}
+.ucl-lg-row.q-direct .wm26-c-rank{color:var(--turf-bright);}
+.ucl-lg-row.q-third .wm26-c-rank{color:var(--gold);}
+.ucl-lg-me-tag{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.04em;color:#06110b;background:var(--turf-bright);border-radius:20px;padding:1px 6px;margin-left:6px;vertical-align:1px;}
+.ucl-lg-zone-divider{padding:5px 10px;font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;text-align:center;border-top:1px solid var(--line);background:rgba(255,255,255,.025);}
+.ucl-lg-zone-divider.zone-playoff{color:var(--gold);}
+.ucl-lg-zone-divider.zone-out{color:var(--muted);}
 .wm26-hero{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:14px;border-radius:12px;background:radial-gradient(120% 160% at 0% 0%,rgba(95,225,201,.14),transparent 60%),var(--panel2);border:1px solid var(--line);}
 /* Champions-/Europa-League: eigene Navy/Gold- bzw. Orange/Schwarz-Optik statt des generischen
    WM26-Grüns, passend zur echten UCL/UEL-Markenfarbe - reine Farbvariante desselben .wm26-hero-Layouts. */
-.ucl-hero{background:radial-gradient(120% 160% at 0% 0%,rgba(143,166,255,.20),transparent 60%),linear-gradient(160deg,#0a0f38,#0d1550);border-color:rgba(143,166,255,.35);}
-.uel-hero{background:radial-gradient(120% 160% at 0% 0%,rgba(255,154,60,.20),transparent 60%),linear-gradient(160deg,#2a1000,#3d1800);border-color:rgba(255,154,60,.4);}
+/* Zusätzlicher Marken-Akzent unten (dünner Farbverlauf-Strich) + leuchtendes Emblem, damit UCL/UEL
+   sich klarer von der generischen WM26-Grün-Optik absetzen, statt nur eine andere Grundfarbe zu haben. */
+.ucl-hero{background:radial-gradient(120% 160% at 0% 0%,rgba(143,166,255,.20),transparent 60%),linear-gradient(160deg,#0a0f38,#0d1550);border-color:rgba(143,166,255,.35);position:relative;overflow:hidden;}
+.uel-hero{background:radial-gradient(120% 160% at 0% 0%,rgba(255,154,60,.20),transparent 60%),linear-gradient(160deg,#2a1000,#3d1800);border-color:rgba(255,154,60,.4);position:relative;overflow:hidden;}
+.ucl-hero::after, .uel-hero::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;}
+.ucl-hero::after{background:linear-gradient(90deg,#8fa6ff,transparent 75%);}
+.uel-hero::after{background:linear-gradient(90deg,#ff9a3c,transparent 75%);}
+.ucl-hero .wm26-hero-crest{filter:drop-shadow(0 0 10px rgba(143,166,255,.55));}
+.uel-hero .wm26-hero-crest{filter:drop-shadow(0 0 10px rgba(255,154,60,.55));}
 .wm26-hero-crest{width:46px;height:46px;flex-shrink:0;}
 .wm26-hero-crest svg{width:100%;height:100%;}
 .wm26-hero-vs{font-size:11px;color:var(--muted);opacity:.7;font-weight:700;}
@@ -28913,10 +28941,15 @@ function uclCompetitionBadge(comp, size=40){
 // 9-24 (Playoff) farblich markiert wie bei WM26, nur eigenes 5-Spalten-Grid ohne S/U/N.
 function uclStandingsTableHTML(table){
   const rows = table.map((r,i)=>{
-    const qCls = i<8 ? 'q-direct' : (i<24 ? 'q-third' : '');
-    return `<div class="ucl-lg-row ${qCls}${r.isPlayer?' wm26-row-me':''}">
+    const qCls = i<8 ? 'q-direct' : (i<24 ? 'q-third' : 'q-out');
+    // Echte Zwischenüberschriften an den beiden Zonengrenzen statt nur einer Legende am Ende - macht
+    // "hier hört Direkt-K.o. auf, hier fängt Playoff an" auf den ersten Blick lesbar, auch ohne die
+    // Farbtönung/Legende erst entziffern zu müssen.
+    const divider = i===8 ? `<div class="ucl-lg-zone-divider zone-playoff">Playoff-Zone · Platz 9-24</div>`
+      : i===24 ? `<div class="ucl-lg-zone-divider zone-out">Ausgeschieden · Platz 25-36</div>` : '';
+    return `${divider}<div class="ucl-lg-row ${qCls}${r.isPlayer?' wm26-row-me':''}">
       <div class="wm26-c-rank">${i+1}</div>
-      <div class="wm26-c-team">${uclSideChip(r.club,r.isPlayer,18)}<span class="wm26-c-team-name" style="color:${r.isPlayer?'var(--turf-bright)':'var(--chalk)'};font-weight:${r.isPlayer?'700':'400'};">${uclSideLabel(r.club, r.isPlayer)}</span></div>
+      <div class="wm26-c-team">${uclSideChip(r.club,r.isPlayer,18)}<span class="wm26-c-team-name" style="color:${r.isPlayer?'var(--turf-bright)':'var(--chalk)'};font-weight:${r.isPlayer?'700':'400'};">${uclSideLabel(r.club, r.isPlayer)}</span>${r.isPlayer?'<span class="ucl-lg-me-tag">DU</span>':''}</div>
       <div class="wm26-c-gf">${r.gf}:${r.ga}</div>
       <div class="mono" style="color:var(--muted);">${r.gd>=0?'+':''}${r.gd}</div>
       <div class="wm26-c-pts">${r.pts}</div>
@@ -29002,7 +29035,11 @@ function uclBracketHTML(rounds, comp){
       }
     });
   }
-  return `<div class="bracket-wrap"><div class="bracket-rounds" style="width:${totalWidth}px;height:${totalHeight}px;">${cols}<div class="bracket-lines">${lines}</div></div></div>`;
+  // Ab dem Achtelfinale ist der Baum praktisch immer breiter als ein Handy-Bildschirm (.bracket-wrap
+  // ist horizontal scrollbar, aber das ist ohne Hinweis nicht unbedingt offensichtlich) - ein kurzer
+  // Hinweistext darunter macht "hier geht's zum Halbfinale/Finale" explizit statt implizit.
+  const scrollHint = totalWidth>380 ? `<div class="bracket-scroll-hint">↔ Zum Halbfinale/Finale wischen</div>` : '';
+  return `<div class="bracket-wrap"><div class="bracket-rounds" style="width:${totalWidth}px;height:${totalHeight}px;">${cols}<div class="bracket-lines">${lines}</div></div></div>${scrollHint}`;
 }
 function renderUclPanel(comp){
   const box = document.getElementById(comp+'-content');
@@ -29047,7 +29084,7 @@ function renderUclPanel(comp){
           <span class="ucl-draw-ball-tag">${m.home?'Heim':'Auswärts'}</span>
         </div>`).join('');
       return `<div class="ucl-draw-group">
-        <p class="ucl-draw-group-label">Topf ${pot}${pot===myPot?' (dein Topf)':''}</p>
+        <p class="ucl-draw-group-label">Topf ${pot}${pot===myPot?'<span class="ucl-draw-my-pot-tag">DEIN TOPF</span>':''}</p>
         <div class="ucl-draw-balls">${balls}</div>
       </div>`;
     }).join('');
@@ -29066,7 +29103,7 @@ function renderUclPanel(comp){
         </div>
         <div class="ucl-draw-pots">${potsHTML}</div>
         ${groupsHTML}
-        ${revealed<4 ? `<button class="action-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Topf ${potOrder[revealed]} ziehen</button>` : `<button class="action-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Zur Ligaphase</button>`}
+        ${revealed<4 ? `<button class="action-btn ucl-draw-next-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Topf ${potOrder[revealed]} ziehen</button>` : `<button class="action-btn ucl-draw-next-btn" id="ucl-draw-next" style="width:260px;margin-top:10px;">Zur Ligaphase</button>`}
       </div>`;
     const btn = document.getElementById('ucl-draw-next');
     if(btn) btn.addEventListener('click', ()=>uclRevealNextDrawSlot(comp));
