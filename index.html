@@ -27992,17 +27992,36 @@ const PLAYER_PHOTO_OVERRIDE = {
   227127: 'https://cdn3.futbin.com/content/fifa26/img/players/p50558775.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=9424b10bb1cc7aca8c2d6d08b42fc18d', // Á. Remiro
   226851: 'https://cdn3.futbin.com/content/fifa26/img/players/p84112931.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=16d533ccf788d751fa00f47361706597', // B. Pavard
   246669: 'https://cdn3.futbin.com/content/fifa26/img/players/p67355533.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=0d37b6884c8bd8dc3a2e5983da7b3da4', // B. Saka
+  // Diese hier hatten schon ein ÄLTERES Foto in einer kartenart-spezifischen Map (Kapitäne, Kronjuwelen,
+  // 27 Ratings, ...) - deshalb ursprünglich hier weggelassen, um jene Karten nicht zu verändern. Aber
+  // genau das ließ die Sieger-Karte (die einzige Kartenart, die überhaupt aus dieser Map liest) auf dem
+  // alten Foto hängen statt das für sie explizit gelieferte neue Foto zu zeigen - deshalb doch hier rein.
+  212622: 'https://cdn3.futbin.com/content/fifa26/img/players/p84098702.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=3c47bba45c95622240aa6a89349b1099', // J. Kimmich
+  231866: 'https://cdn3.futbin.com/content/fifa26/img/players/p50563514.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=9e043b99f446539ceaab8969b92a0acd', // Rodri
+  227203: 'https://cdn3.futbin.com/content/fifa26/img/players/p67336067.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=a32e176f24268c6cca7130b174c8b6d0', // A. Putellas
+  200389: 'https://cdn3.futbin.com/content/fifa26/img/players/p67309253.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=6eff4cdaf0a420c528b46f8089705646', // J. Oblak
+  235212: 'https://cdn3.futbin.com/content/fifa26/img/players/p50566860.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=df3de4049035af1e43e9caa7e419cb97', // A. Hakimi
+  202126: 'https://cdn3.futbin.com/content/fifa26/img/players/p251860366.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=994b2e6ee5f2ae9c3eeb3e6f43160a5f', // H. Kane
+  203376: 'https://cdn3.futbin.com/content/fifa25/img/players/p100866672.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=7e4de2e9e187d2d1cdaac0ca4bee5012', // V. van Dijk
+  239085: 'https://cdn3.futbin.com/content/fifa26/img/players/p168011245.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=032ba6d06db81d5837960fa1e3a6be48', // E. Haaland
+  215441: 'https://cdn3.futbin.com/content/fifa26/img/players/p67324305.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=675a332f9a2a1f2dbdad401686a035ea', // S. Guirassy
+  255253: 'https://cdn3.futbin.com/content/fifa26/img/players/p50586901.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=47f65229baad56740016fa31632852b0', // Vitinha
+  256790: 'https://cdn3.futbin.com/content/fifa26/img/players/p84142870.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=fb280d33af4e47c525a4967324c9dd9c', // J. Musiala
+  239053: 'https://cdn3.futbin.com/content/fifa26/img/players/p151233997.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=a7c50a8cd9108835ba8f2c2ecb5df571', // F. Valverde
+  232293: 'https://cdn3.futbin.com/content/fifa26/img/players/p84118373.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=a6996737cde5b6c9be5641e4b382f9a9', // V. Osimhen
+  247635: 'https://cdn3.futbin.com/content/fifa26/img/players/p134465363.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=3327a850cc986442cc4aa1049d04c0be', // K. Kvaratskhelia
+  238794: 'https://cdn3.futbin.com/content/fifa26/img/players/p151233738.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=ac0e463c18c448726cddd2fcbc3d8802', // Vini Jr.
 };
-// Jede der vielen einzelnen *_IMG_OVERRIDE-Maps (Kronjuwelen, Kapitäne, WM26-Kapitän, Mystery Elite,
-// 27 Ratings, Breakout, SBC-Torwart, ...) kennt ein echtes Actionfoto nur für IHRE eigene Kartenart -
-// ein Spieler kann also z.B. bei seiner Kapitäne-Karte schon das neue Foto haben, während seine ganz
-// neue Champions-/Europa-League-Sieger-Karte (die gar keine eigene Override-Map hat) noch auf dem
-// generischen Standardporträt hängenbleibt. Statt für jede neue Kartenart wieder eine eigene Map von
-// Hand zu pflegen: einfach das erste bereits bekannte echte Foto aus JEDER bestehenden Map wiederverwenden.
+// Nur von der Champions-/Europa-League-Sieger-Karte selbst benutzt (siehe uclRewardCardsForClub) - KEINE
+// andere Kartenart liest diese Funktion. PLAYER_PHOTO_OVERRIDE deshalb bewusst ZUERST geprüft, nicht als
+// letzter Rückfall: das ist die Map mit dem gezielt für genau diese Karte gelieferten Foto, und die
+// älteren, kartenart-spezifischen Maps (Kronjuwelen, Kapitäne, WM26-Kapitän, Mystery Elite, 27 Ratings,
+// Breakout, SBC-Torwart) sind nur der Rückfall für Spieler, für die noch kein eigenes Sieger-Karten-Foto
+// geliefert wurde - sonst würde ein z.B. Jahre altes Kapitäne-Foto ein frisch geliefertes Foto verdecken.
 function realPhotoForBaseId(baseId){
-  return BLACKHOLE_IMG_OVERRIDE[baseId] || KRONJUWELEN_IMG_OVERRIDE[baseId] || KAPITAENE_IMG_OVERRIDE[baseId]
-    || WM26_KAPITAEN_IMG_OVERRIDE[baseId] || MYSTERY_RARE_IMG_OVERRIDE[baseId] || RATINGS27_IMG_OVERRIDE[baseId]
-    || BREAKOUT_IMG_OVERRIDE[baseId] || SBC_GK_IMG_OVERRIDE[baseId] || PLAYER_PHOTO_OVERRIDE[baseId] || null;
+  return PLAYER_PHOTO_OVERRIDE[baseId] || BLACKHOLE_IMG_OVERRIDE[baseId] || KRONJUWELEN_IMG_OVERRIDE[baseId]
+    || KAPITAENE_IMG_OVERRIDE[baseId] || WM26_KAPITAEN_IMG_OVERRIDE[baseId] || MYSTERY_RARE_IMG_OVERRIDE[baseId]
+    || RATINGS27_IMG_OVERRIDE[baseId] || BREAKOUT_IMG_OVERRIDE[baseId] || SBC_GK_IMG_OVERRIDE[baseId] || null;
 }
 function uclTopPlayersForClub(club, n){
   const pool = ALL_BASE.concat(UCL_FILLER_PLAYERS).filter(c=>c.club===club && !c.isManager && (!c.variant || c.variant==='base'));
