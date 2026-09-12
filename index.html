@@ -27900,6 +27900,17 @@ const UEL_REWARD_ODDS_BY_POT = {
   C: [{ov:99,w:80},{ov:101,w:20}],
   D: [{ov:99,w:100}],
 };
+// Jede der vielen einzelnen *_IMG_OVERRIDE-Maps (Kronjuwelen, Kapitäne, WM26-Kapitän, Mystery Elite,
+// 27 Ratings, Breakout, SBC-Torwart, ...) kennt ein echtes Actionfoto nur für IHRE eigene Kartenart -
+// ein Spieler kann also z.B. bei seiner Kapitäne-Karte schon das neue Foto haben, während seine ganz
+// neue Champions-/Europa-League-Sieger-Karte (die gar keine eigene Override-Map hat) noch auf dem
+// generischen Standardporträt hängenbleibt. Statt für jede neue Kartenart wieder eine eigene Map von
+// Hand zu pflegen: einfach das erste bereits bekannte echte Foto aus JEDER bestehenden Map wiederverwenden.
+function realPhotoForBaseId(baseId){
+  return BLACKHOLE_IMG_OVERRIDE[baseId] || KRONJUWELEN_IMG_OVERRIDE[baseId] || KAPITAENE_IMG_OVERRIDE[baseId]
+    || WM26_KAPITAEN_IMG_OVERRIDE[baseId] || MYSTERY_RARE_IMG_OVERRIDE[baseId] || RATINGS27_IMG_OVERRIDE[baseId]
+    || BREAKOUT_IMG_OVERRIDE[baseId] || SBC_GK_IMG_OVERRIDE[baseId] || null;
+}
 function uclTopPlayersForClub(club, n){
   const pool = ALL_BASE.concat(UCL_FILLER_PLAYERS).filter(c=>c.club===club && !c.isManager && (!c.variant || c.variant==='base'));
   return pool.slice().sort((a,b)=>b.ov-a.ov).slice(0,n);
@@ -27925,6 +27936,8 @@ function uclRewardCardsForClub(club, comp){
         // tops[0] = bester realer Spieler -> bekommt IMMER die seltenste (höchste) Stufe
         const {ov,w} = sortedOdds[sortedOdds.length-1-i];
         const card = boostBaseToOv(base, ov, idOffset+base.id, variant, variantLabel, theme);
+        const realImg = realPhotoForBaseId(base.id);
+        if(realImg) card.img = realImg;
         BY_ID.set(card.id, card);
         return {...card, weight:w};
       });
