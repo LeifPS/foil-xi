@@ -2213,6 +2213,10 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
 @keyframes matchIntroKickoff{0%{opacity:0;transform:scale(.5);}30%{opacity:1;transform:scale(1.15);}100%{opacity:0;transform:scale(1.3);}}
 .match-intro-lines{width:100%;flex-direction:column;align-items:center;gap:10px;animation:matchIntroFadeIn .35s ease;}
 .match-intro-lines-title{font-family:'JetBrains Mono';font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+/* Trainer-Karte über der Aufstellung - vorher zeigte nur der kurze Crest-Vergleichs-Screen (#mi-vs, nur
+   ~2.2s sichtbar) überhaupt einen Trainernamen; die viel längere Aufstellungs-Phase hatte gar keinen. */
+.match-intro-mgr{display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:4px;}
+.match-intro-mgr::before{content:'Trainer';font-family:'JetBrains Mono';font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
 .match-intro-lines-stack{width:100%;display:flex;flex-direction:column;align-items:center;gap:10px;}
 .match-intro-line-row{display:flex;justify-content:center;align-items:flex-start;gap:8px;flex-wrap:wrap;animation:matchIntroLineIn .4s cubic-bezier(.3,.8,.4,1);}
 @keyframes matchIntroLineIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
@@ -23992,7 +23996,10 @@ function boostBotXI(xi, slots, forceManager){
     return {n:card.n, pos:slots[i].label, ov:Math.round(ov), baseLevelOv:Math.round(baseLevelOv), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, ...boostedSubstats, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card), level:4};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
-  return {players, managerName: mgr ? mgr.n : null};
+  // mgrCard (the full manager object, not just its name) - lets callers actually render the manager as
+  // a real card (cardEl already renders card.isManager cards fine) instead of only showing his name as
+  // plain text, e.g. in the pre-match lineup reveal (see showMatchIntroCutscene).
+  return {players, managerName: mgr ? mgr.n : null, mgrCard: mgr};
 }
 // forces a bot XI's average rating to land EXACTLY on targetAvg (an integer), not just approximately -
 // simply scaling then rounding each player independently can drift the team average off-target by up to
@@ -27383,9 +27390,9 @@ function wm26NationXI(nation){
     nameCount.set(candidate.n, (nameCount.get(candidate.n)||0)+1);
     return candidate;
   });
-  const {players, managerName} = boostBotXI(xi, slots);
+  const {players, managerName, mgrCard} = boostBotXI(xi, slots);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
-  const result = {owner:`Nationalmannschaft ${natDE(nation)}`, rating, players, isBot:true, managerName, nation};
+  const result = {owner:`Nationalmannschaft ${natDE(nation)}`, rating, players, isBot:true, managerName, mgrCard, nation};
   WM26_XI_CACHE.set(nation, result);
   return result;
 }
@@ -27396,7 +27403,7 @@ function wm26OppSide(opp, nation){
   // real national-team crest where one's been added to CLUB_LOGO (see the "National teams" block
   // there); every other nation just keeps the generic monogram shield until its logo is added.
   const crest = CLUB_LOGO[nation] ? {club: nation} : {shape:'shield', primary:'#4dbf6f', secondary:'#0a0d12', letter:(natDE(nation)||'?')[0].toUpperCase()};
-  return {name: natCode(nation), rating: opp.rating, managerName: opp.managerName, crest, formation: '433'};
+  return {name: natCode(nation), rating: opp.rating, managerName: opp.managerName, mgrCard: opp.mgrCard, crest, formation: '433'};
 }
 function wm26MatchResult(teamA, teamB, allowDraw){
   const aXI = wm26NationXI(teamA.nation);
@@ -28227,9 +28234,9 @@ function uclClubXI(club){
   const mgrPool = MANAGERS.filter(m=>m.club===club);
   const chosenMgr = mgrPool.length ? pick(mgrPool) : {n:'Cheftrainer'};
   const mgr = {...chosenMgr, boostType:'percent', boostValue:8, isManager:true};
-  const {players, managerName} = boostBotXI(xi, slots, mgr);
+  const {players, managerName, mgrCard} = boostBotXI(xi, slots, mgr);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
-  const result = {owner:club, rating, players, isBot:true, managerName, club};
+  const result = {owner:club, rating, players, isBot:true, managerName, mgrCard, club};
   UCL_XI_CACHE.set(club, result);
   return result;
 }
@@ -28393,7 +28400,7 @@ async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel){
   const opp = uclClubXI(oppClub);
   const myMgr = getAssignedManager();
   const meSide = {name: ligaTeamAbbr(profile.displayName||'Dein Verein', profile.clubAbbr), rating, crest: profile.crest, managerName: myMgr?myMgr.n:null};
-  const oppSide = {name: oppClub, rating: opp.rating, managerName: opp.managerName, crest: uclCrestFor(oppClub), formation:'433'};
+  const oppSide = {name: oppClub, rating: opp.rating, managerName: opp.managerName, mgrCard: opp.mgrCard, crest: uclCrestFor(oppClub), formation:'433'};
   await showMatchIntroCutscene(area, meSide, oppSide, opp.players.map(p=>({id:p.id, pos:p.pos, level:p.level, ov:p.baseLevelOv, pac:p.pac, sho:p.sho, pas:p.pas, dri:p.dri, defn:p.defn, phy:p.phy})));
   area.innerHTML = `
     <div class="vs-teams">
@@ -34101,6 +34108,7 @@ function showMatchIntroCutscene(container, meSide, oppSide, oppCardRefs){
       </div>
       <div class="match-intro-lines" id="mi-lines" style="display:none;">
         <div class="match-intro-lines-title">Gegnerische Aufstellung</div>
+        ${oppSide.mgrCard ? `<div class="match-intro-mgr" id="mi-lines-mgr"></div>` : ''}
         <div class="match-intro-lines-stack" id="mi-lines-stack"></div>
       </div>
       <div class="match-intro-lineup" id="mi-lineup" style="display:none;">
@@ -34112,6 +34120,10 @@ function showMatchIntroCutscene(container, meSide, oppSide, oppCardRefs){
       </div>`;
     container.innerHTML = '';
     container.appendChild(wrap);
+    if(oppSide.mgrCard){
+      const mgrSlot = document.getElementById('mi-lines-mgr');
+      if(mgrSlot) mgrSlot.appendChild(cardEl(oppSide.mgrCard, 'xs'));
+    }
     let done = false;
     const finish = ()=>{
       if(done) return; done = true;
