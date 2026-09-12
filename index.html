@@ -17431,7 +17431,7 @@ function renderStore(view){
           ${pack.cost>0 && pack.count>0 ? `<div class="hint" style="margin:0;font-size:10.5px;">~${formatCoins(Math.round(pack.cost/pack.count))} pro Karte</div>` : ''}
           <div class="buyrow">
             <div class="price-pill">${coinIcon(14)}${formatCoins(pack.cost)}</div>
-            <button class="buy-btn" ${profile.coins<pack.cost?'disabled':''}>\u00d6ffnen</button>
+            <button class="buy-btn" ${profile.coins<pack.cost?`disabled title="Fehlen noch ${formatCoins(pack.cost-profile.coins)} Coins"`:''}>\u00d6ffnen</button>
           </div>
         </div>`;
       card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
@@ -28586,7 +28586,10 @@ async function startUcl(comp){
   const existing = uclCurrentRun(comp);
   if(existing && existing.stage!=='done'){ toast('Du hast bereits einen laufenden Lauf in diesem Modus.'); return; }
   const label0 = comp==='uel' ? 'Europa League' : 'Champions League';
-  if(uclStartsUsedToday(comp)>=UCL_DAILY_LIMIT){ toast(`Tageslimit erreicht: maximal ${UCL_DAILY_LIMIT} ${label0}-Teilnahmen pro Tag.`); return; }
+  // QoL: sagt dazu, WANN es wieder losgeht, statt den Spieler raten zu lassen, ob "morgen" der
+  // lokale Kalendertag oder 24h ab jetzt bedeutet (uclStartsUsedToday zählt nach localDateStr,
+  // also Mitternacht lokale Zeit).
+  if(uclStartsUsedToday(comp)>=UCL_DAILY_LIMIT){ toast(`Tageslimit erreicht: maximal ${UCL_DAILY_LIMIT} ${label0}-Teilnahmen pro Tag. Setzt sich um Mitternacht zurück.`); return; }
   const useFreeEntry = comp==='ucl' && !!profile.uclFreeEntryAvailable;
   const fee = useFreeEntry ? 0 : uclEntryFee(comp);
   if(fee>0 && (profile.coins||0)<fee){ toast(`Du brauchst ${formatCoins(fee)} Coins Startgeld.`); return; }
@@ -29115,7 +29118,7 @@ function renderUclPanel(comp){
       </div>
       ${banner}
       <p class="hint" style="margin-top:0;">Die echte ${label} 26/27 nachgespielt: 36 Klubs, Ligaphase (8 Spiele gegen je 2 Gegner pro Topf), Playoff für Platz 9-24, danach K.o.-Runde ab dem Achtelfinale (Hin-/Rückspiel mit Aggregat). Du übernimmst zufällig den Platz eines echten Klubs. Startgeld: <b style="color:var(--gold);">${formatCoins(feeNow)} Coins</b>${feeNow===0?' (Gratis-Startplatz aus deinem Europa-League-Sieg!)':''}. Ab dem Viertelfinale bist du ungefähr kostenneutral, Sieg bringt eine Sieger-Kartenvariante des im Finale besiegten Klubs.</p>
-      <p class="hint">Tageslimit: ${uclStartsUsedToday(comp)}/${UCL_DAILY_LIMIT} ${label}-Teilnahmen heute.</p>
+      <p class="hint">Tageslimit: ${uclStartsUsedToday(comp)}/${UCL_DAILY_LIMIT} ${label}-Teilnahmen heute.${uclStartsUsedToday(comp)>=UCL_DAILY_LIMIT?' Setzt sich um Mitternacht zurück.':''}</p>
       <button class="action-btn" id="ucl-start-${comp}" style="width:220px;">${label} starten</button>
       <div id="ucl-match-area-${comp}" style="margin-top:14px;"></div>`;
     document.getElementById('ucl-start-'+comp).addEventListener('click', ()=>startUcl(comp));
