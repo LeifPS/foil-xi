@@ -18881,6 +18881,12 @@ function adminFullCardPool(){
   wm26VarianteSpecials(); wm26KapitaenSpecials(); breakoutSpecials();
   siegeTrophyCard(); ligaMeisterTrophyCard(); wepTrophyCard();
   LIGA_CHAMPION_ROSTER.forEach((_,i)=>ligaChampionCardForIndex(i));
+  // Champions-/Europa-League-Sieger-Karten (uclRewardCardsForClub) sind wie die WM26-Pools oben lazy -
+  // normales Spielen ruft das nur für den einen Klub auf, den man gerade im Finale besiegt hat. Jeden
+  // der 72 Klubs (beide Wettbewerbe) hier einmal force-builden, sonst tauchen alle anderen möglichen
+  // Sieger-Karten nie im Index auf, bis irgendwer zufällig genau gegen diesen Klub gewinnt.
+  UCL_ALL_CLUBS.forEach(club=>uclRewardCardsForClub(club, 'ucl'));
+  UEL_ALL_CLUBS.forEach(club=>uclRewardCardsForClub(club, 'uel'));
   // Kontrahent-Karten (getKontrahentRoster, id 20000000+base.id*10+ti, ~20-24 Mio.) und "weakened"
   // CPU-Gegner-Karten (pickRealisticOpponent, id 30000000+c.id, ~30-30,4 Mio.) sind rein interne, im
   // laufenden Match on-the-fly erzeugte Gegner-Auffüllkarten ohne jeden echten Erwerbsweg - kein Spieler
@@ -27874,9 +27880,22 @@ function uclClubXI(club){
     nameCount.set(candidate.n, (nameCount.get(candidate.n)||0)+1);
     return candidate;
   });
+  // Jede Karte hier zählt als voll ausgespielt (Level 4/Diamant) - genau der +4-OVR/+4-je-Substat-Bonus,
+  // den eine eigene, komplett hochgelevelte Karte im Spieler-Kader auch bekäme (siehe applyCardLevel).
+  // Ohne das wirkten selbst Top-Klubs wie Bayern nur mit ihren blanken Grundwerten spürbar schwächer,
+  // als eine echte Spieler-Elf aus denselben Karten je wäre.
+  const leveledXi = xi.map(c=>{
+    const out = {...c, ov:c.ov+4};
+    BLACK_HOLE_STAT_KEYS.forEach(k=>{ if(typeof out[k]==='number') out[k] = out[k]+4; });
+    return out;
+  });
+  // Jeder Klub bekommt IMMER einen Trainer-Bonus - einen echten aus MANAGERS, falls für diesen Klub
+  // hinterlegt, sonst pauschal +5% (nie einfach null wie vorher), analog zum garantierten Trainer-Bonus
+  // in einer echten Spieler-Elf.
   const mgrPool = MANAGERS.filter(m=>m.club===club);
-  const mgr = mgrPool.length ? pick(mgrPool) : (hasOwnCards ? null : (BOT_ELITE_MANAGER_POOL.length ? pick(BOT_ELITE_MANAGER_POOL) : null));
-  const {players, managerName} = boostBotXI(xi, slots, mgr);
+  const GENERIC_UCL_MANAGER = {n:'Cheftrainer', boostType:'percent', boostValue:5, isManager:true};
+  const mgr = mgrPool.length ? pick(mgrPool) : GENERIC_UCL_MANAGER;
+  const {players, managerName} = boostBotXI(leveledXi, slots, mgr);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
   const result = {owner:club, rating, players, isBot:true, managerName, club};
   UCL_XI_CACHE.set(club, result);
