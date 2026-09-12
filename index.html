@@ -21605,8 +21605,16 @@ function renderSquad(view){
     el.style.left = slot.x+'%'; el.style.top = slot.y+'%';
     if(card){
       // equipped card: pin the label to the slot it's actually playing, no cycling through its
-      // other listed positions - the card's own pos-bonus tag already reflects this exact slot
-      const cardNode = cardEl(card, 'xs', null, slot.label);
+      // other listed positions - the card's own pos-bonus tag already reflects this exact slot.
+      // The big OVR shown here used to be the card's plain, unboosted card.ov - completely ignoring
+      // Trainer-Boost, Positionsbonus and Chemie, even though squadRating()/getMySquadPlayers() (what
+      // actually plays the match) already factor all three in. Same fix as the UCL/Gegner-Karten: the
+      // NUMBER shown should be the same number the game actually plays with, not a different "raw"
+      // one - previewEffectiveOvAtSlot with the card's OWN uid gives exactly that (its real effective
+      // rating at its current slot, in its current squad), reusing the identical math squadRating() uses.
+      const effOv = previewEffectiveOvAtSlot(card, slot, uid);
+      const displayCard = effOv!=null ? {...card, ov:effOv} : card;
+      const cardNode = cardEl(displayCard, 'xs', null, slot.label);
       const chem = chemDetail.bySlot[slot.id];
       if(chem!==undefined){
         cardNode.style.position = 'relative';
