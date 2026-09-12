@@ -20870,7 +20870,15 @@ function cardIndexChemistryHTML(card){
 function otherVersionsOf(card){
   if(card.isManager || !card.baseId) return [];
   const out = [];
-  BY_ID.forEach(c=>{ if(c.id!==card.id && !c.isManager && c.baseId===card.baseId) out.push(c); });
+  // Dieselbe Ausschluss-Range wie adminFullCardPool (siehe dort) - Kontrahent (20000000+base.id*10+ti)
+  // und die "weakened" CPU-Gegner-Karten (30000000+c.id) sind rein interne, im laufenden Match on-the-
+  // fly erzeugte Auffüllkarten ohne jeden echten Erwerbsweg, tragen aber dieselbe baseId wie ihre echte
+  // Quellkarte - ohne diesen Filter tauchten sie hier als niemals erhältliche "Phantom"-Versionen auf.
+  BY_ID.forEach(c=>{
+    if(c.id!==card.id && !c.isManager && c.baseId===card.baseId
+      && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar'
+      && (c.id<20000000 || c.id>=40000000)) out.push(c);
+  });
   return out.sort((a,b)=>b.ov-a.ov);
 }
 function cardIndexVersionsHTML(card){
