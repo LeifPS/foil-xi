@@ -27672,6 +27672,156 @@ function renderWM26Panel(){
   const playBtn = document.getElementById('wm26-ko-play-btn');
   if(playBtn) playBtn.addEventListener('click', playWM26KnockoutMatch);
 }
+// ===== Champions League Modus (+ Europa League): wie WM 2026, aber Klub- statt Nationalmannschaften -
+// echte UCL/UEL 26/27-Teilnehmer (36 je Wettbewerb, 4 Pöte), echter Trainer/Chemistry/POS-Bonus (im
+// Gegensatz zur vereinfachten WM26-Bewertung, siehe uclClubXI), Ligaphase + Playoff-Runde (Platz 9-24)
+// vor der eigentlichen K.o.-Runde. Klubnamen exakt wie im Kartendatenbank-Feld `club`, damit uclClubXI
+// direkt die echten Karten dieses Klubs findet.
+const UCL_POTS = {
+  A: ['Paris Saint-Germain','FC Bayern München','Real Madrid','Liverpool','Inter','Manchester City','Arsenal','FC Barcelona','Atlético Madrid'],
+  B: ['Borussia Dortmund','Roma','Sporting CP','Aston Villa','FC Porto','Manchester United','Club Brugge KV','Real Betis Balompié','PSV'],
+  C: ['Feyenoord','Lille OSC','FK Bodø/Glimt','Napoli','RB Leipzig','Villarreal CF','Fenerbahçe','Shakhtar Donetsk','Galatasaray'],
+  D: ['Slavia Prag','Slovan Bratislava','VfB Stuttgart','AEK Athen','LASK Linz','Como','RC Lens','Viking FK','Sabah'],
+};
+const UEL_POTS = {
+  A: ['Bayer 04 Leverkusen','SL Benfica','Juventus','AC Milan','Olympique Lyonnais','AZ Alkmaar','Olympiacos FC','Real Sociedad','Olympique de Marseille'],
+  B: ['Ferencvárosi TC','Viktoria Plzeň','Union Saint-Gilloise','Dinamo Zagreb','RB Salzburg','Celtic','Sparta Praha','Stade Rennes','RSC Anderlecht'],
+  C: ['Sturm Graz','Lech Poznań','Crystal Palace','AFC Bournemouth','Sunderland','Celje','Jagiellonia Białystok','Omonia','RC Celta'],
+  D: ['TSG 1899 Hoffenheim','Beşiktaş JK','Torreense','Hapoel Beer Sheva','N.E.C.','OFI Kreta','Lillestrøm','Levski Sofia','Ararat-Armenia'],
+};
+const UCL_ALL_CLUBS = Object.values(UCL_POTS).flat();
+const UEL_ALL_CLUBS = Object.values(UEL_POTS).flat();
+function uclPotOf(club, comp){ const pots = comp==='uel' ? UEL_POTS : UCL_POTS; return Object.keys(pots).find(p=>pots[p].includes(club)) || null; }
+// Klubs komplett ohne echte Kartendaten in dieser Datenbank (auch das übliche Kontrahent-Boosting der
+// eigenen Basiskarten hilft hier nichts, weil es gar keine Basiskarten gibt) - beim Finalsieg gegen
+// einen dieser Klubs gibt's einen Coin-Bonus statt einer Spieler-Karte (siehe uclRewardCardsForClub).
+const UCL_DATALESS_CLUBS = new Set(['Sabah','Slovan Bratislava','AZ Alkmaar','Celje','Omonia','Torreense','Hapoel Beer Sheva','N.E.C.','OFI Kreta','Lillestrøm','Levski Sofia','Ararat-Armenia']);
+// Handverlesene Zusatzspieler für Klubs, deren echte Kader in dieser Kartendatenbank sonst mit 0 Karten
+// dastehen (Rating-Filter der Datenbank lässt kleine Kader komplett rausfallen) - real recherchierte
+// Namen/Positionen/Werte, NUR für den Champions-/Europa-League-Modus (uclClubXI/uclTopPlayersForClub),
+// absichtlich NICHT Teil von ALL_BASE/PLAYERS_BASE, damit sie nie in einem normalen Pack auftauchen
+// können. In BY_ID registriert wie jede andere Bot-only-Karte (siehe Kontrahent), damit sie überall dort
+// normal referenzierbar sind, wo eine Karten-ID aufgelöst wird (Spielerkarte im Match, Reward-Reveal, ...).
+const UCL_FILLER_PLAYERS = [
+  {id:73000001,n:'Hans Vanaken',pos:'CAM, CM',ov:81,nat:'Belgium',lg:'Pro League',club:'Club Brugge KV',pac:60,sho:78,pas:85,dri:82,defn:55,phy:70,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000002,n:'Christos Tzolis',pos:'LW, LM',ov:78,nat:'Greece',lg:'Pro League',club:'Club Brugge KV',pac:88,sho:75,pas:68,dri:82,defn:30,phy:65,foot:'Left',img:'',gk:false,variant:'base'},
+  {id:73000003,n:'Raphael Onyedika',pos:'CDM, CM',ov:77,nat:'Nigeria',lg:'Pro League',club:'Club Brugge KV',pac:68,sho:55,pas:68,dri:70,defn:80,phy:82,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000004,n:'Brandon Mechele',pos:'CB',ov:76,nat:'Belgium',lg:'Pro League',club:'Club Brugge KV',pac:62,sho:35,pas:60,dri:58,defn:79,phy:78,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000005,n:'Armando Obispo',pos:'CB',ov:74,nat:'Curacao',lg:'Eredivisie',club:'PSV',pac:65,sho:43,pas:60,dri:66,defn:73,phy:73,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000006,n:'Couhaib Driouech',pos:'LW',ov:72,nat:'Morocco',lg:'Eredivisie',club:'PSV',pac:92,sho:65,pas:61,dri:75,defn:26,phy:63,foot:'Left',img:'',gk:false,variant:'base'},
+  {id:73000007,n:'Kiliann Sildillia',pos:'RB',ov:72,nat:'France',lg:'Eredivisie',club:'PSV',pac:64,sho:30,pas:61,dri:67,defn:73,phy:73,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000008,n:'Adamo Nagalo',pos:'CB',ov:69,nat:'Burkina Faso',lg:'Eredivisie',club:'PSV',pac:70,sho:29,pas:53,dri:61,defn:68,phy:78,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000009,n:'Gonçalo Borges',pos:'RW',ov:71,nat:'Portugal',lg:'Eredivisie',club:'Feyenoord',pac:83,sho:58,pas:62,dri:74,defn:29,phy:58,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000010,n:'Gaoussou Diarra',pos:'LW',ov:70,nat:'Mali',lg:'Eredivisie',club:'Feyenoord',pac:83,sho:69,pas:62,dri:72,defn:29,phy:58,foot:'Left',img:'',gk:false,variant:'base'},
+  {id:73000011,n:'Nacho Ferri',pos:'ST',ov:70,nat:'Spain',lg:'Eredivisie',club:'Feyenoord',pac:68,sho:70,pas:54,dri:68,defn:29,phy:78,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000012,n:'Neraysho Kasanwirjo',pos:'CB',ov:68,nat:'Netherlands',lg:'Eredivisie',club:'Feyenoord',pac:75,sho:42,pas:54,dri:58,defn:69,phy:74,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000013,n:'Kiril Fesiun',pos:'GK',ov:68,nat:'Ukraine',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:69,sho:67,pas:68,dri:70,defn:36,phy:69,foot:'Right',img:'',gk:true,variant:'base'},
+  {id:73000014,n:'Alaa Ghram',pos:'CB',ov:67,nat:'Tunisia',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:72,sho:42,pas:57,dri:63,defn:67,phy:69,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000015,n:'Lucas Ferreira',pos:'RW',ov:67,nat:'Brazil',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:81,sho:57,pas:60,dri:71,defn:27,phy:61,foot:'Right',img:'',gk:false,variant:'base'},
+  {id:73000016,n:'Oleg Ocheretko',pos:'CAM',ov:66,nat:'Ukraine',lg:'Ukrayina Liha',club:'Shakhtar Donetsk',pac:65,sho:61,pas:62,dri:69,defn:43,phy:63,foot:'Right',img:'',gk:false,variant:'base'},
+];
+UCL_FILLER_PLAYERS.forEach(p=>BY_ID.set(p.id,p));
+// Pro Pot die Kartenanzahl+Ziehungschancen für die Sieger-Belohnung nach dem Finale (Rating fix
+// 105/107/109/111 statt der echten Kartenwerte - eine reine Trophäen-Variante, siehe boostBaseToOv).
+// Stärkerer Pot des besiegten Finalgegners = mehr mögliche Karten UND höhere Chance auf die seltene
+// Top-Karte; der jeweils beste reale Spieler des Klubs bekommt immer die seltenste (höchste) Stufe.
+const UCL_REWARD_ODDS_BY_POT = {
+  A: [{ov:105,w:40},{ov:107,w:30},{ov:109,w:20},{ov:111,w:10}],
+  B: [{ov:105,w:60},{ov:107,w:30},{ov:109,w:10}],
+  C: [{ov:105,w:80},{ov:107,w:20}],
+  D: [{ov:105,w:100}],
+};
+function uclTopPlayersForClub(club, n){
+  const pool = ALL_BASE.concat(UCL_FILLER_PLAYERS).filter(c=>c.club===club && !c.isManager && (!c.variant || c.variant==='base'));
+  return pool.slice().sort((a,b)=>b.ov-a.ov).slice(0,n);
+}
+const UCL_REWARD_CACHE = new Map();
+// null zurück = kein Kartenreward möglich (datenloser Klub) - Aufrufer muss dann selbst auf den
+// Coin-Bonus-Fallback ausweichen (siehe uclFinalReward im Turnier-Ablauf, Aufgabe #10).
+function uclRewardCardsForClub(club, comp){
+  const key = comp+':'+club;
+  if(UCL_REWARD_CACHE.has(key)) return UCL_REWARD_CACHE.get(key);
+  const pot = uclPotOf(club, comp);
+  const odds = pot ? UCL_REWARD_ODDS_BY_POT[pot] : null;
+  let result = null;
+  if(odds && !UCL_DATALESS_CLUBS.has(club)){
+    const tops = uclTopPlayersForClub(club, odds.length);
+    if(tops.length>=odds.length){
+      const sortedOdds = odds.slice().sort((a,b)=>a.ov-b.ov); // aufsteigend: [0]=häufigste/niedrigste Stufe
+      const variant = comp==='uel' ? 'uel_champion' : 'ucl_champion';
+      const variantLabel = comp==='uel' ? 'Europa-League-Sieger' : 'Champions-League-Sieger';
+      const theme = comp==='uel' ? 'uelchamp' : 'uclchamp';
+      const idOffset = comp==='uel' ? 72000000 : 71000000;
+      result = tops.map((base,i)=>{
+        // tops[0] = bester realer Spieler -> bekommt IMMER die seltenste (höchste) Stufe
+        const {ov,w} = sortedOdds[sortedOdds.length-1-i];
+        const card = boostBaseToOv(base, ov, idOffset+base.id, variant, variantLabel, theme);
+        BY_ID.set(card.id, card);
+        return {...card, weight:w};
+      });
+    }
+  }
+  UCL_REWARD_CACHE.set(key, result);
+  return result;
+}
+function uclDrawRewardCard(club, comp){
+  const cards = uclRewardCardsForClub(club, comp);
+  if(!cards) return null;
+  const total = cards.reduce((s,c)=>s+c.weight,0);
+  let r = Math.random()*total;
+  for(const c of cards){ r -= c.weight; if(r<=0) return c; }
+  return cards[cards.length-1];
+}
+const UCL_XI_CACHE = new Map();
+// Stärkstmögliche Elf aus den ECHTEN Karten dieses Klubs (inkl. Kontrahent-Boost für dünn besetzte
+// Positionsgruppen, siehe getKontrahentRoster) - im Unterschied zu wm26NationXI bekommt diese Elf auch
+// einen echten Klub-Trainer (falls vorhanden) und profitiert von computeChemistry: da jede Karte
+// zwangsläufig denselben Klub trägt, greift die Klub-Chemie-Bonus automatisch bei jedem Paar (+3 pro
+// Mitspieler), genau der "Chemistry"-Vorteil, den WM26-Nationalelf nie hatte. Klubs ganz ohne eigene
+// Kartendaten fallen auf denselben moderaten 68-OV-Ziel-Pool zurück wie wm26NationXI (siehe dort für die
+// ausführliche Begründung) - ein daten­loser Klub soll ein unauffälliges Mittelfeldteam sein, nicht durch
+// Zufall die stärkste Elf des ganzen Spiels bekommen.
+function uclClubXI(club){
+  if(UCL_XI_CACHE.has(club)) return UCL_XI_CACHE.get(club);
+  // gleiche breite Kartenbasis wie wm26NationXI (jede reguläre Kartenquelle im Spiel), nur nach Klub
+  // statt Nation gefiltert - bewusst OHNE getKontrahentRoster: dessen künstliche Extra-Boosts sind für
+  // einen eigenen, anderen Zweck (ein absichtlich übermächtiger Bot-Gegner) gedacht und würden hier
+  // jede "stärkste echte Elf" mit unrealistisch aufgeblähten Ratings überdecken.
+  const broadPool = ALL_BASE.concat(ALL_SPECIAL, EXCLUSIVE_SPECIALS, GOAT_SPECIALS, WM_SPECIALS, PRIME_CARDS,
+    KRONJUWELEN_SPECIALS, BLACK_HOLE_SPECIALS, KAPITAENE_SPECIALS, UCLW_SPECIALS, OGICON_CARDS, LEGENDS_SPECIALS,
+    DERBY_SPECIALS, UNDERDOG_SPECIALS, SIGNATURE_SEASON_CARDS, POETEN_CARDS, ICONSWAP_CARDS,
+    WEEK_PASS_CARDS.flatMap(w=>[w.lvl15, w.lvl30]), UCL_FILLER_PLAYERS
+  ).filter(c=>c && !c.isManager);
+  const clubCards = broadPool.filter(c=>c.club===club);
+  const hasOwnCards = clubCards.length>0;
+  const pool = hasOwnCards ? clubCards : broadPool;
+  const NO_DATA_FALLBACK_TARGET_OV = 68;
+  const rank = hasOwnCards
+    ? (a,b)=>b.ov-a.ov
+    : (a,b)=>Math.abs(a.ov-NO_DATA_FALLBACK_TARGET_OV)-Math.abs(b.ov-NO_DATA_FALLBACK_TARGET_OV);
+  const slots = FORMATIONS['433'].slots;
+  const byGroup = {GK:[], DEF:[], MID:[], FWD:[]};
+  pool.forEach(c=>{ byGroup[posGroup2(mainPos(c.pos))].push(c); });
+  Object.values(byGroup).forEach(arr=>arr.sort(rank));
+  const usedNames = new Set(), usedIds = new Set(), nameCount = new Map();
+  const xi = slots.map(slot=>{
+    const group = posGroup2(slot.label);
+    const candidate = byGroup[group].find(c=>!usedNames.has(c.n))
+      || pool.filter(c=>!usedNames.has(c.n)).sort(rank)[0]
+      || pool.filter(c=>!usedIds.has(c.id)).sort((a,b)=> (nameCount.get(a.n)||0)-(nameCount.get(b.n)||0) || rank(a,b))[0]
+      || pool.slice().sort(rank)[0];
+    usedNames.add(candidate.n); usedIds.add(candidate.id);
+    nameCount.set(candidate.n, (nameCount.get(candidate.n)||0)+1);
+    return candidate;
+  });
+  const mgrPool = MANAGERS.filter(m=>m.club===club);
+  const mgr = mgrPool.length ? pick(mgrPool) : (hasOwnCards ? null : (BOT_ELITE_MANAGER_POOL.length ? pick(BOT_ELITE_MANAGER_POOL) : null));
+  const {players, managerName} = boostBotXI(xi, slots, mgr);
+  const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
+  const result = {owner:club, rating, players, isBot:true, managerName, club};
+  UCL_XI_CACHE.set(club, result);
+  return result;
+}
 // ===== Ballon d'Or Challenge: the single hardest one-off match in the game =====
 async function playBallonDorChallenge(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
