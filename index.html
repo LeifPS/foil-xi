@@ -19205,7 +19205,14 @@ function adminFullCardPool(){
   // Legacy Packs (variant 'legacy'/'legacystar') sind absichtlich noch NICHT im Index - die Packs sind
   // aktuell hidden:true/nur Admin-Test (siehe LEGACY_SQUADS), Roster/Fotos noch nicht final abgenommen.
   // Sobald sie im Kartenladen freigeschaltet werden, einfach diese Zeile wieder entfernen.
-  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar' && (c.id<20000000 || c.id>=40000000));
+  // KRITISCH: variant==='admin' (Michael Jackson/Trump/Musk/TimGiOh, die vier Admin-Easter-Eggs mit
+  // OV 999-999999 auf JEDER Position, siehe ADMIN_JACKSON_CARD & Co.) MUSS ausgeschlossen bleiben - diese
+  // Karten haben absichtlich absurd hohe Werte, damit ein Admin sie im Sandbox-Team-Sim testen kann, sind
+  // aber NIE für echten Spielbesitz gedacht (untradable:true). Ohne diesen Filter wählten wm26NationXI/
+  // uclClubXI (die diesen Pool über uclIndexPool() als "jede echte Karte" nutzen) sie automatisch als
+  // stärkste verfügbare Karte für ihre jeweilige Nation (USA: Jackson/Trump/Musk, Deutschland: TimGiOh) -
+  // sichtbar für JEDEN Spieler, der gegen diese Nation antritt, nicht nur für den Admin selbst.
+  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='admin' && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar' && (c.id<20000000 || c.id>=40000000));
 }
 // Icon Promo Pack (see PACKS' 'ligapack' - id kept as-is so existing LIGA_REWARD_TABLE entries and any
 // already-scheduled reward keep working unchanged, only the display name/pool/odds changed): 7 brand-
