@@ -1384,11 +1384,22 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.pattern-wmmgrpattern .pattern-layer{background:
   radial-gradient(circle at 50% 10%, rgba(170,21,27,.32), transparent 55%),
   repeating-linear-gradient(90deg, rgba(170,21,27,.3) 0 8px, rgba(255,196,0,.22) 8px 16px, rgba(170,21,27,.3) 16px 24px);}
-.pcard.pattern-uclchamppattern .pattern-layer{background:
-  radial-gradient(circle at 50% 6%, rgba(143,166,255,.4), transparent 55%),
-  repeating-conic-gradient(from 0deg at 50% 6%, rgba(255,255,255,.1) 0deg 3deg, transparent 3deg 12deg);
+/* Neues Pattern für die UCL-Siegerkarte: statt eines einzelnen generischen Scheinwerfer-Sonnenstrahls
+   (ein großer repeating-conic-gradient von EINEM Punkt oben aus, der optisch kaum als "UCL" erkennbar
+   war) jetzt ein über die ganze Karte verteiltes, zart funkelndes Sternenfeld - passend zum echten
+   UCL-Emblem (ein Ring aus Sternen) statt eines beliebigen Licht-Effekts. Zwei versetzte
+   radial-gradient-Punktraster (unterschiedliche Größe/Helligkeit, im Schachbrettmuster gegeneinander
+   verschoben) statt eines einzelnen Rasters - wirkt dadurch wie echtes Sternenfunkeln statt einem
+   gleichförmigen Lochmuster. Reine Gradient-Grafik wie jedes andere Pattern in dieser Datei, keine
+   Bilder/SVGs, kostet nichts Neues an Rendering.*/
+.pcard.pattern-uclchamppattern .pattern-layer{background-image:
+  radial-gradient(circle at 50% 6%, rgba(143,166,255,.35), transparent 55%),
+  radial-gradient(rgba(255,255,255,.55) 1px, transparent 1.6px),
+  radial-gradient(rgba(255,255,255,.3) 1px, transparent 1.6px);
+  background-size:100% 100%, 34px 34px, 34px 34px;
+  background-position:0 0, 0 0, 17px 17px;
   animation:uclchampSparkle 2.6s ease-in-out infinite;}
-@keyframes uclchampSparkle{0%,100%{opacity:.7;}50%{opacity:1;}}
+@keyframes uclchampSparkle{0%,100%{opacity:.65;}50%{opacity:1;}}
 .pcard.pattern-uelchamppattern .pattern-layer{background:
   radial-gradient(circle at 50% 10%, rgba(255,154,60,.38), transparent 55%),
   repeating-linear-gradient(45deg, rgba(255,154,60,.12) 0 3px, transparent 3px 14px),
