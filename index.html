@@ -13733,19 +13733,30 @@ async function getExternalLockedUids(){
   if(!fb) return new Set();
   return cachedRead('external-locks:'+profile.userId, 8000, async ()=>{
     const locked = new Set();
-    try{
-      const marketSnap = await fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.where('sellerUserId','==',profile.userId)));
-      marketSnap.docs.forEach(d=>locked.add(d.data().cardUid));
-    }catch(e){ console.warn('market lock check failed', e); }
-    try{
-      const liveTradeSnap = await fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains',profile.userId)));
-      liveTradeSnap.docs.forEach(d=>{
+    // Diese drei Abfragen sind komplett unabhängig voneinander (keine Transaktion, keine Reihenfolge-
+    // Anforderung) - liefen bisher aber NACHEINANDER statt gleichzeitig. Auf einer langsamen/mobilen
+    // Verbindung (jede fb.getDocs()-Anfrage kann bis zu FS_CALL_TIMEOUT_MS/15s dauern, siehe
+    // initFirebase) machte das aus einer eigentlich einzelnen Wartezeit im schlimmsten Fall die
+    // dreifache - genau diese Funktion hängt an praktisch jedem Ort, der "ist diese Karte gerade
+    // gesperrt" braucht (Herausforderungen, Verkaufen, Schnellverkauf, ...), weshalb sich das als
+    // generelles "alles lädt ewig" anfühlte. Promise.allSettled statt drei sequenzieller awaits: alle
+    // drei starten gleichzeitig, ein einzelner Fehlschlag blockiert die anderen beiden nicht.
+    const [marketRes, liveTradeRes, tourneyRes] = await Promise.allSettled([
+      fb.getDocs(fb.query(fb.collection(fb.db,'market'), fb.where('sellerUserId','==',profile.userId))),
+      fb.getDocs(fb.query(fb.collection(fb.db,'liveTrades'), fb.where('players','array-contains',profile.userId))),
+      fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('hostUserId','==',profile.userId))),
+    ]);
+    if(marketRes.status==='fulfilled'){
+      marketRes.value.docs.forEach(d=>locked.add(d.data().cardUid));
+    } else console.warn('market lock check failed', marketRes.reason);
+    if(liveTradeRes.status==='fulfilled'){
+      liveTradeRes.value.docs.forEach(d=>{
         const t = d.data();
         const mySide = t.userAId===profile.userId ? 'A' : 'B';
         ((t['offer'+mySide]||{}).items||[]).forEach(it=>locked.add(it.uid));
       });
-    }catch(e){ console.warn('live trade lock check failed', e); }
-    try{
+    } else console.warn('live trade lock check failed', liveTradeRes.reason);
+    if(tourneyRes.status==='fulfilled'){
       // a card staked as a tournament prize stays visible in the collection (see hostTournamentPrompt)
       // but must not be sellable/tradeable/squaddable while the tournament is still open - this must
       // stay locked through 'running' too, not just 'registering': the bracket (and therefore the real
@@ -13759,14 +13770,13 @@ async function getExternalLockedUids(){
       // so a host could keep using/selling/trading their staked card in the entire window between the
       // tournament finishing and the winner getting around to claiming it, which looked exactly like
       // "the card never got taken away". Keep it locked through 'completed' too until prizeClaimed.
-      const tourneySnap = await fb.getDocs(fb.query(fb.collection(fb.db,'tournaments'), fb.where('hostUserId','==',profile.userId)));
-      tourneySnap.docs.forEach(d=>{
+      tourneyRes.value.docs.forEach(d=>{
         const t = d.data();
         if(t.prizeType!=='card' || !t.prizeCard) return;
         const stillPending = t.status==='registering' || t.status==='running' || (t.status==='completed' && !t.prizeClaimed);
         if(stillPending) locked.add(t.prizeCard.stakedUid);
       });
-    }catch(e){ console.warn('tournament card lock check failed', e); }
+    } else console.warn('tournament card lock check failed', tourneyRes.reason);
     return locked;
   });
 }
@@ -29177,7 +29187,12 @@ async function playUclPlayoffLeg(comp){
   const aAgg = newTie.leg1.aGoals+newTie.leg2.aGoals, bAgg = newTie.leg1.bGoals+newTie.leg2.bGoals;
   let winnerClub;
   if(aAgg!==bAgg){ winnerClub = aAgg>bAgg ? tie.aClub : tie.bClub; }
-  else { const dec = uclMatchResultClubs(tie.aClub, tie.bClub, false); newTie.decider = {winnerSide:dec.winnerSide}; winnerClub = dec.winnerSide==='me' ? tie.aClub : tie.bClub; }
+  else {
+    const dec = uclMatchResultClubs(tie.aClub, tie.bClub, false); newTie.decider = {winnerSide:dec.winnerSide}; winnerClub = dec.winnerSide==='me' ? tie.aClub : tie.bClub;
+    // Gleicher Hinweis wie in playUclKnockoutLeg - eine Entscheidung bei Aggregat-Gleichstand darf nie
+    // unsichtbar bleiben, sonst wirkt ein Aggregat-Ausscheiden wie ein grundloser Sieg des Gegners.
+    toast(`Aggregat ${aAgg}:${bAgg} unentschieden — Verlängerung/Elfmeterschießen entscheidet: ${winnerClub===t.myClub?'Du ziehst weiter!':oppClub+' zieht weiter.'}`);
+  }
   newTie.winnerClub = winnerClub; newTie.pending = false;
   const won = winnerClub===t.myClub;
   if(!won){
@@ -29277,7 +29292,15 @@ async function playUclKnockoutLeg(comp){
   const aAgg = newM.leg1.aGoals+newM.leg2.aGoals, bAgg = newM.leg1.bGoals+newM.leg2.bGoals;
   let winnerClub;
   if(aAgg!==bAgg){ winnerClub = aAgg>bAgg ? m.aClub : m.bClub; }
-  else { const dec = uclMatchResultClubs(m.aClub, m.bClub, false); newM.decider = {winnerSide:dec.winnerSide}; winnerClub = dec.winnerSide==='me' ? m.aClub : m.bClub; }
+  else {
+    const dec = uclMatchResultClubs(m.aClub, m.bClub, false); newM.decider = {winnerSide:dec.winnerSide}; winnerClub = dec.winnerSide==='me' ? m.aClub : m.bClub;
+    // Ohne diesen Hinweis lief die Entscheidung bei Aggregat-Gleichstand bisher komplett unsichtbar im
+    // Hintergrund ab - wer z.B. Hinspiel 1:0 gewann und Rückspiel 1:2 verlor (Aggregat 2:2), sah nur
+    // "Niederlage 1:2" und direkt danach "Ausgeschieden", ohne je zu erfahren, dass das Aggregat
+    // eigentlich unentschieden war und stattdessen eine Verlängerung/ein Elfmeterschießen entschieden
+    // hat - wirkte wie ein grundloser Sieg des Gegners statt einer fairen 50/50-Entscheidung.
+    toast(`Aggregat ${aAgg}:${bAgg} unentschieden — Verlängerung/Elfmeterschießen entscheidet: ${winnerClub===t.myClub?'Du ziehst weiter!':oppClub+' zieht weiter.'}`);
+  }
   newM.winnerClub = winnerClub; newM.pending = false;
   const won = winnerClub===t.myClub;
   let rounds = t.knockout.rounds.map((r,ri)=> ri!==roundIdx?r:{...r, matches:r.matches.map((mm,mi)=> mi!==matchIdx?mm:newM)});
