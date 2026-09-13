@@ -26325,13 +26325,30 @@ function wepPlayMatch(teamA, teamB){
 }
 // Dispatcher: reads how far this week's 7-stage Sonntag schedule has gotten and runs whichever stage
 // is next due - same "separate doc per stage, hour-gated" pattern as resolveWeeklyRolloverV2IfNeeded.
+// weekStart für den Wochenendpokal: an einem Sonntag die laufende Woche, sonst die Woche des zuletzt
+// VERGANGENEN Sonntags (mostRecentMondayBerlin() rückt an jedem neuen Tag automatisch auf die aktuelle
+// Kalenderwoche vor, sodass "letzten Sonntag" ab Montag schon eine Woche zurückliegt).
+function wepTargetWeekStart(isSunday){
+  return isSunday ? mostRecentMondayBerlin() : mostRecentMondayBerlin() - 7*24*60*60*1000;
+}
 async function resolveWochenendpokalIfNeeded(){
   await fbReady;
   if(!fb) return null;
   const now = berlinNow();
-  if(now.getDay()!==0) return null; // only Sonntag
-  const weekStart = mostRecentMondayBerlin(); // Sonntag still belongs to the week that started the preceding Monday
+  const isSunday = now.getDay()===0;
+  // Bugfix "Finale wurde nie gespielt": war heute NICHT Sonntag, brach diese Funktion bisher sofort und
+  // vollständig ab - war zufällig NIEMAND zwischen 17:00 und 18:00 (oder überhaupt nach 18:00) an genau
+  // diesem einen Sonntag online, blieb der Wochenendpokal für IMMER auf "Finale-Hinspiel fertig,
+  // Rückspiel nie gestartet" hängen, weil "weekStart" beim nächsten Aufruf (an jedem folgenden Tag)
+  // automatisch auf eine ANDERE, neue Kalenderwoche vorrückte und die alte, unfertige Woche nie wieder
+  // erreichbar war. Jetzt: an jedem Nicht-Sonntag wird stattdessen die Woche des zuletzt vergangenen
+  // Sonntags nachgeholt, und da dieser Tag komplett vorbei ist, gelten alle Uhrzeit-Gates unten als
+  // automatisch erfüllt (siehe hourOk) - ein einzelner Besuch an einem Nicht-Sonntag holt so die
+  // komplette restliche Woche nach (renderWochenendpokalPanel ruft diese Funktion mehrfach auf, siehe
+  // dort), statt dass der Spieler sieben Tage lang je einmal zur richtigen Uhrzeit online sein müsste.
+  const weekStart = wepTargetWeekStart(isSunday);
   if(weekStart<LIGA_SEASON_EPOCH) return null;
+  const hourOk = h => !isSunday || now.getHours()>=h;
   const swiss1Ref = fb.doc(fb.db,'leagueMeta','wepSwiss1_'+weekStart);
   const swiss2Ref = fb.doc(fb.db,'leagueMeta','wepSwiss2_'+weekStart);
   const swiss3Ref = fb.doc(fb.db,'leagueMeta','wepSwiss3_'+weekStart);
@@ -26339,25 +26356,25 @@ async function resolveWochenendpokalIfNeeded(){
   const semi2Ref = fb.doc(fb.db,'leagueMeta','wepSemi2_'+weekStart);
   const final1Ref = fb.doc(fb.db,'leagueMeta','wepFinal1_'+weekStart);
   const final2Ref = fb.doc(fb.db,'leagueMeta','wepFinal2_'+weekStart);
-  if(now.getHours()<WEP_TIMES.swiss1) return null;
+  if(!hourOk(WEP_TIMES.swiss1)) return null;
   let s1; try{ s1 = await fb.getDoc(swiss1Ref); }catch(e){ console.warn('wep swiss1 read failed', e); return null; }
   if(!s1.exists() || s1.data().status!=='done') return await wepRunSwiss1(weekStart, swiss1Ref);
-  if(now.getHours()<WEP_TIMES.swiss2) return null;
+  if(!hourOk(WEP_TIMES.swiss2)) return null;
   let s2; try{ s2 = await fb.getDoc(swiss2Ref); }catch(e){ console.warn('wep swiss2 read failed', e); return null; }
   if(!s2.exists() || s2.data().status!=='done') return await wepRunSwiss2(s1.data(), swiss2Ref, weekStart);
-  if(now.getHours()<WEP_TIMES.swiss3) return null;
+  if(!hourOk(WEP_TIMES.swiss3)) return null;
   let s3; try{ s3 = await fb.getDoc(swiss3Ref); }catch(e){ console.warn('wep swiss3 read failed', e); return null; }
   if(!s3.exists() || s3.data().status!=='done') return await wepRunSwiss3(s1.data(), s2.data(), swiss3Ref, weekStart);
-  if(now.getHours()<WEP_TIMES.semi1) return null;
+  if(!hourOk(WEP_TIMES.semi1)) return null;
   let se1; try{ se1 = await fb.getDoc(semi1Ref); }catch(e){ console.warn('wep semi1 read failed', e); return null; }
   if(!se1.exists() || se1.data().status!=='done') return await wepRunSemi1(s1.data(), s2.data(), s3.data(), semi1Ref, weekStart);
-  if(now.getHours()<WEP_TIMES.semi2) return null;
+  if(!hourOk(WEP_TIMES.semi2)) return null;
   let se2; try{ se2 = await fb.getDoc(semi2Ref); }catch(e){ console.warn('wep semi2 read failed', e); return null; }
   if(!se2.exists() || se2.data().status!=='done') return await wepRunSemi2(se1.data(), semi2Ref);
-  if(now.getHours()<WEP_TIMES.final1) return null;
+  if(!hourOk(WEP_TIMES.final1)) return null;
   let f1; try{ f1 = await fb.getDoc(final1Ref); }catch(e){ console.warn('wep final1 read failed', e); return null; }
   if(!f1.exists() || f1.data().status!=='done') return await wepRunFinal1(se2.data(), final1Ref);
-  if(now.getHours()<WEP_TIMES.final2) return null;
+  if(!hourOk(WEP_TIMES.final2)) return null;
   let f2; try{ f2 = await fb.getDoc(final2Ref); }catch(e){ console.warn('wep final2 read failed', e); return null; }
   if(f2.exists() && f2.data().status==='done') return null;
   return await wepRunFinal2(f1.data(), final2Ref, weekStart);
@@ -26691,8 +26708,13 @@ async function renderWochenendpokalPanel(box){
   box.innerHTML = `<p class="hint">Lädt…</p>`;
   await fbReady;
   if(!fb){ box.innerHTML = `<p class="hint">Nicht verfügbar.</p>`; return; }
-  await resolveWochenendpokalIfNeeded();
-  const weekStart = mostRecentMondayBerlin();
+  // Mehrfach aufrufen statt nur einmal: die Nachhol-Logik in resolveWochenendpokalIfNeeded (siehe dort)
+  // arbeitet an einem Nicht-Sonntag jeweils nur EINE noch offene Stufe pro Aufruf ab, damit sich ein
+  // einzelner verspäteter Besuch nicht in einem Rutsch komplett unkontrolliert durch die ganze Woche
+  // fräst - bis zu 7 Aufrufe (eine Obergrenze, eine pro Stufe) holen die komplette Woche trotzdem in
+  // diesem einen Tab-Öffnen nach, statt dass der Spieler siebenmal neu laden müsste.
+  for(let i=0;i<7;i++){ if(!(await resolveWochenendpokalIfNeeded())) break; }
+  const weekStart = wepTargetWeekStart(berlinNow().getDay()===0);
   const pendingHost = document.createElement('div');
   renderWochenendpokalPendingRewards(pendingHost);
   if(weekStart<LIGA_SEASON_EPOCH){
