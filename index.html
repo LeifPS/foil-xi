@@ -28765,11 +28765,18 @@ async function startUcl(comp){
   const existing = uclCurrentRun(comp);
   if(existing && existing.stage!=='done'){ toast('Du hast bereits einen laufenden Lauf in diesem Modus.'); return; }
   const label0 = comp==='uel' ? 'Europa League' : 'Champions League';
-  // QoL: sagt dazu, WANN es wieder losgeht, statt den Spieler raten zu lassen, ob "morgen" der
-  // lokale Kalendertag oder 24h ab jetzt bedeutet (uclStartsUsedToday zählt nach localDateStr,
-  // also Mitternacht lokale Zeit).
-  if(uclStartsUsedToday(comp)>=UCL_DAILY_LIMIT){ toast(`Tageslimit erreicht: maximal ${UCL_DAILY_LIMIT} ${label0}-Teilnahmen pro Tag. Setzt sich um Mitternacht zurück.`); return; }
   const useFreeEntry = comp==='ucl' && !!profile.uclFreeEntryAvailable;
+  // Der Gratis-UCL-Eintritt (Belohnung für einen UEL-Sieg) zählt bewusst NICHT gegen das normale
+  // Tageslimit und bumpt uclStartCount weiter unten deshalb auch nicht - sonst wäre der "Bonus" oft
+  // wertlos (z.B. an einem Tag, an dem man schon 3x UCL gespielt hat). Macht theoretisch bis zu 6
+  // UCL-Starts an einem Tag möglich: 3 gewöhnliche (Tageslimit) + bis zu 3 gratis, falls an diesem
+  // Tag entsprechend oft UEL gewonnen wurde.
+  if(!useFreeEntry){
+    // QoL: sagt dazu, WANN es wieder losgeht, statt den Spieler raten zu lassen, ob "morgen" der
+    // lokale Kalendertag oder 24h ab jetzt bedeutet (uclStartsUsedToday zählt nach localDateStr,
+    // also Mitternacht lokale Zeit).
+    if(uclStartsUsedToday(comp)>=UCL_DAILY_LIMIT){ toast(`Tageslimit erreicht: maximal ${UCL_DAILY_LIMIT} ${label0}-Teilnahmen pro Tag. Setzt sich um Mitternacht zurück.`); return; }
+  }
   const fee = useFreeEntry ? 0 : uclEntryFee(comp);
   if(fee>0 && (profile.coins||0)<fee){ toast(`Du brauchst ${formatCoins(fee)} Coins Startgeld.`); return; }
   if(fee>0) await atomicCoinChange(-fee);
@@ -28777,16 +28784,19 @@ async function startUcl(comp){
   const clubs = uclClubsFor(comp);
   const myClub = clubs[Math.floor(Math.random()*clubs.length)];
   const { leagueMatches, otherResults } = uclBuildFullSchedule(myClub, comp);
-  // Bugfix: uclStartsUsedToday(comp) MUSS berechnet werden, BEVOR das *StartDate-Feld auf heute gesetzt
-  // wird - sonst sieht der darin enthaltene Datums-Vergleich (profile[dateKey]===todayStr) sein eigenes,
-  // gerade erst gesetztes "heute" und hält den noch nicht zurückgesetzten *StartCount von GESTERN
-  // fälschlich für den heutigen Stand (z.B. gestern 3x gespielt, Limit erreicht, Zähler blieb bei 3 ->
-  // heutiger allererster Start las das eigene "jetzt ist heute" und zählte ab 3 statt ab 0 weiter, macht
-  // aus dem ersten Start des Tages sofort "4/3"). Der neue Zählerstand wird deshalb VOR der Datums-
-  // Zuweisung ermittelt, während das Feld noch den echten letzten Stand (gestern oder leer) zeigt.
-  const newStartCount = uclStartsUsedToday(comp)+1;
-  if(comp==='uel'){ profile.uelStartDate = localDateStr(new Date()); profile.uelStartCount = newStartCount; }
-  else { profile.uclStartDate = localDateStr(new Date()); profile.uclStartCount = newStartCount; }
+  if(!useFreeEntry){
+    // Bugfix: uclStartsUsedToday(comp) MUSS berechnet werden, BEVOR das *StartDate-Feld auf heute
+    // gesetzt wird - sonst sieht der darin enthaltene Datums-Vergleich (profile[dateKey]===todayStr)
+    // sein eigenes, gerade erst gesetztes "heute" und hält den noch nicht zurückgesetzten *StartCount
+    // von GESTERN fälschlich für den heutigen Stand (z.B. gestern 3x gespielt, Limit erreicht, Zähler
+    // blieb bei 3 -> heutiger allererster Start las das eigene "jetzt ist heute" und zählte ab 3 statt
+    // ab 0 weiter, macht aus dem ersten Start des Tages sofort "4/3"). Der neue Zählerstand wird
+    // deshalb VOR der Datums-Zuweisung ermittelt, während das Feld noch den echten letzten Stand
+    // (gestern oder leer) zeigt.
+    const newStartCount = uclStartsUsedToday(comp)+1;
+    if(comp==='uel'){ profile.uelStartDate = localDateStr(new Date()); profile.uelStartCount = newStartCount; }
+    else { profile.uclStartDate = localDateStr(new Date()); profile.uclStartCount = newStartCount; }
+  }
   // Neue Stage 'draw' vor der Ligaphase: der Spielplan steht schon fest (leagueMatches/otherResults),
   // aber der Spieler deckt die eigenen 8 Gegner erst Pot für Pot per Klick auf (siehe uclRevealNextDrawSlot).
   profile[uclKey(comp)] = {schemaVersion:UCL_SCHEMA_VERSION, comp, stage:'draw', myClub, myRating:rating,
