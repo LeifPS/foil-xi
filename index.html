@@ -28481,12 +28481,9 @@ function uclClubXI(club){
   // kein eigener leveledXi-Zwischenschritt mehr nötig, sonst würde der Bonus hier doppelt gezählt.
   // Jeder Klub bekommt IMMER einen Trainer-Bonus - einen echten Namen aus MANAGERS, falls für diesen
   // Klub hinterlegt (nur der Name, der Bonus-Wert wird trotzdem vereinheitlicht), sonst ein generischer
-  // "Cheftrainer". Nie einfach null wie ursprünglich, und nie ein schwächerer/stärkerer Wert als bei
-  // jedem anderen Klub DERSELBEN Wettbewerbsstufe - UCL (+13%) und UEL (+10%) unterscheiden sich bewusst,
-  // kein Klub steht je in beiden Töpfen (UCL_ALL_CLUBS/UEL_ALL_CLUBS sind überschneidungsfrei), daher
-  // reicht die Klubzugehörigkeit allein, ohne dass uclClubXI selbst wissen muss, für welchen Wettbewerb
-  // es gerade aufgerufen wurde.
-  const mgrBoostPct = UEL_ALL_CLUBS.includes(club) ? 10 : 11;
+  // "Cheftrainer". Nie einfach null wie ursprünglich - UCL und UEL nutzen jetzt bewusst denselben
+  // festen Boost (+8%) statt unterschiedlicher Werte je Wettbewerb.
+  const mgrBoostPct = 8;
   const mgrPool = MANAGERS.filter(m=>m.club===club);
   // pos:'MGR' explizit auch am generischen Fallback - jeder echte MANAGERS-Eintrag bekommt das schon
   // automatisch (siehe MANAGERS.forEach weiter oben), aber dieses Objekt hier existiert nur inline und
