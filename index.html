@@ -19583,6 +19583,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-clear-session" style="width:auto;${activeSession?'border-color:var(--turf-bright);color:var(--turf-bright);':'opacity:.5;'}" ${activeSession?'':'disabled'}>Sitzungssperre aufheben (Login von anderem Ger\u00e4t erzwingen)</button>
       <button class="action-btn secondary" id="admin-reset-orei" style="width:auto;border-color:#c98a3e;color:#c98a3e;">O Rei zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-reset-account" style="width:auto;border-color:#ff5f5f;color:#ff5f5f;">Account zur\u00fccksetzen</button>
+      <button class="action-btn secondary" id="admin-reset-ucl-limit" style="width:auto;border-color:#8fa6ff;color:#8fa6ff;">UCL/UEL-Tageslimit zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-patch-missed-fields" style="width:auto;">Nur nachtr\u00e4glich hinzugef\u00fcgte Reset-Felder nachholen</button>
       <button class="action-btn secondary" id="admin-save-history" style="width:auto;border-color:#4a9eff;color:#4a9eff;">Versionshistorie / Wiederherstellen</button>
       ${targetId==='felixfc' ? `<button class="action-btn secondary" id="admin-restore-felixfc" style="width:auto;border-color:#3dc482;color:#3dc482;" ${p.felixfcRestoreApplied?'disabled':''}>${p.felixfcRestoreApplied?'Wiederherstellung bereits durchgef\u00fchrt':'Einmalige Wiederherstellung (Startelf + 40x UCL-Pack + Bronze)'}</button>` : ''}
@@ -19603,6 +19604,18 @@ async function loadAdminUserPanel(targetId){
       toast(`${amount>=0?'+':''}${formatCoins(amount)} Coins f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
     }, 12);
+  });
+  // Behebt/umgeht den "4/3 heute" Tageslimit-Bug (uclStartsUsedToday z\u00e4hlte gestrigen Stand als
+  // heutigen, siehe startUcl-Fix) f\u00fcr Accounts, die davon schon betroffen waren, bevor der eigentliche
+  // Fix griff - setzt Datum UND Z\u00e4hler f\u00fcr beide Wettbewerbe komplett zur\u00fcck, gleiche
+  // Direkt-Firestore-Schreibweise wie "Coins hinzuf\u00fcgen" oben (funktioniert auch f\u00fcr fremde Accounts).
+  document.getElementById('admin-reset-ucl-limit').addEventListener('click', async ()=>{
+    const newProfile = {...p, uclStartCount:0, uclStartDate:null, uelStartCount:0, uelStartDate:null};
+    try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+    catch(e){ console.warn('admin reset ucl limit failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
+    if(targetId===clubId){ profile.uclStartCount=0; profile.uclStartDate=null; profile.uelStartCount=0; profile.uelStartDate=null; }
+    toast(`UCL/UEL-Tageslimit f\u00fcr ${targetId} zur\u00fcckgesetzt.`);
+    loadAdminUserPanel(targetId);
   });
   document.getElementById('admin-give-wins').addEventListener('click', ()=>{
     askTextModal('Siege hinzuf\u00fcgen (negativ zum Abziehen)', '0', async (val)=>{
@@ -28327,9 +28340,11 @@ const UCL_XI_CACHE = new Map();
 let UCL_INDEX_POOL_CACHE = null;
 function uclIndexPool(){
   if(!UCL_INDEX_POOL_CACHE){
-    // Sieger-Karten ausgeschlossen: sonst könnte ein Klub in der Ligaphase mit dem visuellen Champions-
-    // /Europa-League-Sieger-Kartendesign eines noch gar nicht gewonnenen Titels auflaufen.
-    UCL_INDEX_POOL_CACHE = adminFullCardPool().filter(c=>c.variant!=='ucl_champion' && c.variant!=='uel_champion');
+    // Sieger-Karten (ucl_champion/uel_champion) bewusst NICHT mehr ausgeschlossen - jeder Klub soll auch
+    // seine eigene, bereits vorab generierte Sieger-Kartenvariante seiner Top-Spieler nutzen können (auf
+    // Wunsch reaktiviert). card.club auf so einer Karte ist immer der ECHTE Klub des abgebildeten Spielers
+    // (siehe uclRewardCardsForClub), landet also nur im eigenen Kader dieses Klubs, nie bei einem anderen.
+    UCL_INDEX_POOL_CACHE = adminFullCardPool();
   }
   return UCL_INDEX_POOL_CACHE;
 }
@@ -28609,8 +28624,16 @@ async function startUcl(comp){
   const clubs = uclClubsFor(comp);
   const myClub = clubs[Math.floor(Math.random()*clubs.length)];
   const { leagueMatches, otherResults } = uclBuildFullSchedule(myClub, comp);
-  if(comp==='uel'){ profile.uelStartDate = localDateStr(new Date()); profile.uelStartCount = uclStartsUsedToday('uel')+1; }
-  else { profile.uclStartDate = localDateStr(new Date()); profile.uclStartCount = uclStartsUsedToday('ucl')+1; }
+  // Bugfix: uclStartsUsedToday(comp) MUSS berechnet werden, BEVOR das *StartDate-Feld auf heute gesetzt
+  // wird - sonst sieht der darin enthaltene Datums-Vergleich (profile[dateKey]===todayStr) sein eigenes,
+  // gerade erst gesetztes "heute" und hält den noch nicht zurückgesetzten *StartCount von GESTERN
+  // fälschlich für den heutigen Stand (z.B. gestern 3x gespielt, Limit erreicht, Zähler blieb bei 3 ->
+  // heutiger allererster Start las das eigene "jetzt ist heute" und zählte ab 3 statt ab 0 weiter, macht
+  // aus dem ersten Start des Tages sofort "4/3"). Der neue Zählerstand wird deshalb VOR der Datums-
+  // Zuweisung ermittelt, während das Feld noch den echten letzten Stand (gestern oder leer) zeigt.
+  const newStartCount = uclStartsUsedToday(comp)+1;
+  if(comp==='uel'){ profile.uelStartDate = localDateStr(new Date()); profile.uelStartCount = newStartCount; }
+  else { profile.uclStartDate = localDateStr(new Date()); profile.uclStartCount = newStartCount; }
   // Neue Stage 'draw' vor der Ligaphase: der Spielplan steht schon fest (leagueMatches/otherResults),
   // aber der Spieler deckt die eigenen 8 Gegner erst Pot für Pot per Klick auf (siehe uclRevealNextDrawSlot).
   profile[uclKey(comp)] = {schemaVersion:UCL_SCHEMA_VERSION, comp, stage:'draw', myClub, myRating:rating,
