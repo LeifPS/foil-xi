@@ -10035,6 +10035,13 @@ function quickSellValue(card){
   if(card.untradable) return 0;
   return Math.max(1, Math.round(getBaselineRAP(card) * QUICK_SELL_RAP_PCT));
 }
+// Tageslimit für den Gesamterlös (nicht die Kartenanzahl) - ohne das könnte Schnellverkauf trotz des
+// 60%-Abschlags zu einer beliebig großen, unkontrollierten Coin-Quelle werden, wenn jemand einfach die
+// ganze Sammlung auf einmal verkauft.
+const QUICK_SELL_DAILY_CAP = 50000;
+function quickSellEarnedToday(){
+  return profile.quickSellDate===localDateStr(new Date()) ? (profile.quickSellEarnedTotal||0) : 0;
+}
 let salesHistoryCache = null; // Map id -> [prices], most recent first
 async function loadSalesHistory(){
   loadRapOverrides(); // same "everything computeRAP needs" load, piggybacked on every existing call site
@@ -13259,9 +13266,11 @@ async function renderQuickSellSection(el){
   const lockedUids = await getLockedUids();
   const allEligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c), cardId:c.cardId}))
     .filter(x=>x.card && !x.card.untradable && !x.card.favorited && !lockedUids.has(x.uid));
+  const remainingToday = Math.max(0, QUICK_SELL_DAILY_CAP - quickSellEarnedToday());
   el.innerHTML = `
     <div class="vs-panel" style="margin-bottom:16px;border-color:var(--danger);">
       <p class="hint" style="margin:0;">⚠ Schnellverkauf zahlt sofort Coins aus und entfernt die Karte(n) dauerhaft aus deiner Sammlung - anders als der Transfermarkt gibt es <b>kein</b> Zurücknehmen. Der Preis liegt bewusst unter dem echten Marktwert (${Math.round(QUICK_SELL_RAP_PCT*100)}% eines manipulationssicheren Basiswerts) - für mehr Coins lohnt sich oft der Transfermarkt.</p>
+      <p class="hint" style="margin:8px 0 0;">Tageslimit: <b style="color:${remainingToday>0?'var(--gold)':'var(--danger)'};">${formatCoins(remainingToday)}</b> von ${formatCoins(QUICK_SELL_DAILY_CAP)} Coins Schnellverkauf-Erlös heute noch möglich.${remainingToday<=0?' Setzt sich um Mitternacht zurück.':''}</p>
     </div>
     <div style="display:flex;gap:2px;margin-bottom:16px;">
       <button class="nav-btn ${quickSellMode==='manual'?'active':''}" id="qs-tab-manual" style="padding:8px 14px;flex:1;">Manuell auswählen</button>
@@ -13282,10 +13291,23 @@ async function renderQuickSellSection(el){
 async function executeQuickSell(items){
   if(!items.length) return;
   const total = items.reduce((s,x)=>s+x.value, 0);
+  // Tageslimit prüfen, BEVOR irgendetwas entfernt/gutgeschrieben wird - eine abgelehnte Aktion darf
+  // niemals halb ausgeführt sein (Karten weg, aber kein Geld, oder umgekehrt).
+  const earnedToday = quickSellEarnedToday();
+  if(earnedToday + total > QUICK_SELL_DAILY_CAP){
+    const remaining = Math.max(0, QUICK_SELL_DAILY_CAP - earnedToday);
+    toast(`Tageslimit erreicht: maximal ${formatCoins(QUICK_SELL_DAILY_CAP)} Coins Schnellverkauf-Erlös pro Tag. Heute noch möglich: ${formatCoins(remaining)} Coins. Setzt sich um Mitternacht zurück.`);
+    return;
+  }
   const uids = new Set(items.map(x=>x.uid));
   collection = collection.filter(c=>!uids.has(c.uid));
   await sSet('collection', collection);
-  await atomicCoinChange(total);
+  // Bugfix-Muster wie bei uclStartsUsedToday: der neue Gesamtwert wird VOR der Datums-Zuweisung
+  // berechnet, während quickSellDate noch den echten letzten Stand (gestern oder leer) zeigt - sonst
+  // läse quickSellEarnedToday() beim allerersten Verkauf des Tages sein eigenes, gerade erst gesetztes
+  // "heute" und hielte den noch nicht zurückgesetzten Betrag von GESTERN fälschlich für den heutigen.
+  const newEarnedTotal = earnedToday + total;
+  await atomicCoinChange(total, {quickSellDate: localDateStr(new Date()), quickSellEarnedTotal: newEarnedTotal});
   applyAchievementDeltas({marketCoinsEarned: total});
   invalidateReadCache('external-locks:'+profile.userId);
   toast(`${items.length} Karte${items.length===1?'':'n'} schnellverkauft für ${formatCoins(total)} Coins.`);
