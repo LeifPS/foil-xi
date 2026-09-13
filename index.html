@@ -27574,7 +27574,32 @@ function renderLigenPanel(view){
 // nation's actual XI is deterministic (always that country's best available 4-3-3, see wm26NationXI's
 // cache) and cheap to rebuild on demand every time that nation's match needs simulating, which keeps
 // profile.wm26 tiny regardless of how many of the other 47 teams' matches happen along the way.
-const WM26_ENTRY_FEE = 10000;
+// Gestaffeltes Startgeld nach eigenem Kader-Rating statt eines festen Preises für alle - ein schwacher
+// Kader hat es in der WM ohnehin schwerer (siehe wm26SetupPlayerGroup, das den Rest der eigenen Gruppe
+// um dieses Rating herum simuliert), soll dafür aber nicht denselben Vollpreis zahlen wie ein
+// durchoptimierter 120+-Kader. Unter 100 Rating ist der erste Start des Tages komplett gratis (siehe
+// wm26FreeStartUsedToday) - jeder weitere Start am selben Tag (auch mit weiterhin <100 Rating) zahlt den
+// niedrigsten bezahlten Tarif (2.000), statt entweder ganz gesperrt zu sein oder dauerhaft gratis zu
+// bleiben.
+function wm26EntryFeeForRating(rating){
+  if(rating>=120) return 10000;
+  if(rating>=115) return 8000;
+  if(rating>=110) return 6000;
+  if(rating>=105) return 4000;
+  if(rating>=100) return 2000;
+  return 0;
+}
+function wm26FreeStartUsedToday(){ return profile.wm26FreeStartDate===localDateStr(new Date()); }
+// Der TATSÄCHLICH für den aktuellen Kader fällige Preis, inklusive der "1x gratis pro Tag unter 100
+// Rating"-Regel - von startWM26 selbst genutzt, aber auch vom Panel/den Beschreibungstexten, damit die
+// angezeigte Zahl nie vom tatsächlich abgebuchten Betrag abweicht.
+function wm26CurrentEntryFee(rating){
+  if(rating>=100) return wm26EntryFeeForRating(rating);
+  // unter 100 Rating: wm26EntryFeeForRating selbst kennt nur "0" für diesen Bereich (siehe dort) - die
+  // Gratis-Regel gilt aber nur für den ERSTEN Start des Tages, jeder weitere zahlt den niedrigsten
+  // bezahlten Tarif (2.000), statt für immer gratis zu bleiben.
+  return wm26FreeStartUsedToday() ? 2000 : 0;
+}
 // profile.wm26's internal shape changed more than once while this mode was being built (the group/
 // knockout data structures were reworked after the first version shipped). A save made under an
 // older shape would otherwise crash renderWM26Panel the instant it tries to read a field the new code
@@ -27784,8 +27809,11 @@ async function startWM26(){
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
-  if((profile.coins||0) < WM26_ENTRY_FEE){ toast(`Du brauchst ${formatCoins(WM26_ENTRY_FEE)} Coins Startgeld für eine neue WM.`); return; }
-  await atomicCoinChange(-WM26_ENTRY_FEE);
+  const usesFreeStart = rating<100 && !wm26FreeStartUsedToday();
+  const fee = wm26CurrentEntryFee(rating);
+  if((profile.coins||0) < fee){ toast(`Du brauchst ${formatCoins(fee)} Coins Startgeld für eine neue WM.`); return; }
+  if(fee>0) await atomicCoinChange(-fee);
+  if(usesFreeStart) profile.wm26FreeStartDate = localDateStr(new Date());
   const dropped = WM26_ALL_NATIONS[Math.floor(Math.random()*WM26_ALL_NATIONS.length)];
   let groupId = null, otherNations = null;
   Object.entries(WM26_GROUPS).forEach(([letter, nations])=>{
@@ -27800,7 +27828,7 @@ async function startWM26(){
   const {teams, matches} = wm26SetupPlayerGroup(otherNations, rating);
   profile.wm26 = {schemaVersion:WM26_SCHEMA_VERSION, stage:'groups', groupId, replacedNation:dropped, teams, matches, otherGroups, eliminatedAt:null, wonCup:false};
   await sSet('profile', profile);
-  toast(`${formatCoins(WM26_ENTRY_FEE)} Coins Startgeld bezahlt. Du übernimmst den Platz von ${natDE(dropped)} in Gruppe ${groupId}.`);
+  toast(fee>0 ? `${formatCoins(fee)} Coins Startgeld bezahlt. Du übernimmst den Platz von ${natDE(dropped)} in Gruppe ${groupId}.` : `Kostenlose WM (Kader unter 100 Rating). Du übernimmst den Platz von ${natDE(dropped)} in Gruppe ${groupId}.`);
   renderWM26Panel();
 }
 // Trophy-lift cutscene shown once, right when the Finale is actually won - resolves when the player
@@ -28098,9 +28126,12 @@ function renderWM26Panel(){
           <div class="wm26-hero-crest">${renderCrestSVG(profile.crest,46)}</div>
           <div class="wm26-hero-text"><p style="margin:0;">Deine letzte WM endete: <b style="color:var(--chalk);">Aus in der ${WM26_STAGE_LABEL[t.eliminatedAt]}</b></p></div>
         </div>`) : '';
+    const {rating:currentRating} = squadRating();
+    const currentFee = wm26CurrentEntryFee(currentRating);
+    const feeText = currentFee>0 ? `${formatCoins(currentFee)} Coins` : `kostenlos (Kader unter 100 Rating, 1x pro Tag)`;
     box.innerHTML = `
       ${banner}
-      <p class="hint" style="margin-top:0;">Die echte WM 2026 nachgespielt: 48 Teams, 12 Gruppen à 4, danach K.o.-Runde ab den letzten 32 (Gruppensieger + -zweite plus die 8 besten Gruppendritten). Du übernimmst zufällig den Platz einer echten Nation. Startgeld: <b style="color:var(--gold);">${formatCoins(WM26_ENTRY_FEE)} Coins</b>. Scheiterst du, gibt's Trostpreis-Coins je nach Runde. Gewinnst du: 20% WM Winners Pack, 80% <b style="color:var(--gold);">World Cup Pack</b> (neue WM-Variante +5 OVR und WM-Kapitän +16 OVR, aus allen 48 Teams).</p>
+      <p class="hint" style="margin-top:0;">Die echte WM 2026 nachgespielt: 48 Teams, 12 Gruppen à 4, danach K.o.-Runde ab den letzten 32 (Gruppensieger + -zweite plus die 8 besten Gruppendritten). Du übernimmst zufällig den Platz einer echten Nation. Startgeld gestaffelt nach deinem Kader-Rating (120+: 10.000, 115+: 8.000, 110+: 6.000, 105+: 4.000, 100+: 2.000, unter 100: 1x/Tag gratis, danach 2.000) - für deinen aktuellen Kader: <b style="color:var(--gold);">${feeText}</b>. Scheiterst du, gibt's Trostpreis-Coins je nach Runde. Gewinnst du: 20% WM Winners Pack, 80% <b style="color:var(--gold);">World Cup Pack</b> (neue WM-Variante +5 OVR und WM-Kapitän +16 OVR, aus allen 48 Teams).</p>
       <button class="action-btn" id="wm26-start" style="width:220px;">WM 2026 starten</button>
       <div id="wm26-match-area" style="margin-top:14px;"></div>`;
     document.getElementById('wm26-start').addEventListener('click', startWM26);
