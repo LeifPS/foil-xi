@@ -12468,12 +12468,8 @@ const CHALLENGE_DEFS = [
     desc:'Die echte WM 2026 nachgespielt — 48 Teams, 12 Gruppen, K.o.-Runde ab den letzten 32. Preise je nach Abschneiden, Pokalsieg bringt das World Cup Pack.'},
   {id:'ucl', name:'Champions League', pill:'Match', accent:'#0a1a4d', contentId:'ucl-content', renderFn:()=>renderUclPanel('ucl'),
     desc:'Die echte Champions League 26/27 nachgespielt — 36 Klubs, Ligaphase, Playoff, K.o.-Runde ab dem Achtelfinale (Hin-/Rückspiel). Sieg bringt eine Sieger-Kartenvariante des besiegten Finalgegners.'},
-  // Vorübergehend deaktiviert (siehe CHALLENGE_DEFS.forEach unten, das disabled-Kacheln überspringt) -
-  // der Modus selbst (renderUclPanel/startUcl/uclFinishRun etc.) bleibt vollständig im Code, nur der
-  // Einstiegspunkt über die Herausforderungen-Kachel ist weg, bis daran weitergearbeitet wird.
   {id:'uel', name:'Europa League', pill:'Match', accent:'#ff6b00', contentId:'uel-content', renderFn:()=>renderUclPanel('uel'),
-    desc:'Wie die Champions League, aber mit den echten Europa-League-26/27-Teilnehmern — günstigerer Eintritt, geringere Belohnungen. Sieg schaltet einen Gratis-Startplatz für die Champions League frei.',
-    disabled:true},
+    desc:'Wie die Champions League, aber mit den echten Europa-League-26/27-Teilnehmern — günstigerer Eintritt, geringere Belohnungen. Sieg schaltet einen Gratis-Startplatz für die Champions League frei.'},
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
     desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
@@ -28663,9 +28659,6 @@ function uclStartsUsedToday(comp){
   return profile[dateKey]===todayStr ? (profile[countKey]||0) : 0;
 }
 async function startUcl(comp){
-  // Europa League vorübergehend deaktiviert (siehe CHALLENGE_DEFS' uel-Eintrag) - Guard hier zusätzlich,
-  // falls startUcl('uel') je über einen anderen Weg als die (jetzt ausgeblendete) Kachel erreicht wird.
-  if(comp==='uel'){ toast('Die Europa League ist aktuell deaktiviert.'); return; }
   if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschließen.'); return; }
   const {rating, filled} = squadRating();
   if(filled<11){ toast('Fülle und speichere zuerst alle 11 Positionen im Kader-Editor.'); return; }
