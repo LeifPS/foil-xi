@@ -19350,10 +19350,41 @@ function openAdminGiveAllCardsModal(){
   document.getElementById('admin-all-cards-cancel').addEventListener('click', closeModal);
   const confirmBtn = document.getElementById('admin-all-cards-confirm');
   if(missing.length) confirmBtn.addEventListener('click', async ()=>{
-    confirmBtn.disabled = true; confirmBtn.textContent = 'Wird hinzugefügt…';
-    missing.forEach(card=>{ collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id, 1, !!card.untradable); });
-    await sSet('collection', collection);
-    toast(`${missing.length} Karten hinzugefügt — du besitzt jetzt alle ${pool.length}.`);
+    confirmBtn.disabled = true;
+    // Der komplette Kartenindex hat >20.000 Karten - als komplettes 'collection'-Array ergibt das ein
+    // JSON von mehreren MB, weit über Firestores harter 1-MiB-Dokumentgrenze (die 'saves'-Doc trägt
+    // daneben ja noch Profil, andere Sammlungen usw.). Das ist kein interner Sicherheits-Guard, der sich
+    // wegkonfigurieren ließe, sondern eine echte Speichergrenze des Backends: EIN einzelnes Firestore-
+    // Dokument kann "wirklich jede Karte" schlicht nicht fassen, egal wie oft/in welchen Häppchen man
+    // schreibt, weil der finale Schreibvorgang am Ende ohnehin das GESAMTE Array enthält (Firestore
+    // ersetzt das Feld immer komplett, es gibt kein "nur den neuen Teil anhängen" bei einem simplen
+    // Array-Feld). Bisher scheiterte der Schreibversuch deshalb still (sSet fängt den Fehler ab und
+    // fällt lokal zurück), während der Erfolgs-Toast trotzdem unbedingt gefeuert wurde - das sah für den
+    // Admin wie ein grundloses "geht einfach nicht" aus, obwohl real nichts gespeichert wurde.
+    // Deshalb: so viele hinzufügen, wie sicher unter das Limit passen (mit Sicherheitsabstand für den
+    // Rest des Dokuments), jeden Zwischenstand per sSet-Rückgabewert wirklich bestätigen, und ehrlich
+    // sagen, wenn wegen der Firestore-Grenze nicht alle passen, statt das zu verschweigen.
+    const FIRESTORE_DOC_SAFE_BYTES = 850000; // Sicherheitsabstand unter 1 MiB für Profil/andere Felder im selben Dokument
+    const CHUNK_SIZE = 1000;
+    let added = 0, hitLimit = false;
+    for(let i=0;i<missing.length;i+=CHUNK_SIZE){
+      const chunk = missing.slice(i, i+CHUNK_SIZE);
+      const trial = collection.concat(chunk.map(card=>({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId})));
+      if(JSON.stringify(trial).length > FIRESTORE_DOC_SAFE_BYTES){ hitLimit = true; break; }
+      collection = trial;
+      chunk.forEach(card=>bumpCardMintCount(card.id, 1, !!card.untradable));
+      confirmBtn.textContent = `Wird hinzugefügt… (${added + chunk.length}/${missing.length})`;
+      const ok = await sSet('collection', collection);
+      if(ok===null){
+        toast(`Abgebrochen nach ${added} von ${missing.length} Karten — Speichern fehlgeschlagen. Bitte erneut versuchen.`);
+        closeModal();
+        return;
+      }
+      added += chunk.length;
+    }
+    toast(hitLimit
+      ? `${added} von ${missing.length} fehlenden Karten hinzugefügt — mehr passt nicht in ein einzelnes Firestore-Dokument (1-MiB-Grenze). Kein Bug, sondern eine harte Backend-Grenze.`
+      : `${added} Karten hinzugefügt — du besitzt jetzt alle ${pool.length}.`);
     closeModal();
   });
 }
