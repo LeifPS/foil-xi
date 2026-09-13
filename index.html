@@ -10023,6 +10023,18 @@ function powerScore(card){
 function getBaselineRAP(card){
   return Math.round(powerScore(card));
 }
+// ===== Schnellverkauf =====
+// Zahlt sofort Coins statt ein Transfermarkt-Angebot zu erstellen und auf einen Käufer zu warten -
+// bewusst NICHT auf computeRAP() basierend, das echte Verkaufsdaten (loadSalesHistory) einmischt: zwei
+// Spieler könnten sich sonst gegenseitig eine Karte künstlich billig/teuer "verkaufen", um den RAP (und
+// damit den Schnellverkaufspreis) zu manipulieren. getBaselineRAP() ist rein aus Rating/Level/Trainer-
+// Stufe berechnet und von echtem Handel komplett unberührt - der Auszahlung liegt deshalb IMMER dieser
+// Basiswert zugrunde, nie der (potenziell manipulierte) echte Marktwert.
+const QUICK_SELL_RAP_PCT = 0.6; // deutlich unter Marktwert, damit der Transfermarkt attraktiver bleibt
+function quickSellValue(card){
+  if(card.untradable) return 0;
+  return Math.max(1, Math.round(getBaselineRAP(card) * QUICK_SELL_RAP_PCT));
+}
 let salesHistoryCache = null; // Map id -> [prices], most recent first
 async function loadSalesHistory(){
   loadRapOverrides(); // same "everything computeRAP needs" load, piggybacked on every existing call site
@@ -13211,13 +13223,16 @@ function renderTrade(view){
     <div id="trade-subnav" style="display:flex;gap:2px;padding:0;background:none;border:none;margin-bottom:18px;">
       <button class="nav-btn ${tradeSubTab==='market'?'active':''}" id="subtab-market" style="padding:9px 14px;">Transfermarkt</button>
       <button class="nav-btn ${tradeSubTab==='direct'?'active':''}" id="subtab-direct" style="padding:9px 14px;">Direkt-Angebote</button>
+      <button class="nav-btn ${tradeSubTab==='quicksell'?'active':''}" id="subtab-quicksell" style="padding:9px 14px;">Schnellverkauf</button>
     </div>
     <div id="trade-content"></div>
   `;
   document.getElementById('subtab-market').addEventListener('click', ()=>{ tradeSubTab='market'; renderTrade(view); });
   document.getElementById('subtab-direct').addEventListener('click', ()=>{ tradeSubTab='direct'; renderTrade(view); });
+  document.getElementById('subtab-quicksell').addEventListener('click', ()=>{ tradeSubTab='quicksell'; renderTrade(view); });
   if(tradeSubTab==='market') renderMarketSection(document.getElementById('trade-content'));
-  else renderDirectOffersSection(document.getElementById('trade-content'));
+  else if(tradeSubTab==='direct') renderDirectOffersSection(document.getElementById('trade-content'));
+  else renderQuickSellSection(document.getElementById('trade-content'));
 }
 // Live-Verhandlungs-Tausch (statt des alten Einmal-Angebots): eine Einladung wird angenommen, dann
 // bauen BEIDE Seiten live gemeinsam ihr Angebot zusammen (Karten/Trainer/Coins), können im Chat
@@ -13231,6 +13246,200 @@ function renderDirectOffersSection(el){
   }
   el.innerHTML = `<p class="hint">Lädt…</p>`;
   loadMyLiveTrade(el);
+}
+// ===== Schnellverkauf: sofort Coins statt eines Transfermarkt-Angebots, das auf einen Käufer wartet -
+// nur für tradable Karten (untradable/favorisierte/gesperrte Karten tauchen gar nicht erst auf), und der
+// Preis kommt bewusst aus quickSellValue() (siehe dort), nicht aus dem echten, potenziell durch Spieler
+// beeinflussbaren Marktwert. Zwei Reiter wie beim Transfermarkt-Verkaufen-Modal: manuell auswählen oder
+// nach Eigenschaften (Rating/Position) filtern - beides verkauft sofort, nicht erst nach Bestätigung
+// eines Käufers, deshalb die deutliche Warnung im Kopf.
+let quickSellMode = 'manual';
+async function renderQuickSellSection(el){
+  el.innerHTML = `<p class="hint">Verfügbarkeit wird geprüft…</p>`;
+  const lockedUids = await getLockedUids();
+  const allEligible = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c), cardId:c.cardId}))
+    .filter(x=>x.card && !x.card.untradable && !x.card.favorited && !lockedUids.has(x.uid));
+  el.innerHTML = `
+    <div class="vs-panel" style="margin-bottom:16px;border-color:var(--danger);">
+      <p class="hint" style="margin:0;">⚠ Schnellverkauf zahlt sofort Coins aus und entfernt die Karte(n) dauerhaft aus deiner Sammlung - anders als der Transfermarkt gibt es <b>kein</b> Zurücknehmen. Der Preis liegt bewusst unter dem echten Marktwert (${Math.round(QUICK_SELL_RAP_PCT*100)}% eines manipulationssicheren Basiswerts) - für mehr Coins lohnt sich oft der Transfermarkt.</p>
+    </div>
+    <div style="display:flex;gap:2px;margin-bottom:16px;">
+      <button class="nav-btn ${quickSellMode==='manual'?'active':''}" id="qs-tab-manual" style="padding:8px 14px;flex:1;">Manuell auswählen</button>
+      <button class="nav-btn ${quickSellMode==='filter'?'active':''}" id="qs-tab-filter" style="padding:8px 14px;flex:1;">Nach Eigenschaften</button>
+    </div>
+    <div id="qs-body"></div>`;
+  document.getElementById('qs-tab-manual').addEventListener('click', ()=>{ quickSellMode='manual'; renderQuickSellSection(el); });
+  document.getElementById('qs-tab-filter').addEventListener('click', ()=>{ quickSellMode='filter'; renderQuickSellSection(el); });
+  if(quickSellMode==='manual') renderQuickSellManual(allEligible);
+  else renderQuickSellFilter(allEligible);
+}
+// Führt den eigentlichen Verkauf aus: Coins gutschreiben, verkaufte uids aus collection entfernen,
+// speichern, Locks-Cache invalidieren (verkaufte Karten waren nie gesperrt, aber externalLocked hängt
+// vom Marktbestand ab) und die Sektion neu rendern. items = [{uid, value}]. Re-checkt vor dem
+// eigentlichen Entfernen nichts mehr gegen den Server - Schnellverkauf betrifft nur die eigene
+// collection, kein geteilter Zustand, den ein zweiter Client parallel ändern könnte (anders als eine
+// Transfermarkt-Karte, auf die auch jemand anders bieten kann).
+async function executeQuickSell(items){
+  if(!items.length) return;
+  const total = items.reduce((s,x)=>s+x.value, 0);
+  const uids = new Set(items.map(x=>x.uid));
+  collection = collection.filter(c=>!uids.has(c.uid));
+  await sSet('collection', collection);
+  await atomicCoinChange(total);
+  applyAchievementDeltas({marketCoinsEarned: total});
+  invalidateReadCache('external-locks:'+profile.userId);
+  toast(`${items.length} Karte${items.length===1?'':'n'} schnellverkauft für ${formatCoins(total)} Coins.`);
+  renderTrade(document.getElementById('view'));
+}
+// Endgültige Bestätigung vor dem irreversiblen Verkauf - eigenes Modal statt window.confirm(), gleiche
+// Konvention wie jede andere destruktive Aktion in diesem Spiel (siehe z.B. den Live-Trade-Abbrechen-
+// Dialog oder "Kader wirklich abgeben?").
+function confirmQuickSell(items){
+  const total = items.reduce((s,x)=>s+x.value,0);
+  openModal(`
+    <h2 style="margin-bottom:10px;color:var(--danger);">Wirklich schnellverkaufen?</h2>
+    <p class="hint" style="margin-bottom:18px;">${items.length} Karte${items.length===1?'':'n'} für insgesamt <b style="color:var(--gold);">${formatCoins(total)} Coins</b> sofort verkaufen. Das kann nicht rückgängig gemacht werden.</p>
+    <div style="display:flex;gap:10px;">
+      <button class="action-btn secondary" id="qs-confirm-back" style="flex:1;">Zurück</button>
+      <button class="action-btn" id="qs-confirm-yes" style="flex:1;background:var(--danger);">Ja, verkaufen</button>
+    </div>`);
+  document.getElementById('qs-confirm-back').addEventListener('click', closeModal);
+  document.getElementById('qs-confirm-yes').addEventListener('click', async ()=>{
+    closeModal();
+    await executeQuickSell(items);
+  });
+}
+function renderQuickSellManual(allEligible){
+  const body = document.getElementById('qs-body');
+  const posOptions = Object.keys(POS_DE).map(p=>`<option value="${p}">${posDE(p)} (${p})</option>`).join('');
+  body.innerHTML = `
+    <div class="toolbar" style="margin-bottom:8px;">
+      <input id="qs-search" placeholder="Spielername suchen...">
+      <select id="qs-pos-filter">
+        <option value="ANY">Alle Positionen</option>
+        ${posOptions}
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button class="action-btn secondary" id="qs-select-all" style="width:auto;padding:6px 12px;font-size:11.5px;">Alle sichtbaren auswählen</button>
+      <button class="action-btn secondary" id="qs-select-none" style="width:auto;padding:6px 12px;font-size:11.5px;">Auswahl leeren</button>
+    </div>
+    <div class="club-grid" id="qs-pick-grid" style="max-height:320px;overflow:auto;margin-bottom:16px;"></div>
+    <div class="mono" id="qs-selected-info" style="color:var(--muted);margin-bottom:12px;">0 Karten ausgewählt · 0 Coins</div>
+    <button class="action-btn" id="qs-submit" disabled style="opacity:.4;width:260px;background:var(--danger);">Jetzt schnellverkaufen</button>`;
+  const selected = new Map(); // uid -> {uid, value}
+  const updateSel = ()=>{
+    const total = Array.from(selected.values()).reduce((s,x)=>s+x.value,0);
+    document.getElementById('qs-selected-info').textContent = `${selected.size} Karte${selected.size===1?'':'n'} ausgewählt · ${formatCoins(total)} Coins`;
+    const btn = document.getElementById('qs-submit');
+    btn.disabled = !selected.size; btn.style.opacity = selected.size ? '1' : '.4';
+  };
+  const pGrid = document.getElementById('qs-pick-grid');
+  const searchInput = document.getElementById('qs-search');
+  const posFilter = document.getElementById('qs-pos-filter');
+  const filteredList = ()=>{
+    const q = searchInput.value.trim().toLowerCase();
+    const pos = posFilter.value;
+    return allEligible.filter(({card})=>{
+      if(q && !card.n.toLowerCase().includes(q)) return false;
+      if(pos!=='ANY' && mainPos(card.pos)!==pos) return false;
+      return true;
+    });
+  };
+  const renderGrid = ()=>{
+    renderLazyGrid(pGrid, filteredList(), ({uid,card})=>{
+      const value = quickSellValue(card);
+      const wrap = document.createElement('div');
+      wrap.className = 'club-card-wrap';
+      wrap.style.cursor = 'pointer';
+      wrap.appendChild(cardEl(card,'mini'));
+      const tag = document.createElement('div');
+      tag.className = 'mono';
+      tag.style.cssText = 'text-align:center;font-size:10px;color:var(--danger);margin-top:2px;';
+      tag.textContent = formatCoins(value);
+      wrap.appendChild(tag);
+      if(selected.has(uid)) wrap.style.outline = '3px solid var(--danger)';
+      wrap.addEventListener('click', ()=>{
+        if(selected.has(uid)){ selected.delete(uid); wrap.style.outline=''; }
+        else{ selected.set(uid, {uid, value}); wrap.style.outline='3px solid var(--danger)'; }
+        updateSel();
+      });
+      return wrap;
+    }, {emptyHtml: '<p class="hint">Keine passenden Karten gefunden.</p>'});
+  };
+  searchInput.addEventListener('input', renderGrid);
+  posFilter.addEventListener('change', renderGrid);
+  renderGrid();
+  document.getElementById('qs-select-all').addEventListener('click', ()=>{
+    filteredList().forEach(({uid,card})=> selected.set(uid, {uid, value:quickSellValue(card)}));
+    renderGrid(); updateSel();
+  });
+  document.getElementById('qs-select-none').addEventListener('click', ()=>{ selected.clear(); renderGrid(); updateSel(); });
+  document.getElementById('qs-submit').addEventListener('click', ()=>{
+    confirmQuickSell(Array.from(selected.values()));
+  });
+}
+function renderQuickSellFilter(allEligible){
+  const body = document.getElementById('qs-body');
+  const posOptions = Object.keys(POS_DE).map(p=>`<option value="${p}">${posDE(p)} (${p})</option>`).join('');
+  body.innerHTML = `
+    <div class="toolbar" style="margin-bottom:10px;">
+      <input id="qsf-min-ov" type="number" min="1" max="115" placeholder="Min. Rating" style="max-width:120px;">
+      <input id="qsf-max-ov" type="number" min="1" max="115" placeholder="Max. Rating" style="max-width:120px;">
+      <select id="qsf-pos">
+        <option value="ANY">Beliebige Position</option>
+        ${posOptions}
+      </select>
+    </div>
+    <div class="mono" id="qsf-preview" style="color:var(--muted);margin-bottom:14px;">Lege Filter fest, um passende Karten zu sehen.</div>
+    <div class="club-grid" id="qsf-preview-grid" style="max-height:260px;overflow:auto;margin-bottom:16px;"></div>
+    <button class="action-btn" id="qsf-submit" disabled style="opacity:.4;width:260px;background:var(--danger);">Alle schnellverkaufen</button>
+    <p class="hint" style="margin-top:10px;">Maximal 40 Karten pro Aktion.</p>`;
+  const minInput = document.getElementById('qsf-min-ov');
+  const maxInput = document.getElementById('qsf-max-ov');
+  const posSelect = document.getElementById('qsf-pos');
+  let matches = [];
+  const updatePreview = ()=>{
+    const min = Math.max(1, Math.floor(Number(minInput.value)||1));
+    const max = Math.min(115, Math.floor(Number(maxInput.value)||115));
+    const pos = posSelect.value;
+    matches = allEligible.filter(({card})=>{
+      if(card.ov<min || card.ov>max) return false;
+      if(pos!=='ANY' && mainPos(card.pos)!==pos) return false;
+      return true;
+    });
+    const grid = document.getElementById('qsf-preview-grid');
+    const capped = matches.slice(0,40);
+    grid.innerHTML = '';
+    let total = 0;
+    capped.forEach(({card})=>{
+      const value = quickSellValue(card);
+      total += value;
+      const wrap = document.createElement('div');
+      wrap.style.position = 'relative';
+      wrap.appendChild(cardEl(card,'xs'));
+      const tag = document.createElement('div');
+      tag.className = 'mono';
+      tag.style.cssText = 'text-align:center;font-size:9px;color:var(--danger);margin-top:2px;';
+      tag.textContent = formatCoins(value);
+      wrap.appendChild(tag);
+      grid.appendChild(wrap);
+    });
+    document.getElementById('qsf-preview').textContent = matches.length
+      ? `${matches.length} passende Karte${matches.length===1?'':'n'} gefunden${matches.length>40?' (zeige/verkaufe nur die ersten 40)':''}. Gesamterlös: ${formatCoins(total)} Coins.`
+      : 'Keine passenden Karten gefunden.';
+    const btn = document.getElementById('qsf-submit');
+    btn.disabled = !capped.length; btn.style.opacity = capped.length ? '1' : '.4';
+  };
+  [minInput, maxInput].forEach(elx=>elx.addEventListener('input', updatePreview));
+  posSelect.addEventListener('change', updatePreview);
+  document.getElementById('qsf-submit').addEventListener('click', ()=>{
+    const toSell = matches.slice(0,40);
+    if(!toSell.length){ toast('Keine passenden Karten gefunden.'); return; }
+    const items = toSell.map(({uid,card})=>({uid, value:quickSellValue(card)}));
+    confirmQuickSell(items);
+  });
+  updatePreview();
 }
 let marketFilter = {q:'', pos:'ALL', sort:'newest', maxPrice:'', minOv:''};
 function renderMarketSection(el){
