@@ -12828,7 +12828,13 @@ async function renderSBCList(view){
     <div class="sbc-grid" id="challenge-grid"></div>`;
   if(PS_TRAINING_ENABLED) document.getElementById('open-ps-training').addEventListener('click', openPlaystyleTrainingModal);
   await renderChallengeGrid();
-  document.getElementById('challenge-search').addEventListener('input', e=>{
+  // renderChallengeGrid awaits getExternalLockedUids() internally - if the user switches to a different
+  // tab while that's still pending, the #view innerHTML gets replaced out from under this render by the
+  // new tab's own render call, and 'challenge-search' no longer exists by the time we get back here.
+  // Without this guard that threw "Cannot read properties of null (reading 'addEventListener')".
+  const searchInput = document.getElementById('challenge-search');
+  if(!searchInput) return;
+  searchInput.addEventListener('input', e=>{
     const q = e.target.value.trim().toLowerCase();
     document.querySelectorAll('#challenge-grid > *').forEach(tile=>{
       const nameEl = tile.querySelector('.sbc-name');
