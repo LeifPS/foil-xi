@@ -13730,9 +13730,15 @@ function renderSellManual(allEligible, usedInSquad){
     await fbReady;
     if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); e.target.disabled=false; return; }
     const squadValues = new Set(Object.values(squad.slots));
+    // Re-check locks server-side-authoritatively at submit time, not just at picker-render time:
+    // the picker's usedInSquad snapshot can go stale (e.g. a card gets staked as a tournament prize
+    // in another tab while this modal is open), and only re-checking squad-lock here left tournament-
+    // staked/market-listed/live-trade cards listable, which is how a staked card could end up sold
+    // out from under a running tournament (see claimTournamentPrize's cardMissing guard).
+    const externalLocked = await getExternalLockedUids();
     let created = 0, skipped = 0;
     for(const item of selected.values()){
-      const stillLocked = item.itemType==='manager' ? item.uid===squad.managerUid : squadValues.has(item.uid);
+      const stillLocked = item.itemType==='manager' ? item.uid===squad.managerUid : (squadValues.has(item.uid) || externalLocked.has(item.uid));
       if(stillLocked){ skipped++; continue; }
       try{
         await fb.setDoc(fb.doc(fb.db,'market', genId()), {
@@ -14009,11 +14015,12 @@ function renderSellFilter(allEligible, usedInSquad){
     await fbReady;
     if(!fb){ toast('Transfermarkt ben\u00f6tigt das Online-Backend.'); e.target.disabled=false; return; }
     const squadValues = new Set(Object.values(squad.slots));
+    const externalLocked = await getExternalLockedUids();
     let created = 0, skipped = 0;
     for(let i=0;i<toList.length;i++){
       const {uid,cardId,card} = toList[i];
       const price = prices[i].price;
-      if(squadValues.has(uid)){ skipped++; continue; }
+      if(squadValues.has(uid) || externalLocked.has(uid)){ skipped++; continue; }
       try{
         await fb.setDoc(fb.doc(fb.db,'market', genId()), {
           sellerUserId: profile.userId, sellerName: profile.displayName||profile.userId,
@@ -14117,64 +14124,82 @@ async function buyMarketListing(listing){
   if(profile.coins < listing.price){ toast('Nicht genug Coins.'); closeModal(); return; }
   await fbReady;
   if(!fb){ toast('Backend nicht erreichbar.'); closeModal(); return; }
+  const isManager = listing.itemType==='manager';
+  const isPack = listing.itemType==='pack';
+  const removeField = isManager ? 'managerCollection' : isPack ? 'packCollection' : 'collection';
   try{
-    // re-fetch the listing itself fresh - it may have already been bought or withdrawn by someone else
-    const freshListingSnap = await fb.getDoc(fb.doc(fb.db,'market', listing.id));
-    if(!freshListingSnap.exists()){
-      toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.');
+    // Sicherheits-Fix: das vorherige Vorgehen (Listing per getDoc lesen, dann SEPARAT per updateDoc
+    // bezahlen+entfernen, dann SEPARAT per deleteDoc löschen) hatte zwischen dem ersten Lesen und dem
+    // eigentlichen Löschen ein Zeitfenster, in dem zwei Käufe desselben Listings (zwei Tabs, zwei
+    // Spieler gleichzeitig, oder ein Skript) beide "existiert noch" sahen und beide durchliefen - der
+    // Verkäufer wurde dadurch ZWEIMAL bezahlt für ein einziges Item, und bei zwei Tabs desselben Käufers
+    // bekam der Käufer die Karte zweimal für den Preis einmal. Jetzt wird der komplette Kauf (Prüfen,
+    // Bezahlen, Item entfernen, Listing löschen) in EINER Firestore-Transaktion geclaimt - exakt dasselbe
+    // Muster wie schon bei finalizeLiveTrade (Direkt-Angebote) und dem Turnier-Beitritt: die Transaktion
+    // erzwingt, dass ein zweiter, fast gleichzeitiger Versuch die inzwischen veränderten Daten neu liest
+    // und die eigene Prüfung dann fehlschlägt, statt beide unabhängig voneinander durchzulassen.
+    let claimedEntry = null, claimError = null;
+    if(fb.runTransaction && fb.increment && fb.arrayRemove){
+      await fb.runTransaction(fb.db, async (tx)=>{
+        const listingSnap = await tx.get(fb.doc(fb.db,'market', listing.id));
+        if(!listingSnap.exists()){ claimError='listing-gone'; return; }
+        const sellerSnap = await tx.get(fb.doc(fb.db,'saves', listing.sellerUserId));
+        if(!sellerSnap.exists()){ claimError='no-seller'; return; }
+        const sellerData = sellerSnap.data();
+        const sourceArr = sellerData[removeField] || [];
+        // the exact stored entry (not a reconstructed copy) - fb.arrayRemove needs deep equality
+        // against what's actually stored in the array
+        const soldEntry = sourceArr.find(x=>x.uid===listing.cardUid);
+        if(!soldEntry){ claimError='item-gone'; return; }
+        claimedEntry = soldEntry;
+        tx.delete(fb.doc(fb.db,'market', listing.id));
+        tx.update(fb.doc(fb.db,'saves', listing.sellerUserId), {
+          'profile.coins': fb.increment(listing.price),
+          'profile.achievementStats.marketCoinsEarned': fb.increment(listing.price),
+          [removeField]: fb.arrayRemove(soldEntry),
+        });
+      });
+    } else {
+      // Fallback ohne Transaktionen (siehe fb.runTransaction-Check oben) - derselbe race-behaftete Ablauf
+      // wie früher, nur falls das SDK sie mal nicht bereitstellt. Praktisch nie der aktive Pfad.
+      const freshListingSnap = await fb.getDoc(fb.doc(fb.db,'market', listing.id));
+      if(!freshListingSnap.exists()){ claimError='listing-gone'; }
+      else{
+        const sellerSnap = await fb.getDoc(fb.doc(fb.db,'saves', listing.sellerUserId));
+        if(!sellerSnap.exists()){ claimError='no-seller'; }
+        else{
+          const sellerData = sellerSnap.data();
+          const sourceArr = sellerData[removeField] || [];
+          const soldEntry = sourceArr.find(x=>x.uid===listing.cardUid);
+          if(!soldEntry){ claimError='item-gone'; }
+          else{
+            claimedEntry = soldEntry;
+            let sellerProfile = sellerData.profile || {coins:0};
+            sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
+            if(!sellerProfile.achievementStats) sellerProfile.achievementStats = {};
+            sellerProfile.achievementStats.marketCoinsEarned = (sellerProfile.achievementStats.marketCoinsEarned||0) + listing.price;
+            const filteredField = sourceArr.filter(x=>x.uid!==listing.cardUid);
+            await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile, [removeField]:filteredField}, {merge:true});
+            try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
+          }
+        }
+      }
+    }
+    if(claimError==='listing-gone'){
+      toast('Dieses Angebot ist nicht mehr verfügbar.');
       invalidateReadCache('market-listings');
       closeModal(); loadMarketListings(); return;
     }
-    const sellerSnap = await fb.getDoc(fb.doc(fb.db,'saves', listing.sellerUserId));
-    if(!sellerSnap.exists()){ toast('Verk\u00e4ufer-Daten nicht gefunden.'); await withdrawMarketListing(listing); closeModal(); return; }
-    const sellerData = sellerSnap.data();
-    const sellerCollection = sellerData.collection || [];
-    const sellerManagerCollection = sellerData.managerCollection || [];
-    const sellerPackCollection = sellerData.packCollection || [];
-    const isManager = listing.itemType==='manager';
-    const isPack = listing.itemType==='pack';
-    // the exact stored entry (not a reconstructed copy) - fb.arrayRemove below only removes a value
-    // that deep-equals what's actually stored in the array
-    const soldEntry = isManager ? sellerManagerCollection.find(m=>m.uid===listing.cardUid)
-      : isPack ? sellerPackCollection.find(p=>p.uid===listing.cardUid)
-      : sellerCollection.find(c=>c.uid===listing.cardUid);
-    if(!soldEntry){ toast('Dieses Angebot ist nicht mehr verf\u00fcgbar.'); await withdrawMarketListing(listing); closeModal(); return; }
+    if(claimError==='no-seller'){ toast('Verkäufer-Daten nicht gefunden.'); await withdrawMarketListing(listing); closeModal(); return; }
+    if(claimError==='item-gone' || !claimedEntry){ toast('Dieses Angebot ist nicht mehr verfügbar.'); await withdrawMarketListing(listing); closeModal(); return; }
     // player leveling: carry the sold card's XP/level over to the buyer, same as direct trades. The
     // ORIGINAL obtainedFrom/obtainedAt provenance stamp carries over unchanged too - a market sale
     // moves an already-existing card, it never resets who first actually got it (see the comment on
     // cardIndexProvenanceHTML).
-    const soldEntryXp = soldEntry.xp||0;
-    // Pay the seller AND remove the sold item in ONE atomic updateDoc via increment()/arrayRemove() -
-    // NOT the old read-the-collection-filter-it-write-the-whole-array-back approach. That silently lost
-    // the sale (seller got neither coins nor lost the card) whenever the seller's own session happened
-    // to write ITS OWN (locally stale, still-containing-the-sold-item) copy of collection/profile back
-    // around the same time - e.g. leveling an unrelated card, or any other action that calls
-    // sSet('collection', ...)/sSet('profile', ...) - since neither write knew about the other, the one
-    // that landed last on the server silently won and erased this sale's effect. increment/arrayRemove
-    // are applied server-side against whatever the field's current value is at write time, so they can
-    // never be clobbered by (or clobber) a concurrent write to the same document.
-    const removeField = isManager ? 'managerCollection' : isPack ? 'packCollection' : 'collection';
-    if(fb.updateDoc && fb.increment && fb.arrayRemove){
-      // Händler-Erfolg zählt Coins aus dem Transfermarkt/Handel statt der Anzahl Handelsgeschäfte -
-      // gleicher updateDoc-Schreibvorgang wie die Coin-Zahlung selbst, in EINEM Round-Trip.
-      await fb.updateDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {
-        'profile.coins': fb.increment(listing.price),
-        'profile.achievementStats.marketCoinsEarned': fb.increment(listing.price),
-        [removeField]: fb.arrayRemove(soldEntry),
-      });
-    } else {
-      let sellerProfile = sellerData.profile || {coins:0};
-      sellerProfile.coins = (sellerProfile.coins||0) + listing.price;
-      if(!sellerProfile.achievementStats) sellerProfile.achievementStats = {};
-      sellerProfile.achievementStats.marketCoinsEarned = (sellerProfile.achievementStats.marketCoinsEarned||0) + listing.price;
-      const filteredField = (isManager ? sellerManagerCollection : isPack ? sellerPackCollection : sellerCollection).filter(x=>x.uid!==listing.cardUid);
-      await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile, [removeField]:filteredField}, {merge:true});
-    }
-    try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
-
+    const soldEntryXp = claimedEntry.xp||0;
     if(isManager){ managerCollection.push({uid:genId(), mgrId:listing.cardId}); await sSet('managerCollection', managerCollection); }
     else if(isPack){ packCollection.push({uid:genId(), packId:listing.cardId}); await sSet('packCollection', packCollection); }
-    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp, obtainedAt:soldEntry.obtainedAt||Date.now(), obtainedFrom:soldEntry.obtainedFrom||listing.sellerUserId, ...(soldEntry.psOverride ? {psOverride:soldEntry.psOverride} : {})}); await sSet('collection', collection); }
+    else { collection.push({uid:genId(), cardId:listing.cardId, xp:soldEntryXp, obtainedAt:claimedEntry.obtainedAt||Date.now(), obtainedFrom:claimedEntry.obtainedFrom||listing.sellerUserId, ...(claimedEntry.psOverride ? {psOverride:claimedEntry.psOverride} : {})}); await sSet('collection', collection); }
     await atomicCoinChange(-listing.price);
     if(!isPack) recordSale(listing.cardId, listing.price);
     closeModal();
@@ -14183,7 +14208,7 @@ async function buyMarketListing(listing){
     loadMarketListings();
   }catch(e){
     console.warn('buy market listing failed', e);
-    toast('Kauf fehlgeschlagen \u2014 bitte erneut versuchen.');
+    toast('Kauf fehlgeschlagen — bitte erneut versuchen.');
     closeModal();
   }
 }
@@ -23427,7 +23452,7 @@ async function claimTournamentPrize(id, role='winner'){
   await fbReady;
   if(!fb) return;
   const ref = fb.doc(fb.db,'tournaments', id);
-  let claimed = false, prizeCoins = 0, prizeCardName = null, prizeCardId = null, wonNow = false;
+  let claimed = false, prizeCoins = 0, prizeCardName = null, prizeCardId = null, wonNow = false, cardMissing = false, prizeCardHostId = null;
   const newCardUid = genId(); // generated up front so the transaction and the local UI update agree on the same uid
   try{
     if(fb.runTransaction && clubId){
@@ -23448,6 +23473,21 @@ async function claimTournamentPrize(id, role='winner'){
           return;
         }
         if(t.winnerUserId!==profile.userId || t.prizeClaimed) return;
+        // Sicherheits-Fix: die Sperre, die ein gestaktes Preis-Karte eigentlich vorm Verkaufen/Tauschen
+        // schützt (siehe getExternalLockedUids), wird nur beim manuellen Verkaufen/Anlegen eines
+        // Angebots geprüft - ein Umgehen davon (Bug, Bypass, ein bisher unbekannter Fall) würde sonst
+        // hier trotzdem bedingungslos eine FRISCH GEMÜNZTE Kopie für den Sieger erzeugen, selbst wenn
+        // der Host die Original-Karte längst nicht mehr besitzt (arrayRemove auf einen nicht mehr
+        // vorhandenen Wert ist bei Firestore ein stiller No-op, kein Fehler) - eine echte Dopplung.
+        // Firestore-Transaktionen verlangen ALLE Reads vor dem ersten Write, daher liest dieser Block
+        // (falls nötig) den Host-Spielstand VOR den tx.update()-Aufrufen weiter unten.
+        let cardStillStaked = false;
+        const wantsCardTransfer = t.prizeType==='card' && t.prizeCard && t.winnerUserId!==t.hostUserId && fb.arrayUnion && fb.arrayRemove;
+        if(wantsCardTransfer){
+          const hostSnap = await tx.get(fb.doc(fb.db,'saves', t.hostUserId));
+          const hostCollection = hostSnap.exists() ? (hostSnap.data().collection||[]) : [];
+          cardStillStaked = hostCollection.some(c=>c.uid===t.prizeCard.stakedUid && c.cardId===t.prizeCard.cardId);
+        }
         tx.update(ref, {prizeClaimed:true, prizeType:t.prizeType});
         // "Turnier-Champion"-Erfolg (siehe ACHIEVEMENTS 'tournamentWins') - genau hier statt beim
         // Ermitteln des Siegers (prepareHostedTournamentRun), weil DAS oft auf einem FREMDEN Client
@@ -23457,15 +23497,21 @@ async function claimTournamentPrize(id, role='winner'){
         tx.update(saveRef, achievementDeltaPayload({tournamentWins:1}));
         wonNow = true;
         if(t.prizeType==='card' && t.prizeCard){
-          if(t.winnerUserId!==t.hostUserId && fb.arrayUnion && fb.arrayRemove){
-            // move the card from the host's collection into the winner's own collection - atomic on
-            // both ends, so it can never be duplicated or lost mid-transfer
-            tx.update(fb.doc(fb.db,'saves', t.hostUserId), {collection: fb.arrayRemove({uid:t.prizeCard.stakedUid, cardId:t.prizeCard.cardId})});
-            tx.update(saveRef, {collection: fb.arrayUnion({uid:newCardUid, cardId:t.prizeCard.cardId})});
-            prizeCardId = t.prizeCard.cardId;
+          if(wantsCardTransfer){
+            if(cardStillStaked){
+              // move the card from the host's collection into the winner's own collection - atomic on
+              // both ends, so it can never be duplicated or lost mid-transfer
+              tx.update(fb.doc(fb.db,'saves', t.hostUserId), {collection: fb.arrayRemove({uid:t.prizeCard.stakedUid, cardId:t.prizeCard.cardId})});
+              tx.update(saveRef, {collection: fb.arrayUnion({uid:newCardUid, cardId:t.prizeCard.cardId})});
+              prizeCardId = t.prizeCard.cardId;
+              prizeCardHostId = t.hostUserId; // t is scoped to this callback - captured here for use after the transaction resolves
+            } else {
+              cardMissing = true; // host no longer has it - do NOT mint a duplicate, see comment above
+            }
           }
           // if the host won their own staked card back, it never left their collection - nothing to move
-          claimed = true; prizeCardName = t.prizeCard.n;
+          claimed = true;
+          if(!cardMissing) prizeCardName = t.prizeCard.n;
         }
         // independent of the card branch above (not else-if): a card-prize tournament can still carry
         // a nonzero winnerPrizeCoins if it had an entry-fee pool (see prepareHostedTournamentRun) -
@@ -23476,7 +23522,7 @@ async function claimTournamentPrize(id, role='winner'){
         }
       });
       if(claimed && prizeCoins>0){ profile.coins += prizeCoins; updateCoinDisplay(true); }
-      if(claimed && prizeCardId){ collection.push({uid:newCardUid, cardId:prizeCardId, obtainedAt:Date.now(), obtainedFrom:t.hostUserId}); }
+      if(claimed && prizeCardId){ collection.push({uid:newCardUid, cardId:prizeCardId, obtainedAt:Date.now(), obtainedFrom:prizeCardHostId}); }
       if(wonNow) applyAchievementDeltas({tournamentWins:1});
     } else {
       // Fallback for a backend without transaction support - same race as before, kept only so
@@ -23494,11 +23540,23 @@ async function claimTournamentPrize(id, role='winner'){
         } else if(t.winnerUserId===profile.userId && !t.prizeClaimed){
           if(t.prizeType==='card' && t.prizeCard){
             if(t.winnerUserId!==t.hostUserId){
-              try{ await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {collection: fb.arrayRemove({uid:t.prizeCard.stakedUid, cardId:t.prizeCard.cardId})}); }catch(_){}
-              collection.push({uid:newCardUid, cardId:t.prizeCard.cardId, obtainedAt:Date.now(), obtainedFrom:t.hostUserId});
-              await sSet('collection', collection);
+              // Same guard as the transactional path above (see its comment): verify the host still
+              // actually has the staked card before minting a copy for the winner, instead of trusting
+              // arrayRemove's silent no-op on an already-gone value.
+              try{
+                const hostSnap = await fb.getDoc(fb.doc(fb.db,'saves', t.hostUserId));
+                const hostCollection = hostSnap.exists() ? (hostSnap.data().collection||[]) : [];
+                const stillStaked = hostCollection.some(c=>c.uid===t.prizeCard.stakedUid && c.cardId===t.prizeCard.cardId);
+                if(stillStaked){
+                  await fb.updateDoc(fb.doc(fb.db,'saves', t.hostUserId), {collection: fb.arrayRemove({uid:t.prizeCard.stakedUid, cardId:t.prizeCard.cardId})});
+                  collection.push({uid:newCardUid, cardId:t.prizeCard.cardId, obtainedAt:Date.now(), obtainedFrom:t.hostUserId});
+                  await sSet('collection', collection);
+                } else {
+                  cardMissing = true;
+                }
+              }catch(_){}
             }
-            prizeCardName = t.prizeCard.n;
+            if(!cardMissing) prizeCardName = t.prizeCard.n;
           }
           // independent of the card branch above: a card-prize tournament can still carry a nonzero
           // winnerPrizeCoins if it had an entry-fee pool (see prepareHostedTournamentRun) - paid out
@@ -23520,7 +23578,10 @@ async function claimTournamentPrize(id, role='winner'){
       playSfx('coin');
       // a card-prize win can now carry an extra coin bonus (entry-fee pool, see
       // prepareHostedTournamentRun) alongside the card itself - mention both when both apply.
-      const msg = prizeCardName && prizeCoins>0 ? `\ud83c\udfc6 Preis abgeholt: ${prizeCardName} + ${formatCoins(prizeCoins)} Coins!`
+      // cardMissing: the staked card genuinely isn't there anymore (see the presence check above) -
+      // say so honestly instead of silently pretending the card arrived, since it didn't.
+      const msg = cardMissing ? `Die gestakte Karte ist leider nicht mehr verf\u00fcgbar${prizeCoins>0?` \u2014 du bekommst aber ${formatCoins(prizeCoins)} Coins.`:'.'}`
+        : prizeCardName && prizeCoins>0 ? `\ud83c\udfc6 Preis abgeholt: ${prizeCardName} + ${formatCoins(prizeCoins)} Coins!`
         : prizeCardName ? `\ud83c\udfc6 Preis abgeholt: ${prizeCardName}!`
         : `\ud83c\udfc6 Preisgeld abgeholt: +${formatCoins(prizeCoins)} Coins!`;
       toast(msg);
