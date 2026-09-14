@@ -18,6 +18,15 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     document.body.innerHTML += '<div id="ucl-match-area-ucl"></div>';
     const toasts = []; toast = (m) => toasts.push(m);
     renderUclPanel = () => {};
+    // Der Aggregat-Entscheider ist ein echter 50/50-Zufallsausgang (uclMatchResultClubs simuliert ein
+    // echtes Match) - gewinnt die Testkarte diesen Münzwurf, läuft das gesamte K.o.-Turnier (nur 1 Runde
+    // hier) sofort durch bis zum Pokalsieg, und uclFinishRun würde auf showUclTrophyCutscene warten, das
+    // im echten Spiel erst durch einen Klick auf "Weiter" auflöst - in diesem headless Test kommt dieser
+    // Klick nie, also hinge page.evaluate hier ohne diesen Stub etwa jeden zweiten Lauf für immer (genau
+    // das reproduzierte "Target page ... has been closed"-Timeout-Verhalten). Stub löst sofort auf, exakt
+    // wie renderUclPanel oben schon gestubbt ist, und lässt den eigentlichen Testfokus (den Decider-Toast
+    // selbst) unangetastet, unabhängig davon, wer den Münzwurf gewinnt.
+    showUclTrophyCutscene = async () => {};
 
     let callNum = 0;
     // Genau das gemeldete Szenario: Hinspiel 1:0 (Sieg), Rückspiel 1:2 (Niederlage) -> Aggregat 2:2.

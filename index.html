@@ -9288,6 +9288,76 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// ===== TOTY Pack (Team of the Year, Männer + Frauen gemischt): 24 der aktuell besten realen Spieler,
+// jeweils auf 107-110 OVR geboostet - nutzt den bereits bestehenden pickCount-Mechanismus (siehe
+// showPickScreen, schon von talentpick/championspick/twoof95 verwendet): das Pack zieht 2 zufällige,
+// GARANTIERT unterschiedliche Karten aus diesem Pool (siehe PACKS-Eintrag 'toty'), der Spieler behält
+// nur EINE davon. Eager statt lazy gebaut (wie Kronjuwelen/Kapitäne oben), bewusst NICHT wie Breakout/
+// WM26 lazy-on-first-use - genau dieses "wird erst gebaut, wenn irgendwer das Pack tatsächlich zieht"
+// hat zuvor schon bei UCL/UEL-Siegerkarten dazu geführt, dass eine bereits besessene Karte in einer
+// neuen Session unauflösbar war (siehe ensureOwnedUclRewardCardsRegistered) - eager vermeidet diese
+// ganze Fehlerklasse von vornherein.
+const TOTY_ROSTER = [
+  {baseId:231443, ov:110}, // Ousmane Dembélé
+  {baseId:258980, ov:110}, // Alessia Russo
+  {baseId:241667, ov:110}, // Aitana Bonmatí
+  {baseId:252145, ov:110}, // Nuno Mendes
+  {baseId:231747, ov:109}, // Kylian Mbappé
+  {baseId:239085, ov:109}, // Erling Haaland
+  {baseId:241846, ov:109}, // Ewa Pajor
+  {baseId:237288, ov:109}, // Mariona
+  {baseId:262531, ov:108}, // Claudia Pina
+  {baseId:251854, ov:108}, // Pedri
+  {baseId:227203, ov:108}, // Alexia Putellas
+  {baseId:255253, ov:108}, // Vitinha
+  {baseId:203376, ov:108}, // Virgil van Dijk
+  {baseId:227246, ov:108}, // Lucy Bronze
+  {baseId:230621, ov:108}, // Gianluigi Donnarumma
+  {baseId:246426, ov:108}, // Leah Williamson
+  {baseId:227102, ov:108}, // Caroline Graham Hansen
+  {baseId:233419, ov:108}, // Raphinha
+  {baseId:234378, ov:107}, // Declan Rice
+  {baseId:245956, ov:107}, // Christiane Endler
+  {baseId:238257, ov:107}, // Millie Bright
+  {baseId:241486, ov:107}, // Jules Koundé
+  {baseId:265674, ov:107}, // Selma Bacha
+  {baseId:243715, ov:107}, // William Saliba
+];
+const TOTY_IMG_OVERRIDE = {
+  231443: 'https://cdn3.futbin.com/content/fifa26/img/players/p100894739.png?fm=png&ixlib=java-2.1.0&verzion=5&w=485&s=00b6818565a3c73eb207de1018968456', // Dembélé
+  258980: 'https://cdn3.futbin.com/content/fifa26/img/players/p67367844.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=3790ff7bcd1f67656bec08e9d0b4641d', // Russo
+  241667: 'https://cdn3.futbin.com/content/fifa26/img/players/p67350531.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=43eb698fdc244ba32e922ddcccf59888', // Bonmatí
+  252145: 'https://cdn3.futbin.com/content/fifa26/img/players/p50583793.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=522aa130d79e8987323b9991128ed0bc', // Nuno Mendes
+  231747: 'https://cdn3.futbin.com/content/fifa26/img/players/p117672259.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=ba72171ab9226c4fecf90218cdee0695', // Mbappé
+  239085: 'https://cdn3.futbin.com/content/fifa26/img/players/p100902381.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=a354093582d72262c0dbc7fdaf04d1a8', // Haaland
+  241846: 'https://cdn3.futbin.com/content/fifa26/img/players/p84127926.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=bc22463d5783cbe5c8b68b9570771ebc', // Pajor
+  237288: 'https://cdn3.futbin.com/content/fifa26/img/players/p67346152.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=fcac8ff4639e9d56571b316902e5cc9d', // Mariona
+  262531: 'https://cdn3.futbin.com/content/fifa26/img/players/p117703043.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=e6c5cf6ef43fa0b634d6ac407df350f6', // Pina
+  251854: 'https://cdn3.futbin.com/content/fifa26/img/players/p67360718.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=3b155c3dd023cf904b4bba67a6f4b07b', // Pedri
+  227203: 'https://cdn3.futbin.com/content/fifa26/img/players/p84113283.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=506d532bb1e2814355b0d72b434a12cd', // Putellas
+  255253: 'https://cdn3.futbin.com/content/fifa26/img/players/p100918549.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=6bc14a5d5cfcbbe6fcc087c0926312c7', // Vitinha
+  203376: 'https://cdn3.futbin.com/content/fifa26/img/players/p67312240.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=0a611af47b47f261f6fd3c60a362ccd0', // Van Dijk
+  227246: 'https://cdn3.futbin.com/content/fifa26/img/players/p84113326.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=02210d4749e10ff3b2713a8d7055a4e4', // Bronze
+  230621: 'https://cdn3.futbin.com/content/fifa26/img/players/p84116701.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=fe8375306dd32745aa7b2077b46e545f', // Donnarumma
+  246426: 'https://cdn3.futbin.com/content/fifa26/img/players/p67355290.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=8034a7b83e94750db836b76f6c616169', // Williamson
+  227102: 'https://cdn3.futbin.com/content/fifa26/img/players/p67335966.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=9819452586c2c64c86413478e7463242', // Graham Hansen
+  233419: 'https://cdn3.futbin.com/content/fifa26/img/players/p84119499.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=900c531c1e54d402f8fb205d62dfbd27', // Raphinha
+  234378: 'https://cdn3.futbin.com/content/fifa26/img/players/p100897674.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=77df4695c4cf1193e50c695cf5366de0', // Rice
+  245956: 'https://cdn3.futbin.com/content/fifa26/img/players/p67354820.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=e2edf486a9030cd84a58e07ebfad6864', // Endler
+  238257: 'https://cdn3.futbin.com/content/fifa26/img/players/p67347121.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=28d8d2e1de54792f70e9b1320444c7ca', // Bright
+  241486: 'https://cdn3.futbin.com/content/fifa26/img/players/p67350350.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=d8914cec54da4c22c5addb3ca0fbddba', // Koundé
+  265674: 'https://cdn3.futbin.com/content/fifa26/img/players/p84151754.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=0eb6bd932bd71ad421e8de9937ee2f31', // Bacha
+  243715: 'https://cdn3.futbin.com/content/fifa26/img/players/p67352579.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=e1e833d1f3b3a82d59f745351bd434a4', // Saliba
+};
+const TOTY_ID_BASE = 9805600;
+const TOTY_SPECIALS = TOTY_ROSTER.map((r,i)=>{
+  const base = findBaseCard(r.baseId);
+  if(!base) return null;
+  const card = boostBaseToOv(base, r.ov, TOTY_ID_BASE+i, 'toty', 'TOTY', 'toty');
+  if(TOTY_IMG_OVERRIDE[r.baseId]) card.img = TOTY_IMG_OVERRIDE[r.baseId];
+  return card;
+}).filter(Boolean);
+TOTY_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 // ===== Kapitäne Pack: real NATIONAL TEAM captains only (not just club captains), boosted to 100-107,
 // one flat tier (no saph/rub/dia split like Kronjuwelen) - a distinct standalone pack/theme, own
 // steel/anthracite design with an armband badge instead of a gemstone icon. =====
@@ -11111,6 +11181,19 @@ const PACKS = [
   {id:'goat',name:'GOAT Pack',cost:0,tier:'ultimate',count:1,hidden:true,
     desc:'1 Spieler mit Rating \u00fcber 99 \u2014 die absolute Ausnahmekarte. Nicht k\u00e4uflich, nur durch die GOAT-Quest erh\u00e4ltlich.',
     draw(){ return [pick(GOAT_SPECIALS)]; }},
+  // comingSoon statt hidden, damit es im Kartenladen bereits SICHTBAR (aber ausgegraut/nicht k\u00e4uflich)
+  // auftaucht, w\u00e4hrend Roster/Preis/Balancing noch nicht final freigegeben sind - siehe buyPack/die
+  // pack-card-Vorlage oben f\u00fcr die "Noch nicht freigeschaltet"-Sperre. pickCount:1 bei count:2 nutzt
+  // den bestehenden showPickScreen-Mechanismus (siehe talentpick/championspick/twoof95). draw() liefert
+  // bewusst 2 GARANTIERT unterschiedliche Karten aus TOTY_SPECIALS (kein Duplikat-Pick-Dilemma).
+  {id:'toty',name:'TOTY Pack',cost:200000,tier:'ultimate',count:2,pickCount:1,comingSoon:true,
+    desc:'Team of the Year: 24 der aktuell besten realen Spieler (M\u00e4nner und Frauen gemischt), Rating 107 bis 110. Das Pack zieht 2 zuf\u00e4llige, unterschiedliche Karten aus diesem Pool \u2014 du entscheidest, welche der beiden du beh\u00e4ltst. Noch nicht freigeschaltet.',
+    draw(){
+      const a = pick(TOTY_SPECIALS);
+      let b = pick(TOTY_SPECIALS);
+      while(b.id===a.id) b = pick(TOTY_SPECIALS);
+      return [a, b];
+    }},
   {id:'uclwinners',name:'UCL Winners Pack',cost:0,tier:'ultimate',count:3,hidden:true,
     desc:'3 Karten aus der echten PSG-Startelf \u2014 amtierender Doppel-Champions-League-Sieger 2025 und 2026 \u2014 als seltene Cup-Winner-Variante. Die ersten beiden Karten sind auf Rating 92-94 begrenzt, die dritte liegt meist um 95-96, kann aber auch dar\u00fcber oder darunter landen. Richtig selten (nur bei der dritten Karte m\u00f6glich): Trainer Luis Enrique pers\u00f6nlich, mit +7% Team-Bonus. Nicht k\u00e4uflich, nur als Pokalsieg im Turnier-Modus erh\u00e4ltlich.',
     draw(){
@@ -17699,6 +17782,7 @@ function renderStore(view){
       const isRatings27 = pack.id==='ratings27';
       const card = document.createElement('div');
       card.className = `pack-card ${pack.tier}`;
+      if(pack.comingSoon) card.style.filter = 'grayscale(0.6)';
       card.innerHTML = `
         <div class="pack-tier-ribbon">${TIER_LABEL[pack.tier]}</div>
         <div class="pack-glyph${pack.img?' has-img':''}">
@@ -17709,11 +17793,12 @@ function renderStore(view){
           <div class="desc">${pack.desc}</div>
           ${isWM ? `<div class="mono" id="wm-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur dieses Wochenende verf\u00fcgbar</div>` : ''}
           ${isRatings27 ? `<div class="mono" id="ratings27-countdown" style="font-size:11px;color:var(--danger);margin-bottom:4px;">\u23f3 Nur 14 Tage verf\u00fcgbar</div>` : ''}
+          ${pack.comingSoon ? `<div class="mono" style="font-size:11px;color:var(--muted);margin-bottom:4px;">\ud83d\udd12 Noch nicht freigeschaltet</div>` : ''}
           <button class="odds-link" data-id="${pack.id}">Chancen anzeigen</button>
           ${pack.cost>0 && pack.count>0 ? `<div class="hint" style="margin:0;font-size:10.5px;">~${formatCoins(Math.round(pack.cost/pack.count))} pro Karte</div>` : ''}
           <div class="buyrow">
-            <div class="price-pill">${coinIcon(14)}${formatCoins(pack.cost)}</div>
-            <button class="buy-btn" ${profile.coins<pack.cost?`disabled title="Fehlen noch ${formatCoins(pack.cost-profile.coins)} Coins"`:''}>\u00d6ffnen</button>
+            <div class="price-pill"${pack.comingSoon?' style="opacity:.55;"':''}>${coinIcon(14)}${formatCoins(pack.cost)}</div>
+            <button class="buy-btn" ${pack.comingSoon ? 'disabled title="Noch nicht freigeschaltet"' : (profile.coins<pack.cost?`disabled title="Fehlen noch ${formatCoins(pack.cost-profile.coins)} Coins"`:'')}>${pack.comingSoon ? 'Bald' : '\u00d6ffnen'}</button>
           </div>
         </div>`;
       card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
@@ -17787,6 +17872,7 @@ async function redeemCode(){
 }
 
 async function buyPack(pack){
+  if(pack.comingSoon){ toast('Dieses Pack ist noch nicht freigeschaltet.'); return; }
   if(profile.coins < pack.cost){ toast("Nicht genug Coins."); return; }
   await atomicCoinChange(-pack.cost);
   if(bumpWeekPassQuest('openPack', 1, pack.id)) await sSet('profile', profile);
