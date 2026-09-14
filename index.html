@@ -640,6 +640,33 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #39e6ff;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 44px 1px #ff3df0;}
 }
+/* EVO-Karten: grünes "DNA"-Design (Doppelhelix-Streifen im Hintergrund) statt Konfetti/Partikel-FX wie
+   die anderen Spezialkarten - passt zur "wächst mit Fortschritt"-Idee besser als ein einmaliger Pull-
+   Glanz. Die Pfeil-Stufenanzeige (evo-fx unten) ist das eigentliche Alleinstellungsmerkmal: leere "^"
+   für noch nicht freigekaufte Stufen, gefüllte für schon gekaufte - andere Stufenzahlen/Farben (siehe
+   EVO_DEFS-Kommentar) sind bewusst noch NICHT gebaut. */
+.pcard.theme-evo{--acc:#2fbf5c;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#08150c 0%,#061009 45%,#0a1810 100%) padding-box,
+    linear-gradient(160deg,#0f4a26,#2fbf5c,#9df5b8,#2fbf5c,#0f4a26) border-box !important;
+  animation: evoGlow 2.6s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-evo::before{animation:autoShine 1.6s ease-in-out infinite;}
+.pcard.theme-evo .name{color:#d8ffe4;text-shadow:0 0 8px rgba(47,191,92,.6);}
+@keyframes evoGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 18px -3px #2fbf5c;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 38px 1px #9df5b8;}
+}
+.evo-fx{position:absolute;inset:0;overflow:hidden;pointer-events:none;border-radius:inherit;}
+.evo-fx-dna{position:absolute;inset:0;opacity:.35;
+  background-image:
+    repeating-linear-gradient(60deg, rgba(157,245,184,.5) 0 3px, transparent 3px 24px),
+    repeating-linear-gradient(-60deg, rgba(47,191,92,.4) 0 3px, transparent 3px 24px);
+  animation: evoDnaShift 6s linear infinite;}
+@keyframes evoDnaShift{ 0%{background-position:0 0, 0 0;} 100%{background-position:0 96px, 0 -96px;} }
+.evo-fx-chevrons{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;flex-direction:column-reverse;gap:3px;}
+.evo-fx-chevrons svg{width:34px;height:16px;display:block;}
+.evo-fx-chevrons .evo-chevron path{fill:none;stroke:rgba(157,245,184,.28);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
+.evo-fx-chevrons .evo-chevron.filled path{stroke:#9df5b8;filter:drop-shadow(0 0 4px rgba(157,245,184,.85));}
 /* Legacy (World Cup-winning squads, see LEGACY_SQUADS): a muted vintage bronze/sepia foil for the 77
    base roster cards - deliberately calmer than any rare-pull theme since EVERY card in a Legacy Pack
    gets this, not just a lucky few. Legacy Star (the 1-4 named standouts per squad, further-boosted) gets
@@ -9288,6 +9315,52 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// ===== EVO-Karten: jeder Spieler startet als Basis-99er und wird schrittweise (meist 3 Stufen)
+// stärker gemacht - anders als jede andere Spezialkarte hier wird der Boost NICHT einmalig beim
+// Erzeugen der Karte festgeschrieben, sondern pro EIGENEM Exemplar dynamisch draufgerechnet (siehe
+// applyEvoBoost/leveledOwnedCard), genau wie das bestehende Level-System (Bronze/Silber/Gold/Diamant)
+// die eigene XP oben drauf rechnet. Jede Stufe muss erst durch ein echtes Spielziel (Siege/Tore/
+// Vorlagen mit dieser Karte im Kader, siehe awardCardXP) freigespielt und DANACH per Coins gekauft
+// werden (freeStage -> kaufen -> nächste Stufe). Stufenanzahl und -stärke sind bewusst pro Karte
+// unterschiedlich ("kommt auf die Karte an") statt einer einzigen festen Formel.
+const EVO_ID_BASE = 9806000;
+const EVO_DEFS = [
+  {id:0, baseId:232293, stages:[ // V. Osimhen
+    {objective:{type:'wins', target:5}, cost:8000, ovBoost:2},
+    {objective:{type:'goals', target:15}, cost:15000, ovBoost:3},
+    {objective:{type:'assists', target:10}, cost:25000, ovBoost:3},
+  ]},
+  {id:1, baseId:215441, stages:[ // S. Guirassy
+    {objective:{type:'goals', target:10}, cost:6000, ovBoost:2},
+    {objective:{type:'wins', target:10}, cost:12000, ovBoost:2},
+    {objective:{type:'assists', target:15}, cost:20000, ovBoost:2},
+  ]},
+];
+const EVO_OBJECTIVE_LABEL = {wins:'Siege', goals:'Tore', assists:'Vorlagen'};
+const EVO_CARDS = EVO_DEFS.map(def=>{
+  const base = findBaseCard(def.baseId);
+  if(!base) return null;
+  const card = boostBaseToOv(base, 99, EVO_ID_BASE+def.id, 'evo', 'EVO', 'evo');
+  card.evoDefId = def.id;
+  card.untradable = true; // eigenes Fortschritts-/Kaufsystem statt Markt/Handel - siehe Schnellverkauf/Handel-Sperren
+  return card;
+}).filter(Boolean);
+EVO_CARDS.forEach(c=>BY_ID.set(c.id,c));
+function evoDefForCardId(cardId){ return EVO_DEFS.find(d=>EVO_ID_BASE+d.id===cardId) || null; }
+function evoCardIdForDef(def){ return EVO_ID_BASE+def.id; }
+// separater, direkt testbarer Schritt statt inline in boot()/init() - exakt einmal pro Account
+// (profile.evoStarterGranted gate liegt beim Aufrufer), idempotent falls ein Exemplar schon existiert.
+async function grantEvoStarterIfNeeded(){
+  let evoGranted = false;
+  EVO_CARDS.forEach(card=>{
+    if(collection.some(c=>c.cardId===card.id)) return; // z.B. schon per Admin-Tool vergeben
+    collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:'EVO-Startpaket'});
+    evoGranted = true;
+  });
+  profile.evoStarterGranted = true;
+  await sSet('profile', profile);
+  if(evoGranted) await sSet('collection', collection);
+}
 // ===== Kapitäne Pack: real NATIONAL TEAM captains only (not just club captains), boosted to 100-107,
 // one flat tier (no saph/rub/dia split like Kronjuwelen) - a distinct standalone pack/theme, own
 // steel/anthracite design with an armband badge instead of a gemstone icon. =====
@@ -12514,6 +12587,8 @@ const CHALLENGE_DEFS = [
     desc:'Beliebig oft wiederholbares hartes Match (Rating 92-96). Sieg bringt 1.500 Coins + ein Rare Gold Vault Pack.'},
   {id:'streak', name:'Serie ohne Niederlage', pill:'Serie', accent:'var(--muted)', contentId:'streak-content', renderFn:()=>renderWinStreakPanel(),
     desc:'Gewinne 5 Spiele in Folge (Rating 90-93) \u2014 jede Niederlage setzt zur\u00fcck. Belohnung bei 5/5: 3.000 Coins + Icon Moments Pack.'},
+  {id:'evo', name:'EVO-Karten', pill:'Fortschritt', accent:'#2fbf5c', contentId:'evo-content', renderFn:()=>renderEvoPanel(),
+    desc:'Deine EVO-Karten starten als 99er und werden schrittweise st\u00e4rker: erst im Kader ein Spielziel erf\u00fcllen, dann die Stufe mit Coins freikaufen.'},
 ];
 function challengeTileHTML(def, statusHTML){
   return `
@@ -12524,6 +12599,67 @@ function challengeTileHTML(def, statusHTML){
     <button class="sbc-build-btn" style="background:${def.accent};">\u00d6ffnen</button>`;
 }
 function challengeIsDone(def){ return !!(def.doneCheck && def.doneCheck()); }
+// EVO-Karten Panel: eine Karte pro EVO_DEFS-Eintrag, die der Spieler tatsächlich besitzt (normalerweise
+// aus dem Startpaket, siehe boot()) - fehlt ein Exemplar (z.B. auf einem uralten Account ohne Backfill),
+// wird das einfach übersprungen statt einen Fehler zu werfen.
+function evoOwnedEntriesForDef(def){
+  const cardId = evoCardIdForDef(def);
+  return collection.filter(c=>c.cardId===cardId);
+}
+async function renderEvoPanel(){
+  const el = document.getElementById('evo-content');
+  if(!el) return;
+  const blocks = EVO_DEFS.map(def=>{
+    const entries = evoOwnedEntriesForDef(def);
+    if(!entries.length) return '';
+    return entries.map(entry=>{
+      const card = leveledOwnedCard(entry);
+      if(!card) return '';
+      const stage = entry.evoStage||0;
+      const stagesHTML = def.stages.map((s,i)=>{
+        const applied = i<stage;
+        const unlocked = !applied && evoStageUnlocked(entry, def, i);
+        const objLabel = EVO_OBJECTIVE_LABEL[s.objective.type]||s.objective.type;
+        const progress = Math.min(evoProgressValue(entry, s.objective.type), s.objective.target);
+        const statusHTML = applied
+          ? `<span style="color:var(--turf-bright);">✓ freigeschaltet</span>`
+          : (i===stage
+              ? (unlocked
+                  ? `<button class="action-btn" data-evo-buy="${entry.uid}" data-evo-stage="${i}" style="padding:6px 12px;font-size:12.5px;">Für ${formatCoins(s.cost)} Coins kaufen</button>`
+                  : `<span class="mono" style="color:var(--muted);">${objLabel}: ${progress} / ${s.objective.target}</span>`)
+              : `<span class="mono" style="color:var(--muted);">🔒 gesperrt</span>`);
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);">
+          <div>Stufe ${i+1}: +${s.ovBoost} OVR <span class="hint">(${objLabel} ${s.objective.target})</span></div>
+          <div>${statusHTML}</div>
+        </div>`;
+      }).join('');
+      return `<div class="vs-panel" style="margin-bottom:14px;">
+        <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+          <div style="width:150px;flex-shrink:0;">${cardEl(card,'mini').outerHTML}</div>
+          <div style="flex:1;min-width:220px;">${stagesHTML}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }).join('');
+  el.innerHTML = blocks || `<p class="hint">Du besitzt aktuell keine EVO-Karte.</p>`;
+  el.querySelectorAll('[data-evo-buy]').forEach(btn=>{
+    btn.addEventListener('click', ()=>buyEvoStage(btn.dataset.evoBuy, Number(btn.dataset.evoStage)));
+  });
+}
+async function buyEvoStage(uid, stageIdx){
+  const entry = collection.find(c=>c.uid===uid);
+  if(!entry) return;
+  const def = evoDefForCardId(entry.cardId);
+  if(!def) return;
+  if(stageIdx!==(entry.evoStage||0) || !evoStageUnlocked(entry, def, stageIdx)) return; // Spielziel nicht erfüllt / falsche Reihenfolge
+  const stage = def.stages[stageIdx];
+  if(profile.coins<stage.cost){ toast('Nicht genug Coins.'); return; }
+  await atomicCoinChange(-stage.cost);
+  entry.evoStage = stageIdx+1;
+  await sSet('collection', collection);
+  toast(`Stufe ${stageIdx+1} freigeschaltet: +${stage.ovBoost} OVR!`);
+  await renderEvoPanel();
+}
 function openChallengeDetail(def){
   const view = document.getElementById('view');
   view.innerHTML = `
@@ -15552,9 +15688,39 @@ function applyCardLevel(base, xp, uid, forceUntradable, favorited, traitsOverrid
   if(traitsOverride && traitsOverride.length){ out.traits = traitsOverride; out.manualTraits = true; }
   return out;
 }
+// EVO-Karten: wie viele Stufen dieses EIGENE Exemplar schon gekauft hat, summiert deren jeweiligen
+// OV-Boost auf - der zugrunde liegende BY_ID-Kartentyp bleibt dabei immer der unveränderte 99er
+// (siehe EVO_CARDS), genau wie applyCardLevel den Level-Bonus nie in die geteilte Basis schreibt.
+function evoAppliedOvBoost(entry, def){
+  const stage = entry.evoStage||0;
+  let boost = 0;
+  for(let i=0;i<stage && i<def.stages.length;i++) boost += def.stages[i].ovBoost;
+  return boost;
+}
+function applyEvoBoost(base, boost){
+  if(!boost) return base;
+  const withStats = distributeStatGain(base, boost, BLACK_HOLE_STAT_KEYS);
+  return {...withStats, ov:base.ov+boost, pot:(base.pot||base.ov)+boost};
+}
+function evoProgressValue(entry, type){ return (entry.evoProgress && entry.evoProgress[type]) || 0; }
+// Eine Stufe ist erst "freigespielt", wenn es tatsächlich die NÄCHSTE ist (der Reihe nach, kein
+// Überspringen) UND das zugehörige Spielziel erreicht wurde - das Kaufen selbst (buyEvoStage) ist
+// ein separater, zweiter Schritt (Coins), genau wie vom Nutzer gewünscht ("erst erfüllen, dann kaufen").
+function evoStageUnlocked(entry, def, stageIdx){
+  if(stageIdx!==(entry.evoStage||0)) return false;
+  const stage = def.stages[stageIdx];
+  if(!stage) return false;
+  return evoProgressValue(entry, stage.objective.type) >= stage.objective.target;
+}
 function leveledOwnedCard(entry){
-  const base = BY_ID.get(entry.cardId);
-  return base ? applyCardLevel(base, entry.xp, entry.uid, entry.untradable, entry.favorite, entry.psOverride) : null;
+  let base = BY_ID.get(entry.cardId);
+  if(!base) return null;
+  const evoDef = evoDefForCardId(entry.cardId);
+  if(evoDef){
+    base = applyEvoBoost(base, evoAppliedOvBoost(entry, evoDef));
+    base = {...base, evoStage:entry.evoStage||0, evoMaxStages:evoDef.stages.length};
+  }
+  return applyCardLevel(base, entry.xp, entry.uid, entry.untradable, entry.favorite, entry.psOverride);
 }
 function ownedCard(uid){
   const entry = collection.find(c=>c.uid===uid);
@@ -15613,6 +15779,7 @@ async function awardCardXP(matchRatings){
   if(!matchRatings || !matchRatings.ratings || !matchRatings.ratings.length) return;
   const levelUps = [];
   let changed = false;
+  const won = matchRatings.winnerSide==='me';
   matchRatings.ratings.forEach(p=>{
     if(!p.uid) return;
     const entry = collection.find(c=>c.uid===p.uid);
@@ -15624,6 +15791,14 @@ async function awardCardXP(matchRatings){
     if(after>before){
       const base = BY_ID.get(entry.cardId);
       levelUps.push({n: base ? base.n : p.n, level: after});
+    }
+    // EVO-Karten-Spielziele: nur Siege/Tore/Vorlagen aus ECHTEN Matches, in denen diese Karte
+    // tatsächlich mitgespielt hat (genau dieser forEach-Zweig läuft nur für Startelf-Karten mit uid).
+    if(evoDefForCardId(entry.cardId)){
+      if(!entry.evoProgress) entry.evoProgress = {wins:0, goals:0, assists:0};
+      if(won) entry.evoProgress.wins = (entry.evoProgress.wins||0)+1;
+      if(p.goals) entry.evoProgress.goals = (entry.evoProgress.goals||0)+p.goals;
+      if(p.assists) entry.evoProgress.assists = (entry.evoProgress.assists||0)+p.assists;
     }
   });
   if(changed) await sSet('collection', collection);
@@ -16051,6 +16226,9 @@ async function init(){
   if(collection.some(c=>c.cardId>=50000000)){ wm26VarianteSpecials(); wm26KapitaenSpecials(); }
   // Same lazy-build problem as WM26 above, for the Breakout Pack's 6 boosted specials (ids 9803100-9803105).
   if(collection.some(c=>c.cardId>=9803100 && c.cardId<9803106)) breakoutSpecials();
+  // Same lazy-build problem again, this time for Champions-/Europa-League-Sieger-Karten - siehe
+  // ensureOwnedUclRewardCardsRegistered.
+  ensureOwnedUclRewardCardsRegistered();
   managerCollection = _boot.managerCollection;
   if(!managerCollection) managerCollection = [];
   packCollection = _boot.packCollection;
@@ -16110,6 +16288,9 @@ async function init(){
     profile.achievementsBackfilled = true;
     await sSet('profile', profile);
   }
+  // EVO-Karten: einmalige Gratis-Grundausstattung (eine Basis-99er-Karte pro EVO_DEFS-Eintrag) -
+  // genau wie der Ballon-d'Or-/Erfolge-Backfill oben, exakt einmal pro Account, dann nie wieder.
+  if(!profile.evoStarterGranted) await grantEvoStarterIfNeeded();
   squadPresets = _boot.squadPresets;
   if(!squadPresets) squadPresets = [];
   currentTab = restoredLastTab();
@@ -16539,6 +16720,17 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // handful of thin molten-gold cracks that individually flicker across the face - own mechanism, not
   // a recolor of any other tier's FX (no falling/rising particles like Legikone/WM-Kapitän, no rotating
   // cut-gem facets like the Kronjuwelen), so the single best card in the game reads as its own thing.
+  // EVO-Karten: grüner DNA-Streifen-Hintergrund + eine Reihe leerer/gefüllter "^"-Pfeile, einer pro
+  // Stufe (card.evoMaxStages, siehe leveledOwnedCard) - gefüllt für jede bereits gekaufte Stufe
+  // (card.evoStage). Andere Stufenzahlen/Farbschemata sind bewusst noch nicht gebaut (siehe EVO_DEFS).
+  const isEvoTier = card.theme==='evo';
+  const evoFxHTML = isEvoTier ? (()=>{
+    const maxStages = card.evoMaxStages||3;
+    const stage = card.evoStage||0;
+    const chevrons = Array.from({length:maxStages},(_,i)=>
+      `<svg class="evo-chevron${i<stage?' filled':''}" viewBox="0 0 24 12"><path d="M2 10 L12 2 L22 10"/></svg>`).join('');
+    return `<div class="evo-fx"><div class="evo-fx-dna"></div><div class="evo-fx-chevrons">${chevrons}</div></div>`;
+  })() : '';
   const isGoatTier = card.theme==='goat';
   const goatFxHTML = isGoatTier ? `<div class="goat-fx">
       <div class="goat-halo"></div>
@@ -16756,6 +16948,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${iconpromoFxHTML}
     ${adminFxHTML}
     ${uclChampFxHTML}
+    ${evoFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
@@ -27352,18 +27545,40 @@ async function renderAllLigenOverview(box){
   const targetWeekStart = preSeason ? LIGA_SEASON_EPOCH : (isWeekendRecap ? weekStartBefore + 7*24*60*60*1000 : weekStart);
   const sortedLetters = docs.map(d=>d.id);
   const sizeOf = l => { const d=docs.find(x=>x.id===l); return d ? (d.data().members||[]).length : 0; };
+  const isUpcoming = preSeason || isWeekendRecap;
+  // Jede Liga lädt ihre Tabelle jetzt erst bei Bedarf (Klick) nach, statt alle auf einmal beim Öffnen
+  // dieses Tabs: ligaRefreshTeamDisplay lädt pro Vereinsmitglied das KOMPLETTE Save-Dokument (Profil
+  // UND die volle Kartensammlung, nicht nur Anzeigename/Wappen - saves/{userId} ist EIN gemeinsames
+  // Firestore-Dokument für beides, siehe sGetMany). Bei vielen Ligen gleichzeitig lief das bisher auf
+  // so viele parallele Firestore-Reads wie es Spieler im gesamten Spiel gibt hinaus, jeweils mit der
+  // vollen Sammlung im Payload - auf Mobile Safari (deutlich engeres Tab-Speicherlimit als Desktop)
+  // genau das Muster, das zu den gemeldeten Abstürzen beim Laden der Liga passt. Nur die eigene Liga
+  // wird automatisch aufgeklappt, alle anderen erst auf Klick.
   let html = '';
-  for(const d of docs){
+  docs.forEach(d=>{
     const letter = d.id, members = d.data().members||[];
     const mine = members.includes(clubId);
-    html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">${ligaBadgeHTML(letter,28)}<div style="font-family:'Anton';font-size:15px;">Liga ${letter}${mine?' <span style="color:var(--turf-bright);font-size:12px;">(deine)</span>':''}</div><div class="hint" style="margin:0;">${members.length} Vereine</div></div>`;
+    html += `<div style="margin:18px 0 8px;">
+      <button class="liga-overview-toggle" data-letter="${letter}" style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;padding:0;cursor:pointer;text-align:left;color:inherit;font:inherit;">
+        ${ligaBadgeHTML(letter,28)}<div style="font-family:'Anton';font-size:15px;">Liga ${letter}${mine?' <span style="color:var(--turf-bright);font-size:12px;">(deine)</span>':''}</div>
+        <div class="hint" style="margin:0;">${members.length} Vereine</div>
+        <span class="hint" style="margin-left:auto;">▾</span>
+      </button>
+      <div id="liga-overview-row-${letter}" data-loaded="0"></div>
+    </div>`;
+  });
+  box.innerHTML = html;
+  const loadRow = async (letter, members)=>{
+    const rowEl = document.getElementById(`liga-overview-row-${letter}`);
+    if(!rowEl || rowEl.dataset.loaded==='1') return;
+    rowEl.dataset.loaded = '1';
+    rowEl.innerHTML = `<p class="hint">Lädt…</p>`;
     LIGA_LAST_ERROR = null;
     // Same rule as the personal view: only the still-0:0 upcoming week (Sonntag, or pre-season) is
     // safe to self-heal a team-count mismatch on - an already-underway Montag-Samstag week is not.
     let week = (isWeekendRecap || preSeason)
       ? await ligaSyncedWeek(letter, members, targetWeekStart)
       : await getOrCreateLeagueWeek(letter, members, targetWeekStart);
-    const isUpcoming = preSeason || isWeekendRecap;
     // This overview is visited by anyone, not just that league's own members - without this, a league
     // nobody personally checks in on this week would sit at 0 pts (all pending) here all week, only
     // ever catching up once someone opens their OWN "Meine Liga" tab (or Samstag's force-resolve hits).
@@ -27376,12 +27591,19 @@ async function renderAllLigenOverview(box){
       const tbl = isUpcoming
         ? ligaComputeStandings(week.teams, week.matches, 0, targetWeekStart)
         : ligaComputeStandings(week.teams, week.matches, 5, targetWeekStart, targetWeekStart, clubId);
-      html += ligaStandingsTableHTML(tbl, zones);
+      rowEl.innerHTML = ligaStandingsTableHTML(tbl, zones);
     } else {
-      html += `<p class="hint">Tabelle konnte nicht geladen werden${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}.</p>`;
+      rowEl.innerHTML = `<p class="hint">Tabelle konnte nicht geladen werden${LIGA_LAST_ERROR?` (${LIGA_LAST_ERROR})`:''}.</p>`;
     }
-  }
-  box.innerHTML = html;
+  };
+  box.querySelectorAll('.liga-overview-toggle').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const d = docs.find(x=>x.id===btn.dataset.letter);
+      if(d) loadRow(d.id, d.data().members||[]);
+    });
+  });
+  const mineDoc = docs.find(d=>(d.data().members||[]).includes(clubId));
+  if(mineDoc) loadRow(mineDoc.id, mineDoc.data().members||[]);
 }
 // Liga-reward packs are queued (profile.pendingLigaPacks, see resolveWeeklyRolloverIfNeeded) instead of
 // drawn+added the moment the weekly rollover runs, so the player opens each one themselves, one at a
@@ -28733,6 +28955,22 @@ function uclRewardCardsForClub(club, comp){
   }
   UCL_REWARD_CACHE.set(key, result);
   return result;
+}
+// Behebt das gleiche Lazy-Build-Problem wie wm26VarianteSpecials/breakoutSpecials, hier für Champions-/
+// Europa-League-Sieger-Karten: normales Spielen baut per uclRewardCardsForClub nur den EINEN Klub, den
+// man gerade im Finale besiegt hat, und UCL_REWARD_CACHE ist ein reiner In-Memory-Cache, der bei jedem
+// Page-Load wieder leer ist. Ein Spieler, der eine solche Karte besitzt, aber in DIESER Session noch
+// kein Finale gegen genau diesen Klub gewonnen hat, bekam bisher BY_ID.get(cardId)===undefined zurück -
+// die Karte "verschwand" aus Sammlung/Kader/Handel, obwohl sie nie weg war. Anders als bei WM26/Breakout
+// lässt sich das Ziel-cardId hier nicht an einem festen ID-Bereich erkennen (idOffset+base.id kann je
+// nach Basisspieler sehr unterschiedlich groß werden) - stattdessen einfach prüfen, ob IRGENDEINE eigene
+// Karte noch nicht in BY_ID auftaucht, und in dem (seltenen) Fall alle 72 Klubs beider Wettbewerbe einmal
+// force-builden (exakt wie adminFullCardPool das für den Karten-Index schon tut - günstig, reine
+// Objekterzeugung ohne Netzwerk).
+function ensureOwnedUclRewardCardsRegistered(){
+  if(!collection.some(c=>!BY_ID.has(c.cardId))) return;
+  UCL_ALL_CLUBS.forEach(club=>uclRewardCardsForClub(club, 'ucl'));
+  UEL_ALL_CLUBS.forEach(club=>uclRewardCardsForClub(club, 'uel'));
 }
 function uclDrawRewardCard(club, comp){
   const cards = uclRewardCardsForClub(club, comp);
@@ -34546,7 +34784,9 @@ function computeMatchRatings(myPlayers, myGoals, oppGoals, myScorers, incidents,
     return {n:p.n, pos:p.pos, rating: Math.round(r*10)/10, goals, assists, uid:p.uid};
   });
   const motm = ratings.reduce((best,p)=> (!best || p.rating>best.rating) ? p : best, null);
-  return {ratings, motm};
+  // winnerSide is exposed here (not just used internally for resultBonus above) so awardCardXP can
+  // track EVO-Karten-Spielziele (Siege) without any of its 5 call sites needing to pass it separately.
+  return {ratings, motm, winnerSide};
 }
 function renderMatchRatingsHTML(matchRatings){
   const {ratings, motm} = matchRatings;
