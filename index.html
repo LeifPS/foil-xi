@@ -28928,9 +28928,31 @@ function uclRewardCardsForClub(club, comp){
 // force-builden (exakt wie adminFullCardPool das für den Karten-Index schon tut - günstig, reine
 // Objekterzeugung ohne Netzwerk).
 function ensureOwnedUclRewardCardsRegistered(){
-  if(!collection.some(c=>!BY_ID.has(c.cardId))) return;
-  UCL_ALL_CLUBS.forEach(club=>uclRewardCardsForClub(club, 'ucl'));
-  UEL_ALL_CLUBS.forEach(club=>uclRewardCardsForClub(club, 'uel'));
+  // War zuerst ein blanketer Rebuild ALLER 72 Klubs (siehe alte Version) - das behob das Verschwinden,
+  // führte aber bei jedem betroffenen Account (jedem, der überhaupt eine Sieger-Karte besitzt) zu einem
+  // schweren, synchronen 72-Klub-Rebuild bei JEDEM einzelnen Boot (uclTopPlayersForClub filtert/sortiert
+  // dafür pro Klub den kompletten ALL_BASE+UCL_FILLER_PLAYERS-Pool, ~11.000+ Karten). Genau die Accounts,
+  // die eine Sieger-Karte besitzen, meldeten danach "manchmal nicht angezeigt oder Absturz" - passt exakt
+  // zu einem zu langen synchronen Boot-Hänger auf schwächeren/mobilen Geräten. Jetzt gezielt: cardId
+  // rückwärts über beide möglichen Offsets (71/72 Mio.) auf den echten Basisspieler auflösen und NUR
+  // dessen einen Klub neu bauen (1-2 Klubs statt 72, in der Praxis kostenlos). Nur wenn das für keine
+  // unaufgelöste Karte klappt (der seltene Fall einer aus UCL_FILLER_PLAYERS stammenden Karte -
+  // findBaseCard kennt diesen Pool nicht) wird als Rückfall doch der volle 72-Klub-Rebuild bezahlt.
+  let stillUnresolved = false;
+  collection.forEach(entry=>{
+    if(BY_ID.has(entry.cardId)) return;
+    let resolvedHere = false;
+    [[71000000,'ucl'],[72000000,'uel']].forEach(([idOffset,comp])=>{
+      if(resolvedHere || BY_ID.has(entry.cardId)) return;
+      const base = findBaseCard(entry.cardId-idOffset);
+      if(base){ uclRewardCardsForClub(base.club, comp); resolvedHere = true; }
+    });
+    if(!resolvedHere && !BY_ID.has(entry.cardId)) stillUnresolved = true;
+  });
+  if(stillUnresolved){
+    UCL_ALL_CLUBS.forEach(club=>uclRewardCardsForClub(club, 'ucl'));
+    UEL_ALL_CLUBS.forEach(club=>uclRewardCardsForClub(club, 'uel'));
+  }
 }
 function uclDrawRewardCard(club, comp){
   const cards = uclRewardCardsForClub(club, comp);

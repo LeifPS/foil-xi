@@ -26,6 +26,12 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     ensureOwnedUclRewardCardsRegistered();
     const resolvableAfterFix = BY_ID.has(ownedCardId);
     const cardAfterFix = leveledOwnedCard(collection[0]);
+    // War zuerst ein blanketer Rebuild ALLER 72 Klubs bei jedem Boot - das behob zwar das Verschwinden,
+    // kostete aber jeden betroffenen Account (jeden Sieger-Karten-Besitzer!) einen schweren synchronen
+    // 72-Klub-Rebuild bei JEDEM einzelnen Page-Load, was genau bei diesen Accounts zu den gemeldeten
+    // "manchmal nicht angezeigt oder Absturz"-Problemen passte. Jetzt gezielt nur der EINE betroffene
+    // Klub - UCL_REWARD_CACHE darf danach genau 1 Eintrag haben, nicht bis zu 72.
+    const cacheSizeAfterTargetedFix = UCL_REWARD_CACHE.size;
 
     // Idempotent + günstig: ein zweiter Aufruf (z.B. jeder weitere Page-Load) darf nichts kaputt machen
     // und muss weiterhin sofort auflösbar bleiben.
@@ -40,7 +46,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     ensureOwnedUclRewardCardsRegistered();
     const cacheSizeAfterNoop = UCL_REWARD_CACHE.size;
 
-    return { resolvableBeforeFix, resolvableAfterFix, cardAfterFix: !!cardAfterFix, resolvableAfterSecondCall, cacheSizeBefore, cacheSizeAfterNoop };
+    return { resolvableBeforeFix, resolvableAfterFix, cardAfterFix: !!cardAfterFix, resolvableAfterSecondCall, cacheSizeBefore, cacheSizeAfterNoop, cacheSizeAfterTargetedFix };
   }));
 
   console.log('UCL/UEL-Sieger-Karten-Wiederherstellungs-Test');
@@ -48,6 +54,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.resolvableBeforeFix, false, 'reproduziert den gemeldeten Bug: eine besessene Sieger-Karte ist in einer frischen Session zunächst NICHT auflösbar');
   eq(result.resolvableAfterFix, true, 'ensureOwnedUclRewardCardsRegistered() macht die besessene Karte wieder auflösbar');
   eq(result.cardAfterFix, true, 'leveledOwnedCard() liefert nach dem Fix wieder eine echte Karte statt null');
+  eq(result.cacheSizeAfterTargetedFix, 1, 'der Fix baut gezielt nur den EINEN betroffenen Klub neu (nicht alle 72) - vermeidet den schweren Boot-Hänger, der die Sieger-Karten-Besitzer selbst getroffen hat');
   eq(result.resolvableAfterSecondCall, true, 'ein zweiter Aufruf (z.B. jeder weitere Page-Load) bleibt idempotent auflösbar');
   eq(result.cacheSizeBefore, result.cacheSizeAfterNoop, 'besitzt ein Spieler keine unbekannte Karte, löst der Check keinen unnötigen Full-Rebuild aus');
 
