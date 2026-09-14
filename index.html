@@ -699,11 +699,15 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
     repeating-linear-gradient(97deg, rgba(157,205,255,.2) 0 2px, transparent 2px 54px),
     repeating-linear-gradient(-8deg, rgba(157,205,255,.18) 0 2px, transparent 2px 46px),
     linear-gradient(160deg,#0a1c48 0%,#123572 45%,#08133a 100%);}
-.pcard .toty-shard-shine{position:absolute;inset:-30% -100%;
-  background:linear-gradient(100deg, transparent 40%, rgba(255,215,106,.55) 48%, rgba(255,243,207,.8) 50%, rgba(255,215,106,.55) 52%, transparent 60%);
-  background-size:55% 100%;mix-blend-mode:overlay;
+/* Kein mix-blend-mode mehr für den Glanzstreifen (war die teuerste einzelne Eigenschaft hier, siehe
+   Absturz-Kommentar bei adminFullCardPool) - ein einfacher halbtransparenter Verlauf ohne Blend-Modus
+   liefert optisch fast denselben "golden aufblitzenden Streifen"-Effekt, kostet die GPU aber deutlich
+   weniger, auch wenn irgendwann mehrere TOTY-Karten gleichzeitig sichtbar sind. */
+.pcard .toty-shard-shine{position:absolute;inset:0;
+  background:linear-gradient(100deg, transparent 42%, rgba(255,215,106,.4) 49%, rgba(255,243,207,.55) 50%, rgba(255,215,106,.4) 51%, transparent 58%);
+  background-size:220% 100%;
   animation:totyShardShine 4.2s ease-in-out infinite;}
-@keyframes totyShardShine{0%{background-position:-30% 0;}100%{background-position:180% 0;}}
+@keyframes totyShardShine{0%{background-position:130% 0;}100%{background-position:-70% 0;}}
 /* GOAT (ov>99, hand-picked real-world superstars - the single rarest pull in the whole game, only via
    the GOAT-Quest): previously just inherited the generic .r-ultimate look (same violet card any other
    95+ base card without its own theme gets), so the single best card in the game was visually
@@ -19588,6 +19592,19 @@ function adminFullCardPool(){
   // Legacy Packs (variant 'legacy'/'legacystar') sind absichtlich noch NICHT im Index - die Packs sind
   // aktuell hidden:true/nur Admin-Test (siehe LEGACY_SQUADS), Roster/Fotos noch nicht final abgenommen.
   // Sobald sie im Kartenladen freigeschaltet werden, einfach diese Zeile wieder entfernen.
+  // TOTY (variant 'toty') aus demselben Grund ausgeschlossen, aber mit einer viel schärferen Folge als
+  // bei Legacy: TOTY-Karten behalten (wie jede boostBaseToOv-Karte) card.club vom echten Basisspieler -
+  // Bonmatí/Pina/Pedri/Putellas/Raphinha/Graham Hansen/Koundé/Bacha tragen also alle weiterhin
+  // "FC Barcelona". uclClubXI() (das genau diesen Pool über uclIndexPool() als "jede echte Karte für
+  // diesen Klub" nutzt) hätte Barcelonas TOTY-Varianten dadurch schon jetzt automatisch als STÄRKSTE
+  // verfügbare Spieler in JEDES UCL/UEL-Match mit Barcelona gestellt - noch bevor das (comingSoon:true,
+  // gar nicht kaufbare) Pack überhaupt live ist. Das erklärt den gemeldeten Bug ("Karten sorgen für
+  // Probleme, manchmal nicht angezeigt oder Absturz"): mehrere derart schwere Foil-Shard-Karten
+  // (4 gekreuzte repeating-gradients + eine übergroße mix-blend-mode-Animation, siehe .toty-shards/
+  // .toty-shard-shine) gleichzeitig in einer einzigen Klub-Elf gerendert, bei jedem Match gegen z.B.
+  // Barcelona - genau das Muster, das schwächere/mobile Geräte zum Absturz bringt. Sobald TOTY im
+  // Kartenladen freigeschaltet wird, diese Zeile wieder entfernen (dann ist das gewünschtes Verhalten,
+  // siehe der bestehende Sieger-Karten-Kommentar oben).
   // KRITISCH: variant==='admin' (Michael Jackson/Trump/Musk/TimGiOh, die vier Admin-Easter-Eggs mit
   // OV 999-999999 auf JEDER Position, siehe ADMIN_JACKSON_CARD & Co.) MUSS ausgeschlossen bleiben - diese
   // Karten haben absichtlich absurd hohe Werte, damit ein Admin sie im Sandbox-Team-Sim testen kann, sind
@@ -19595,7 +19612,7 @@ function adminFullCardPool(){
   // uclClubXI (die diesen Pool über uclIndexPool() als "jede echte Karte" nutzen) sie automatisch als
   // stärkste verfügbare Karte für ihre jeweilige Nation (USA: Jackson/Trump/Musk, Deutschland: TimGiOh) -
   // sichtbar für JEDEN Spieler, der gegen diese Nation antritt, nicht nur für den Admin selbst.
-  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='admin' && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar' && (c.id<20000000 || c.id>=40000000));
+  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='admin' && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar' && c.variant!=='toty' && (c.id<20000000 || c.id>=40000000));
 }
 // Icon Promo Pack (see PACKS' 'ligapack' - id kept as-is so existing LIGA_REWARD_TABLE entries and any
 // already-scheduled reward keep working unchanged, only the display name/pool/odds changed): 7 brand-
