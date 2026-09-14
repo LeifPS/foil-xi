@@ -668,9 +668,9 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ffd76a;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 46px 1px #ff8a3d;}
 }
-/* TOTY (Team of the Year): komplett neues "Foil-Shards"-Design (siehe .toty-shards weiter unten) -
-   viele aneinandergrenzende Facetten statt einzelner Symbole, blau mit goldenem Blickwinkel-Schimmer,
-   ausschließlich unterhalb des Spielerfotos. */
+/* TOTY (Team of the Year): "Foil-Shards"-Design (siehe .toty-shards weiter unten) - viele große,
+   unregelmäßige, aneinandergrenzende Facetten über der GESAMTEN Karte, blau mit goldenem
+   Blickwinkel-Schimmer. */
 .pcard.theme-toty{--acc:#3d8bff;border:2px solid transparent;
   background:
     linear-gradient(155deg,#050b18 0%,#0a1226 45%,#04060f 100%) padding-box,
@@ -682,21 +682,25 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 18px -3px #3d8bff;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #ffd76a;}
 }
-/* Foil-Shards: viele aneinandergrenzende kantige Facetten statt einzelner Symbole - drei gekreuzte
-   repeating-linear-gradients (60°/-60°/0°) statt hunderter einzelner <i>-Elemente, günstiger und dichter.
-   Grundfarbe Blau; ein darüber laufender Glanzstreifen im Overlay-Blend-Modus lässt die Facetten je nach
-   Streifenposition ("Blickwinkel") golden aufblitzen - klassischer Folienkarten-Effekt. Sitzt bewusst NUR
-   unterhalb des Spielerfotos (top:59% ≈ Fotohöhe/Kartenhöhe bei .pcard UND .pcard.mini), nie darüber. */
-.pcard .toty-fx{position:absolute;top:59%;left:0;right:0;bottom:0;z-index:0;pointer-events:none;
-  overflow:hidden;border-radius:0 0 var(--radius) var(--radius);}
+/* Foil-Shards: viele aneinandergrenzende, GROSSE und bewusst unregelmäßige Facetten statt einzelner
+   Symbole - vier gekreuzte repeating-linear-gradients, jede mit einem anderen Winkel UND einer anderen
+   Periode (46-78px statt gleichmäßiger 15px-Zellen), damit sich nie ein regelmäßiges Raster ergibt,
+   sondern ein unregelmäßiges Splitter-/Kristallmuster. Deckt jetzt die GESAMTE Karte ab (inset:0),
+   liegt aber unter dem Foto (z-index unter .photo-frame) - die Spielerfotos haben einen transparenten
+   Hintergrund, das Muster scheint also rund um den Spieler herum durch, nicht nur unterhalb. Ein
+   darüber laufender Glanzstreifen im Overlay-Blend-Modus lässt die Facetten je nach Streifenposition
+   ("Blickwinkel") golden statt blau aufblitzen - klassischer Folienkarten-Effekt. */
+.pcard .toty-fx{position:absolute;inset:0;z-index:0;pointer-events:none;
+  overflow:hidden;border-radius:var(--radius);}
 .pcard .toty-shards{position:absolute;inset:0;
   background:
-    repeating-linear-gradient(60deg, rgba(157,205,255,.22) 0 1px, transparent 1px 15px),
-    repeating-linear-gradient(-60deg, rgba(157,205,255,.22) 0 1px, transparent 1px 15px),
-    repeating-linear-gradient(0deg, rgba(157,205,255,.14) 0 1px, transparent 1px 15px),
+    repeating-linear-gradient(23deg, rgba(157,205,255,.3) 0 2px, transparent 2px 62px),
+    repeating-linear-gradient(-52deg, rgba(157,205,255,.26) 0 2px, transparent 2px 78px),
+    repeating-linear-gradient(97deg, rgba(157,205,255,.2) 0 2px, transparent 2px 54px),
+    repeating-linear-gradient(-8deg, rgba(157,205,255,.18) 0 2px, transparent 2px 46px),
     linear-gradient(160deg,#0a1c48 0%,#123572 45%,#08133a 100%);}
-.pcard .toty-shard-shine{position:absolute;inset:-20% -80%;
-  background:linear-gradient(100deg, transparent 40%, rgba(255,215,106,.5) 48%, rgba(255,243,207,.75) 50%, rgba(255,215,106,.5) 52%, transparent 60%);
+.pcard .toty-shard-shine{position:absolute;inset:-30% -100%;
+  background:linear-gradient(100deg, transparent 40%, rgba(255,215,106,.55) 48%, rgba(255,243,207,.8) 50%, rgba(255,215,106,.55) 52%, transparent 60%);
   background-size:55% 100%;mix-blend-mode:overlay;
   animation:totyShardShine 4.2s ease-in-out infinite;}
 @keyframes totyShardShine{0%{background-position:-30% 0;}100%{background-position:180% 0;}}
@@ -16658,9 +16662,10 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // handful of thin molten-gold cracks that individually flicker across the face - own mechanism, not
   // a recolor of any other tier's FX (no falling/rising particles like Legikone/WM-Kapitän, no rotating
   // cut-gem facets like the Kronjuwelen), so the single best card in the game reads as its own thing.
-  // TOTY (Team of the Year): "Foil-Shards" - eine Fläche aus vielen aneinandergrenzenden Facetten
+  // TOTY (Team of the Year): "Foil-Shards" - eine Fläche aus vielen großen, unregelmäßigen Facetten
   // (per CSS-Gradienten erzeugt, siehe .toty-shards) plus einem golden schimmernden Glanzstreifen
-  // darüber, ausschließlich unterhalb des Fotos (siehe .toty-fx CSS: top:59%).
+  // darüber, über die GESAMTE Karte (das Spielerfoto hat einen transparenten Hintergrund und liegt
+  // per z-index darüber, siehe .toty-fx CSS).
   const isTotyTier = card.theme==='toty';
   const totyFxHTML = isTotyTier ? `<div class="toty-fx">
       <div class="toty-shards"></div>
