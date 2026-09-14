@@ -25760,15 +25760,25 @@ async function ligaWeekendRecapActive(){
 async function resolveWeeklyRolloverIfNeeded(){
   await fbReady;
   if(!fb) return null;
-  const weekStart = mostRecentMondayBerlin();
+  const now = berlinNow();
+  const isSaturday = now.getDay()===6;
+  // Nachhol-Fix (identisches Muster wie zuvor beim Wochenendpokal, siehe wepTargetWeekStart): an einem
+  // Nicht-Samstag zielt das auf die VORWOCHE, deren Samstags-Aufstiegsrunde unvollständig geblieben sein
+  // kann, wenn niemand während der genauen Stunden-Fenster (12/13/15/16 Uhr, siehe
+  // resolveWeeklyRolloverV2IfNeeded) online war. Ohne diesen Fix blieb eine so hängengebliebene Woche für
+  // IMMER auf ihrer letzten erreichten Stufe stecken, weil der nächste Aufruf ab Sonntag automatisch eine
+  // ANDERE (neue) Kalenderwoche adressierte, komplett unsichtbar (kein Fehler, kein Hinweis) - die
+  // betroffene Liga lief einfach mit der alten Mitgliederliste weiter, ohne dass Auf-/Abstieg je
+  // stattfand.
+  const weekStart = isSaturday ? mostRecentMondayBerlin() : mostRecentMondayBerlin() - 7*24*60*60*1000;
   if(weekStart<LIGA_SEASON_EPOCH) return null; // season hasn't even started its first week yet
   // Everything below this point is the ORIGINAL, unmodified instant-rollover pass - still used as-is
   // for any week that started before LIGA_RULES_V2_WEEK_START, so a week already in progress when the
-  // new rules shipped keeps working exactly as it always did, right through its own Samstag. Every
-  // later week goes through resolveWeeklyRolloverV2IfNeeded's four-phase version instead.
-  if(weekStart>=LIGA_RULES_V2_WEEK_START) return resolveWeeklyRolloverV2IfNeeded(weekStart);
-  const now = berlinNow();
-  if(now.getDay()!==6) return null; // only Samstag ab 00:00 Uhr Berlin time
+  // new rules shipped keeps working exactly as it always did. Every later week goes through
+  // resolveWeeklyRolloverV2IfNeeded's four-phase version instead - isSaturday is passed through so it
+  // can tell "live, on the actual day" apart from "catching up a stuck previous week" and relax its own
+  // per-stage hour gates accordingly.
+  if(weekStart>=LIGA_RULES_V2_WEEK_START) return resolveWeeklyRolloverV2IfNeeded(weekStart, isSaturday);
   const flagRef = fb.doc(fb.db,'leagueMeta','rollover_'+weekStart);
   // Atomic claim: a plain read-then-later-write flag left a window where two clients hitting Samstag
   // 12:00 at the same moment could BOTH pass the "not done yet" check and both run the whole payout
@@ -25938,10 +25948,14 @@ async function ligaV2ClaimStage(ref){
 // Dispatcher: reads how far this week's four-stage promotion bracket has gotten and runs whichever
 // stage is next due, one at a time - each stage's own doc existing with status:'done' is what "next
 // stage is due" actually checks, the hour gate on top just stops it running before its fixed moment.
-async function resolveWeeklyRolloverV2IfNeeded(weekStart){
+// isSaturday=false means this is a NACHHOL-Aufruf für eine bereits vergangene, unvollständig
+// gebliebene Woche (siehe resolveWeeklyRolloverIfNeeded) - der Tag selbst ist dann schon vorbei, also
+// werden alle Stunden-Gates übersprungen (jede noch nicht fertige Stufe gilt sofort als fällig),
+// genau wie hourOk bei resolveWochenendpokalIfNeeded es für den Wochenendpokal schon macht.
+async function resolveWeeklyRolloverV2IfNeeded(weekStart, isSaturday){
   const now = berlinNow();
-  if(now.getDay()!==6) return null; // only Samstag
-  if(now.getHours()<12) return null; // nothing due before the Halbfinale-Hinspiel kickoff
+  const hourOk = h => !isSaturday || now.getHours()>=h;
+  if(!hourOk(12)) return null; // nothing due before the Halbfinale-Hinspiel kickoff
   const semiLeg1Ref = fb.doc(fb.db,'leagueMeta','promoSemiLeg1_'+weekStart);
   const semiLeg2Ref = fb.doc(fb.db,'leagueMeta','promoSemiLeg2_'+weekStart);
   const finalLeg1Ref = fb.doc(fb.db,'leagueMeta','promoFinalLeg1_'+weekStart);
@@ -25952,21 +25966,21 @@ async function resolveWeeklyRolloverV2IfNeeded(weekStart){
   if(!semiLeg1Snap.exists() || semiLeg1Snap.data().status!=='done'){
     return await ligaPromoSemiLeg1(weekStart, semiLeg1Ref);
   }
-  if(now.getHours()<13) return null; // Halbfinale-Hinspiel done, Rückspiel isn't due yet
+  if(!hourOk(13)) return null; // Halbfinale-Hinspiel done, Rückspiel isn't due yet
   let semiLeg2Snap;
   try{ semiLeg2Snap = await fb.getDoc(semiLeg2Ref); }
   catch(e){ console.warn('promo semi leg2 read failed', e); return null; }
   if(!semiLeg2Snap.exists() || semiLeg2Snap.data().status!=='done'){
     return await ligaPromoSemiLeg2(weekStart, semiLeg1Snap.data(), semiLeg2Ref);
   }
-  if(now.getHours()<15) return null; // Halbfinale done, Finale-Hinspiel isn't due yet
+  if(!hourOk(15)) return null; // Halbfinale done, Finale-Hinspiel isn't due yet
   let finalLeg1Snap;
   try{ finalLeg1Snap = await fb.getDoc(finalLeg1Ref); }
   catch(e){ console.warn('promo final leg1 read failed', e); return null; }
   if(!finalLeg1Snap.exists() || finalLeg1Snap.data().status!=='done'){
     return await ligaPromoFinalLeg1(weekStart, semiLeg1Snap.data(), semiLeg2Snap.data(), finalLeg1Ref);
   }
-  if(now.getHours()<16) return null; // Finale-Hinspiel done, Rückspiel isn't due yet
+  if(!hourOk(16)) return null; // Finale-Hinspiel done, Rückspiel isn't due yet
   let rolloverSnap;
   try{ rolloverSnap = await fb.getDoc(rolloverRef); }
   catch(e){ console.warn('rollover v2 flag read failed', e); return null; }
@@ -27572,8 +27586,13 @@ function renderLigenPanel(view){
     // Sat/Sun: whoever opens this tab first runs the weekly commissioner pass (promotions, relegation
     // playoffs, payouts, newcomer slotting) - a no-op for everyone after the first, guarded by
     // leagueMeta/rollover_{weekStart}. Doing this BEFORE reading membership means even the very first
-    // visitor immediately sees their own possibly-just-changed league.
-    await resolveWeeklyRolloverIfNeeded();
+    // visitor immediately sees their own possibly-just-changed league. Looped (same "advance one stage
+    // per call, repeat until nothing's left to do" pattern as the Wochenendpokal panel below) - a single
+    // call only ever advances the V2 bracket by one stage, so a catch-up visit for a stuck previous week
+    // (see resolveWeeklyRolloverIfNeeded's Nachhol-Fix) needs several calls in a row to actually run all
+    // four stages plus the old system's single pass, instead of only ever getting one stage further per
+    // page load.
+    for(let i=0;i<6;i++){ if(!(await resolveWeeklyRolloverIfNeeded())) break; }
     const weekStart = ligaCurrentWeekStart();
     // Single fetch of the whole leagueMembership collection, reused for BOTH finding my own league AND
     // the zone-coloring context below (sortedLetters/sizeOf) - this used to be two separate, sequential
