@@ -422,7 +422,8 @@ body.gfx-no-fxlayers .pcard .wm26k-fx,
 body.gfx-no-fxlayers .pcard .breakout-fx,
 body.gfx-no-fxlayers .pcard .iconpromo-fx,
 body.gfx-no-fxlayers .pcard .iconswap2-fx,
-body.gfx-no-fxlayers .pcard .uclchamp-fx{ display:none !important; }
+body.gfx-no-fxlayers .pcard .uclchamp-fx,
+body.gfx-no-fxlayers .pcard .toty-fx{ display:none !important; }
 body.gfx-no-confetti .wm26-trophy-cutscene *{ animation:none !important; }
 body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
@@ -667,6 +668,39 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ffd76a;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 46px 1px #ff8a3d;}
 }
+/* TOTY (Team of the Year): blau-goldenes Design mit einem großen runden Edelstein als klarem Fokus in
+   der Kartenmitte (Trophäen-Look statt der üblichen Konfetti/Partikel-FX anderer Themes) - Kartenrahmen
+   in derselben Blau-Gold-Palette, dazu ein paar goldene Funken als zusätzliche, aber bewusst
+   zurückhaltende Nebenelemente, damit der Edelstein selbst der Blickfang bleibt. */
+.pcard.theme-toty{--acc:#3d8bff;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#050b18 0%,#0a1226 45%,#04060f 100%) padding-box,
+    linear-gradient(160deg,#0a2a66,#3d8bff,#ffd76a,#3d8bff,#0a2a66) border-box !important;
+  animation: totyBorderGlow 2.8s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-toty::before{animation:autoShine 1.4s ease-in-out infinite;}
+.pcard.theme-toty .name{color:#eaf4ff;text-shadow:0 0 8px rgba(61,139,255,.6);}
+@keyframes totyBorderGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 18px -3px #3d8bff;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #ffd76a;}
+}
+.pcard .toty-fx{position:absolute;inset:0;z-index:1;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .toty-gem-glow{position:absolute;top:13%;left:50%;width:56%;padding-top:56%;margin-left:-28%;border-radius:50%;
+  background:radial-gradient(circle, rgba(61,139,255,.55) 0%, rgba(61,139,255,.16) 45%, transparent 72%);
+  animation:totyGemGlow 3s ease-in-out infinite;}
+@keyframes totyGemGlow{0%,100%{opacity:.6;transform:scale(1);}50%{opacity:1;transform:scale(1.08);}}
+.pcard .toty-gem{position:absolute;top:19%;left:50%;width:40%;padding-top:40%;margin-left:-20%;border-radius:50%;
+  background:radial-gradient(circle at 35% 28%, #eaf6ff 0%, #9ecdff 16%, #3d8bff 42%, #0f4faa 68%, #041c47 100%);
+  border:3px solid #ffd76a;
+  box-shadow:0 0 0 1px rgba(255,215,106,.55), 0 4px 14px rgba(0,0,0,.5), inset 0 0 12px rgba(255,255,255,.35);}
+.pcard .toty-gem::before{content:"";position:absolute;inset:0;border-radius:50%;
+  background:repeating-conic-gradient(from 0deg, rgba(255,255,255,.18) 0deg 8deg, transparent 8deg 40deg);
+  mix-blend-mode:overlay; animation:totyGemFacetSpin 9s linear infinite;}
+.pcard .toty-gem::after{content:"";position:absolute;top:14%;left:22%;width:24%;height:15%;border-radius:50%;
+  background:rgba(255,255,255,.8); filter:blur(2px); transform:rotate(-25deg);}
+@keyframes totyGemFacetSpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+.pcard .toty-spark{position:absolute;width:6px;height:6px;background:#ffd76a;border-radius:50%;
+  box-shadow:0 0 6px 1px rgba(255,215,106,.9);opacity:0;animation:totySparkTwinkle 2.6s ease-in-out infinite;}
+@keyframes totySparkTwinkle{0%,100%{opacity:0;transform:scale(.4);}50%{opacity:1;transform:scale(1);}}
 /* GOAT (ov>99, hand-picked real-world superstars - the single rarest pull in the whole game, only via
    the GOAT-Quest): previously just inherited the generic .r-ultimate look (same violet card any other
    95+ base card without its own theme gets), so the single best card in the game was visually
@@ -16625,6 +16659,20 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // handful of thin molten-gold cracks that individually flicker across the face - own mechanism, not
   // a recolor of any other tier's FX (no falling/rising particles like Legikone/WM-Kapitän, no rotating
   // cut-gem facets like the Kronjuwelen), so the single best card in the game reads as its own thing.
+  // TOTY (Team of the Year): großer runder blau-goldener Edelstein zentriert über dem Foto als klarer
+  // Blickfang, plus ein paar goldene Funken drumherum als zusätzliche, aber zurückhaltende Nebenelemente
+  // (siehe .toty-gem/.toty-spark CSS oben) - eigenes Element statt .pattern-layer, wie jedes andere
+  // bespoke Theme hier.
+  const isTotyTier = card.theme==='toty';
+  const totyFxHTML = isTotyTier ? `<div class="toty-fx">
+      <div class="toty-gem-glow"></div>
+      <div class="toty-gem"></div>
+      <i class="toty-spark" style="top:8%;left:12%;animation-delay:.2s;"></i>
+      <i class="toty-spark" style="top:14%;left:84%;animation-delay:1.1s;"></i>
+      <i class="toty-spark" style="top:52%;left:6%;animation-delay:1.8s;"></i>
+      <i class="toty-spark" style="top:56%;left:90%;animation-delay:.7s;"></i>
+      <i class="toty-spark" style="top:6%;left:50%;animation-delay:1.4s;"></i>
+    </div>` : '';
   const isGoatTier = card.theme==='goat';
   const goatFxHTML = isGoatTier ? `<div class="goat-fx">
       <div class="goat-halo"></div>
@@ -16842,6 +16890,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${iconpromoFxHTML}
     ${adminFxHTML}
     ${uclChampFxHTML}
+    ${totyFxHTML}
     <div class="photo-frame">
       ${photoInner}
       <div class="photo-tint"></div>
