@@ -2848,6 +2848,33 @@ body.is-offline #offline-overlay{display:flex;}
 .modal-overlay{position:fixed;inset:0;background:rgba(4,5,8,.86);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
 .modal-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:960px;width:100%;max-height:88vh;overflow:auto;}
 
+/* ---- Skill-Modus: full-bleed match overlay ---- */
+.sk-overlay{position:fixed;inset:0;background:#05070a;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px;touch-action:none;}
+.sk-hud{width:100%;max-width:900px;display:flex;align-items:center;justify-content:space-between;font-family:inherit;color:#eee6d8;}
+.sk-hud .sk-team{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;}
+.sk-dot{width:11px;height:11px;border-radius:50%;flex:none;}
+.sk-stamina{width:56px;height:4px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden;}
+.sk-stamina-fill{height:100%;width:100%;}
+.sk-score{font-size:26px;font-weight:800;display:flex;gap:10px;align-items:baseline;color:#fff;}
+.sk-score .sk-sep{opacity:.4;font-size:18px;}
+.sk-timer{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
+.sk-field-holder{position:relative;max-width:100%;}
+#sk-canvas{display:block;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.55);max-width:100%;height:auto;background:#123;}
+.sk-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;font-weight:800;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.6);pointer-events:none;opacity:0;transition:opacity .25s;text-align:center;}
+.sk-controls-hint{font-size:11px;color:var(--muted);text-align:center;max-width:900px;}
+.sk-close{position:absolute;top:10px;right:10px;background:none;border:1px solid var(--line);color:#eee6d8;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;z-index:2;}
+.sk-result{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 30px;text-align:center;max-width:360px;}
+/* touch controls - only shown on touch-capable viewports (see JS isTouchDevice check) */
+.sk-touch{display:none;}
+.sk-touch.active{display:flex;}
+.sk-touch{position:fixed;inset:auto 0 0 0;z-index:201;justify-content:space-between;align-items:flex-end;padding:0 14px 14px;pointer-events:none;}
+.sk-stick-zone{width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);position:relative;pointer-events:auto;touch-action:none;}
+.sk-stick-nub{position:absolute;width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.28);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+.sk-action-cluster{display:grid;grid-template-columns:repeat(2,56px);grid-auto-rows:56px;gap:10px;pointer-events:auto;}
+.sk-action-btn{border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;}
+.sk-action-btn.active,.sk-stick-zone.active{background:rgba(255,255,255,.32);}
+@media (min-width:901px){ .sk-touch{display:none !important;} }
+
 /* ---- login / entry gate ---- */
 .gate-overlay{background:radial-gradient(circle at 50% 20%,#132018 0%,#080a0f 62%);}
 .gate-box{background:linear-gradient(180deg,var(--panel),var(--void));border:1px solid var(--line);border-radius:20px;padding:32px 28px 26px;max-width:380px;width:100%;text-align:center;box-shadow:0 30px 70px -25px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.02) inset;}
@@ -9764,6 +9791,12 @@ const FIREBASE_CONFIG = {
   storageBucket: "chess-rng.firebasestorage.app",
   messagingSenderId: "1071354935766",
   appId: "1:1071354935766:web:0e5c5a6a2f0f0b95be4c77",
+  // Realtime Database (Skill-Modus live sync) - MUSS in der Firebase Console unter "Build > Realtime
+  // Database > Datenbank erstellen" angelegt werden, danach hier die dort angezeigte databaseURL
+  // eintragen (Format i.d.R. https://chess-rng-default-rtdb.<region>.firebasedatabase.app). Solange das
+  // leer bleibt, bootet initFirebase() ganz normal weiter (Firestore/Auth unbeeinträchtigt) - nur
+  // fb.rtdb bleibt null und das Skill-Modus zeigt einen "noch nicht verfügbar"-Hinweis statt zu starten.
+  databaseURL: "",
 };
 const FB_VERSION = '10.13.2';
 let fb = null; // set to {db, collection, doc, setDoc, getDoc, getDocs, query, orderBy, limit} when available
@@ -9784,7 +9817,7 @@ function withTimeout(promise, ms){
 }
 async function initFirebase(){
   try{
-    const [appMod, fsMod, authMod] = await withTimeout(Promise.all([
+    const [appMod, fsMod, authMod, rtdbMod] = await withTimeout(Promise.all([
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app.js`),
       // full SDK, not -lite: the Lite bundle has no onSnapshot() at all (it's REST/one-shot-query only
       // by design) - needed for real-time listeners (see ensureMarketListener) so two clients can't
@@ -9793,6 +9826,11 @@ async function initFirebase(){
       // file (collection/doc/getDocs/setDoc/...), so this is a drop-in swap beyond the new export.
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore.js`),
       import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-auth.js`),
+      // Realtime Database - only used by Skill-Modus (enterSkillDuelMatch) for its 30x/s host-authoritative
+      // position sync; Firestore's per-write pricing/latency isn't built for that update rate. Always
+      // imported alongside the rest (cheap, cached by the browser) - whether it actually gets a live
+      // database instance depends on FIREBASE_CONFIG.databaseURL being set, checked below.
+      import(`https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-database.js`),
     ]), 8000);
     // Reuse the existing app instead of calling initializeApp() again if a previous attempt already got
     // this far (see retryFirebaseConnectionInBackground below) - initializeApp() throws
@@ -9846,6 +9884,19 @@ async function initFirebase(){
       signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signOut:authMod.signOut,
       setPersistence:authMod.setPersistence, browserLocalPersistence:authMod.browserLocalPersistence,
       browserSessionPersistence:authMod.browserSessionPersistence, onAuthStateChanged:authMod.onAuthStateChanged};
+    // Realtime Database is optional - only wired up once a real databaseURL is configured (see the
+    // comment on FIREBASE_CONFIG.databaseURL above). getDatabase() throws immediately if the app has no
+    // databaseURL at all, so this whole block is skipped rather than attempted-and-caught; fb.rtdb stays
+    // null and callers (Skill-Modus) treat that exactly like fb itself being null.
+    if(FIREBASE_CONFIG.databaseURL){
+      try{
+        const rtdb = rtdbMod.getDatabase(app);
+        fb.rtdb = {db:rtdb, ref:rtdbMod.ref, set:rtdbMod.set, update:rtdbMod.update, remove:rtdbMod.remove,
+          onValue:rtdbMod.onValue, off:rtdbMod.off, onDisconnect:rtdbMod.onDisconnect, get:rtdbMod.get};
+      }catch(e){ console.warn('Realtime Database unavailable:', e); fb.rtdb = null; }
+    } else {
+      fb.rtdb = null;
+    }
     // Firebase already persists a signed-in session across reloads on its own (indexedDB, not
     // anything this app writes) - this app just never checked for it before booting, so it re-asked
     // for the password on every single visit even though the browser was already holding a valid
@@ -12491,6 +12542,8 @@ const CHALLENGE_DEFS = [
     desc:'Wie die Champions League, aber mit den echten Europa-League-26/27-Teilnehmern — günstigerer Eintritt, geringere Belohnungen. Sieg schaltet einen Gratis-Startplatz für die Champions League frei.'},
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
     desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
+  {id:'skillduel', name:'Skill-Duell', pill:'Arcade', accent:'#e64980', contentId:'skillduel-content', renderFn:()=>renderSkillDuelPanel(),
+    desc:'Echtzeit-Arcade-1v1 gegen einen Freund (online, zwei Accounts) \u2014 jeder w\u00e4hlt eine Feldspieler-Karte aus der eigenen Sammlung. Werte bestimmen die St\u00e4rke, PlayStyles+ schalten Spezialmoves frei. Noch ohne Einsatz/Belohnung.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
     desc:'Ein einzelnes, extrem hartes Match. Sieg bringt die einzigartige Ballon d\u2019Or-Karte \u2014 und schaltet danach eine noch h\u00e4rtere zweite Ballon d\u2019Or-Herausforderung frei.',
     doneCheck:()=>!!profile.ballondorClaimed},
@@ -24471,6 +24524,809 @@ async function loadIncomingDuels(){
       box.appendChild(row);
     });
   }catch(e){ console.warn('load incoming duels failed', e); box.innerHTML = `<p class="hint">Konnte Herausforderungen nicht laden.</p>`; }
+}
+
+// ===================================================================================================
+// ===== SKILL-MODUS: Echtzeit-Arcade-1v1 zwischen zwei echten Accounts, mit echten Karten (Werte
+// bestimmen die Stärke, PlayStyles+ schalten Spezialmoves frei - ein Move ist NIE universell verfügbar,
+// nur wenn die gewählte Karte den passenden Trait tatsächlich trägt, siehe skillMovesForCard). Nur
+// Feldspieler wählbar (kein Torwart). Matchmaking läuft über Firestore (skillDuels/skillMatches,
+// exakt analog zu duels/matches), die Live-Synchronisation während des Matches selbst über Realtime
+// Database (fb.rtdb) statt Firestore - 30 Zustands-Updates/Sekunde sind für Firestores Preis-/
+// Latenzmodell nicht gemacht, für RTDB der Normalfall. Modell: host-autoritativ - wer die Einladung
+// verschickt hat, simuliert BEIDE Spieler+Ball lokal (eigene Tastatur + der vom Gast übertragene
+// Input) und published 30x/s den fertigen Zustand; der Gast berechnet nie selbst Physik, sondern
+// sendet nur seinen eigenen Input und rendert passiv, was der Host schickt - so können beide
+// Bildschirme nie auseinanderlaufen (einzige Quelle der Wahrheit). Kein Einsatz/Preis - das kommt
+// später, siehe explizite Rückstellung.
+// ===================================================================================================
+
+// Extensible PlayStyle+ -> Spezialmove-Mapping. Neue Moves für weitere PlayStyles+ werden künftig
+// einfach hier ergänzt (Label -> Move-Schlüssel) - kein Aufrufer (Eingabe, Physik-Loop, Mobile-Buttons,
+// Gamepad, UI-Badges) braucht dafür je angepasst zu werden, alle lesen ausschließlich über
+// skillMovesForCard()/SK_MOVE_ICON_URL. Acht Moves aus acht verschiedenen PlayStyles+ (vier ursprünglich
+// aus dem Prototyp, vier weitere ergänzt):
+const SKILL_MOVE_BY_TRAIT = {
+  'Powerschuss':'powershot', 'Powerschuss+':'powershot',                       // Power Shot: Schuss aufladbar (Sofortschuss bleibt für alle möglich)
+  'Angeschn. Schuss':'finesse', 'Angeschnittener Schuss+':'finesse',           // Finesse Shot: Modifikator-Taste bei Schussauslösung = mehr Kurve, weniger Wucht
+  'Schneller Schritt':'quickstep', 'Schneller Schritt+':'quickstep',           // Quick Step: kurzer Tempostoß in Laufrichtung
+  'Technik':'technical', 'Technik+':'technical',                              // Technical: enge Ballführung (langsamer, aber ballsicherer)
+  'Grätsche':'slide', 'Grätsche+':'slide',                                    // Grätsche: Ballgewinn-Lunge Richtung Ball, kurze Erholungsphase danach
+  'Lupfer':'chip', 'Lupfer+':'chip',                                          // Lupfer: gechippter Schuss, Ball ignoriert kurz jede Spieler-Kollision
+  'Raserei':'rush', 'Raserei+':'rush',                                        // Raserei: gehaltener Sprint über das normale Tempolimit hinaus, kostet mehr Ausdauer
+  'Block':'block', 'Block+':'block',                                         // Block: gehaltene Blockhaltung, schluckt Schüsse statt sie abprallen zu lassen
+};
+const SKILL_MOVE_LABEL = {powershot:'Power Shot', finesse:'Finesse Shot', quickstep:'Quick Step', technical:'Technical',
+  slide:'Grätsche', chip:'Lupfer', rush:'Raserei', block:'Block'};
+// je Move-Schlüssel das echte EA-Icon des Basis-Traits - PLAYSTYLE_INFO wird erst weiter UNTEN in
+// dieser Datei als const definiert, ein Zugriff hier oben am Modul-Top-Level würde also mitten im
+// Boot mit "Cannot access before initialization" abstürzen (TDZ). Deshalb lazy + memoisiert, erst
+// beim ersten echten Skill-Duell aufgerufen (startSkillMatch), wenn das ganze Skript längst geladen ist.
+let _skMoveIconUrlCache = null, _skMoveIconImgsCache = null;
+function skMoveIconUrls(){
+  if(_skMoveIconUrlCache) return _skMoveIconUrlCache;
+  _skMoveIconUrlCache = {};
+  Object.entries(SKILL_MOVE_BY_TRAIT).forEach(([label,move])=>{
+    if(!_skMoveIconUrlCache[move] && PLAYSTYLE_INFO[label]) _skMoveIconUrlCache[move] = PLAYSTYLE_INFO[label].icon;
+  });
+  return _skMoveIconUrlCache;
+}
+function skMoveIconImgs(){
+  if(_skMoveIconImgsCache) return _skMoveIconImgsCache;
+  _skMoveIconImgsCache = {};
+  Object.entries(skMoveIconUrls()).forEach(([move,url])=>{ const img=new Image(); img.src=url; _skMoveIconImgsCache[move]=img; });
+  return _skMoveIconImgsCache;
+}
+function skillMovesForCard(card){
+  const traits = resolveCardTraits(card)||[];
+  const moves = new Set();
+  traits.forEach(t=>{ const m = SKILL_MOVE_BY_TRAIT[t]; if(m) moves.add(m); });
+  return moves;
+}
+
+let skillDuelState = null; // laufender Matchzustand während ein Skill-Duell-Overlay offen ist, sonst null
+let pendingSkillDuelId = null, pendingSkillDuelTimer = null;
+
+async function challengeSkillDuel(friend){
+  if(pendingSkillDuelId || skillDuelState) return;
+  pendingSkillDuelId = 'pending';
+  await fbReady;
+  if(!fb){ pendingSkillDuelId=null; toast('Skill-Duelle benötigen das Online-Backend (Firebase). Gerade nicht erreichbar.'); return; }
+  if(!fb.rtdb){ pendingSkillDuelId=null; toast('Skill-Modus ist auf diesem Server noch nicht eingerichtet (Realtime Database fehlt).'); return; }
+  const duelId = genId();
+  const duel = {
+    id: duelId, fromUserId: profile.userId, fromName: profile.displayName||profile.userId,
+    toUserId: friend.userId, toName: friend.name,
+    status:'pending', createdAt: Date.now()
+  };
+  try{ await fb.setDoc(fb.doc(fb.db,'skillDuels',duelId), duel); }
+  catch(e){ console.warn('skill challenge send failed', e); pendingSkillDuelId=null; toast('Herausforderung konnte nicht gesendet werden.'); return; }
+  pendingSkillDuelId = duelId;
+  toast(`Skill-Duell-Herausforderung an ${friend.name} gesendet…`);
+  const startTime = Date.now();
+  const poll = async ()=>{
+    if(pendingSkillDuelId!==duelId) return;
+    if(Date.now()-startTime > 60000){
+      pendingSkillDuelId = null;
+      try{ await fb.deleteDoc(fb.doc(fb.db,'skillDuels',duelId)); }catch(_){}
+      toast(`${friend.name} hat nicht rechtzeitig geantwortet.`);
+      return;
+    }
+    try{
+      const snap = await fb.getDoc(fb.doc(fb.db,'skillDuels',duelId));
+      if(snap.exists()){
+        const d = snap.data();
+        if(d.status==='accepted' && d.matchId){
+          pendingSkillDuelId = null;
+          openSkillCardPicker(d.matchId, true, {name:friend.name});
+          return;
+        } else if(d.status==='declined'){
+          pendingSkillDuelId = null;
+          toast(`${friend.name} hat die Herausforderung abgelehnt.`);
+          return;
+        }
+      } else { pendingSkillDuelId = null; return; }
+    }catch(e){ console.warn('skill duel poll failed', e); }
+    pendingSkillDuelTimer = setTimeout(poll, 3500);
+  };
+  poll();
+}
+
+async function loadIncomingSkillDuels(){
+  const box = document.getElementById('skillduel-incoming');
+  if(!box) return;
+  await fbReady;
+  if(!fb){ box.innerHTML = '<p class="hint">Backend nicht erreichbar.</p>'; return; }
+  try{
+    const incoming = await cachedRead('incoming-skillduels:'+profile.userId, 12000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'skillDuels'), fb.where('toUserId','==',profile.userId), fb.limit(20)));
+      return snap.docs.map(d=>({id:d.id, ...d.data()})).filter(d=>d.status==='pending');
+    });
+    if(!box) return;
+    if(!incoming.length){ box.innerHTML = '<p class="hint">Keine eingehenden Skill-Duell-Herausforderungen.</p>'; return; }
+    box.innerHTML = '';
+    incoming.forEach(duel=>{
+      const row = document.createElement('div');
+      row.className = 'leader-row';
+      row.style.flexWrap = 'wrap';
+      row.innerHTML = `<span style="flex:1;"><b>${duel.fromName}</b> fordert dich zum Skill-Duell heraus</span>`;
+      const btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;gap:8px;margin-top:6px;width:100%;';
+      const acceptBtn = document.createElement('button'); acceptBtn.className='action-btn'; acceptBtn.style.cssText='width:auto;padding:6px 12px;'; acceptBtn.textContent='Annehmen';
+      const declineBtn = document.createElement('button'); declineBtn.className='action-btn secondary'; declineBtn.style.cssText='width:auto;padding:6px 12px;background:var(--danger);'; declineBtn.textContent='Ablehnen';
+      acceptBtn.addEventListener('click', async ()=>{
+        if(skillDuelState){ toast('Du bist gerade in einem Skill-Duell.'); return; }
+        acceptBtn.disabled=true; declineBtn.disabled=true;
+        const matchId = genId();
+        try{
+          await fb.setDoc(fb.doc(fb.db,'skillMatches',matchId), {
+            id:matchId, hostUserId:duel.fromUserId, hostName:duel.fromName,
+            guestUserId:profile.userId, guestName:profile.displayName||profile.userId,
+            createdAt: Date.now()
+          });
+          await fb.setDoc(fb.doc(fb.db,'skillDuels',duel.id), {status:'accepted', matchId}, {merge:true});
+          invalidateReadCache('incoming-skillduels:'+profile.userId);
+          openSkillCardPicker(matchId, false, {name:duel.fromName});
+        }catch(e){ console.warn('accept skill duel failed', e); toast('Herausforderung konnte nicht angenommen werden.'); acceptBtn.disabled=false; declineBtn.disabled=false; }
+      });
+      declineBtn.addEventListener('click', async ()=>{
+        acceptBtn.disabled=true; declineBtn.disabled=true;
+        try{ await fb.setDoc(fb.doc(fb.db,'skillDuels',duel.id), {status:'declined'}, {merge:true}); }catch(_){}
+        invalidateReadCache('incoming-skillduels:'+profile.userId);
+        loadIncomingSkillDuels();
+      });
+      btns.append(acceptBtn, declineBtn);
+      row.appendChild(btns);
+      box.appendChild(row);
+    });
+  }catch(e){ console.warn('load incoming skill duels failed', e); box.innerHTML = '<p class="hint">Konnte Herausforderungen nicht laden.</p>'; }
+}
+
+async function renderSkillDuelPanel(){
+  const content = document.getElementById('skillduel-content');
+  if(!content) return;
+  const rtdbReady = !!(fb && fb.rtdb);
+  content.innerHTML = `
+    <div class="play-grid">
+      <div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Freunde herausfordern</h3>
+        ${rtdbReady?'':'<p class="hint" style="color:var(--danger);margin-bottom:10px;">Skill-Modus ist auf diesem Server noch nicht eingerichtet (Realtime Database fehlt) — Herausfordern ist deaktiviert.</p>'}
+        <div class="leader-list" id="skillduel-friend-list">
+          ${(profile.friends||[]).length ? '' : '<p class="hint">Noch keine Freunde hinzugefügt (siehe Herausforderungen › Matchmaking).</p>'}
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Eingehende Skill-Duelle</h3>
+        <div class="leader-list" id="skillduel-incoming"><p class="hint">Lädt…</p></div>
+      </div>
+    </div>`;
+  const listEl = document.getElementById('skillduel-friend-list');
+  (profile.friends||[]).forEach(friend=>{
+    const row = document.createElement('div');
+    row.className = 'leader-row';
+    row.innerHTML = `<span style="flex:1;">${friend.name}</span>`;
+    const btn = document.createElement('button');
+    btn.className='action-btn'; btn.style.cssText='width:auto;padding:5px 10px;font-size:11px;'; btn.textContent='Skill-Duell';
+    btn.disabled = !rtdbReady;
+    btn.addEventListener('click', ()=>{ btn.disabled=true; challengeSkillDuel(friend); setTimeout(()=>{ if(btn) btn.disabled=!rtdbReady; }, 2000); });
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  });
+  loadIncomingSkillDuels();
+}
+
+// nur Feldspieler (kein Torwart) aus der eigenen Sammlung, stärkste zuerst
+function eligibleSkillCards(){
+  return collection.map(e=>({uid:e.uid, card:leveledOwnedCard(e)}))
+    .filter(x=>x.card && !x.card.isManager && mainPos(x.card.pos)!=='GK')
+    .sort((a,b)=>b.card.ov-a.card.ov);
+}
+// überträgt genau die Felder, die die Gegenseite braucht, um exakt dieselbe Karte (inkl. individueller
+// Level-/PlayStyle-Training-Overrides) nachzubauen, ohne das komplette Card-Objekt zu übertragen -
+// gleiches Prinzip wie getMySquadCardRefs()/resolveCardRefs() für normale Duelle.
+function fullCardRefForSkillPick(card){
+  return {id:card.id, level:card.level||0, n:card.n, img:card.img, pos:card.pos,
+    pac:card.pac, sho:card.sho, pas:card.pas, dri:card.dri, defn:card.defn, phy:card.phy,
+    traits: resolveCardTraits(card)};
+}
+function resolveSkillCardRef(ref){
+  if(!ref) return null;
+  const base = BY_ID.get(ref.id);
+  if(!base) return null;
+  return {...base, level:ref.level||0, n:ref.n||base.n, img:ref.img||base.img, pos:ref.pos||base.pos,
+    pac:ref.pac, sho:ref.sho, pas:ref.pas, dri:ref.dri, defn:ref.defn, phy:ref.phy, traits:ref.traits};
+}
+function cleanupSkillMatchDoc(matchId){
+  if(fb) fb.deleteDoc(fb.doc(fb.db,'skillMatches',matchId)).catch(()=>{});
+}
+let skillPickPollTimer = null;
+function openSkillCardPicker(matchId, isHost, opponentInfo){
+  if(skillDuelState) return;
+  const eligible = eligibleSkillCards();
+  if(!eligible.length){ toast('Du besitzt keine einsetzbaren Feldspieler-Karten.'); cleanupSkillMatchDoc(matchId); return; }
+  openModal(`
+    <h2 style="margin-bottom:4px;">Skill-Duell gegen ${opponentInfo.name}</h2>
+    <p class="hint" style="margin-bottom:14px;">Wähle eine Feldspieler-Karte. Werte bestimmen die Stärke, PlayStyles+ schalten Spezialmoves frei — ohne den passenden Trait bleibt ein Move gesperrt.</p>
+    <div id="sk-pick-grid" style="max-height:52vh;overflow:auto;"></div>
+    <div id="sk-pick-status" class="hint" style="margin-top:10px;text-align:center;"></div>
+    <div style="display:flex;justify-content:center;margin-top:12px;">
+      <button class="action-btn secondary" id="sk-pick-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
+    </div>`);
+  const grid = document.getElementById('sk-pick-grid');
+  renderLazyGrid(grid, eligible, ({uid, card})=>{
+    const moves = [...skillMovesForCard(card)].map(m=>SKILL_MOVE_LABEL[m]);
+    const tile = document.createElement('div');
+    tile.className = 'sk-pick-tile';
+    tile.style.cssText = 'cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px;';
+    tile.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;"><b>${card.n}</b><span class="mono">${card.ov} OVR</span></div>
+      <div class="hint" style="font-size:11px;">${cardPositions(card.pos).join(', ')}</div>
+      <div class="hint" style="font-size:11px;color:var(--gold);">${moves.length?moves.join(' · '):'Keine Spezialmoves'}</div>`;
+    tile.addEventListener('click', async ()=>{
+      const statusEl = document.getElementById('sk-pick-status');
+      if(statusEl) statusEl.textContent = 'Warte auf Gegner…';
+      grid.querySelectorAll('.sk-pick-tile').forEach(t=>{ t.style.opacity='.4'; t.style.pointerEvents='none'; });
+      const field = isHost ? 'hostPick' : 'guestPick';
+      try{
+        await fb.updateDoc(fb.doc(fb.db,'skillMatches',matchId), {[field]: fullCardRefForSkillPick(card)});
+      }catch(e){
+        console.warn('skill pick write failed', e);
+        if(statusEl) statusEl.textContent = 'Fehler beim Senden — erneut versuchen.';
+        grid.querySelectorAll('.sk-pick-tile').forEach(t=>{ t.style.opacity='1'; t.style.pointerEvents=''; });
+        return;
+      }
+      waitForBothSkillPicks(matchId, isHost);
+    });
+    return tile;
+  });
+  document.getElementById('sk-pick-cancel').addEventListener('click', ()=>{ clearTimeout(skillPickPollTimer); closeModal(); cleanupSkillMatchDoc(matchId); });
+}
+async function waitForBothSkillPicks(matchId, isHost){
+  clearTimeout(skillPickPollTimer);
+  const startTime = Date.now();
+  const poll = async ()=>{
+    const statusEl = document.getElementById('sk-pick-status');
+    if(Date.now()-startTime > 90000){
+      if(statusEl) statusEl.textContent = 'Zeitüberschreitung — der Gegner hat nicht gewählt.';
+      setTimeout(()=>closeModal(), 1500);
+      cleanupSkillMatchDoc(matchId);
+      return;
+    }
+    try{
+      const snap = await fb.getDoc(fb.doc(fb.db,'skillMatches',matchId));
+      if(!snap.exists()){ closeModal(); return; }
+      const d = snap.data();
+      if(d.hostPick && d.guestPick){
+        closeModal();
+        startSkillMatch(matchId, isHost, d);
+        return;
+      }
+    }catch(e){ console.warn('skill pick poll failed', e); }
+    skillPickPollTimer = setTimeout(poll, 2000);
+  };
+  poll();
+}
+
+// ---------- Physik/Engine-Konstanten (adaptiert aus dem lokalen Hot-Seat-Prototyp) ----------
+const SK_W = 900, SK_H = 540, SK_GOAL_H = 150;
+const SK_GOAL_Y0 = SK_H/2 - SK_GOAL_H/2, SK_GOAL_Y1 = SK_H/2 + SK_GOAL_H/2;
+const SK_WALL = 6, SK_PLAYER_OOB = 34;
+const SK_MATCH_SECONDS = 180, SK_GOAL_LIMIT = 5;
+const SK_TOUCH_MARGIN = 22, SK_BASE_POWER = 480, SK_MOMENTUM_FACTOR = 0.9, SK_CURVE_FACTOR = 0.55;
+const SK_SHOOT_COOLDOWN = 0.28, SK_WHIFF_COOLDOWN = 0.16;
+const SK_POWER_SHOT_CHARGE_TIME = 0.5, SK_POWER_SHOT_POWER_BONUS = 0.7, SK_POWER_SHOT_SPREAD_BONUS = 0.16;
+const SK_DASH_IMPULSE = 300, SK_DASH_COOLDOWN_TIME = 1.6, SK_DASH_BOOST_WINDOW = 0.22, SK_DASH_PEAK_SPEED = 520, SK_DASH_STAMINA_COST = 18;
+const SK_SLIDE_IMPULSE = 380, SK_SLIDE_DURATION = 0.35, SK_SLIDE_COOLDOWN = 2.2, SK_SLIDE_RECOVERY = 0.5, SK_SLIDE_STAMINA_COST = 14;
+const SK_CHIP_AIRBORNE_TIME = 0.55; // solange ignoriert der Ball jede Spieler-Kollision (fliegt über Köpfe hinweg)
+const SK_RUSH_SPEED_MULT = 1.35, SK_RUSH_STAMINA_DRAIN_MULT = 1.9;
+const SK_BLOCK_STAMINA_DRAIN = 10, SK_BLOCK_SPEED_MULT = 0.55;
+const SK_SYNC_HZ = 30, SK_SYNC_INTERVAL_MS = Math.round(1000/SK_SYNC_HZ);
+
+const SK_EMPTY_INPUT = Object.freeze({up:false,down:false,left:false,right:false,shoot:false,dash:false,tech:false,finesse:false,slide:false,chip:false,rush:false,block:false});
+
+function deriveSkillPhysics(card){
+  const n = v => Math.max(0,Math.min(99,v||50))/99;
+  const PAC=card.pac||50, SHO=card.sho||50, PAS=card.pas||50, DRI=card.dri||50, DEF=card.defn||50, PHY=card.phy||50;
+  return {
+    accel: 1600 + n(PAC)*1800, maxSpeed: 250 + n(PAC)*150,
+    shotPowerMult: 0.75 + n(SHO)*0.6, shotSpread: (1-n(SHO))*0.22,
+    curveMult: 0.5 + n(PAS)*1.3, touchBuffer: 0.08 + n(PAS)*0.16,
+    friction: 6 + n(DRI)*7, dribbleRestitution: 0.72 - n(DRI)*0.42,
+    duelPower: 0.7 + n(DEF)*0.9, interceptReach: n(DEF)*12,
+    mass: 2.2 + n(PHY)*2.4, staminaDrain: 0.55 - n(PHY)*0.35, staminaRegen: 0.6 + n(PHY)*0.9
+  };
+}
+function makeSkillPlayer(x,y,color,dark,card){
+  const d = deriveSkillPhysics(card);
+  return {x,y,vx:0,vy:0,r:22,color,dark,cooldown:0, card, moves:skillMovesForCard(card), ...d,
+    stamina:100, touchTimer:0, lastTouchBallX:x, lastTouchBallY:y, lastTouchPlayerX:x, lastTouchPlayerY:y,
+    isCharging:false, chargeTime:0, dashCooldown:0, dashBoostTimer:0, closeControl:false,
+    lastDirX:0, lastDirY:0, toastIcon:null, toastTimer:0, finesseHeld:false, chipHeld:false,
+    sliding:false, slideTimer:0, slideCooldown:0, slideRecovery:0, rushing:false, blocking:false, blockCooldown:0};
+}
+function skShowIcon(p, key){ p.toastIcon = key; p.toastTimer = 0.9; }
+function skReadKeyboardInput(keyState){
+  return {
+    up: !!(keyState['w']||keyState['W']||keyState['ArrowUp']),
+    down: !!(keyState['s']||keyState['S']||keyState['ArrowDown']),
+    left: !!(keyState['a']||keyState['A']||keyState['ArrowLeft']),
+    right: !!(keyState['d']||keyState['D']||keyState['ArrowRight']),
+    shoot: !!keyState[' '], dash: !!(keyState['e']||keyState['E']), tech: !!(keyState['q']||keyState['Q']),
+    finesse: !!keyState['Shift'], slide: !!(keyState['f']||keyState['F']), chip: !!(keyState['c']||keyState['C']),
+    rush: !!(keyState['r']||keyState['R']), block: !!(keyState['b']||keyState['B']),
+  };
+}
+function skInputOr(a,b){
+  return {up:a.up||b.up, down:a.down||b.down, left:a.left||b.left, right:a.right||b.right,
+    shoot:a.shoot||b.shoot, dash:a.dash||b.dash, tech:a.tech||b.tech, finesse:a.finesse||b.finesse,
+    slide:a.slide||b.slide, chip:a.chip||b.chip, rush:a.rush||b.rush, block:a.block||b.block};
+}
+function skTryDash(p){
+  if(!p.moves.has('quickstep') || p.dashCooldown>0 || p.stamina<SK_DASH_STAMINA_COST) return;
+  const len = Math.hypot(p.lastDirX,p.lastDirY);
+  if(len<0.1) return;
+  p.vx += p.lastDirX*SK_DASH_IMPULSE; p.vy += p.lastDirY*SK_DASH_IMPULSE;
+  p.dashCooldown = SK_DASH_COOLDOWN_TIME; p.dashBoostTimer = SK_DASH_BOOST_WINDOW;
+  p.stamina = Math.max(0, p.stamina-SK_DASH_STAMINA_COST);
+  skShowIcon(p,'quickstep');
+}
+function skTrySlide(p, ball){
+  if(!p.moves.has('slide') || p.slideCooldown>0 || p.sliding || p.stamina<SK_SLIDE_STAMINA_COST) return;
+  const dx = ball.x-p.x, dy = ball.y-p.y, dist = Math.hypot(dx,dy)||1;
+  p.vx += (dx/dist)*SK_SLIDE_IMPULSE; p.vy += (dy/dist)*SK_SLIDE_IMPULSE;
+  p.sliding = true; p.slideTimer = SK_SLIDE_DURATION; p.slideCooldown = SK_SLIDE_COOLDOWN;
+  p.stamina = Math.max(0, p.stamina-SK_SLIDE_STAMINA_COST);
+  skShowIcon(p,'slide');
+}
+function skStartCharge(p){ if(p.isCharging) return; p.isCharging = true; p.chargeTime = 0; }
+function skReleaseShot(p, ball){
+  const held = p.isCharging ? p.chargeTime : 0;
+  p.isCharging = false; p.chargeTime = 0;
+  if(p.touchTimer<=0 || p.cooldown>0){ p.cooldown = Math.max(p.cooldown, SK_WHIFF_COOLDOWN); return; }
+  const dx = p.lastTouchBallX-p.lastTouchPlayerX, dy = p.lastTouchBallY-p.lastTouchPlayerY;
+  const chargeFrac = p.moves.has('powershot') ? Math.min(1, held/SK_POWER_SHOT_CHARGE_TIME) : 0;
+  let angle = Math.atan2(dy,dx);
+  angle += (Math.random()*2-1)*(p.shotSpread + chargeFrac*SK_POWER_SHOT_SPREAD_BONUS);
+  const dirx = Math.cos(angle), diry = Math.sin(angle);
+  const perpx = -diry, perpy = dirx;
+  const alongSpeed = p.vx*dirx + p.vy*diry, perpSpeed = p.vx*perpx + p.vy*perpy;
+  const isFinesse = p.moves.has('finesse') && p.finesseHeld;
+  const isChip = p.moves.has('chip') && p.chipHeld;
+  let power = (SK_BASE_POWER + Math.max(0,alongSpeed)*SK_MOMENTUM_FACTOR) * p.shotPowerMult;
+  power *= (1+chargeFrac*SK_POWER_SHOT_POWER_BONUS);
+  let curve = SK_CURVE_FACTOR*p.curveMult;
+  if(isFinesse){ power*=0.88; curve*=1.9; }
+  if(isChip) power*=0.55;
+  ball.vx = dirx*power + perpx*perpSpeed*0.5;
+  ball.vy = diry*power + perpy*perpSpeed*0.5;
+  ball.spin = perpSpeed*curve;
+  if(isChip) ball.airborne = SK_CHIP_AIRBORNE_TIME;
+  p.cooldown = SK_SHOOT_COOLDOWN;
+  if(isChip) skShowIcon(p,'chip');
+  else if(isFinesse) skShowIcon(p,'finesse');
+  else if(chargeFrac>0.85) skShowIcon(p,'powershot');
+}
+function skMovePlayer(p, dt, input){
+  let ax=0, ay=0;
+  if(input.up) ay-=1; if(input.down) ay+=1; if(input.left) ax-=1; if(input.right) ax+=1;
+  const len = Math.hypot(ax,ay);
+  if(len>0){ ax/=len; ay/=len; p.lastDirX=ax; p.lastDirY=ay; }
+  const curSpeed0 = Math.hypot(p.vx,p.vy);
+  if(len>0 && curSpeed0>60){
+    const dot = (p.vx/curSpeed0)*ax + (p.vy/curSpeed0)*ay;
+    if(dot < -0.4){ p.vx*=0.82; p.vy*=0.82; }
+  }
+  const speedNow = Math.hypot(p.vx,p.vy);
+  const sprinting = len>0 && speedNow>p.maxSpeed*0.7;
+  const rushActive = p.rushing && p.stamina>0;
+  const drainMult = rushActive ? SK_RUSH_STAMINA_DRAIN_MULT : 1;
+  if(sprinting || rushActive){ p.stamina = Math.max(0, p.stamina - p.staminaDrain*22*dt*drainMult); }
+  else { p.stamina = Math.min(100, p.stamina + p.staminaRegen*16*dt); }
+  let staminaMult = 0.55 + (p.stamina/100)*0.45;
+  if(p.isCharging){ p.chargeTime = Math.min(SK_POWER_SHOT_CHARGE_TIME*1.4, p.chargeTime+dt); staminaMult*=0.55; }
+  if(p.closeControl) staminaMult *= 0.72;
+  if(p.blocking) staminaMult *= SK_BLOCK_SPEED_MULT;
+  if(p.sliding || p.slideRecovery>0) staminaMult *= 0.5;
+  p.vx += ax*p.accel*dt; p.vy += ay*p.accel*dt;
+  const fr = Math.exp(-p.friction*dt);
+  p.vx *= fr; p.vy *= fr;
+  let capNow = p.maxSpeed*staminaMult;
+  if(rushActive) capNow = Math.max(capNow, p.maxSpeed*SK_RUSH_SPEED_MULT);
+  if(p.dashBoostTimer>0){ capNow = Math.max(capNow, SK_DASH_PEAK_SPEED); p.dashBoostTimer -= dt; }
+  if(p.dashCooldown>0) p.dashCooldown -= dt;
+  if(p.slideCooldown>0) p.slideCooldown -= dt;
+  if(p.sliding){ p.slideTimer -= dt; if(p.slideTimer<=0){ p.sliding=false; p.slideRecovery=SK_SLIDE_RECOVERY; } }
+  else if(p.slideRecovery>0) p.slideRecovery -= dt;
+  if(p.blocking) p.stamina = Math.max(0, p.stamina - SK_BLOCK_STAMINA_DRAIN*dt);
+  const speed = Math.hypot(p.vx,p.vy);
+  if(speed>capNow){ p.vx=p.vx/speed*capNow; p.vy=p.vy/speed*capNow; }
+  p.x += p.vx*dt; p.y += p.vy*dt;
+  p.x = Math.max(p.r+SK_WALL-SK_PLAYER_OOB, Math.min(SK_W-p.r-SK_WALL+SK_PLAYER_OOB, p.x));
+  p.y = Math.max(p.r+SK_WALL-SK_PLAYER_OOB, Math.min(SK_H-p.r-SK_WALL+SK_PLAYER_OOB, p.y));
+  if(p.cooldown>0) p.cooldown -= dt;
+  if(p.toastTimer>0) p.toastTimer -= dt;
+}
+function skApplyInput(p, input, prev, ball){
+  skMovePlayer(p, 1/60, input); // dt wird vom Aufrufer separat für den restlichen Physik-Step verwendet - siehe skStep
+  if(input.shoot && !prev.shoot){ if(p.moves.has('powershot')) skStartCharge(p); else skReleaseShot(p, ball); }
+  if(!input.shoot && prev.shoot && p.isCharging) skReleaseShot(p, ball);
+  if(input.dash && !prev.dash) skTryDash(p);
+  if(input.slide && !prev.slide) skTrySlide(p, ball);
+  p.finesseHeld = input.finesse; p.chipHeld = input.chip;
+  p.closeControl = input.tech && p.moves.has('technical');
+  p.rushing = input.rush && p.moves.has('rush');
+  p.blocking = input.block && p.moves.has('block');
+}
+function skCircleCollide(a,b,restitution,massA,massB){
+  const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy)||0.0001;
+  const overlap = a.r+b.r-dist;
+  if(overlap<=0) return;
+  const nx=dx/dist, ny=dy/dist, totalMass=massA+massB;
+  a.x -= nx*overlap*(massB/totalMass); a.y -= ny*overlap*(massB/totalMass);
+  b.x += nx*overlap*(massA/totalMass); b.y += ny*overlap*(massA/totalMass);
+  const rvx=b.vx-a.vx, rvy=b.vy-a.vy, velAlongNormal=rvx*nx+rvy*ny;
+  if(velAlongNormal>0) return;
+  const j = -(1+restitution)*velAlongNormal/(1/massA+1/massB);
+  const impx=j*nx, impy=j*ny;
+  a.vx -= impx/massA; a.vy -= impy/massA; b.vx += impx/massB; b.vy += impy/massB;
+}
+function skUpdateTouch(p, ball, dt){
+  const dist = Math.hypot(ball.x-p.x, ball.y-p.y);
+  if(dist <= p.r+ball.r+SK_TOUCH_MARGIN+p.interceptReach){
+    p.touchTimer = p.touchBuffer;
+    p.lastTouchBallX=ball.x; p.lastTouchBallY=ball.y; p.lastTouchPlayerX=p.x; p.lastTouchPlayerY=p.y;
+  } else { p.touchTimer -= dt; }
+}
+// Ein voller Physik-Schritt für BEIDE Spieler+Ball - läuft ausschließlich beim Host (siehe
+// skHostLoop); der Gast bekommt das Ergebnis fertig aus RTDB und ruft diese Funktion nie auf.
+function skStep(engine, dt){
+  const p1=engine.p1, p2=engine.p2, ball=engine.ball;
+  skApplyInput(p1, engine.p1Input, engine.p1Prev, ball); engine.p1Prev = engine.p1Input;
+  skApplyInput(p2, engine.p2Input, engine.p2Prev, ball); engine.p2Prev = engine.p2Input;
+  skUpdateTouch(p1, ball, dt); skUpdateTouch(p2, ball, dt);
+  ball.vx *= Math.exp(-1.3*dt); ball.vy *= Math.exp(-1.3*dt);
+  if(Math.abs(ball.spin)>1){
+    const speed = Math.hypot(ball.vx,ball.vy);
+    if(speed>5){
+      const dirx=ball.vx/speed, diry=ball.vy/speed, perpx=-diry, perpy=dirx;
+      ball.vx += perpx*ball.spin*dt*1.6; ball.vy += perpy*ball.spin*dt*1.6;
+    }
+    ball.spin *= Math.exp(-0.9*dt);
+  }
+  ball.x += ball.vx*dt; ball.y += ball.vy*dt;
+  if(ball.airborne>0) ball.airborne -= dt;
+  const duelBoost1 = p1.sliding?1.8:1, duelBoost2 = p2.sliding?1.8:1;
+  skCircleCollide(p1, p2, 0.3, p1.mass*p1.duelPower*duelBoost1, p2.mass*p2.duelPower*duelBoost2);
+  if(ball.airborne<=0){
+    const rest1 = (p1.sliding?0.1:p1.dribbleRestitution*(p1.closeControl?0.35:1)) * (p1.blocking?0.15:1);
+    const rest2 = (p2.sliding?0.1:p2.dribbleRestitution*(p2.closeControl?0.35:1)) * (p2.blocking?0.15:1);
+    skCircleCollide(p1, ball, rest1, p1.mass*(p1.blocking?1.6:1), 1);
+    skCircleCollide(p2, ball, rest2, p2.mass*(p2.blocking?1.6:1), 1);
+  }
+  if(ball.y-ball.r<SK_WALL){ ball.y=SK_WALL+ball.r; ball.vy*=-0.7; }
+  if(ball.y+ball.r>SK_H-SK_WALL){ ball.y=SK_H-SK_WALL-ball.r; ball.vy*=-0.7; }
+  const inGoalMouth = ball.y>SK_GOAL_Y0+ball.r*0.3 && ball.y<SK_GOAL_Y1-ball.r*0.3;
+  if(ball.x-ball.r<SK_WALL){
+    if(inGoalMouth){ engine.score[1]++; skResetPositions(engine); engine.msg={text:'TOR!', side:2, ts:Date.now()}; }
+    else { ball.x=SK_WALL+ball.r; ball.vx*=-0.7; }
+  }
+  if(ball.x+ball.r>SK_W-SK_WALL){
+    if(inGoalMouth){ engine.score[0]++; skResetPositions(engine); engine.msg={text:'TOR!', side:1, ts:Date.now()}; }
+    else { ball.x=SK_W-SK_WALL-ball.r; ball.vx*=-0.88; }
+  }
+}
+function skResetPositions(engine){
+  engine.p1.x=SK_W*0.22; engine.p1.y=SK_H/2; engine.p1.vx=0; engine.p1.vy=0;
+  engine.p2.x=SK_W*0.78; engine.p2.y=SK_H/2; engine.p2.vx=0; engine.p2.vy=0;
+  engine.ball.x=SK_W/2; engine.ball.y=SK_H/2; engine.ball.vx=0; engine.ball.vy=0; engine.ball.spin=0; engine.ball.airborne=0;
+}
+function skDrawField(ctx){
+  ctx.fillStyle='#123'; ctx.fillRect(0,0,SK_W,SK_H);
+  const stripes=10;
+  for(let i=0;i<stripes;i++){ ctx.fillStyle = i%2===0?'#1f6b3a':'#1a5e32'; ctx.fillRect(0,i*(SK_H/stripes),SK_W,SK_H/stripes+1); }
+  ctx.strokeStyle='rgba(255,255,255,0.78)'; ctx.lineWidth=3;
+  ctx.strokeRect(SK_WALL,SK_WALL,SK_W-SK_WALL*2,SK_H-SK_WALL*2);
+  ctx.beginPath(); ctx.moveTo(SK_W/2,SK_WALL); ctx.lineTo(SK_W/2,SK_H-SK_WALL); ctx.stroke();
+  ctx.beginPath(); ctx.arc(SK_W/2,SK_H/2,70,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(SK_W/2,SK_H/2,3,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,0.78)'; ctx.fill();
+  ctx.strokeRect(SK_WALL,SK_H/2-110,120,220); ctx.strokeRect(SK_W-SK_WALL-120,SK_H/2-110,120,220);
+  ctx.fillStyle='rgba(255,255,255,0.78)';
+  ctx.fillRect(SK_WALL-4,SK_GOAL_Y0,4,SK_GOAL_H); ctx.fillRect(SK_W-SK_WALL,SK_GOAL_Y0,4,SK_GOAL_H);
+  ctx.strokeStyle='rgba(255,255,255,0.35)';
+  ctx.strokeRect(SK_WALL-4,SK_GOAL_Y0,24,SK_GOAL_H); ctx.strokeRect(SK_W-SK_WALL-20,SK_GOAL_Y0,24,SK_GOAL_H);
+}
+function skDrawCircle(ctx,x,y,r,color,ring){
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
+  if(ring){ ctx.lineWidth=3; ctx.strokeStyle=ring; ctx.stroke(); }
+}
+function skDrawPlayer(ctx, p){
+  ctx.save(); ctx.shadowColor=p.color; ctx.shadowBlur=p.cooldown>0?0:14;
+  skDrawCircle(ctx,p.x,p.y,p.r,p.color,p.dark); ctx.restore();
+  if(p.closeControl){ ctx.save(); ctx.setLineDash([4,4]); ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r+9,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+  if(p.blocking){ ctx.save(); ctx.lineWidth=3; ctx.strokeStyle='rgba(130,230,255,0.85)';
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r+11,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+  if(p.sliding){ ctx.save(); ctx.lineWidth=3; ctx.strokeStyle='rgba(255,180,80,0.85)';
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r+11,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+  if(p.cooldown>0){ ctx.beginPath(); ctx.arc(p.x,p.y,p.r+6,-Math.PI/2,-Math.PI/2+(1-p.cooldown/SK_SHOOT_COOLDOWN)*Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2; ctx.stroke(); }
+  if(p.isCharging){ const frac=Math.min(1,p.chargeTime/SK_POWER_SHOT_CHARGE_TIME);
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r+13,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
+    ctx.strokeStyle = frac>=1?'#ff5a4d':'rgba(255,255,255,0.9)'; ctx.lineWidth=3; ctx.stroke(); }
+  if(p.dashCooldown>0){ ctx.beginPath(); ctx.arc(p.x,p.y,p.r+17,-Math.PI/2,-Math.PI/2+(1-p.dashCooldown/SK_DASH_COOLDOWN_TIME)*Math.PI*2);
+    ctx.strokeStyle='rgba(130,200,255,0.55)'; ctx.lineWidth=2; ctx.stroke(); }
+  if(p.toastTimer>0 && p.toastIcon){
+    const img = skMoveIconImgs()[p.toastIcon];
+    if(img && img.complete && img.naturalWidth>0){
+      const age = 0.9-p.toastTimer, scale = age<0.12 ? 1+(0.12-age)/0.12*0.35 : 1, size=46*scale;
+      ctx.save(); ctx.globalAlpha=Math.min(1,p.toastTimer/0.9);
+      ctx.drawImage(img, p.x-size/2, p.y-p.r-30-size/2, size, size); ctx.restore();
+    }
+  }
+}
+function skDrawBall(ctx, ball){
+  ctx.save(); ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur = ball.airborne>0?18:8;
+  skDrawCircle(ctx, ball.x, ball.y, ball.airborne>0?ball.r*1.3:ball.r, '#f3efe4', 'rgba(30,20,10,0.3)'); ctx.restore();
+}
+function skRender(ctx, engine){
+  skDrawField(ctx); skDrawPlayer(ctx, engine.p1); skDrawPlayer(ctx, engine.p2); skDrawBall(ctx, engine.ball);
+  const stam1 = document.getElementById('sk-stam-me'), stam2 = document.getElementById('sk-stam-opp');
+  if(stam1) stam1.style.width = engine.p1.stamina+'%';
+  if(stam2) stam2.style.width = engine.p2.stamina+'%';
+  const s1El = document.getElementById('sk-s1'), s2El = document.getElementById('sk-s2');
+  if(s1El) s1El.textContent = engine.score[0];
+  if(s2El) s2El.textContent = engine.score[1];
+  const timerEl = document.getElementById('sk-timer');
+  if(timerEl){ const t=Math.max(0,Math.ceil(engine.timeLeft)); timerEl.textContent = Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); }
+  const msgEl = document.getElementById('sk-msg');
+  if(msgEl && engine.msg){
+    const age = Date.now()-engine.msg.ts;
+    if(age<1100){ msgEl.textContent = engine.msg.text+(engine.msg.side===1?' — links':' — rechts'); msgEl.style.opacity='1'; }
+    else msgEl.style.opacity='0';
+  }
+}
+
+// ---------- Lokale Eingaben (Tastatur + Touch + Gamepad, siehe skComposeLocalInput) ----------
+const skKeyState = {};
+let skTouchInput = null; // von den Touch-Controls gesetzt (siehe skSetupTouchControls), sonst null
+function skReadGamepadInput(){
+  if(skillDuelState==null || !navigator.getGamepads) return SK_EMPTY_INPUT;
+  const pads = navigator.getGamepads();
+  const gp = pads && pads[skillDuelState.gamepadIndex];
+  if(!gp) return SK_EMPTY_INPUT;
+  const ax0 = gp.axes[0]||0, ax1 = gp.axes[1]||0, dead=0.35;
+  const btn = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  return {
+    up: ax1<-dead, down: ax1>dead, left: ax0<-dead, right: ax0>dead,
+    shoot: btn(0), dash: btn(1), slide: btn(2), block: btn(3),
+    tech: btn(4), finesse: btn(5), chip: btn(6), rush: btn(7),
+  };
+}
+function skComposeLocalInput(){
+  const kb = skReadKeyboardInput(skKeyState);
+  const withTouch = skTouchInput ? skInputOr(kb, skTouchInput) : kb;
+  const pad = skReadGamepadInput();
+  return skInputOr(withTouch, pad);
+}
+function skSetupKeyboard(){
+  const down = e=>{
+    if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) && skillDuelState) e.preventDefault();
+    skKeyState[e.key] = true;
+  };
+  const up = e=>{ skKeyState[e.key] = false; };
+  window.addEventListener('keydown', down);
+  window.addEventListener('keyup', up);
+  return ()=>{ window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+}
+function skSetupGamepad(){
+  const onConnect = e=>{ if(skillDuelState && skillDuelState.gamepadIndex==null) skillDuelState.gamepadIndex = e.gamepad.index; };
+  const onDisconnect = e=>{ if(skillDuelState && skillDuelState.gamepadIndex===e.gamepad.index) skillDuelState.gamepadIndex = null; };
+  window.addEventListener('gamepadconnected', onConnect);
+  window.addEventListener('gamepaddisconnected', onDisconnect);
+  const already = navigator.getGamepads ? navigator.getGamepads() : [];
+  for(const gp of already){ if(gp){ skillDuelState.gamepadIndex = gp.index; break; } }
+  return ()=>{ window.removeEventListener('gamepadconnected', onConnect); window.removeEventListener('gamepaddisconnected', onDisconnect); };
+}
+// Touch-Steuerung: virtueller Stick (links) + Aktions-Cluster (rechts), das dynamisch nur die Buttons
+// zeigt, die die eigene gewählte Karte tatsächlich nutzen kann (SHOOT immer, alles andere nur mit
+// passendem PlayStyle+ - exakt dieselbe Gating-Logik wie Tastatur/Gamepad, nur visuell gespiegelt).
+function isSkillTouchDevice(){
+  return ('ontouchstart' in window) || (navigator.maxTouchPoints||0)>0;
+}
+function skSetupTouchControls(overlay, myMoves){
+  if(!isSkillTouchDevice()) return ()=>{};
+  skTouchInput = {...SK_EMPTY_INPUT};
+  const wrap = document.createElement('div');
+  wrap.className = 'sk-touch active';
+  wrap.id = 'sk-touch';
+  wrap.innerHTML = `
+    <div class="sk-stick-zone" id="sk-stick"><div class="sk-stick-nub" id="sk-stick-nub"></div></div>
+    <div class="sk-action-cluster" id="sk-actions"></div>`;
+  overlay.appendChild(wrap);
+  const stick = wrap.querySelector('#sk-stick'), nub = wrap.querySelector('#sk-stick-nub');
+  let stickTouchId = null;
+  const stickHandle = (clientX, clientY)=>{
+    const rect = stick.getBoundingClientRect();
+    const cx = rect.left+rect.width/2, cy = rect.top+rect.height/2;
+    let dx = clientX-cx, dy = clientY-cy;
+    const dist = Math.hypot(dx,dy), max = rect.width/2;
+    if(dist>max){ dx = dx/dist*max; dy = dy/dist*max; }
+    nub.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    const nx = dx/max, ny = dy/max, dead=0.28;
+    skTouchInput.left = nx<-dead; skTouchInput.right = nx>dead; skTouchInput.up = ny<-dead; skTouchInput.down = ny>dead;
+    stick.classList.add('active');
+  };
+  const stickReset = ()=>{
+    nub.style.transform = 'translate(-50%,-50%)'; stick.classList.remove('active');
+    skTouchInput.left=skTouchInput.right=skTouchInput.up=skTouchInput.down=false; stickTouchId=null;
+  };
+  stick.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.changedTouches[0]; stickTouchId=t.identifier; stickHandle(t.clientX,t.clientY); }, {passive:false});
+  stick.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    for(const t of e.changedTouches){ if(t.identifier===stickTouchId) stickHandle(t.clientX,t.clientY); }
+  }, {passive:false});
+  const stickEnd = e=>{ for(const t of e.changedTouches){ if(t.identifier===stickTouchId) stickReset(); } };
+  stick.addEventListener('touchend', stickEnd); stick.addEventListener('touchcancel', stickEnd);
+
+  const actionsEl = wrap.querySelector('#sk-actions');
+  // {key, label, hold} - hold=true bleibt gedrückt solange berührt (z.B. Technik), sonst nur ein Tap-Impuls
+  const buttonDefs = [{key:'shoot', label:'SCHUSS', hold:true, always:true}];
+  if(myMoves.has('quickstep')) buttonDefs.push({key:'dash', label:'DASH', hold:false});
+  if(myMoves.has('slide')) buttonDefs.push({key:'slide', label:'TACKLE', hold:false});
+  if(myMoves.has('technical')) buttonDefs.push({key:'tech', label:'TECH', hold:true});
+  if(myMoves.has('finesse')) buttonDefs.push({key:'finesse', label:'FIN.', hold:true});
+  if(myMoves.has('chip')) buttonDefs.push({key:'chip', label:'LUPFER', hold:true});
+  if(myMoves.has('rush')) buttonDefs.push({key:'rush', label:'RUSH', hold:true});
+  if(myMoves.has('block')) buttonDefs.push({key:'block', label:'BLOCK', hold:true});
+  buttonDefs.forEach(def=>{
+    const btn = document.createElement('div');
+    btn.className = 'sk-action-btn'; btn.textContent = def.label;
+    const press = e=>{ e.preventDefault(); skTouchInput[def.key]=true; btn.classList.add('active'); };
+    const release = e=>{ e.preventDefault(); skTouchInput[def.key]=false; btn.classList.remove('active'); };
+    btn.addEventListener('touchstart', press, {passive:false});
+    btn.addEventListener('touchend', release);
+    btn.addEventListener('touchcancel', release);
+    actionsEl.appendChild(btn);
+  });
+  return ()=>{ skTouchInput = null; wrap.remove(); };
+}
+
+function skEndMatch(engine, matchId, isHost, meLabel, oppLabel){
+  if(engine.ended) return;
+  engine.ended = true;
+  const meScore = engine.score[isHost?0:1], oppScore = engine.score[isHost?1:0];
+  const resultText = meScore>oppScore ? 'Gewonnen!' : meScore<oppScore ? 'Verloren.' : 'Unentschieden.';
+  if(isHost && fb && fb.rtdb){
+    fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), skSerializeState(engine, true)).catch(()=>{});
+  }
+  skTeardownMatch();
+  openModal(`
+    <div class="sk-result">
+      <h2 style="margin-bottom:6px;">${resultText}</h2>
+      <p class="hint" style="margin-bottom:4px;">${meLabel} ${meScore} : ${oppScore} ${oppLabel}</p>
+      <button class="action-btn" id="sk-result-close" style="width:auto;padding:9px 24px;margin-top:14px;">Schließen</button>
+    </div>`);
+  document.getElementById('sk-result-close').addEventListener('click', closeModal);
+  if(isHost) cleanupSkillMatchDoc(matchId);
+}
+function skTeardownMatch(){
+  if(!skillDuelState) return;
+  const st = skillDuelState;
+  skillDuelState = null;
+  if(st.rafId) cancelAnimationFrame(st.rafId);
+  if(st.syncTimer) clearInterval(st.syncTimer);
+  if(st.removeKeyboard) st.removeKeyboard();
+  if(st.removeGamepad) st.removeGamepad();
+  if(st.removeTouch) st.removeTouch();
+  if(st.rtdbInputRef && fb && fb.rtdb){ try{ fb.rtdb.off(st.rtdbInputRef); }catch(_){} }
+  if(st.rtdbStateRef && fb && fb.rtdb){ try{ fb.rtdb.off(st.rtdbStateRef); }catch(_){} }
+  if(st.isHost && fb && fb.rtdb){ fb.rtdb.remove(fb.rtdb.ref(fb.rtdb.db, `skillLive/${st.matchId}`)).catch(()=>{}); }
+  else if(fb && fb.rtdb){ fb.rtdb.remove(fb.rtdb.ref(fb.rtdb.db, `skillLive/${st.matchId}/input`)).catch(()=>{}); }
+  if(st.overlay) st.overlay.remove();
+  Object.keys(skKeyState).forEach(k=>delete skKeyState[k]);
+}
+function skSerializeState(engine, ended){
+  const dump = p => ({x:p.x,y:p.y,stamina:p.stamina,cooldown:p.cooldown,isCharging:p.isCharging,chargeTime:p.chargeTime,
+    closeControl:p.closeControl,blocking:p.blocking,sliding:p.sliding,dashCooldown:p.dashCooldown,
+    toastIcon:p.toastIcon,toastTimer:p.toastTimer});
+  return {p1:dump(engine.p1), p2:dump(engine.p2), ball:{x:engine.ball.x,y:engine.ball.y,airborne:engine.ball.airborne},
+    score:engine.score, timeLeft:engine.timeLeft, msg:engine.msg||null, ended:!!ended};
+}
+function skApplyRemoteState(engine, state){
+  Object.assign(engine.p1, state.p1); Object.assign(engine.p2, state.p2);
+  Object.assign(engine.ball, state.ball);
+  engine.score = state.score; engine.timeLeft = state.timeLeft; engine.msg = state.msg;
+}
+
+async function startSkillMatch(matchId, isHost, matchDoc){
+  if(skillDuelState) return;
+  const hostCard = resolveSkillCardRef(matchDoc.hostPick), guestCard = resolveSkillCardRef(matchDoc.guestPick);
+  if(!hostCard || !guestCard){ toast('Karte konnte nicht geladen werden.'); cleanupSkillMatchDoc(matchId); return; }
+  const hostName = matchDoc.hostName, guestName = matchDoc.guestName;
+  const meLabel = isHost ? hostName : guestName, oppLabel = isHost ? guestName : hostName;
+  const overlay = document.createElement('div');
+  overlay.className = 'sk-overlay'; overlay.id = 'sk-overlay';
+  overlay.innerHTML = `
+    <button class="sk-close" id="sk-close-btn">Verlassen</button>
+    <div class="sk-hud">
+      <div class="sk-team"><span class="sk-dot" style="background:#f2a93b;box-shadow:0 0 8px #f2a93b;"></span>${hostName}<span class="sk-stamina"><span class="sk-stamina-fill" id="sk-stam-me" style="background:#f2a93b;"></span></span></div>
+      <div style="text-align:center;"><div class="sk-score"><span id="sk-s1">0</span><span class="sk-sep">:</span><span id="sk-s2">0</span></div><div class="sk-timer" id="sk-timer">3:00</div></div>
+      <div class="sk-team"><span class="sk-stamina"><span class="sk-stamina-fill" id="sk-stam-opp" style="background:#6f7bf0;"></span></span>${guestName}<span class="sk-dot" style="background:#6f7bf0;box-shadow:0 0 8px #6f7bf0;"></span></div>
+    </div>
+    <div class="sk-field-holder"><canvas id="sk-canvas" width="${SK_W}" height="${SK_H}"></canvas><div class="sk-msg" id="sk-msg"></div></div>
+    <div class="sk-controls-hint">WASD/Pfeile bewegen · Leertaste schießen · nur mit passendem PlayStyle+: E Dash · Q Technik · Shift Finesse · F Grätsche · C Lupfer · R Raserei · B Block</div>`;
+  document.body.appendChild(overlay);
+  const canvas = document.getElementById('sk-canvas'), ctx = canvas.getContext('2d');
+  const engine = {
+    p1: makeSkillPlayer(SK_W*0.22, SK_H/2, '#f2a93b', '#b9781f', hostCard),
+    p2: makeSkillPlayer(SK_W*0.78, SK_H/2, '#6f7bf0', '#4750b3', guestCard),
+    ball: {x:SK_W/2, y:SK_H/2, vx:0, vy:0, r:13, mass:0.35, spin:0, airborne:0},
+    score:[0,0], timeLeft: SK_MATCH_SECONDS, ended:false, msg:null,
+    p1Input: {...SK_EMPTY_INPUT}, p2Input: {...SK_EMPTY_INPUT}, p1Prev: {...SK_EMPTY_INPUT}, p2Prev: {...SK_EMPTY_INPUT},
+  };
+  const myMoves = isHost ? engine.p1.moves : engine.p2.moves;
+  skillDuelState = {matchId, isHost, engine, overlay, gamepadIndex:null};
+  skillDuelState.removeKeyboard = skSetupKeyboard();
+  skillDuelState.removeGamepad = skSetupGamepad();
+  skillDuelState.removeTouch = skSetupTouchControls(overlay, myMoves);
+  document.getElementById('sk-close-btn').addEventListener('click', ()=>{
+    if(isHost && fb && fb.rtdb) fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), {...skSerializeState(engine,true)}).catch(()=>{});
+    skTeardownMatch();
+  });
+
+  if(isHost){
+    const stateRef = fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`);
+    const inputRef = fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/input`);
+    skillDuelState.rtdbInputRef = inputRef;
+    let guestLeft = false;
+    fb.rtdb.onValue(inputRef, snap=>{
+      const val = snap.val();
+      if(!val) return;
+      if(val.left) guestLeft = true;
+      engine.p2Input = skInputOr(SK_EMPTY_INPUT, val);
+    });
+    let last = performance.now();
+    const loop = now=>{
+      if(!skillDuelState) return;
+      const dt = Math.min(0.033, (now-last)/1000); last = now;
+      engine.p1Input = skComposeLocalInput();
+      skStep(engine, dt);
+      engine.timeLeft -= dt;
+      skRender(ctx, engine);
+      if(guestLeft || engine.timeLeft<=0 || engine.score[0]>=SK_GOAL_LIMIT || engine.score[1]>=SK_GOAL_LIMIT){
+        skEndMatch(engine, matchId, true, meLabel, oppLabel);
+        return;
+      }
+      skillDuelState.rafId = requestAnimationFrame(loop);
+    };
+    skillDuelState.rafId = requestAnimationFrame(loop);
+    skillDuelState.syncTimer = setInterval(()=>{
+      if(!skillDuelState) return;
+      fb.rtdb.set(stateRef, skSerializeState(engine, false)).catch(()=>{});
+    }, SK_SYNC_INTERVAL_MS);
+  } else {
+    const stateRef = fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`);
+    const inputRef = fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/input`);
+    skillDuelState.rtdbStateRef = stateRef;
+    let remoteEnded = false;
+    fb.rtdb.onValue(stateRef, snap=>{
+      const val = snap.val();
+      if(!val) return;
+      skApplyRemoteState(engine, val);
+      if(val.ended) remoteEnded = true;
+    });
+    const loop = ()=>{
+      if(!skillDuelState) return;
+      skRender(ctx, engine);
+      if(remoteEnded){ skEndMatch(engine, matchId, false, meLabel, oppLabel); return; }
+      skillDuelState.rafId = requestAnimationFrame(loop);
+    };
+    skillDuelState.rafId = requestAnimationFrame(loop);
+    skillDuelState.syncTimer = setInterval(()=>{
+      if(!skillDuelState) return;
+      const input = skComposeLocalInput();
+      fb.rtdb.set(inputRef, input).catch(()=>{});
+    }, SK_SYNC_INTERVAL_MS);
+  }
 }
 
 // ===== TOURNAMENT / CUP MODE (match-based, lives in the Herausforderungen tab) =====
