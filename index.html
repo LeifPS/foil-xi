@@ -24891,7 +24891,20 @@ const SK_BOT_CARD = {id:-1, n:'AFK-Bot', pos:'CB', ov:65, pac:55, sho:55, pas:55
 const SK_EMPTY_INPUT = Object.freeze({up:false,down:false,left:false,right:false,shoot:false,dash:false,tech:false,finesse:false,slide:false,chip:false,rush:false,block:false});
 
 function deriveSkillPhysics(card){
-  const n = v => Math.max(0,Math.min(99,v||50))/99;
+  // 100+-Karten haben in praktisch jedem Substat einen Wert nahe 99 - und weil dasselbe Substat hier in
+  // rund zehn verschiedene Mechaniken gleichzeitig einfließt (Tempo UND Beschleunigung UND Schusskraft
+  // UND Kurve UND Ballkontrolle UND Zweikampfstärke UND ...), addiert sich der Vorteil einer Elite-Karte
+  // extrem schnell zu einem uneinholbaren Gesamtvorteil ("100+ Karten sind viel zu OPP"). Deshalb ab 85
+  // ein weicher Deckel: der Anteil eines Substats oberhalb von 85 zählt nur noch zu 35% - ein 99er-Stat
+  // wirkt dadurch effektiv wie ein ~90er, spürbar besser als eine 85er-Karte, aber nicht mehr grotesk
+  // überlegen. Unterhalb von 85 bleibt die Skalierung unverändert linear, dort entscheidet Skill genauso
+  // stark mit wie bisher.
+  const SK_STAT_SOFT_CAP = 85, SK_STAT_SOFT_CAP_RATE = 0.35;
+  const n = raw => {
+    const v = Math.max(1, Math.min(99, raw||50));
+    const capped = v<=SK_STAT_SOFT_CAP ? v : SK_STAT_SOFT_CAP + (v-SK_STAT_SOFT_CAP)*SK_STAT_SOFT_CAP_RATE;
+    return capped/99;
+  };
   const PAC=card.pac||50, SHO=card.sho||50, PAS=card.pas||50, DRI=card.dri||50, DEF=card.defn||50, PHY=card.phy||50;
   return {
     accel: 1600 + n(PAC)*1800, maxSpeed: 250 + n(PAC)*150,
