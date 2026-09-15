@@ -9791,12 +9791,15 @@ const FIREBASE_CONFIG = {
   storageBucket: "chess-rng.firebasestorage.app",
   messagingSenderId: "1071354935766",
   appId: "1:1071354935766:web:0e5c5a6a2f0f0b95be4c77",
-  // Realtime Database (Skill-Modus live sync) - MUSS in der Firebase Console unter "Build > Realtime
-  // Database > Datenbank erstellen" angelegt werden, danach hier die dort angezeigte databaseURL
-  // eintragen (Format i.d.R. https://chess-rng-default-rtdb.<region>.firebasedatabase.app). Solange das
-  // leer bleibt, bootet initFirebase() ganz normal weiter (Firestore/Auth unbeeinträchtigt) - nur
-  // fb.rtdb bleibt null und das Skill-Modus zeigt einen "noch nicht verfügbar"-Hinweis statt zu starten.
-  databaseURL: "",
+  // Realtime Database (Skill-Modus live sync) - am 2026-09-15 in der Firebase Console angelegt. Wenn
+  // diese Zeile jemals wieder leer sein soll (Instanz gelöscht o.ä.), bootet initFirebase() trotzdem
+  // ganz normal weiter (Firestore/Auth unbeeinträchtigt) - nur fb.rtdb bleibt dann null und der
+  // Skill-Modus zeigt einen "noch nicht verfügbar"-Hinweis statt zu starten. WICHTIG: die Security
+  // Rules der Instanz selbst müssen zusätzlich noch auf "authentifizierte Nutzer dürfen unter
+  // /skillLive lesen+schreiben" gesetzt werden (siehe Firebase Console > Realtime Database > Regeln) -
+  // eine frisch angelegte Instanz im "gesperrten Modus" lehnt sonst jeden fb.rtdb-Aufruf sang- und
+  // klanglos mit PERMISSION_DENIED ab, was sich als "Skill-Duell hängt bei Warte auf Gegner" zeigen würde.
+  databaseURL: "https://chess-rng-default-rtdb.europe-west1.firebasedatabase.app",
 };
 const FB_VERSION = '10.13.2';
 let fb = null; // set to {db, collection, doc, setDoc, getDoc, getDocs, query, orderBy, limit} when available
