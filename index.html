@@ -2874,6 +2874,23 @@ body.is-offline #offline-overlay{display:flex;}
 .sk-action-btn{border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;}
 .sk-action-btn.active,.sk-stick-zone.active{background:rgba(255,255,255,.32);}
 @media (min-width:901px){ .sk-touch{display:none !important;} }
+/* Skill-Duell ist als Querformat-Spiel gebaut (900x540-Canvas) - auf einem Touchscreen im Hochformat
+   ist das Spielfeld winzig gequetscht und die Touch-Steuerung unbrauchbar. skTryLockLandscape()
+   versucht das Gerät aktiv per Screen-Orientation-API zu drehen (klappt v.a. auf Android/Chrome), aber
+   iOS Safari unterstützt das grundsätzlich nicht - dieser Hinweis ist deshalb der zuverlässige
+   Fallback, der auf JEDEM Touchscreen im Hochformat greift, unabhängig davon, ob der Lock geklappt hat.
+   Volldeckend + höherer z-index als alles andere im Overlay (inkl. Touch-Buttons), damit im Hochformat
+   nichts darunter versehentlich bedienbar bleibt. */
+.sk-rotate-hint{display:none;position:fixed;inset:0;z-index:260;background:#05070a;color:#eee6d8;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;}
+.sk-rotate-hint .sk-rotate-icon{font-size:46px;display:inline-block;animation:sk-rotate-spin 1.8s ease-in-out infinite;}
+@keyframes sk-rotate-spin{0%,100%{transform:rotate(0deg);}50%{transform:rotate(90deg);}}
+@media (orientation:portrait) and (pointer:coarse){ .sk-overlay .sk-rotate-hint{display:flex;} }
+/* Kartenauswahl fürs Skill-Duell (siehe skCardPickTile) - echte Kartenvorschau statt reiner Textliste */
+.sk-pick-grid{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;padding:6px 0;}
+.sk-pick-tile{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;width:110px;transition:transform .15s;}
+.sk-pick-tile:active{transform:scale(.96);}
+.sk-pick-tile.picked{opacity:.4;pointer-events:none;}
+.sk-pick-moves{font-size:10px;text-align:center;color:var(--gold);line-height:1.3;}
 
 /* ---- login / entry gate ---- */
 .gate-overlay{background:radial-gradient(circle at 50% 20%,#132018 0%,#080a0f 62%);}
@@ -24748,6 +24765,20 @@ function cleanupSkillMatchDoc(matchId){
   if(fb) fb.deleteDoc(fb.doc(fb.db,'skillMatches',matchId)).catch(()=>{});
 }
 let skillPickPollTimer = null;
+// Echte Kartenvorschau (cardEl, dieselbe Darstellung wie überall sonst im Spiel) statt einer reinen
+// Textzeile - darunter die tatsächlich freigeschalteten Moves. Von beiden Picker-Funktionen geteilt.
+function skCardPickTile(card, onClick){
+  const tile = document.createElement('div');
+  tile.className = 'sk-pick-tile';
+  tile.appendChild(cardEl(card, 'mini'));
+  const moves = [...skillMovesForCard(card)].map(m=>SKILL_MOVE_LABEL[m]);
+  const caption = document.createElement('div');
+  caption.className = 'sk-pick-moves';
+  caption.textContent = moves.length ? moves.join(' · ') : 'Keine Spezialmoves';
+  tile.appendChild(caption);
+  tile.addEventListener('click', onClick);
+  return tile;
+}
 function openSkillCardPicker(matchId, isHost, opponentInfo){
   if(skillDuelState) return;
   const eligible = eligibleSkillCards();
@@ -24755,37 +24786,27 @@ function openSkillCardPicker(matchId, isHost, opponentInfo){
   openModal(`
     <h2 style="margin-bottom:4px;">Skill-Duell gegen ${opponentInfo.name}</h2>
     <p class="hint" style="margin-bottom:14px;">Wähle eine Feldspieler-Karte. Werte bestimmen die Stärke, PlayStyles+ schalten Spezialmoves frei — ohne den passenden Trait bleibt ein Move gesperrt.</p>
-    <div id="sk-pick-grid" style="max-height:52vh;overflow:auto;"></div>
+    <div id="sk-pick-grid" class="sk-pick-grid" style="max-height:56vh;overflow:auto;"></div>
     <div id="sk-pick-status" class="hint" style="margin-top:10px;text-align:center;"></div>
     <div style="display:flex;justify-content:center;margin-top:12px;">
       <button class="action-btn secondary" id="sk-pick-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
     </div>`);
   const grid = document.getElementById('sk-pick-grid');
-  renderLazyGrid(grid, eligible, ({uid, card})=>{
-    const moves = [...skillMovesForCard(card)].map(m=>SKILL_MOVE_LABEL[m]);
-    const tile = document.createElement('div');
-    tile.className = 'sk-pick-tile';
-    tile.style.cssText = 'cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px;';
-    tile.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;"><b>${card.n}</b><span class="mono">${card.ov} OVR</span></div>
-      <div class="hint" style="font-size:11px;">${cardPositions(card.pos).join(', ')}</div>
-      <div class="hint" style="font-size:11px;color:var(--gold);">${moves.length?moves.join(' · '):'Keine Spezialmoves'}</div>`;
-    tile.addEventListener('click', async ()=>{
-      const statusEl = document.getElementById('sk-pick-status');
-      if(statusEl) statusEl.textContent = 'Warte auf Gegner…';
-      grid.querySelectorAll('.sk-pick-tile').forEach(t=>{ t.style.opacity='.4'; t.style.pointerEvents='none'; });
-      const field = isHost ? 'hostPick' : 'guestPick';
-      try{
-        await fb.updateDoc(fb.doc(fb.db,'skillMatches',matchId), {[field]: fullCardRefForSkillPick(card)});
-      }catch(e){
-        console.warn('skill pick write failed', e);
-        if(statusEl) statusEl.textContent = 'Fehler beim Senden — erneut versuchen.';
-        grid.querySelectorAll('.sk-pick-tile').forEach(t=>{ t.style.opacity='1'; t.style.pointerEvents=''; });
-        return;
-      }
-      waitForBothSkillPicks(matchId, isHost);
-    });
-    return tile;
-  });
+  renderLazyGrid(grid, eligible, ({uid, card})=>skCardPickTile(card, async ()=>{
+    const statusEl = document.getElementById('sk-pick-status');
+    if(statusEl) statusEl.textContent = 'Warte auf Gegner…';
+    grid.querySelectorAll('.sk-pick-tile').forEach(t=>t.classList.add('picked'));
+    const field = isHost ? 'hostPick' : 'guestPick';
+    try{
+      await fb.updateDoc(fb.doc(fb.db,'skillMatches',matchId), {[field]: fullCardRefForSkillPick(card)});
+    }catch(e){
+      console.warn('skill pick write failed', e);
+      if(statusEl) statusEl.textContent = 'Fehler beim Senden — erneut versuchen.';
+      grid.querySelectorAll('.sk-pick-tile').forEach(t=>t.classList.remove('picked'));
+      return;
+    }
+    waitForBothSkillPicks(matchId, isHost);
+  }));
   document.getElementById('sk-pick-cancel').addEventListener('click', ()=>{ clearTimeout(skillPickPollTimer); closeModal(); cleanupSkillMatchDoc(matchId); });
 }
 async function waitForBothSkillPicks(matchId, isHost){
@@ -24823,25 +24844,15 @@ function openSkillBotCardPicker(){
   openModal(`
     <h2 style="margin-bottom:4px;">Gegen AFK-Bot testen</h2>
     <p class="hint" style="margin-bottom:14px;">Nur zum Ausprobieren der eigenen Steuerung an einem Gerät — der Bot bewegt sich nie und greift nie ein.</p>
-    <div id="sk-pick-grid" style="max-height:52vh;overflow:auto;"></div>
+    <div id="sk-pick-grid" class="sk-pick-grid" style="max-height:56vh;overflow:auto;"></div>
     <div style="display:flex;justify-content:center;margin-top:12px;">
       <button class="action-btn secondary" id="sk-pick-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
     </div>`);
   const grid = document.getElementById('sk-pick-grid');
-  renderLazyGrid(grid, eligible, ({uid, card})=>{
-    const moves = [...skillMovesForCard(card)].map(m=>SKILL_MOVE_LABEL[m]);
-    const tile = document.createElement('div');
-    tile.className = 'sk-pick-tile';
-    tile.style.cssText = 'cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px;';
-    tile.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;"><b>${card.n}</b><span class="mono">${card.ov} OVR</span></div>
-      <div class="hint" style="font-size:11px;">${cardPositions(card.pos).join(', ')}</div>
-      <div class="hint" style="font-size:11px;color:var(--gold);">${moves.length?moves.join(' · '):'Keine Spezialmoves'}</div>`;
-    tile.addEventListener('click', ()=>{
-      closeModal();
-      startSkillMatch(null, true, {hostName:profile.displayName||profile.userId, guestName:'AFK-Bot', hostPick:card, guestPick:SK_BOT_CARD}, {vsBot:true});
-    });
-    return tile;
-  });
+  renderLazyGrid(grid, eligible, ({uid, card})=>skCardPickTile(card, ()=>{
+    closeModal();
+    startSkillMatch(null, true, {hostName:profile.displayName||profile.userId, guestName:'AFK-Bot', hostPick:card, guestPick:SK_BOT_CARD}, {vsBot:true});
+  }));
   document.getElementById('sk-pick-cancel').addEventListener('click', closeModal);
 }
 
@@ -25175,6 +25186,23 @@ function skSetupGamepad(){
 function isSkillTouchDevice(){
   return ('ontouchstart' in window) || (navigator.maxTouchPoints||0)>0;
 }
+// Skill-Duell ist als Querformat-Spiel gebaut - versucht das Gerät aktiv zu drehen (klappt v.a. auf
+// Android/Chrome, meist nur im Fullscreen möglich), schlägt auf vielen Browsern (v.a. iOS Safari) aber
+// einfach lautlos fehl, ohne den Matchstart zu blockieren - der CSS-Hinweis (.sk-rotate-hint) ist der
+// eigentlich zuverlässige Fallback dafür, siehe CSS-Kommentar dort.
+async function skTryLockLandscape(){
+  if(!isSkillTouchDevice()) return;
+  try{
+    if(document.documentElement.requestFullscreen && !document.fullscreenElement){
+      await document.documentElement.requestFullscreen({navigationUI:'hide'}).catch(()=>{});
+    }
+    if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape').catch(()=>{});
+  }catch(_){}
+}
+function skReleaseLandscapeLock(){
+  try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(_){}
+  try{ if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); }catch(_){}
+}
 function skSetupTouchControls(overlay, myMoves){
   if(!isSkillTouchDevice()) return ()=>{};
   skTouchInput = {...SK_EMPTY_INPUT};
@@ -25270,6 +25298,7 @@ function skTeardownMatch(){
     else if(fb && fb.rtdb){ fb.rtdb.remove(fb.rtdb.ref(fb.rtdb.db, `skillLive/${st.matchId}/input`)).catch(()=>{}); }
   }
   if(st.overlay) st.overlay.remove();
+  skReleaseLandscapeLock();
   Object.keys(skKeyState).forEach(k=>delete skKeyState[k]);
 }
 function skSerializeState(engine, ended){
@@ -25305,8 +25334,10 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
       <div class="sk-team"><span class="sk-stamina"><span class="sk-stamina-fill" id="sk-stam-opp" style="background:#6f7bf0;"></span></span>${guestName}<span class="sk-dot" style="background:#6f7bf0;box-shadow:0 0 8px #6f7bf0;"></span></div>
     </div>
     <div class="sk-field-holder"><canvas id="sk-canvas" width="${SK_W}" height="${SK_H}"></canvas><div class="sk-msg" id="sk-msg"></div></div>
-    <div class="sk-controls-hint">WASD/Pfeile bewegen · Leertaste schießen · nur mit passendem PlayStyle+: E Dash · Q Technik · Shift Finesse · F Grätsche · C Lupfer · R Raserei · B Block</div>`;
+    <div class="sk-controls-hint">WASD/Pfeile bewegen · Leertaste schießen · nur mit passendem PlayStyle+: E Dash · Q Technik · Shift Finesse · F Grätsche · C Lupfer · R Raserei · B Block</div>
+    <div class="sk-rotate-hint"><span class="sk-rotate-icon">↻</span><div style="font-weight:700;">Bitte Gerät drehen</div><div class="hint">Skill-Duell läuft nur im Querformat.</div></div>`;
   document.body.appendChild(overlay);
+  skTryLockLandscape();
   const canvas = document.getElementById('sk-canvas'), ctx = canvas.getContext('2d');
   const engine = {
     p1: makeSkillPlayer(SK_W*0.22, SK_H/2, '#f2a93b', '#b9781f', hostCard),
