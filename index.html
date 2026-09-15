@@ -2864,15 +2864,28 @@ body.is-offline #offline-overlay{display:flex;}
 .sk-controls-hint{font-size:11px;color:var(--muted);text-align:center;max-width:900px;}
 .sk-close{position:absolute;top:10px;right:10px;background:none;border:1px solid var(--line);color:#eee6d8;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;z-index:2;}
 .sk-result{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 30px;text-align:center;max-width:360px;}
-/* touch controls - only shown on touch-capable viewports (see JS isTouchDevice check) */
+/* Touch-Steuerung (nur auf touch-fähigen Viewports, siehe JS isSkillTouchDevice) - komplett auf
+   Pointer Events umgestellt (siehe skSetupTouchControls): jeder Button/Stick nimmt beim Antippen den
+   Pointer per setPointerCapture in Besitz, sodass er "gedrückt" bleibt, bis genau dieser Finger
+   losgelassen wird, egal wohin er danach über den Bildschirm rutscht - das war der Hauptgrund für
+   schief sitzende/"vertauschte" Hitboxen mit rohen Touch-Events (ein touchend, dessen target nicht mehr
+   zum ursprünglich gedrückten Button passte). box-sizing:border-box überall, damit der sichtbare Kreis
+   exakt der klickbaren Fläche entspricht (nicht Border/Padding addiert on top), und
+   -webkit-tap-highlight-color:transparent + touch-callout/user-select:none gegen den browsereigenen
+   Tap-Flash/Kontextmenü, der auf runden Buttons wie eine falsch sitzende rechteckige Hitbox aussieht. */
 .sk-touch{display:none;}
 .sk-touch.active{display:flex;}
-.sk-touch{position:fixed;inset:auto 0 0 0;z-index:201;justify-content:space-between;align-items:flex-end;padding:0 14px 14px;pointer-events:none;}
-.sk-stick-zone{width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);position:relative;pointer-events:auto;touch-action:none;}
-.sk-stick-nub{position:absolute;width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.28);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
-.sk-action-cluster{display:grid;grid-template-columns:repeat(2,56px);grid-auto-rows:56px;gap:10px;pointer-events:auto;}
-.sk-action-btn{border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;}
-.sk-action-btn.active,.sk-stick-zone.active{background:rgba(255,255,255,.32);}
+.sk-touch{position:fixed;inset:auto 0 0 0;z-index:201;justify-content:space-between;align-items:flex-end;padding:12px 18px calc(12px + env(safe-area-inset-bottom));pointer-events:none;}
+.sk-touch, .sk-touch *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+.sk-stick-zone{width:112px;height:112px;border-radius:50%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.2);position:relative;pointer-events:auto;touch-action:none;flex:none;}
+.sk-stick-zone.active{border-color:rgba(255,255,255,.4);}
+.sk-stick-nub{position:absolute;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.32);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+.sk-stick-zone.active .sk-stick-nub{background:rgba(255,255,255,.5);}
+.sk-action-cluster{display:flex;flex-wrap:wrap-reverse;justify-content:flex-end;align-items:flex-end;gap:12px;max-width:220px;pointer-events:none;}
+.sk-action-btn{width:54px;height:54px;flex:none;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:800;letter-spacing:.02em;line-height:1.1;display:flex;align-items:center;justify-content:center;text-align:center;padding:2px;touch-action:none;pointer-events:auto;}
+.sk-action-btn.sk-action-shoot{width:68px;height:68px;font-size:11.5px;background:rgba(240,90,60,.32);border-color:rgba(255,150,120,.75);}
+.sk-action-btn.active{background:rgba(255,255,255,.42);transform:scale(.93);}
+.sk-action-btn.sk-action-shoot.active{background:rgba(255,120,90,.58);}
 @media (min-width:901px){ .sk-touch{display:none !important;} }
 /* Skill-Duell ist als Querformat-Spiel gebaut (900x540-Canvas) - auf einem Touchscreen im Hochformat
    ist das Spielfeld winzig gequetscht und die Touch-Steuerung unbrauchbar. skTryLockLandscape()
@@ -25184,7 +25197,7 @@ function skSetupGamepad(){
 // zeigt, die die eigene gewählte Karte tatsächlich nutzen kann (SHOOT immer, alles andere nur mit
 // passendem PlayStyle+ - exakt dieselbe Gating-Logik wie Tastatur/Gamepad, nur visuell gespiegelt).
 function isSkillTouchDevice(){
-  return ('ontouchstart' in window) || (navigator.maxTouchPoints||0)>0;
+  return ('ontouchstart' in window) || (navigator.maxTouchPoints||0)>0 || (window.matchMedia && matchMedia('(pointer:coarse)').matches);
 }
 // Skill-Duell ist als Querformat-Spiel gebaut - versucht das Gerät aktiv zu drehen (klappt v.a. auf
 // Android/Chrome, meist nur im Fullscreen möglich), schlägt auf vielen Browsern (v.a. iOS Safari) aber
@@ -25203,6 +25216,12 @@ function skReleaseLandscapeLock(){
   try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(_){}
   try{ if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); }catch(_){}
 }
+// Pointer Events statt roher Touch-Events: setPointerCapture() bindet jeden Finger fest an genau das
+// Element, auf dem er zuerst aufgesetzt hat, bis zum eigenen pointerup/pointercancel - das war die
+// eigentliche Ursache für "vertauschte" Hitboxen (ein touchend-Handler, dessen changedTouches-Eintrag
+// nicht mehr zum Button passte, sobald der Finger auch nur leicht verrutschte). Mit Pointer-Capture ist
+// das strukturell ausgeschlossen: der Button bleibt gedrückt, bis exakt dieser Finger abgehoben wird,
+// unabhängig davon, wohin er sich danach bewegt.
 function skSetupTouchControls(overlay, myMoves){
   if(!isSkillTouchDevice()) return ()=>{};
   skTouchInput = {...SK_EMPTY_INPUT};
@@ -25214,7 +25233,7 @@ function skSetupTouchControls(overlay, myMoves){
     <div class="sk-action-cluster" id="sk-actions"></div>`;
   overlay.appendChild(wrap);
   const stick = wrap.querySelector('#sk-stick'), nub = wrap.querySelector('#sk-stick-nub');
-  let stickTouchId = null;
+  let stickPointerId = null;
   const stickHandle = (clientX, clientY)=>{
     const rect = stick.getBoundingClientRect();
     const cx = rect.left+rect.width/2, cy = rect.top+rect.height/2;
@@ -25224,38 +25243,63 @@ function skSetupTouchControls(overlay, myMoves){
     nub.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     const nx = dx/max, ny = dy/max, dead=0.28;
     skTouchInput.left = nx<-dead; skTouchInput.right = nx>dead; skTouchInput.up = ny<-dead; skTouchInput.down = ny>dead;
-    stick.classList.add('active');
   };
   const stickReset = ()=>{
     nub.style.transform = 'translate(-50%,-50%)'; stick.classList.remove('active');
-    skTouchInput.left=skTouchInput.right=skTouchInput.up=skTouchInput.down=false; stickTouchId=null;
+    skTouchInput.left=skTouchInput.right=skTouchInput.up=skTouchInput.down=false; stickPointerId=null;
   };
-  stick.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.changedTouches[0]; stickTouchId=t.identifier; stickHandle(t.clientX,t.clientY); }, {passive:false});
-  stick.addEventListener('touchmove', e=>{
+  stick.addEventListener('pointerdown', e=>{
     e.preventDefault();
-    for(const t of e.changedTouches){ if(t.identifier===stickTouchId) stickHandle(t.clientX,t.clientY); }
-  }, {passive:false});
-  const stickEnd = e=>{ for(const t of e.changedTouches){ if(t.identifier===stickTouchId) stickReset(); } };
-  stick.addEventListener('touchend', stickEnd); stick.addEventListener('touchcancel', stickEnd);
+    stickPointerId = e.pointerId;
+    try{ stick.setPointerCapture(e.pointerId); }catch(_){}
+    stick.classList.add('active');
+    stickHandle(e.clientX, e.clientY);
+  });
+  stick.addEventListener('pointermove', e=>{
+    if(e.pointerId!==stickPointerId) return;
+    e.preventDefault();
+    stickHandle(e.clientX, e.clientY);
+  });
+  const stickEnd = e=>{ if(e.pointerId===stickPointerId) stickReset(); };
+  stick.addEventListener('pointerup', stickEnd);
+  stick.addEventListener('pointercancel', stickEnd);
 
   const actionsEl = wrap.querySelector('#sk-actions');
-  // {key, label, hold} - hold=true bleibt gedrückt solange berührt (z.B. Technik), sonst nur ein Tap-Impuls
-  const buttonDefs = [{key:'shoot', label:'SCHUSS', hold:true, always:true}];
-  if(myMoves.has('quickstep')) buttonDefs.push({key:'dash', label:'DASH', hold:false});
-  if(myMoves.has('slide')) buttonDefs.push({key:'slide', label:'TACKLE', hold:false});
-  if(myMoves.has('technical')) buttonDefs.push({key:'tech', label:'TECH', hold:true});
-  if(myMoves.has('finesse')) buttonDefs.push({key:'finesse', label:'FIN.', hold:true});
-  if(myMoves.has('chip')) buttonDefs.push({key:'chip', label:'LUPFER', hold:true});
-  if(myMoves.has('rush')) buttonDefs.push({key:'rush', label:'RUSH', hold:true});
-  if(myMoves.has('block')) buttonDefs.push({key:'block', label:'BLOCK', hold:true});
+  // Höchstens 3 Move-Buttons + SHOOT: eine Karte hat nie mehr als 3 Traits (resolveCardTraits kappt
+  // hart), also nie mehr als 3 gleichzeitig nutzbare Moves - der Cluster bleibt dadurch immer klein und
+  // übersichtlich, kein Scroll-/Überlauf-Sonderfall nötig. SHOOT steht als letztes Element ganz rechts
+  // (näher am Daumen bei Rechtshänder-Griff) und ist deutlich größer als die Move-Buttons.
+  const buttonDefs = [];
+  if(myMoves.has('quickstep')) buttonDefs.push({key:'dash', label:'DASH'});
+  if(myMoves.has('slide')) buttonDefs.push({key:'slide', label:'TACKLE'});
+  if(myMoves.has('technical')) buttonDefs.push({key:'tech', label:'TECH'});
+  if(myMoves.has('finesse')) buttonDefs.push({key:'finesse', label:'FINESSE'});
+  if(myMoves.has('chip')) buttonDefs.push({key:'chip', label:'LUPFER'});
+  if(myMoves.has('rush')) buttonDefs.push({key:'rush', label:'RUSH'});
+  if(myMoves.has('block')) buttonDefs.push({key:'block', label:'BLOCK'});
+  buttonDefs.push({key:'shoot', label:'SCHUSS', primary:true});
   buttonDefs.forEach(def=>{
     const btn = document.createElement('div');
-    btn.className = 'sk-action-btn'; btn.textContent = def.label;
-    const press = e=>{ e.preventDefault(); skTouchInput[def.key]=true; btn.classList.add('active'); };
-    const release = e=>{ e.preventDefault(); skTouchInput[def.key]=false; btn.classList.remove('active'); };
-    btn.addEventListener('touchstart', press, {passive:false});
-    btn.addEventListener('touchend', release);
-    btn.addEventListener('touchcancel', release);
+    btn.className = 'sk-action-btn' + (def.primary ? ' sk-action-shoot' : '');
+    btn.textContent = def.label;
+    let pid = null;
+    const press = e=>{
+      e.preventDefault();
+      pid = e.pointerId;
+      try{ btn.setPointerCapture(pid); }catch(_){}
+      skTouchInput[def.key] = true;
+      btn.classList.add('active');
+    };
+    const release = e=>{
+      if(pid!==null && e.pointerId!==pid) return;
+      e.preventDefault();
+      skTouchInput[def.key] = false;
+      btn.classList.remove('active');
+      pid = null;
+    };
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
     actionsEl.appendChild(btn);
   });
   return ()=>{ skTouchInput = null; wrap.remove(); };
