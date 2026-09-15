@@ -24690,6 +24690,10 @@ async function renderSkillDuelPanel(){
   if(!content) return;
   const rtdbReady = !!(fb && fb.rtdb);
   content.innerHTML = `
+    <div class="toolbar" style="margin-bottom:16px;">
+      <button class="action-btn secondary" id="skillduel-bot-btn" style="width:auto;padding:9px 18px;">Allein gegen AFK-Bot testen</button>
+    </div>
+    <p class="hint" style="margin-top:-10px;margin-bottom:16px;">Braucht keinen zweiten Account und keine Realtime Database — der Bot bewegt sich nie, nur zum Ausprobieren der eigenen Steuerung (Tastatur/Touch/Gamepad).</p>
     <div class="play-grid">
       <div>
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Freunde herausfordern</h3>
@@ -24703,6 +24707,7 @@ async function renderSkillDuelPanel(){
         <div class="leader-list" id="skillduel-incoming"><p class="hint">Lädt…</p></div>
       </div>
     </div>`;
+  document.getElementById('skillduel-bot-btn').addEventListener('click', openSkillBotCardPicker);
   const listEl = document.getElementById('skillduel-friend-list');
   (profile.friends||[]).forEach(friend=>{
     const row = document.createElement('div');
@@ -24808,6 +24813,37 @@ async function waitForBothSkillPicks(matchId, isHost){
   };
   poll();
 }
+// Testmatch gegen einen regungslosen Bot an nur einem Gerät/Account - kein Firestore/RTDB nötig
+// (funktioniert also auch, bevor/ohne dass die Realtime Database eingerichtet ist), nur zum
+// Ausprobieren der eigenen Steuerung (Tastatur/Touch/Gamepad), kein echter Gegner-Modus.
+function openSkillBotCardPicker(){
+  if(skillDuelState) return;
+  const eligible = eligibleSkillCards();
+  if(!eligible.length){ toast('Du besitzt keine einsetzbaren Feldspieler-Karten.'); return; }
+  openModal(`
+    <h2 style="margin-bottom:4px;">Gegen AFK-Bot testen</h2>
+    <p class="hint" style="margin-bottom:14px;">Nur zum Ausprobieren der eigenen Steuerung an einem Gerät — der Bot bewegt sich nie und greift nie ein.</p>
+    <div id="sk-pick-grid" style="max-height:52vh;overflow:auto;"></div>
+    <div style="display:flex;justify-content:center;margin-top:12px;">
+      <button class="action-btn secondary" id="sk-pick-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
+    </div>`);
+  const grid = document.getElementById('sk-pick-grid');
+  renderLazyGrid(grid, eligible, ({uid, card})=>{
+    const moves = [...skillMovesForCard(card)].map(m=>SKILL_MOVE_LABEL[m]);
+    const tile = document.createElement('div');
+    tile.className = 'sk-pick-tile';
+    tile.style.cssText = 'cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px;';
+    tile.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;"><b>${card.n}</b><span class="mono">${card.ov} OVR</span></div>
+      <div class="hint" style="font-size:11px;">${cardPositions(card.pos).join(', ')}</div>
+      <div class="hint" style="font-size:11px;color:var(--gold);">${moves.length?moves.join(' · '):'Keine Spezialmoves'}</div>`;
+    tile.addEventListener('click', ()=>{
+      closeModal();
+      startSkillMatch(null, true, {hostName:profile.displayName||profile.userId, guestName:'AFK-Bot', hostPick:card, guestPick:SK_BOT_CARD}, {vsBot:true});
+    });
+    return tile;
+  });
+  document.getElementById('sk-pick-cancel').addEventListener('click', closeModal);
+}
 
 // ---------- Physik/Engine-Konstanten (adaptiert aus dem lokalen Hot-Seat-Prototyp) ----------
 const SK_W = 900, SK_H = 540, SK_GOAL_H = 150;
@@ -24823,6 +24859,10 @@ const SK_CHIP_AIRBORNE_TIME = 0.55; // solange ignoriert der Ball jede Spieler-K
 const SK_RUSH_SPEED_MULT = 1.35, SK_RUSH_STAMINA_DRAIN_MULT = 1.9;
 const SK_BLOCK_STAMINA_DRAIN = 10, SK_BLOCK_SPEED_MULT = 0.55;
 const SK_SYNC_HZ = 30, SK_SYNC_INTERVAL_MS = Math.round(1000/SK_SYNC_HZ);
+// Steht für sich allein still (AFK per Definition, siehe openSkillBotCardPicker) - dient nur zum
+// Testen der eigenen Steuerung/Touch/Gamepad-Bedienung an einem einzigen Gerät/Account, ohne echten
+// Gegner. Keine Traits, weil das AFK-Verhalten unabhängig davon ist (Input bleibt immer leer).
+const SK_BOT_CARD = {id:-1, n:'AFK-Bot', pos:'CB', ov:65, pac:55, sho:55, pas:55, dri:55, defn:55, phy:55, traits:[]};
 
 const SK_EMPTY_INPUT = Object.freeze({up:false,down:false,left:false,right:false,shoot:false,dash:false,tech:false,finesse:false,slide:false,chip:false,rush:false,block:false});
 
@@ -25196,9 +25236,10 @@ function skSetupTouchControls(overlay, myMoves){
 function skEndMatch(engine, matchId, isHost, meLabel, oppLabel){
   if(engine.ended) return;
   engine.ended = true;
+  const vsBot = !!(skillDuelState && skillDuelState.vsBot);
   const meScore = engine.score[isHost?0:1], oppScore = engine.score[isHost?1:0];
   const resultText = meScore>oppScore ? 'Gewonnen!' : meScore<oppScore ? 'Verloren.' : 'Unentschieden.';
-  if(isHost && fb && fb.rtdb){
+  if(!vsBot && isHost && fb && fb.rtdb){
     fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), skSerializeState(engine, true)).catch(()=>{});
   }
   skTeardownMatch();
@@ -25209,7 +25250,7 @@ function skEndMatch(engine, matchId, isHost, meLabel, oppLabel){
       <button class="action-btn" id="sk-result-close" style="width:auto;padding:9px 24px;margin-top:14px;">Schließen</button>
     </div>`);
   document.getElementById('sk-result-close').addEventListener('click', closeModal);
-  if(isHost) cleanupSkillMatchDoc(matchId);
+  if(!vsBot && isHost) cleanupSkillMatchDoc(matchId);
 }
 function skTeardownMatch(){
   if(!skillDuelState) return;
@@ -25220,10 +25261,14 @@ function skTeardownMatch(){
   if(st.removeKeyboard) st.removeKeyboard();
   if(st.removeGamepad) st.removeGamepad();
   if(st.removeTouch) st.removeTouch();
-  if(st.rtdbInputRef && fb && fb.rtdb){ try{ fb.rtdb.off(st.rtdbInputRef); }catch(_){} }
-  if(st.rtdbStateRef && fb && fb.rtdb){ try{ fb.rtdb.off(st.rtdbStateRef); }catch(_){} }
-  if(st.isHost && fb && fb.rtdb){ fb.rtdb.remove(fb.rtdb.ref(fb.rtdb.db, `skillLive/${st.matchId}`)).catch(()=>{}); }
-  else if(fb && fb.rtdb){ fb.rtdb.remove(fb.rtdb.ref(fb.rtdb.db, `skillLive/${st.matchId}/input`)).catch(()=>{}); }
+  // AFK-Bot-Testmatches (siehe openSkillBotCardPicker) laufen komplett lokal ohne matchId/Netzwerk -
+  // da gibt's nichts, das über RTDB aufzuräumen wäre.
+  if(!st.vsBot){
+    if(st.rtdbInputRef && fb && fb.rtdb){ try{ fb.rtdb.off(st.rtdbInputRef); }catch(_){} }
+    if(st.rtdbStateRef && fb && fb.rtdb){ try{ fb.rtdb.off(st.rtdbStateRef); }catch(_){} }
+    if(st.isHost && fb && fb.rtdb){ fb.rtdb.remove(fb.rtdb.ref(fb.rtdb.db, `skillLive/${st.matchId}`)).catch(()=>{}); }
+    else if(fb && fb.rtdb){ fb.rtdb.remove(fb.rtdb.ref(fb.rtdb.db, `skillLive/${st.matchId}/input`)).catch(()=>{}); }
+  }
   if(st.overlay) st.overlay.remove();
   Object.keys(skKeyState).forEach(k=>delete skKeyState[k]);
 }
@@ -25240,10 +25285,14 @@ function skApplyRemoteState(engine, state){
   engine.score = state.score; engine.timeLeft = state.timeLeft; engine.msg = state.msg;
 }
 
-async function startSkillMatch(matchId, isHost, matchDoc){
+async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
   if(skillDuelState) return;
-  const hostCard = resolveSkillCardRef(matchDoc.hostPick), guestCard = resolveSkillCardRef(matchDoc.guestPick);
-  if(!hostCard || !guestCard){ toast('Karte konnte nicht geladen werden.'); cleanupSkillMatchDoc(matchId); return; }
+  const vsBot = !!opts.vsBot;
+  // Im Bot-Testmatch sind hostPick/guestPick schon fertige Kartenobjekte (siehe openSkillBotCardPicker) -
+  // kein Firestore-Roundtrip nötig, weil beide "Seiten" im selben Tab laufen.
+  const hostCard = vsBot ? matchDoc.hostPick : resolveSkillCardRef(matchDoc.hostPick);
+  const guestCard = vsBot ? matchDoc.guestPick : resolveSkillCardRef(matchDoc.guestPick);
+  if(!hostCard || !guestCard){ toast('Karte konnte nicht geladen werden.'); if(!vsBot) cleanupSkillMatchDoc(matchId); return; }
   const hostName = matchDoc.hostName, guestName = matchDoc.guestName;
   const meLabel = isHost ? hostName : guestName, oppLabel = isHost ? guestName : hostName;
   const overlay = document.createElement('div');
@@ -25267,16 +25316,36 @@ async function startSkillMatch(matchId, isHost, matchDoc){
     p1Input: {...SK_EMPTY_INPUT}, p2Input: {...SK_EMPTY_INPUT}, p1Prev: {...SK_EMPTY_INPUT}, p2Prev: {...SK_EMPTY_INPUT},
   };
   const myMoves = isHost ? engine.p1.moves : engine.p2.moves;
-  skillDuelState = {matchId, isHost, engine, overlay, gamepadIndex:null};
+  skillDuelState = {matchId, isHost, engine, overlay, gamepadIndex:null, vsBot};
   skillDuelState.removeKeyboard = skSetupKeyboard();
   skillDuelState.removeGamepad = skSetupGamepad();
   skillDuelState.removeTouch = skSetupTouchControls(overlay, myMoves);
   document.getElementById('sk-close-btn').addEventListener('click', ()=>{
-    if(isHost && fb && fb.rtdb) fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), {...skSerializeState(engine,true)}).catch(()=>{});
+    if(!vsBot && isHost && fb && fb.rtdb) fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), {...skSerializeState(engine,true)}).catch(()=>{});
     skTeardownMatch();
   });
 
-  if(isHost){
+  if(vsBot){
+    // Rein lokale Schleife, kein Firestore/RTDB - der Bot lässt seinen Input für immer auf
+    // SK_EMPTY_INPUT stehen (AFK per Definition). Dient nur zum Alleine-Testen von Steuerung/Touch/
+    // Gamepad, nicht als echter Gegner-Modus.
+    let last = performance.now();
+    const loop = now=>{
+      if(!skillDuelState) return;
+      const dt = Math.min(0.033, (now-last)/1000); last = now;
+      engine.p1Input = skComposeLocalInput();
+      engine.p2Input = SK_EMPTY_INPUT;
+      skStep(engine, dt);
+      engine.timeLeft -= dt;
+      skRender(ctx, engine);
+      if(engine.timeLeft<=0 || engine.score[0]>=SK_GOAL_LIMIT || engine.score[1]>=SK_GOAL_LIMIT){
+        skEndMatch(engine, matchId, true, meLabel, oppLabel);
+        return;
+      }
+      skillDuelState.rafId = requestAnimationFrame(loop);
+    };
+    skillDuelState.rafId = requestAnimationFrame(loop);
+  } else if(isHost){
     const stateRef = fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`);
     const inputRef = fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/input`);
     skillDuelState.rtdbInputRef = inputRef;
