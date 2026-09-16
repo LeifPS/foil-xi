@@ -24675,7 +24675,7 @@ const SKILL_MOVE_LABEL = {powershot:'Power Shot', finesse:'Finesse Shot', quicks
 // dieser Datei als const definiert, ein Zugriff hier oben am Modul-Top-Level würde also mitten im
 // Boot mit "Cannot access before initialization" abstürzen (TDZ). Deshalb lazy + memoisiert, erst
 // beim ersten echten Skill-Duell aufgerufen (startSkillMatch), wenn das ganze Skript längst geladen ist.
-let _skMoveIconUrlCache = null, _skMoveIconImgsCache = null;
+let _skMoveIconUrlCache = null, _skMoveIconImgsCache = null, _skMoveEliteIconUrlCache = null, _skMoveEliteIconImgsCache = null;
 function skMoveIconUrls(){
   if(_skMoveIconUrlCache) return _skMoveIconUrlCache;
   _skMoveIconUrlCache = {};
@@ -24683,6 +24683,17 @@ function skMoveIconUrls(){
     if(!_skMoveIconUrlCache[move] && PLAYSTYLE_INFO[label]) _skMoveIconUrlCache[move] = PLAYSTYLE_INFO[label].icon;
   });
   return _skMoveIconUrlCache;
+}
+// Eigene Elite-Icon-Tabelle: jedes "+"-PlayStyle hat in PLAYSTYLE_INFO ein eigenes, echtes EA-Icon
+// (elite:true) - "wenn ich die Elite-Version triggere, will ich dass über dem Spieler auch die Elite-
+// Version [des Icons] ist" statt immer nur das Basis-Icon zu zeigen.
+function skMoveEliteIconUrls(){
+  if(_skMoveEliteIconUrlCache) return _skMoveEliteIconUrlCache;
+  _skMoveEliteIconUrlCache = {};
+  Object.entries(SKILL_MOVE_BY_TRAIT).forEach(([label,move])=>{
+    if(!_skMoveEliteIconUrlCache[move] && PLAYSTYLE_INFO[label] && PLAYSTYLE_INFO[label].elite) _skMoveEliteIconUrlCache[move] = PLAYSTYLE_INFO[label].icon;
+  });
+  return _skMoveEliteIconUrlCache;
 }
 function skMoveIconImgs(){
   if(_skMoveIconImgsCache) return _skMoveIconImgsCache;
@@ -24695,6 +24706,15 @@ function skMoveIconImgs(){
     _skMoveIconImgsCache[move]=img;
   });
   return _skMoveIconImgsCache;
+}
+function skMoveEliteIconImgs(){
+  if(_skMoveEliteIconImgsCache) return _skMoveEliteIconImgsCache;
+  _skMoveEliteIconImgsCache = {};
+  Object.entries(skMoveEliteIconUrls()).forEach(([move,url])=>{
+    const img=new Image(); img.onerror = ()=>{ img._failed = true; }; img.src=url;
+    _skMoveEliteIconImgsCache[move]=img;
+  });
+  return _skMoveEliteIconImgsCache;
 }
 function skillMovesForCard(card){
   const traits = resolveCardTraits(card)||[];
@@ -25075,7 +25095,7 @@ const SK_GOAL_Y0 = SK_H/2 - SK_GOAL_H/2, SK_GOAL_Y1 = SK_H/2 + SK_GOAL_H/2;
 const SK_GOAL_DEPTH = 30;
 const SK_WALL = 6, SK_PLAYER_OOB = 34;
 const SK_MATCH_SECONDS = 180, SK_GOAL_LIMIT = 5;
-const SK_TOUCH_MARGIN = 22, SK_BASE_POWER = 480, SK_MOMENTUM_FACTOR = 0.9, SK_CURVE_FACTOR = 0.55;
+const SK_TOUCH_MARGIN = 22, SK_BASE_POWER = 480, SK_MOMENTUM_FACTOR = 0.9;
 // Genereller Multiplikator auf Beschleunigung UND Höchsttempo in deriveSkillPhysics, wirkt auf JEDE
 // Karte gleichermaßen (die PAC-Skalierung/den PAC-Tempo-Deckel zwischen schnellen und langsamen Karten
 // verändert das nicht, nur das gesamte Niveau). Verlauf: 0.6 -> 0.2 (ein Drittel) -> auf Wunsch
@@ -25083,8 +25103,8 @@ const SK_TOUCH_MARGIN = 22, SK_BASE_POWER = 480, SK_MOMENTUM_FACTOR = 0.9, SK_CU
 const SK_PLAYER_SPEED_MULT = 0.4;
 // "Mehr Schusspower": genereller Multiplikator auf JEDEN Schuss (wirkt vor allen move-spezifischen
 // Multiplikatoren in skReleaseShot, also gleichermaßen auf Sofortschuss, Finesse, Lupfer, Power Shot,
-// Header/Volley, Low Driven Shot). Erst 1.5 (50% mehr), dann 1.85, jetzt nochmal etwas angehoben.
-const SK_SHOT_SPEED_BOOST = 2.0;
+// Header/Volley, Low Driven Shot). Verlauf: 1.5 -> 1.85 -> 2.0 -> "+30% Schusskraft" -> 2.6.
+const SK_SHOT_SPEED_BOOST = 2.6;
 // Ball-Bremse: statt einer konstanten prozentualen Bremsung (fühlte sich bei hohem Tempo wie ein
 // gleitender Hockey-Puck an) wächst der Bremsanteil jetzt zusätzlich mit dem Balltempo selbst - ein
 // harter Schuss verliert dadurch kurz nach dem Abschluss sehr viel schneller an Fahrt, ein normal
@@ -25107,13 +25127,17 @@ const SK_BLOCK_STAMINA_DRAIN = 10, SK_BLOCK_SPEED_MULT = 0.55;
 // restliche Spiel für Basis-vs-Elite-Unterscheidung nutzt (siehe PLAYSTYLE_ELITE_OF).
 const SK_ELITE_POWERSHOT_CHARGE_MULT = 0.65; // 35% schnelleres Aufladen
 const SK_ELITE_POWERSHOT_POWER_BONUS = 0.95; // statt SK_POWER_SHOT_POWER_BONUS=0.7
-const SK_ELITE_FINESSE_POWER_MULT = 0.94, SK_ELITE_FINESSE_CURVE_MULT = 2.6; // statt 0.88 / 1.9
+// Finesse Shot, neu designt: der Schuss selbst bleibt ganz normal (Power/Streuung unverändert) - Finesse
+// fügt nur zusätzlichen Spin RICHTUNG GEGNERISCHES TOR hinzu (mittel bei Basis, viel bei Elite), egal
+// wie der Spieler gerade läuft. Vorher hing die Kurve an der eigenen seitlichen Laufgeschwindigkeit
+// (perpSpeed) - das machte einen guten Effekt zufällig und schwer gezielt auslösbar.
+const SK_FINESSE_SPIN = 250, SK_ELITE_FINESSE_SPIN = 430;
 const SK_ELITE_DASH_IMPULSE = 340, SK_ELITE_DASH_COOLDOWN_TIME = 1.0, SK_ELITE_DASH_STAMINA_COST = 14;
 const SK_ELITE_SLIDE_IMPULSE = 500, SK_ELITE_SLIDE_COOLDOWN = 1.6, SK_ELITE_SLIDE_STAMINA_COST = 11;
 const SK_ELITE_TECHNICAL_STAMINA_MULT = 0.85, SK_ELITE_TECHNICAL_RESTITUTION_MULT = 0.2; // statt 0.72 / 0.35
 const SK_ELITE_CHIP_AIRBORNE_TIME = 0.8, SK_ELITE_CHIP_POWER_MULT = 0.68; // statt 0.55 / 0.55
 const SK_ELITE_RUSH_SPEED_MULT = 1.55, SK_ELITE_RUSH_STAMINA_DRAIN_MULT = 1.5;
-const SK_ELITE_BLOCK_STAMINA_DRAIN = 6, SK_ELITE_BLOCK_SPEED_MULT = 0.7, SK_ELITE_BLOCK_RESTITUTION_MULT = 0.05;
+const SK_ELITE_BLOCK_STAMINA_DRAIN = 6, SK_ELITE_BLOCK_SPEED_MULT = 0.7, SK_ELITE_BLOCK_RESTITUTION_MULT = 0.05, SK_ELITE_BLOCK_MASS_MULT = 2.0;
 // ----- Konstanten für die 13 neuen PlayStyles+ (siehe SKILL_MOVE_BY_TRAIT-Kommentar für die
 // Design-Entscheidungen, welcher Trait welche Mechanik bekommt und warum neun Traits bewusst
 // keine Entsprechung haben). Vier aktive Knopf-Moves (mit Elite-Variante):
@@ -25197,14 +25221,18 @@ function makeSkillPlayer(x,y,color,dark,card){
   if(moves.has('bruiser')) d.mass *= eliteMoves.has('bruiser') ? SK_ELITE_BRUISER_MASS_MULT : SK_BRUISER_MASS_MULT;
   if(moves.has('pressproven')) d.dribbleRestitution *= eliteMoves.has('pressproven') ? SK_ELITE_PRESSPROVEN_RESTITUTION_MULT : SK_PRESSPROVEN_RESTITUTION_MULT;
   if(moves.has('relentless')) d.staminaRegen *= eliteMoves.has('relentless') ? SK_ELITE_RELENTLESS_REGEN_MULT : SK_RELENTLESS_REGEN_MULT;
+  // attackDir: welche Richtung das gegnerische Tor liegt, einmalig aus der Start-Spawnposition abgeleitet
+  // (links spawnende Spieler verteidigen das linke Tor und greifen nach rechts an, siehe skStep-Scoring)
+  // - wird von Finesse Shot gebraucht, um Spin IMMER Richtung gegnerisches Tor zu legen statt zufällig.
   return {x,y,vx:0,vy:0,r:SK_PLAYER_RADIUS,color,dark,cooldown:0, card, moves, eliteMoves, ...d,
+    attackDir: x<SK_W/2 ? 1 : -1,
     stamina:100, touchTimer:0, lastTouchBallX:x, lastTouchBallY:y, lastTouchPlayerX:x, lastTouchPlayerY:y,
     isCharging:false, chargeTime:0, dashCooldown:0, dashBoostTimer:0, closeControl:false,
-    lastDirX:0, lastDirY:0, toastIcon:null, toastTimer:0, finesseHeld:false, chipHeld:false, lowshotHeld:false,
+    lastDirX:0, lastDirY:0, toastIcon:null, toastIconElite:false, toastTimer:0, finesseHeld:false, chipHeld:false, lowshotHeld:false,
     sliding:false, slideTimer:0, slideCooldown:0, slideRecovery:0, rushing:false, blocking:false, blockCooldown:0,
     feintCooldown:0, jockeying:false, trickCooldown:0, trickPending:false, wasTouchingLastFrame:false};
 }
-function skShowIcon(p, key){ p.toastIcon = key; p.toastTimer = 0.9; }
+function skShowIcon(p, key, elite){ p.toastIcon = key; p.toastIconElite = !!elite; p.toastTimer = 0.9; }
 function skReadKeyboardInput(keyState){
   return {
     up: !!(keyState['w']||keyState['W']||keyState['ArrowUp']),
@@ -25241,7 +25269,7 @@ function skTryDash(p){
   p.vx += p.lastDirX*impulse; p.vy += p.lastDirY*impulse;
   p.dashCooldown = cooldown; p.dashBoostTimer = SK_DASH_BOOST_WINDOW;
   p.stamina = Math.max(0, p.stamina-cost);
-  skShowIcon(p,'quickstep');
+  skShowIcon(p,'quickstep',elite);
 }
 function skTrySlide(p, ball){
   if(!p.moves.has('slide') || p.slideCooldown>0 || p.sliding) return;
@@ -25254,7 +25282,7 @@ function skTrySlide(p, ball){
   p.vx += (dx/dist)*impulse; p.vy += (dy/dist)*impulse;
   p.sliding = true; p.slideTimer = SK_SLIDE_DURATION; p.slideCooldown = cooldown;
   p.stamina = Math.max(0, p.stamina-cost);
-  skShowIcon(p,'slide');
+  skShowIcon(p,'slide',elite);
 }
 function skTryFeint(p){
   if(!p.moves.has('feint') || p.feintCooldown>0) return;
@@ -25271,7 +25299,7 @@ function skTryFeint(p){
   p.vx = p.lastDirX*boost; p.vy = p.lastDirY*boost;
   p.feintCooldown = cooldown;
   p.stamina = Math.max(0, p.stamina-cost);
-  skShowIcon(p,'feint');
+  skShowIcon(p,'feint',elite);
 }
 // Nutmeg/Übersteiger aus kurzer Distanz gegen den Gegenspieler - wird aus skApplyInput nur als Flag
 // vorgemerkt (dort fehlt der Gegner als Parameter) und hier von skStep für BEIDE Spieler aufgelöst,
@@ -25293,7 +25321,7 @@ function skResolveTrick(p, opp, ball){
   ball.vx += (dx/len)*impulse; ball.vy += (dy/len)*impulse;
   p.vx += (dx/len)*boost; p.vy += (dy/len)*boost;
   p.trickCooldown = cooldown;
-  skShowIcon(p,'trick');
+  skShowIcon(p,'trick',elite);
 }
 function skStartCharge(p){ if(p.isCharging) return; p.isCharging = true; p.chargeTime = 0; }
 function skReleaseShot(p, ball){
@@ -25327,12 +25355,18 @@ function skReleaseShot(p, ball){
   let power = (SK_BASE_POWER + Math.max(0,alongSpeed)*SK_MOMENTUM_FACTOR) * p.shotPowerMult * SK_SHOT_SPEED_BOOST;
   power *= (1+chargeFrac*powerShotBonus);
   // Kurve/Spin gibt es NUR bei einem bewussten Finesse Shot - jeder andere Schuss fliegt gerade
-  // (bis auf die geringe, SHO-abhängige Zufallsstreuung oben). Vorher lief seitliche Laufgeschwindigkeit
-  // IMMER in etwas Spin ein, was Finesse Shot optisch entwertete ("kurvt bei allen").
+  // (bis auf die geringe, SHO-abhängige Zufallsstreuung oben). Der Schuss selbst bleibt bei Finesse
+  // ganz normal (keine Power-Abschwächung mehr) - Finesse fügt nur Spin Richtung gegnerisches Tor
+  // hinzu, mittel bei Basis, viel bei Elite, unabhängig von der eigenen Laufbewegung.
   let curve = 0;
   if(isFinesse){
-    power *= isFinesseElite ? SK_ELITE_FINESSE_POWER_MULT : 0.88;
-    curve = SK_CURVE_FACTOR*p.curveMult*(isFinesseElite ? SK_ELITE_FINESSE_CURVE_MULT : 1.9);
+    const spinMag = (isFinesseElite ? SK_ELITE_FINESSE_SPIN : SK_FINESSE_SPIN) * p.curveMult;
+    const goalX = p.attackDir>0 ? SK_W : 0, goalY = SK_H/2;
+    // Seitlicher Versatz des gegnerischen Tor-Zentrums relativ zur Schusslinie (dirx,diry) - positiv/
+    // negativ entscheidet, auf welche Seite der Spin drehen muss, damit die Kurve tatsächlich RICHTUNG
+    // Tor biegt statt zufällig in irgendeine Richtung.
+    const lateralToGoal = (goalX-ball.x)*perpx + (goalY-ball.y)*perpy;
+    curve = Math.sign(lateralToGoal || 1) * spinMag;
   }
   if(isChip) power *= isChipElite ? SK_ELITE_CHIP_POWER_MULT : 0.55;
   if(isLowshot) power *= isLowshotElite ? SK_ELITE_LOWSHOT_POWER_MULT : SK_LOWSHOT_POWER_MULT;
@@ -25340,15 +25374,15 @@ function skReleaseShot(p, ball){
   else if(isHeader) power *= isHeaderElite ? SK_ELITE_HEADER_POWER_MULT : SK_HEADER_POWER_MULT;
   ball.vx = dirx*power + perpx*perpSpeed*0.5;
   ball.vy = diry*power + perpy*perpSpeed*0.5;
-  ball.spin = perpSpeed*curve;
+  ball.spin = curve;
   if(isChip) ball.airborne = isChipElite ? SK_ELITE_CHIP_AIRBORNE_TIME : SK_CHIP_AIRBORNE_TIME;
   p.cooldown = SK_SHOOT_COOLDOWN;
-  if(isVolley) skShowIcon(p,'volley');
-  else if(isHeader) skShowIcon(p,'header');
-  else if(isChip) skShowIcon(p,'chip');
-  else if(isFinesse) skShowIcon(p,'finesse');
-  else if(isLowshot) skShowIcon(p,'lowshot');
-  else if(chargeFrac>0.85) skShowIcon(p,'powershot');
+  if(isVolley) skShowIcon(p,'volley',isVolleyElite);
+  else if(isHeader) skShowIcon(p,'header',isHeaderElite);
+  else if(isChip) skShowIcon(p,'chip',isChipElite);
+  else if(isFinesse) skShowIcon(p,'finesse',isFinesseElite);
+  else if(isLowshot) skShowIcon(p,'lowshot',isLowshotElite);
+  else if(chargeFrac>0.85) skShowIcon(p,'powershot',isPowerElite);
 }
 function skMovePlayer(p, dt, input){
   let ax=0, ay=0;
@@ -25435,23 +25469,6 @@ function skCircleCollide(a,b,restitution,massA,massB){
   const impx=j*nx, impy=j*ny;
   a.vx -= impx/massA; a.vy -= impy/massA; b.vx += impx/massB; b.vy += impy/massB;
 }
-// Ball hat KEINEN Widerstand gegen den Spieler ("wenn ich mit dem Ball laufe ist es sonst zu schwer") -
-// anders als skCircleCollide (echte Zwei-Körper-Physik mit Massenverhältnis) wird hier der Spieler
-// wie eine unendlich schwere, unbewegliche Wand behandelt: NUR der Ball wird aus der Überlappung
-// herausgeschoben und bekommt den Rückstoß-Impuls, die Position UND Geschwindigkeit des Spielers
-// bleiben komplett unberührt. Mathematisch der Grenzfall massA→∞ von skCircleCollide (dort verschwindet
-// jeder 1/massA-Term), deshalb ohne jeden Massenparameter.
-function skBallCollide(p, ball, restitution){
-  const dx=ball.x-p.x, dy=ball.y-p.y, dist=Math.hypot(dx,dy)||0.0001;
-  const overlap = p.r+ball.r-dist;
-  if(overlap<=0) return;
-  const nx=dx/dist, ny=dy/dist;
-  ball.x += nx*overlap; ball.y += ny*overlap;
-  const rvx=ball.vx-p.vx, rvy=ball.vy-p.vy, velAlongNormal=rvx*nx+rvy*ny;
-  if(velAlongNormal>0) return;
-  const scale = -(1+restitution)*velAlongNormal;
-  ball.vx += scale*nx; ball.vy += scale*ny;
-}
 function skUpdateTouch(p, ball, dt){
   const dist = Math.hypot(ball.x-p.x, ball.y-p.y);
   // Jockey (gehalten): zusätzliche, temporäre Abfangreichweite obendrauf, solange die Abschirm-Haltung
@@ -25505,7 +25522,8 @@ function skStep(engine, dt){
   skCircleCollide(p1, p2, 0.3, p1.mass*p1.duelPower*duelBoost1, p2.mass*p2.duelPower*duelBoost2);
   if(ball.airborne<=0){
     const rest1 = skBallRestitution(p1), rest2 = skBallRestitution(p2);
-    skBallCollide(p1, ball, rest1); skBallCollide(p2, ball, rest2);
+    skCircleCollide(p1, ball, rest1, p1.mass*(p1.blocking?(p1.eliteMoves.has('block')?SK_ELITE_BLOCK_MASS_MULT:1.6):1), 1);
+    skCircleCollide(p2, ball, rest2, p2.mass*(p2.blocking?(p2.eliteMoves.has('block')?SK_ELITE_BLOCK_MASS_MULT:1.6):1), 1);
   }
   if(ball.y-ball.r<SK_WALL){ ball.y=SK_WALL+ball.r; ball.vy*=-0.7; }
   if(ball.y+ball.r>SK_H-SK_WALL){ ball.y=SK_H-SK_WALL-ball.r; ball.vy*=-0.7; }
@@ -25595,19 +25613,25 @@ function skDrawPlayer(ctx, p){
   if(p.dashCooldown>0){ ctx.beginPath(); ctx.arc(p.x,p.y,p.r+17,-Math.PI/2,-Math.PI/2+(1-p.dashCooldown/SK_DASH_COOLDOWN_TIME)*Math.PI*2);
     ctx.strokeStyle='rgba(130,200,255,0.55)'; ctx.lineWidth=2; ctx.stroke(); }
   if(p.toastTimer>0 && p.toastIcon){
-    const img = skMoveIconImgs()[p.toastIcon];
+    // Elite-Auslösung ("Gold") zeigt das ECHTE Elite-Icon des Traits statt immer nur das Basis-Icon,
+    // plus einen goldenen Ring als zusätzlichen, auf einen Blick erkennbaren Hinweis.
+    const img = (p.toastIconElite ? skMoveEliteIconImgs() : skMoveIconImgs())[p.toastIcon];
     const age = 0.9-p.toastTimer, scale = age<0.12 ? 1+(0.12-age)/0.12*0.35 : 1, size=46*scale;
     const cx = p.x, cy = p.y-p.r-30;
     ctx.save(); ctx.globalAlpha=Math.min(1,p.toastTimer/0.9);
+    if(p.toastIconElite){
+      ctx.beginPath(); ctx.arc(cx, cy, size/2+3, 0, Math.PI*2);
+      ctx.strokeStyle = '#e8c468'; ctx.lineWidth = 2.5; ctx.stroke();
+    }
     if(img && img.complete && img.naturalWidth>0){
       ctx.drawImage(img, cx-size/2, cy-size/2, size, size);
     } else {
       // Fallback, solange das externe EA-Icon noch lädt ODER dauerhaft fehlschlägt (Netzwerk/geblockte
       // URL) - garantiert IMMER ein sichtbares Feedback, statt bei einem hängenden/fehlgeschlagenen
       // Bild-Request auf ewig gar nichts zu zeigen.
-      skDrawCircle(ctx, cx, cy, size/2, 'rgba(20,22,18,.88)', 'rgba(255,255,255,.7)');
+      skDrawCircle(ctx, cx, cy, size/2, 'rgba(20,22,18,.88)', p.toastIconElite ? '#e8c468' : 'rgba(255,255,255,.7)');
       ctx.fillStyle = '#fff'; ctx.font = '700 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText((SKILL_MOVE_LABEL[p.toastIcon] || p.toastIcon).slice(0,7), cx, cy);
+      ctx.fillText(((SKILL_MOVE_LABEL[p.toastIcon] || p.toastIcon)+(p.toastIconElite?'+':'')).slice(0,8), cx, cy);
     }
     ctx.restore();
   }
@@ -25913,7 +25937,7 @@ function skTeardownMatch(){
 function skSerializeState(engine, ended){
   const dump = p => ({x:p.x,y:p.y,stamina:p.stamina,cooldown:p.cooldown,isCharging:p.isCharging,chargeTime:p.chargeTime,
     closeControl:p.closeControl,blocking:p.blocking,sliding:p.sliding,dashCooldown:p.dashCooldown,
-    toastIcon:p.toastIcon,toastTimer:p.toastTimer});
+    toastIcon:p.toastIcon,toastIconElite:p.toastIconElite,toastTimer:p.toastTimer});
   return {p1:dump(engine.p1), p2:dump(engine.p2), ball:{x:engine.ball.x,y:engine.ball.y,airborne:engine.ball.airborne},
     score:engine.score, timeLeft:engine.timeLeft, msg:engine.msg||null, ended:!!ended};
 }
@@ -35030,7 +35054,7 @@ const PLAYSTYLE_BASE_OF = Object.fromEntries(Object.entries(PLAYSTYLE_ELITE_OF).
 // unsichtbar (meldete sich als "Symbol kommt nie"). skDrawPlayer zeigt trotzdem IMMER einen
 // Text-Fallback, falls das Icon selbst nie lädt (Netzwerk/geblockte URL) - das hier ist nur der
 // zusätzliche Kopfstart, damit der Normalfall (funktionierendes Netz) das echte Icon zeigt.
-skMoveIconImgs();
+skMoveIconImgs(); skMoveEliteIconImgs();
 
 // ===== PlayStyle-Training: pay to permanently add a base PlayStyle or upgrade one to "+" on ONE owned
 // card copy (not the shared card type - see psOverride/applyCardLevel's traitsOverride param). Applies
