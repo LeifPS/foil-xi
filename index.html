@@ -25044,12 +25044,13 @@ function deriveSkillPhysics(card){
     return capped/99;
   };
   // Tempo/Beschleunigung bekommen zusätzlich zum allgemeinen Deckel oben einen EIGENEN, früher
-  // greifenden Deckel ("schnelle Spieler etwas langsamer machen, ohne die langsamen noch langsamer zu
-  // machen"): unterhalb von 70 PAC bleibt die Kurve exakt linear, also für jede Karte bis dahin
-  // WORT-WÖRTLICH dasselbe Tempo wie bisher - erst darüber wird der weitere Zuwachs gedämpft, sodass
-  // ein 99er-PAC-Spieler spürbar langsamer wird als vorher, ohne dass sich für einen 60er- oder
-  // 70er-PAC-Spieler auch nur ein einziger Pixel Höchstgeschwindigkeit ändert.
-  const SK_PAC_SPEED_SOFT_CAP = 70, SK_PAC_SPEED_SOFT_CAP_RATE = 0.4;
+  // greifenden und deutlich stärkeren Deckel ("schnelle Spieler DEUTLICH langsamer machen, ohne die
+  // langsamen noch langsamer zu machen"): unterhalb von 65 PAC bleibt die Kurve exakt linear, also für
+  // jede Karte bis dahin WORT-WÖRTLICH dasselbe Tempo wie bisher - erst darüber wird der weitere
+  // Zuwachs stark gedämpft (nur noch 15% Wirkung), sodass ein 99er-PAC-Spieler deutlich langsamer wird
+  // als vorher, ohne dass sich für einen 60er- oder 65er-PAC-Spieler auch nur ein einziger Pixel
+  // Höchstgeschwindigkeit ändert.
+  const SK_PAC_SPEED_SOFT_CAP = 65, SK_PAC_SPEED_SOFT_CAP_RATE = 0.15;
   const nPacSpeed = raw => {
     const v = Math.max(1, Math.min(99, raw||50));
     const capped = v<=SK_PAC_SPEED_SOFT_CAP ? v : SK_PAC_SPEED_SOFT_CAP + (v-SK_PAC_SPEED_SOFT_CAP)*SK_PAC_SPEED_SOFT_CAP_RATE;

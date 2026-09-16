@@ -66,9 +66,10 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const gap74v60 = pow74-pow60;
     const belowCapStaysLinear = Math.abs(gap74v60-gap85v71)<0.0001;
 
-    // Neuer, separater Tempo-Deckel ("schnelle Spieler etwas langsamer machen, ohne die langsamen noch
-    // langsamer zu machen"): unterhalb von 70 PAC exakt dieselbe Geschwindigkeit wie vorher (linear,
-    // Deckel unten überhaupt nicht aktiv), oberhalb von 70 wird der weitere Tempozuwachs gedämpft.
+    // Neuer, separater Tempo-Deckel ("schnelle Spieler DEUTLICH langsamer machen, ohne die langsamen
+    // noch langsamer zu machen"): unterhalb von 65 PAC exakt dieselbe Geschwindigkeit wie vorher
+    // (linear, Deckel unten überhaupt nicht aktiv), oberhalb von 65 wird der weitere Tempozuwachs stark
+    // gedämpft (nur noch 15% Wirkung).
     const pacLowA = {...fakeCard, pac:40}, pacLowB = {...fakeCard, pac:65};
     const speedLowA = deriveSkillPhysics(pacLowA).maxSpeed, speedLowB = deriveSkillPhysics(pacLowB).maxSpeed;
     const belowSpeedCapUnaffected = Math.abs(speedLowA - (250 + (40/99)*150)) < 0.0001 && Math.abs(speedLowB - (250 + (65/99)*150)) < 0.0001;
@@ -76,6 +77,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const speed70 = deriveSkillPhysics(pac70).maxSpeed, speed99forSpeed = deriveSkillPhysics(pac99forSpeed).maxSpeed;
     const linearProjectionAt99 = 250 + (99/99)*150; // was ein 99er ohne Deckel hätte (400)
     const fastPlayersAreSlowerThanLinear = speed99forSpeed < linearProjectionAt99 && speed99forSpeed > speed70;
+    // "Deutlich" heißt messbar mehr als eine kosmetische Änderung - ein 99er-PAC-Spieler muss
+    // mindestens 10% langsamer sein als die ungedeckelte lineare Projektion.
+    const reductionIsSubstantial = (linearProjectionAt99 - speed99forSpeed) / linearProjectionAt99 >= 0.1;
 
     // Elite-Variante desselben Traits (Grätsche+ statt Grätsche) muss denselben Move freischalten -
     // sonst wäre ein Move nur für Nicht-Elite-Karten nutzbar, was PLAYSTYLE_ELITE_OF widerspräche.
@@ -85,7 +89,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
     BY_ID.delete(fakeCard.id); BY_ID.delete(fakeGk.id);
 
-    return {hasOnlyExpectedMoves, hasNoUngatedMoves, gkExcluded, fieldIncluded, roundtripStatsMatch, roundtripMovesMatch, statsScaleUp, eliteAlsoUnlocks, eliteAdvantageIsSoftCapped, belowCapStaysLinear, belowSpeedCapUnaffected, fastPlayersAreSlowerThanLinear};
+    return {hasOnlyExpectedMoves, hasNoUngatedMoves, gkExcluded, fieldIncluded, roundtripStatsMatch, roundtripMovesMatch, statsScaleUp, eliteAlsoUnlocks, eliteAdvantageIsSoftCapped, belowCapStaysLinear, belowSpeedCapUnaffected, fastPlayersAreSlowerThanLinear, reductionIsSubstantial};
   }));
 
   console.log('Skill-Modus-Fundament-Test');
@@ -102,6 +106,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.belowCapStaysLinear, true, 'unterhalb des weichen Deckels (85) bleibt die Skalierung unverändert linear');
   eq(result.belowSpeedCapUnaffected, true, 'Tempo-Deckel: unterhalb von 70 PAC exakt dieselbe Höchstgeschwindigkeit wie ohne Deckel (langsame Spieler werden nicht noch langsamer)');
   eq(result.fastPlayersAreSlowerThanLinear, true, 'Tempo-Deckel: ein 99er-PAC-Spieler ist spürbar langsamer als ohne Deckel, aber immer noch schneller als ein 70er');
+  eq(result.reductionIsSubstantial, true, 'Tempo-Deckel: die Reduktion bei PAC 99 beträgt mindestens 10% (spürbar/deutlich, nicht nur kosmetisch)');
 
   summary('Skill-Modus-Fundament-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });
