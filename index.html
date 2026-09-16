@@ -2874,16 +2874,46 @@ body.is-offline #offline-overlay{display:flex;}
    -webkit-tap-highlight-color:transparent + touch-callout/user-select:none gegen den browsereigenen
    Tap-Flash/Kontextmenü, der auf runden Buttons wie eine falsch sitzende rechteckige Hitbox aussieht. */
 .sk-touch{display:none;}
-.sk-touch.active{display:flex;}
-.sk-touch{position:fixed;inset:auto 0 0 0;z-index:201;justify-content:space-between;align-items:flex-end;padding:12px 18px calc(12px + env(safe-area-inset-bottom));pointer-events:none;}
+.sk-touch.active{display:block;}
+.sk-touch{position:fixed;inset:0;z-index:201;pointer-events:none;}
 .sk-touch, .sk-touch *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
-.sk-stick-zone{width:112px;height:112px;border-radius:50%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.2);position:relative;pointer-events:auto;touch-action:none;flex:none;}
+/* Stick fest am linken Rand, VERTIKAL ZENTRIERT (nicht mehr unten in der Ecke) - clamp()+vmin statt
+   fester px-Werte, damit Größe/Abstand sich auf jedem Screen (Handy, Tablet, Querformat mit wenig
+   Höhe) gleichermaßen sinnvoll skalieren, nicht nur auf der einen Auflösung, an der getestet wurde. */
+.sk-stick-zone{
+  position:fixed; left:max(14px, 2.8vmin); top:50%; transform:translateY(-50%);
+  width:clamp(92px, 15vmin, 132px); height:clamp(92px, 15vmin, 132px);
+  border-radius:50%; background:rgba(255,255,255,.07); border:2px solid rgba(255,255,255,.2);
+  pointer-events:auto; touch-action:none;
+}
 .sk-stick-zone.active{border-color:rgba(255,255,255,.4);}
-.sk-stick-nub{position:absolute;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.32);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+.sk-stick-nub{position:absolute;width:42%;height:42%;border-radius:50%;background:rgba(255,255,255,.32);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
 .sk-stick-zone.active .sk-stick-nub{background:rgba(255,255,255,.5);}
-.sk-action-cluster{display:flex;flex-wrap:wrap-reverse;justify-content:flex-end;align-items:flex-end;gap:12px;max-width:220px;pointer-events:none;}
-.sk-action-btn{width:54px;height:54px;flex:none;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:800;letter-spacing:.02em;line-height:1.1;display:flex;align-items:center;justify-content:center;text-align:center;padding:2px;touch-action:none;pointer-events:auto;}
-.sk-action-btn.sk-action-shoot{width:68px;height:68px;font-size:11.5px;background:rgba(240,90,60,.32);border-color:rgba(255,150,120,.75);}
+/* Aktions-Cluster: SCHUSS ist der Anker unten rechts (größer als vorher), die bis zu drei PlayStyle-
+   Move-Buttons fächern sich von dort aus in einem Viertelkreis auf - Ost (direkt links vom Schuss,
+   gleiche Höhe), Nordost (diagonal), Nord (direkt darüber) - in genau dieser Reihenfolge befüllt, egal
+   ob 1, 2 oder 3 Moves verfügbar sind (siehe skSetupTouchControls). Alle Maße als CSS-Variablen in
+   vmin/clamp(), damit die komplette Geometrie (inkl. der Fächer-Positionen selbst) responsiv bleibt,
+   statt bei anderen Bildschirmgrößen/Seitenverhältnissen auseinanderzufallen. */
+.sk-action-cluster{
+  --shoot-size: clamp(76px, 12.5vmin, 100px);
+  --move-size: clamp(52px, 8.5vmin, 68px);
+  --gap: clamp(10px, 1.8vmin, 16px);
+  --edge: max(16px, 3vmin);
+  --ne-offset: calc((var(--shoot-size)/2) + ((var(--shoot-size)/2 + var(--gap) + var(--move-size)/2) * 0.7071) - (var(--move-size)/2));
+  position:fixed; right:var(--edge); bottom:calc(var(--edge) + env(safe-area-inset-bottom));
+  width:0; height:0; pointer-events:none;
+}
+.sk-action-btn{
+  position:absolute; border-radius:50%; background:rgba(255,255,255,.12); border:2px solid rgba(255,255,255,.3);
+  color:#fff; font-size:10px; font-weight:800; letter-spacing:.02em; line-height:1.1;
+  display:flex; align-items:center; justify-content:center; text-align:center; padding:2px;
+  touch-action:none; pointer-events:auto;
+}
+.sk-action-btn.sk-action-shoot{width:var(--shoot-size);height:var(--shoot-size);right:0;bottom:0;font-size:12.5px;background:rgba(240,90,60,.32);border-color:rgba(255,150,120,.75);}
+.sk-action-btn.sk-dir-e{width:var(--move-size);height:var(--move-size);right:calc(var(--shoot-size) + var(--gap));bottom:calc((var(--shoot-size) - var(--move-size))/2);}
+.sk-action-btn.sk-dir-n{width:var(--move-size);height:var(--move-size);right:calc((var(--shoot-size) - var(--move-size))/2);bottom:calc(var(--shoot-size) + var(--gap));}
+.sk-action-btn.sk-dir-ne{width:var(--move-size);height:var(--move-size);right:var(--ne-offset);bottom:var(--ne-offset);}
 .sk-action-btn.active{background:rgba(255,255,255,.42);transform:scale(.93);}
 .sk-action-btn.sk-action-shoot.active{background:rgba(255,120,90,.58);}
 @media (min-width:901px){ .sk-touch{display:none !important;} }
@@ -25347,22 +25377,25 @@ function skSetupTouchControls(overlay, myMoves){
   stick.addEventListener('pointercancel', stickEnd);
 
   const actionsEl = wrap.querySelector('#sk-actions');
-  // Höchstens 3 Move-Buttons + SHOOT: eine Karte hat nie mehr als 3 Traits (resolveCardTraits kappt
-  // hart), also nie mehr als 3 gleichzeitig nutzbare Moves - der Cluster bleibt dadurch immer klein und
-  // übersichtlich, kein Scroll-/Überlauf-Sonderfall nötig. SHOOT steht als letztes Element ganz rechts
-  // (näher am Daumen bei Rechtshänder-Griff) und ist deutlich größer als die Move-Buttons.
-  const buttonDefs = [];
-  if(myMoves.has('quickstep')) buttonDefs.push({key:'dash', label:'DASH'});
-  if(myMoves.has('slide')) buttonDefs.push({key:'slide', label:'TACKLE'});
-  if(myMoves.has('technical')) buttonDefs.push({key:'tech', label:'TECH'});
-  if(myMoves.has('finesse')) buttonDefs.push({key:'finesse', label:'FINESSE'});
-  if(myMoves.has('chip')) buttonDefs.push({key:'chip', label:'LUPFER'});
-  if(myMoves.has('rush')) buttonDefs.push({key:'rush', label:'RUSH'});
-  if(myMoves.has('block')) buttonDefs.push({key:'block', label:'BLOCK'});
+  // Höchstens 3 Move-Buttons: eine Karte hat nie mehr als 3 Traits (resolveCardTraits kappt hart), also
+  // nie mehr als 3 gleichzeitig nutzbare Moves. SCHUSS ist der Anker unten rechts (größer, immer da),
+  // die Move-Buttons fächern sich von dort in einem Viertelkreis auf - Ost (direkt links vom Schuss),
+  // Nordost (diagonal), Nord (direkt darüber) - der Reihe nach befüllt, egal ob 1, 2 oder 3 Moves
+  // verfügbar sind (siehe SK_TOUCH_DIRS/die zugehörigen CSS-Klassen sk-dir-e/ne/n).
+  const SK_TOUCH_DIRS = ['sk-dir-e', 'sk-dir-ne', 'sk-dir-n'];
+  const moveDefs = [];
+  if(myMoves.has('quickstep')) moveDefs.push({key:'dash', label:'DASH'});
+  if(myMoves.has('slide')) moveDefs.push({key:'slide', label:'TACKLE'});
+  if(myMoves.has('technical')) moveDefs.push({key:'tech', label:'TECH'});
+  if(myMoves.has('finesse')) moveDefs.push({key:'finesse', label:'FINESSE'});
+  if(myMoves.has('chip')) moveDefs.push({key:'chip', label:'LUPFER'});
+  if(myMoves.has('rush')) moveDefs.push({key:'rush', label:'RUSH'});
+  if(myMoves.has('block')) moveDefs.push({key:'block', label:'BLOCK'});
+  const buttonDefs = moveDefs.slice(0,3).map((def,i)=>({...def, dirClass:SK_TOUCH_DIRS[i]}));
   buttonDefs.push({key:'shoot', label:'SCHUSS', primary:true});
   buttonDefs.forEach(def=>{
     const btn = document.createElement('div');
-    btn.className = 'sk-action-btn' + (def.primary ? ' sk-action-shoot' : '');
+    btn.className = 'sk-action-btn' + (def.primary ? ' sk-action-shoot' : ' '+def.dirClass);
     btn.textContent = def.label;
     let pid = null;
     const press = e=>{
