@@ -25,6 +25,12 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
     const touchHiddenWhenAlreadyConnected = !document.querySelector('.sk-touch.active');
     const gamepadMoveKeys = skillDuelState.gamepadMoveKeys.slice();
+    // Ohne diesen Hinweis gibt es keine Möglichkeit herauszufinden, welcher physische Knopf z.B.
+    // Lupfer ist, weil B/X/Y je nach Karte unterschiedlich belegt sind (siehe skMoveButtonKeys) -
+    // gemeldetes Problem: "wie kann ich Lupfer auf Controller machen, es geht nicht".
+    const hintEl = document.getElementById('sk-gamepad-hint');
+    const hintVisibleWhenConnected = hintEl.style.display !== 'none';
+    const hintShowsCorrectMapping = hintEl.textContent === 'Controller verbunden — A Schuss · B DASH · X TACKLE · Y TECH';
 
     const pressOnly = (idx) => {
       fakeGamepad.buttons.forEach((b,i)=>{ b.pressed = (i===idx); });
@@ -50,12 +56,14 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     window.dispatchEvent(disconnectEvt);
     await new Promise(r=>setTimeout(r, 20));
     const touchVisibleAfterDisconnect = !!document.querySelector('.sk-touch.active');
+    const hintHiddenAfterDisconnect = document.getElementById('sk-gamepad-hint').style.display === 'none';
 
     document.getElementById('sk-close-btn').click();
     BY_ID.delete(fakeCard.id);
 
     return {
       touchHiddenWhenAlreadyConnected,
+      hintVisibleWhenConnected, hintShowsCorrectMapping, hintHiddenAfterDisconnect,
       moveKeysMatchExpectedOrder: JSON.stringify(gamepadMoveKeys)===JSON.stringify(['dash','slide','tech']),
       shootOnA,
       bTriggersFirstMove: inputB.dash===true && !inputB.slide && !inputB.tech,
@@ -70,6 +78,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   console.log('Skill-Duell-Controller-Support-Test');
   noErrors(errors, 'Seite');
   eq(result.touchHiddenWhenAlreadyConnected, true, 'Touch-Overlay bleibt versteckt, wenn beim Matchstart schon ein Controller verbunden ist');
+  eq(result.hintVisibleWhenConnected, true, 'die Controller-Knopf-Legende wird angezeigt, sobald ein Controller verbunden ist');
+  eq(result.hintShowsCorrectMapping, true, 'die Legende zeigt die tatsächliche B/X/Y-Zuordnung für die gewählte Karte korrekt an');
+  eq(result.hintHiddenAfterDisconnect, true, 'die Legende verschwindet wieder, sobald der Controller getrennt wird');
   eq(result.moveKeysMatchExpectedOrder, true, 'B/X/Y werden in derselben Prioritätsreihenfolge belegt wie die Touch-Buttons Ost/Nordost/Nord');
   eq(result.shootOnA, true, 'Button 0 (A) löst den Schuss aus');
   eq(result.bTriggersFirstMove, true, 'Button 1 (B) löst genau die erste verfügbare PlayStyle-Fähigkeit aus');

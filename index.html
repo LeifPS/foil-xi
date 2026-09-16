@@ -24637,7 +24637,13 @@ function skMoveIconUrls(){
 function skMoveIconImgs(){
   if(_skMoveIconImgsCache) return _skMoveIconImgsCache;
   _skMoveIconImgsCache = {};
-  Object.entries(skMoveIconUrls()).forEach(([move,url])=>{ const img=new Image(); img.src=url; _skMoveIconImgsCache[move]=img; });
+  // img._failed markiert einen fehlgeschlagenen Ladeversuch (Netzwerk/geblockte externe EA-URL) - siehe
+  // skDrawPlayer: dort gibt's dann sofort einen Text-Fallback statt für immer auf das Bild zu warten,
+  // das nie ankommt ("Symbol kommt nie" trotz korrekt ausgelöstem Move).
+  Object.entries(skMoveIconUrls()).forEach(([move,url])=>{
+    const img=new Image(); img.onerror = ()=>{ img._failed = true; }; img.src=url;
+    _skMoveIconImgsCache[move]=img;
+  });
   return _skMoveIconImgsCache;
 }
 function skillMovesForCard(card){
@@ -25235,11 +25241,20 @@ function skDrawPlayer(ctx, p){
     ctx.strokeStyle='rgba(130,200,255,0.55)'; ctx.lineWidth=2; ctx.stroke(); }
   if(p.toastTimer>0 && p.toastIcon){
     const img = skMoveIconImgs()[p.toastIcon];
+    const age = 0.9-p.toastTimer, scale = age<0.12 ? 1+(0.12-age)/0.12*0.35 : 1, size=46*scale;
+    const cx = p.x, cy = p.y-p.r-30;
+    ctx.save(); ctx.globalAlpha=Math.min(1,p.toastTimer/0.9);
     if(img && img.complete && img.naturalWidth>0){
-      const age = 0.9-p.toastTimer, scale = age<0.12 ? 1+(0.12-age)/0.12*0.35 : 1, size=46*scale;
-      ctx.save(); ctx.globalAlpha=Math.min(1,p.toastTimer/0.9);
-      ctx.drawImage(img, p.x-size/2, p.y-p.r-30-size/2, size, size); ctx.restore();
+      ctx.drawImage(img, cx-size/2, cy-size/2, size, size);
+    } else {
+      // Fallback, solange das externe EA-Icon noch lädt ODER dauerhaft fehlschlägt (Netzwerk/geblockte
+      // URL) - garantiert IMMER ein sichtbares Feedback, statt bei einem hängenden/fehlgeschlagenen
+      // Bild-Request auf ewig gar nichts zu zeigen.
+      skDrawCircle(ctx, cx, cy, size/2, 'rgba(20,22,18,.88)', 'rgba(255,255,255,.7)');
+      ctx.fillStyle = '#fff'; ctx.font = '700 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText((SKILL_MOVE_LABEL[p.toastIcon] || p.toastIcon).slice(0,7), cx, cy);
     }
+    ctx.restore();
   }
 }
 function skDrawBall(ctx, ball){
@@ -25315,9 +25330,19 @@ function skSetupKeyboard(){
 // Solange ein Controller verbunden ist, blendet sich das Touch-Overlay aus (siehe skUpdateTouchVisibility)
 // - es würde sonst auf einem Touchscreen-Gerät mit angeschlossenem Controller (z.B. Tablet/Handy per
 // Bluetooth-Gamepad) einen Teil des Spielfelds blockieren, obwohl niemand mehr draufdrückt.
+// Zeigt, welcher physische Controller-Knopf welchen Move auslöst - B/X/Y sind DYNAMISCH je nach
+// tatsächlichen PlayStyles+ der gewählten Karte belegt (siehe skMoveButtonKeys), ohne diesen Hinweis
+// hätte man keine Möglichkeit herauszufinden, welcher Knopf z.B. Lupfer ist.
+function skGamepadHintText(moveKeys){
+  const letters = ['B','X','Y'];
+  const parts = ['A Schuss', ...moveKeys.map((key,i)=>`${letters[i]} ${SK_MOVE_BUTTON_LABEL[key]}`)];
+  return 'Controller verbunden — ' + parts.join(' · ');
+}
 function skUpdateTouchVisibility(){
-  if(!skillDuelState || !skillDuelState.touchWrap) return;
-  skillDuelState.touchWrap.classList.toggle('active', skillDuelState.gamepadIndex==null);
+  if(!skillDuelState) return;
+  const gamepadConnected = skillDuelState.gamepadIndex!=null;
+  if(skillDuelState.touchWrap) skillDuelState.touchWrap.classList.toggle('active', !gamepadConnected);
+  if(skillDuelState.gamepadHintEl) skillDuelState.gamepadHintEl.style.display = gamepadConnected ? '' : 'none';
 }
 function skSetupGamepad(){
   const onConnect = e=>{
@@ -25519,6 +25544,7 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
     </div>
     <div class="sk-field-holder"><canvas id="sk-canvas" width="${SK_W}" height="${SK_H}"></canvas><div class="sk-msg" id="sk-msg"></div></div>
     <div class="sk-controls-hint">WASD/Pfeile bewegen · Leertaste schießen · nur mit passendem PlayStyle+: E Dash · Q Technik · Shift Finesse · F Grätsche · C Lupfer · R Raserei · B Block</div>
+    <div class="sk-controls-hint" id="sk-gamepad-hint" style="display:none;color:var(--gold);"></div>
     <div class="sk-rotate-hint"><span class="sk-rotate-icon">↻</span><div style="font-weight:700;">Bitte Gerät drehen</div><div class="hint">Skill-Duell läuft nur im Querformat.</div></div>`;
   document.body.appendChild(overlay);
   skTryLockLandscape();
@@ -25532,9 +25558,12 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
   };
   const myMoves = isHost ? engine.p1.moves : engine.p2.moves;
   skillDuelState = {matchId, isHost, engine, overlay, gamepadIndex:null, vsBot, gamepadMoveKeys:skMoveButtonKeys(myMoves)};
+  skillDuelState.gamepadHintEl = document.getElementById('sk-gamepad-hint');
+  skillDuelState.gamepadHintEl.textContent = skGamepadHintText(skillDuelState.gamepadMoveKeys);
   skillDuelState.removeKeyboard = skSetupKeyboard();
   skillDuelState.removeGamepad = skSetupGamepad();
   skillDuelState.removeTouch = skSetupTouchControls(overlay, myMoves);
+  skUpdateTouchVisibility(); // deckt auch den Fall ab, dass beim Matchstart schon ein Controller verbunden ist
   document.getElementById('sk-close-btn').addEventListener('click', ()=>{
     if(!vsBot && isHost && fb && fb.rtdb) fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), {...skSerializeState(engine,true)}).catch(()=>{});
     skTeardownMatch();
@@ -34560,6 +34589,13 @@ const PLAYSTYLE_ELITE_OF = (()=>{
 // (psTrainingUpgrade) to find which base trait a given elite label came from, and by the UI to only
 // ever offer upgrading traits that actually HAVE an elite tier at all.
 const PLAYSTYLE_BASE_OF = Object.fromEntries(Object.entries(PLAYSTYLE_ELITE_OF).map(([base,elite])=>[elite,base]));
+// Lädt die externen EA-Move-Icons fürs Skill-Modus schon beim Booten vor, nicht erst beim ersten
+// tatsächlichen Trigger eines Moves im allerersten Match einer Session - sonst ist das Bild spätestens
+// beim ersten Mal noch nicht fertig geladen und der Toast-Icon-Ring bleibt für dessen gesamte 0,9s
+// unsichtbar (meldete sich als "Symbol kommt nie"). skDrawPlayer zeigt trotzdem IMMER einen
+// Text-Fallback, falls das Icon selbst nie lädt (Netzwerk/geblockte URL) - das hier ist nur der
+// zusätzliche Kopfstart, damit der Normalfall (funktionierendes Netz) das echte Icon zeigt.
+skMoveIconImgs();
 
 // ===== PlayStyle-Training: pay to permanently add a base PlayStyle or upgrade one to "+" on ONE owned
 // card copy (not the shared card type - see psOverride/applyCardLevel's traitsOverride param). Applies
