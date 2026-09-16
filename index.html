@@ -25068,17 +25068,24 @@ function openLocalTwoPlayerSetup(){
 const SK_W = 1100, SK_H = 660, SK_GOAL_H = 180; // Torgröße im selben Verhältnis zur Feldhöhe wie vorher (150/540) mitskaliert
 const SK_PLAYER_RADIUS = 22, SK_BALL_RADIUS = 25; // Ball etwas größer als der Spieler (war vorher deutlich kleiner, r:13)
 const SK_GOAL_Y0 = SK_H/2 - SK_GOAL_H/2, SK_GOAL_Y1 = SK_H/2 + SK_GOAL_H/2;
+// "Mach klarer wo das Tor ist, indem du ihm Tiefe gibst, so gibt es auch Pfosten": echte Netz-Box mit
+// sichtbarer Tiefe HINTER der Torlinie statt nur einer dünnen Linie am Spielfeldrand - der Canvas
+// bekommt dafür an jeder Seite SK_GOAL_DEPTH Extra-Breite (siehe skDrawField/startSkillMatch), die
+// eigentliche Spielfeldgröße/Physik (SK_W/SK_H) bleibt davon komplett unberührt.
+const SK_GOAL_DEPTH = 30;
 const SK_WALL = 6, SK_PLAYER_OOB = 34;
 const SK_MATCH_SECONDS = 180, SK_GOAL_LIMIT = 5;
 const SK_TOUCH_MARGIN = 22, SK_BASE_POWER = 480, SK_MOMENTUM_FACTOR = 0.9, SK_CURVE_FACTOR = 0.55;
 // "Deutlich deutlich langsamere Spieler": genereller Multiplikator auf Beschleunigung UND Höchsttempo
 // in deriveSkillPhysics, wirkt auf JEDE Karte gleichermaßen (die PAC-Skalierung/den PAC-Tempo-Deckel
-// zwischen schnellen und langsamen Karten verändert das nicht, nur das gesamte Niveau).
-const SK_PLAYER_SPEED_MULT = 0.6;
+// zwischen schnellen und langsamen Karten verändert das nicht, nur das gesamte Niveau). Erst 0.6, auf
+// erneuten Wunsch ("ein 99er soll ungefähr ein Drittel von dem haben, was er gerade hat") nochmal um
+// den Faktor 1/3 weiter gesenkt: 0.6 * (1/3) ≈ 0.2.
+const SK_PLAYER_SPEED_MULT = 0.2;
 // "Mehr Schusspower": genereller Multiplikator auf JEDEN Schuss (wirkt vor allen move-spezifischen
 // Multiplikatoren in skReleaseShot, also gleichermaßen auf Sofortschuss, Finesse, Lupfer, Power Shot,
-// Header/Volley, Low Driven Shot). Erst 1.5 (50% mehr), auf erneuten Wunsch weiter auf 1.85 angehoben.
-const SK_SHOT_SPEED_BOOST = 1.85;
+// Header/Volley, Low Driven Shot). Erst 1.5 (50% mehr), dann 1.85, jetzt nochmal etwas angehoben.
+const SK_SHOT_SPEED_BOOST = 2.0;
 // Ball-Bremse: statt einer konstanten prozentualen Bremsung (fühlte sich bei hohem Tempo wie ein
 // gleitender Hockey-Puck an) wächst der Bremsanteil jetzt zusätzlich mit dem Balltempo selbst - ein
 // harter Schuss verliert dadurch kurz nach dem Abschluss sehr viel schneller an Fahrt, ein normal
@@ -25503,6 +25510,15 @@ function skResetPositions(engine){
   engine.ball.x=SK_W/2; engine.ball.y=SK_H/2; engine.ball.vx=0; engine.ball.vy=0; engine.ball.spin=0; engine.ball.airborne=0;
 }
 function skDrawField(ctx){
+  // Alle Feld-/Spieler-/Ballkoordinaten (SK_W/SK_H, p.x/p.y, ball.x/ball.y) bleiben unverändert reine
+  // Spielfeldkoordinaten (0..SK_W) - der Canvas selbst ist aber links UND rechts um SK_GOAL_DEPTH breiter
+  // als das Spielfeld (siehe startSkillMatch), damit die Tor-Tiefe tatsächlich sichtbaren Platz hat.
+  // Eine einzige Verschiebung hier reicht: sie bleibt für den Rest des Frames aktiv, skDrawPlayer/
+  // skDrawBall (danach in skRender aufgerufen) brauchen deshalb keine eigene Anpassung. Reset am Anfang
+  // verhindert, dass sich die Verschiebung über mehrere Frames aufsummiert.
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+  ctx.translate(SK_GOAL_DEPTH,0);
   ctx.fillStyle='#123'; ctx.fillRect(0,0,SK_W,SK_H);
   const stripes=10;
   for(let i=0;i<stripes;i++){ ctx.fillStyle = i%2===0?'#1f6b3a':'#1a5e32'; ctx.fillRect(0,i*(SK_H/stripes),SK_W,SK_H/stripes+1); }
@@ -25512,10 +25528,34 @@ function skDrawField(ctx){
   ctx.beginPath(); ctx.arc(SK_W/2,SK_H/2,70,0,Math.PI*2); ctx.stroke();
   ctx.beginPath(); ctx.arc(SK_W/2,SK_H/2,3,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,0.78)'; ctx.fill();
   ctx.strokeRect(SK_WALL,SK_H/2-110,120,220); ctx.strokeRect(SK_W-SK_WALL-120,SK_H/2-110,120,220);
-  ctx.fillStyle='rgba(255,255,255,0.78)';
-  ctx.fillRect(SK_WALL-4,SK_GOAL_Y0,4,SK_GOAL_H); ctx.fillRect(SK_W-SK_WALL,SK_GOAL_Y0,4,SK_GOAL_H);
-  ctx.strokeStyle='rgba(255,255,255,0.35)';
-  ctx.strokeRect(SK_WALL-4,SK_GOAL_Y0,24,SK_GOAL_H); ctx.strokeRect(SK_W-SK_WALL-20,SK_GOAL_Y0,24,SK_GOAL_H);
+  // Torkasten mit echter Tiefe HINTER der Torlinie statt nur einer dünnen Linie - macht auf einen Blick
+  // klar, wo das Tor wirklich ist und wo genau die Pfosten stehen (die vier weißen Punkte).
+  skDrawGoalDepth(ctx, SK_WALL, -1);
+  skDrawGoalDepth(ctx, SK_W-SK_WALL, 1);
+}
+// lineX: die tatsächliche Torlinie (Zähl-Grenze in skStep). dir: -1 wenn die Tiefe nach links (negative
+// x, linkes Tor) wachsen soll, +1 nach rechts (rechtes Tor) - beides liegt dank der Extra-Canvas-Breite
+// (siehe skDrawField) jetzt tatsächlich im sichtbaren Bereich.
+function skDrawGoalDepth(ctx, lineX, dir){
+  const backX = lineX + dir*SK_GOAL_DEPTH;
+  const boxX = Math.min(lineX, backX);
+  ctx.fillStyle = 'rgba(4,8,7,0.6)';
+  ctx.fillRect(boxX, SK_GOAL_Y0, SK_GOAL_DEPTH, SK_GOAL_H);
+  // Netz-Raster als einfache Textur, damit die Fläche erkennbar ein Netz ist statt nur ein dunkler Klotz.
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1;
+  const mesh = 8;
+  for(let gy=SK_GOAL_Y0; gy<=SK_GOAL_Y1; gy+=mesh){ ctx.beginPath(); ctx.moveTo(lineX,gy); ctx.lineTo(backX,gy); ctx.stroke(); }
+  for(let d=0; d<=SK_GOAL_DEPTH; d+=mesh){ const x=lineX+dir*d; ctx.beginPath(); ctx.moveTo(x,SK_GOAL_Y0); ctx.lineTo(x,SK_GOAL_Y1); ctx.stroke(); }
+  // Seitenstangen (oben/unten) + Rückstange, von oben gesehen.
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(lineX,SK_GOAL_Y0); ctx.lineTo(backX,SK_GOAL_Y0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(lineX,SK_GOAL_Y1); ctx.lineTo(backX,SK_GOAL_Y1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(backX,SK_GOAL_Y0); ctx.lineTo(backX,SK_GOAL_Y1); ctx.stroke();
+  // Die vier Pfosten selbst (vorne = echte Torlinie, hinten = Tiefe) als dicke weiße Punkte.
+  ctx.fillStyle = '#fff';
+  [[lineX,SK_GOAL_Y0],[lineX,SK_GOAL_Y1],[backX,SK_GOAL_Y0],[backX,SK_GOAL_Y1]].forEach(([px,py])=>{
+    ctx.beginPath(); ctx.arc(px,py,4.5,0,Math.PI*2); ctx.fill();
+  });
 }
 function skDrawCircle(ctx,x,y,r,color,ring){
   ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
@@ -25890,7 +25930,7 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
       <div style="text-align:center;"><div class="sk-score"><span id="sk-s1">0</span><span class="sk-sep">:</span><span id="sk-s2">0</span></div><div class="sk-timer" id="sk-timer">3:00</div></div>
       <div class="sk-team"><span class="sk-stamina"><span class="sk-stamina-fill" id="sk-stam-opp" style="background:#6f7bf0;"></span></span>${guestName}<span class="sk-dot" style="background:#6f7bf0;box-shadow:0 0 8px #6f7bf0;"></span></div>
     </div>
-    <div class="sk-field-holder"><canvas id="sk-canvas" width="${SK_W}" height="${SK_H}"></canvas><div class="sk-msg" id="sk-msg"></div></div>
+    <div class="sk-field-holder"><canvas id="sk-canvas" width="${SK_W+SK_GOAL_DEPTH*2}" height="${SK_H}"></canvas><div class="sk-msg" id="sk-msg"></div></div>
     <div class="sk-controls-hint"><kbd>WASD</kbd>/<kbd>Pfeile</kbd> bewegen · <kbd>Leertaste</kbd> schießen · <span style="opacity:.6;">nur mit passendem PlayStyle+:</span> <kbd>E</kbd> Dash · <kbd>Q</kbd> Technik · <kbd>Shift</kbd> Finesse · <kbd>F</kbd> Grätsche · <kbd>C</kbd> Lupfer · <kbd>R</kbd> Raserei · <kbd>B</kbd> Block · <kbd>G</kbd> Beinarbeit · <kbd>J</kbd> Abdrängen · <kbd>T</kbd> Trick · <kbd>L</kbd> Flacher Schuss</div>
     <div class="sk-controls-hint" id="sk-gamepad-hint" style="display:none;color:var(--gold);"></div>
     <div class="sk-rotate-hint"><span class="sk-rotate-icon">↻</span><div style="font-weight:700;">Bitte Gerät drehen</div><div class="hint">Skill-Duell läuft nur im Querformat.</div></div>`;

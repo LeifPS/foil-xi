@@ -44,7 +44,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     startSkillMatch(null, true, {hostName:'Ich', guestName:'AFK-Bot', hostPick:fakeCard, guestPick:SK_BOT_CARD}, {vsBot:true});
     await new Promise(r=>setTimeout(r, 50));
     const canvas = document.getElementById('sk-canvas');
-    const canvasMatchesNewSize = canvas.width===SK_W && canvas.height===SK_H;
+    // Canvas ist links+rechts um SK_GOAL_DEPTH breiter als das Spielfeld selbst (Platz für die Tor-
+    // Tiefe/Pfosten, siehe skDrawField) - die reine Spielfeldgröße bleibt SK_W/SK_H.
+    const canvasMatchesNewSize = canvas.width===SK_W+SK_GOAL_DEPTH*2 && canvas.height===SK_H;
     document.getElementById('sk-close-btn').click();
 
     // ---------- (3) Etwas mehr Slide ----------

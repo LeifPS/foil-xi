@@ -1,0 +1,81 @@
+// Regressionstest für "mach klarer wo das Tor ist, indem du ihm Tiefe gibst, so gibt es auch Pfosten
+// zb., mach den Ball etwas stärker schießen, und der Spieler soll deutlich langsamer sein (ungefähr
+// ein Drittel von dem, was ein 99er gerade hat)": deckt (1) die neue Tor-Tiefe (breiterer Canvas als
+// das Spielfeld, damit ein echter Netzkasten mit Pfosten hinter der Torlinie sichtbaren Platz hat),
+// (2) den erneuten Schusspower-Buff und (3) die erneute, diesmal sehr starke Tempo-Reduktion.
+const { withPage } = require('./lib/browser');
+const { ok, eq, noErrors, summary } = require('./lib/assert');
+
+(async () => {
+  const { result, errors } = await withPage(async (page) => page.evaluate(async () => {
+    const fakeCard = {id:900001301, n:'Goal-Depth-Test', pos:'ST', ov:88, pac:80,sho:80,pas:70,dri:75,defn:40,phy:75, traits:[], variant:'base'};
+    BY_ID.set(fakeCard.id, fakeCard);
+
+    // ---------- (1) Tor-Tiefe ----------
+    const goalDepthExists = SK_GOAL_DEPTH > 0;
+    startSkillMatch(null, true, {hostName:'Ich', guestName:'AFK-Bot', hostPick:fakeCard, guestPick:SK_BOT_CARD}, {mode:'bot'});
+    await new Promise(r=>setTimeout(r, 50));
+    const canvas = document.getElementById('sk-canvas');
+    // Der Canvas ist links UND rechts um SK_GOAL_DEPTH breiter als das reine Spielfeld (SK_W) - genug
+    // Platz, damit die Tor-Box tatsächlich sichtbar HINTER der Torlinie liegt statt vom Canvas-Rand
+    // abgeschnitten zu werden.
+    const canvasHasExtraWidthForGoalDepth = canvas.width === SK_W + SK_GOAL_DEPTH*2;
+    const fieldHeightUnchanged = canvas.height === SK_H;
+    // skDrawField/skDrawGoalDepth dürfen mit einem echten 2D-Context nicht crashen (deckt u.a. den
+    // Transform-Reset ab, der ein Aufsummieren der Verschiebung über mehrere Frames verhindert).
+    const ctx = canvas.getContext('2d');
+    let renderErrorFrame1 = null, renderErrorFrame2 = null;
+    try{ skRender(ctx, skillDuelState.engine); }catch(e){ renderErrorFrame1 = e.message; }
+    try{ skRender(ctx, skillDuelState.engine); }catch(e){ renderErrorFrame2 = e.message; }
+    // Nach dem Zeichnen muss die Transform-Matrix wieder exakt der eine Translate von skDrawField sein
+    // (kein Aufsummieren über mehrere Frames hinweg).
+    const t = ctx.getTransform();
+    const transformDoesNotAccumulate = t.e === SK_GOAL_DEPTH && t.f === 0;
+    document.getElementById('sk-close-btn').click();
+
+    // ---------- (2) Ball schießt etwas stärker ----------
+    // Muss über der zuvor schon erhöhten Schwelle (1.85) liegen - "etwas stärker" ist ein weiterer,
+    // wenn auch kleinerer Schritt auf dem bereits verstärkten Schusstempo.
+    const shotIsStrongerThanBefore = SK_SHOT_SPEED_BOOST > 1.85;
+
+    // ---------- (3) Spieler deutlich langsamer (~ein Drittel dessen, was ein 99er GERADE hat) ----------
+    const fastCard = {...fakeCard, pac:99};
+    const speedNow = deriveSkillPhysics(fastCard).maxSpeed;
+    // "Gerade hat" bezog sich auf den Stand VOR diesem Buff (SK_PLAYER_SPEED_MULT war 0.6) - das neue
+    // Tempo muss also ungefähr bei einem Drittel dessen liegen, was ein 99er mit dem alten Multiplikator
+    // gehabt hätte (großzügiger Korridor 25-45%, da "ungefähr" keine Punktlandung verlangt).
+    const SK_PAC_SPEED_SOFT_CAP = 50, SK_PAC_SPEED_SOFT_CAP_RATE = 0.12;
+    const nPacSpeedRef = raw => {
+      const v = Math.max(1, Math.min(99, raw||50));
+      const capped = v<=SK_PAC_SPEED_SOFT_CAP ? v : SK_PAC_SPEED_SOFT_CAP + (v-SK_PAC_SPEED_SOFT_CAP)*SK_PAC_SPEED_SOFT_CAP_RATE;
+      return capped/99;
+    };
+    const unmultipliedMaxSpeed99 = 250 + nPacSpeedRef(99)*150;
+    const speedBefore = unmultipliedMaxSpeed99 * 0.6; // Stand direkt vor diesem Buff
+    const ratio = speedNow / speedBefore;
+    const playerIsRoughlyAThirdOfBefore = ratio >= 0.25 && ratio <= 0.45;
+    const playerIsSubstantiallySlowerOverall = SK_PLAYER_SPEED_MULT <= 0.25;
+
+    BY_ID.delete(fakeCard.id);
+
+    return {
+      goalDepthExists, canvasHasExtraWidthForGoalDepth, fieldHeightUnchanged,
+      renderErrorFrame1, renderErrorFrame2, transformDoesNotAccumulate,
+      shotIsStrongerThanBefore, playerIsRoughlyAThirdOfBefore, playerIsSubstantiallySlowerOverall,
+    };
+  }));
+
+  console.log('Skill-Duell-Tor-Tiefe-Power-Tempo-Test');
+  noErrors(errors, 'Seite');
+  eq(result.goalDepthExists, true, 'SK_GOAL_DEPTH ist gesetzt (Tor bekommt sichtbare Tiefe)');
+  eq(result.canvasHasExtraWidthForGoalDepth, true, 'der Canvas ist links+rechts um SK_GOAL_DEPTH breiter als das reine Spielfeld');
+  eq(result.fieldHeightUnchanged, true, 'die Canvas-Höhe bleibt unverändert bei SK_H');
+  eq(result.renderErrorFrame1, null, 'skRender zeichnet die neue Tor-Tiefe/Pfosten ohne Fehler');
+  eq(result.renderErrorFrame2, null, 'ein zweiter aufeinanderfolgender Render-Frame läuft ebenfalls fehlerfrei');
+  eq(result.transformDoesNotAccumulate, true, 'die Canvas-Transform-Verschiebung summiert sich nicht über mehrere Frames auf');
+  eq(result.shotIsStrongerThanBefore, true, 'SK_SHOT_SPEED_BOOST wurde gegenüber dem vorherigen Stand (1.85) nochmal erhöht');
+  eq(result.playerIsRoughlyAThirdOfBefore, true, 'ein 99er-PAC-Spieler ist jetzt ungefähr ein Drittel so schnell wie vor diesem Tempo-Buff');
+  eq(result.playerIsSubstantiallySlowerOverall, true, 'SK_PLAYER_SPEED_MULT liegt deutlich niedriger als zuvor (<=0.25)');
+
+  summary('Skill-Duell-Tor-Tiefe-Power-Tempo-Test');
+})().catch(e => { console.error('FATAL', e); process.exit(1); });
