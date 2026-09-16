@@ -69,18 +69,22 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // Neuer, separater Tempo-Deckel ("viel langsamer, ungefähr die Hälfte davon"): unterhalb von 50
     // PAC exakt dieselbe Geschwindigkeit wie vorher (linear, Deckel unten überhaupt nicht aktiv),
     // oberhalb von 50 wird der weitere Tempozuwachs auf nur noch 12% Wirkung gedrückt.
+    // Alle erwarteten Werte werden mit dem generellen "deutlich deutlich langsamere Spieler"-
+    // Multiplikator SK_PLAYER_SPEED_MULT skaliert - der verändert das PAC-Tempo-Deckel-Verhalten
+    // relativ zueinander nicht, senkt nur das gesamte Geschwindigkeitsniveau gleichermaßen.
     const pacLowA = {...fakeCard, pac:30}, pacLowB = {...fakeCard, pac:50};
     const speedLowA = deriveSkillPhysics(pacLowA).maxSpeed, speedLowB = deriveSkillPhysics(pacLowB).maxSpeed;
-    const belowSpeedCapUnaffected = Math.abs(speedLowA - (250 + (30/99)*150)) < 0.0001 && Math.abs(speedLowB - (250 + (50/99)*150)) < 0.0001;
+    const belowSpeedCapUnaffected = Math.abs(speedLowA - (250 + (30/99)*150)*SK_PLAYER_SPEED_MULT) < 0.0001 && Math.abs(speedLowB - (250 + (50/99)*150)*SK_PLAYER_SPEED_MULT) < 0.0001;
     const pac70 = {...fakeCard, pac:70}, pac99forSpeed = {...fakeCard, pac:99};
     const speed70 = deriveSkillPhysics(pac70).maxSpeed, speed99forSpeed = deriveSkillPhysics(pac99forSpeed).maxSpeed;
-    const linearProjectionAt99 = 250 + (99/99)*150; // was ein 99er ohne Deckel hätte (400)
+    const linearProjectionAt99 = (250 + (99/99)*150) * SK_PLAYER_SPEED_MULT; // was ein 99er ohne Deckel hätte (400*Mult)
     const fastPlayersAreSlowerThanLinear = speed99forSpeed < linearProjectionAt99 && speed99forSpeed > speed70;
     // "Ungefähr die Hälfte" heißt: der Tempo-BONUS (nicht die absolute Geschwindigkeit, die ja immer
-    // mindestens die Basis 250 ist) eines 99er-PAC-Spielers muss ungefähr auf die Hälfte dessen sinken,
-    // was er ganz ohne Deckel hätte (150) - großzügiger Korridor (35-65%) statt eines exakten Werts,
+    // mindestens die (skalierte) Basis hat) eines 99er-PAC-Spielers muss ungefähr auf die Hälfte dessen
+    // sinken, was er ganz ohne Deckel hätte - großzügiger Korridor (35-65%) statt eines exakten Werts,
     // da "ungefähr" ausdrücklich keine Punktlandung verlangt.
-    const bonusAt99 = speed99forSpeed - 250, linearBonusAt99 = linearProjectionAt99 - 250;
+    const baseSpeed = 250*SK_PLAYER_SPEED_MULT;
+    const bonusAt99 = speed99forSpeed - baseSpeed, linearBonusAt99 = linearProjectionAt99 - baseSpeed;
     const reductionIsSubstantial = bonusAt99/linearBonusAt99 >= 0.35 && bonusAt99/linearBonusAt99 <= 0.65;
 
     // Elite-Variante desselben Traits (Grätsche+ statt Grätsche) muss denselben Move freischalten -
