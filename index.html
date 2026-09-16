@@ -25512,7 +25512,12 @@ function skStep(engine, dt){
       const dirx=ball.vx/speed, diry=ball.vy/speed, perpx=-diry, perpy=dirx;
       ball.vx += perpx*ball.spin*dt*1.6; ball.vy += perpy*ball.spin*dt*1.6;
     }
-    ball.spin *= Math.exp(-0.9*dt);
+    // Spin zerfällt mit DERSELBEN Rate wie das Balltempo selbst (statt einer fixen, viel langsameren
+    // Rate) - hält das Verhältnis Spin/Tempo über den ganzen Flug ungefähr konstant. Vorher blieb der
+    // Spin lange kräftig, während das Tempo (durch die stärkere Ballbremse) schon stark abgesackt war -
+    // gegen Ende dominierte der Spin dann die noch verbleibende, kleine Geschwindigkeit komplett und
+    // der Ball drehte sich regelrecht im Kreis statt nur zu kurven.
+    ball.spin *= ballDecay;
   }
   ball.x += ball.vx*dt; ball.y += ball.vy*dt;
   if(ball.airborne>0) ball.airborne -= dt;
