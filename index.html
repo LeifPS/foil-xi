@@ -2849,24 +2849,37 @@ body.is-offline #offline-overlay{display:flex;}
 .modal-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:960px;width:100%;max-height:88vh;overflow:auto;}
 
 /* ---- Skill-Modus: full-bleed match overlay ---- */
-.sk-overlay{position:fixed;inset:0;background:#05070a;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px;touch-action:none;}
-.sk-hud{width:100%;max-width:900px;display:flex;align-items:center;justify-content:space-between;font-family:inherit;color:#eee6d8;}
-.sk-hud .sk-team{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;}
+.sk-overlay{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% -10%,#132a20 0%,#070b0d 55%,#030506 100%);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:10px;touch-action:none;}
+.sk-hud{width:100%;max-width:960px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:inherit;color:#eee6d8;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 18px;box-shadow:0 14px 34px -18px rgba(0,0,0,.7),0 0 0 1px rgba(0,0,0,.2) inset;backdrop-filter:blur(6px);}
+.sk-hud .sk-team{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:800;letter-spacing:.01em;min-width:0;}
+.sk-hud .sk-team span:not(.sk-dot):not(.sk-stamina){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:34vw;}
 .sk-dot{width:11px;height:11px;border-radius:50%;flex:none;}
-.sk-stamina{width:56px;height:4px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden;}
-.sk-stamina-fill{height:100%;width:100%;}
-.sk-score{font-size:26px;font-weight:800;display:flex;gap:10px;align-items:baseline;color:#fff;}
-.sk-score .sk-sep{opacity:.4;font-size:18px;}
-.sk-timer{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;transition:color .3s;}
+.sk-stamina{width:56px;height:5px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.25) inset;}
+.sk-stamina-fill{height:100%;width:100%;transition:width .12s linear,background .25s ease;}
+.sk-score{font-size:30px;font-weight:900;display:flex;gap:12px;align-items:baseline;color:#fff;font-family:'Anton',inherit;letter-spacing:.02em;text-shadow:0 2px 10px rgba(0,0,0,.5);}
+.sk-score .sk-sep{opacity:.35;font-size:20px;}
+.sk-timer{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;transition:color .3s;font-weight:700;letter-spacing:.03em;margin-top:1px;}
 .sk-timer-warn{animation:sk-timer-pulse 1s ease-in-out infinite;}
-@keyframes sk-timer-pulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+@keyframes sk-timer-pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
 .sk-score span{display:inline-block;}
-.sk-field-holder{position:relative;max-width:100%;}
-#sk-canvas{display:block;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.55);max-width:100%;height:auto;background:#123;}
-.sk-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;font-weight:800;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.6);pointer-events:none;opacity:0;transition:opacity .25s;text-align:center;}
-.sk-controls-hint{font-size:11px;color:var(--muted);text-align:center;max-width:900px;}
-.sk-close{position:absolute;top:10px;right:10px;background:none;border:1px solid var(--line);color:#eee6d8;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;z-index:2;}
-.sk-result{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 30px;text-align:center;max-width:360px;}
+.sk-field-holder{position:relative;max-width:100%;border-radius:14px;padding:5px;background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.09);box-shadow:0 24px 60px -20px rgba(0,0,0,.75);}
+#sk-canvas{display:block;border-radius:9px;max-width:100%;height:auto;background:#123;}
+.sk-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.7);font-size:34px;font-weight:900;font-family:'Anton',inherit;letter-spacing:.03em;background:linear-gradient(180deg,#ffe9a8,var(--gold, #f2c94c));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 4px 24px rgba(0,0,0,.6);filter:drop-shadow(0 0 14px rgba(242,201,76,.45));pointer-events:none;opacity:0;transition:opacity .2s ease,transform .35s cubic-bezier(.2,1.4,.4,1);text-align:center;white-space:nowrap;}
+.sk-msg.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+.sk-controls-hint{font-size:11px;color:var(--muted);text-align:center;max-width:960px;display:flex;flex-wrap:wrap;justify-content:center;gap:5px;align-items:center;}
+.sk-controls-hint kbd{display:inline-block;font-family:inherit;font-size:10px;font-weight:800;color:#eee6d8;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-bottom-width:2px;border-radius:5px;padding:1px 6px;margin-right:3px;}
+.sk-close{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#eee6d8;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;z-index:2;transition:background .15s,transform .15s;}
+.sk-close:hover{background:rgba(255,90,77,.22);border-color:rgba(255,120,110,.5);}
+.sk-close:active{transform:scale(.95);}
+.sk-result{background:linear-gradient(180deg,var(--panel),var(--void));border:1px solid var(--line);border-radius:20px;padding:30px 34px;text-align:center;max-width:380px;box-shadow:0 30px 70px -25px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.03) inset;animation:sk-result-pop .3s cubic-bezier(.2,1.4,.4,1);}
+@keyframes sk-result-pop{from{opacity:0;transform:scale(.85) translateY(10px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.sk-result-badge{font-size:52px;line-height:1;margin-bottom:6px;filter:drop-shadow(0 6px 16px rgba(0,0,0,.4));}
+.sk-result-title{font-family:'Anton',inherit;letter-spacing:.02em;font-size:26px;margin-bottom:8px;}
+.sk-result-title.win{color:var(--turf-bright,#3ddc84);}
+.sk-result-title.lose{color:#ff6b5c;}
+.sk-result-title.draw{color:var(--gold,#f2c94c);}
+.sk-result-score{font-size:22px;font-weight:800;color:#fff;margin-bottom:4px;font-variant-numeric:tabular-nums;}
+.sk-result-actions{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap;}
 /* Touch-Steuerung (nur auf touch-fähigen Viewports, siehe JS isSkillTouchDevice) - komplett auf
    Pointer Events umgestellt (siehe skSetupTouchControls): jeder Button/Stick nimmt beim Antippen den
    Pointer per setPointerCapture in Besitz, sodass er "gedrückt" bleibt, bis genau dieser Finger
@@ -2927,17 +2940,18 @@ body.is-offline #offline-overlay{display:flex;}
    Fallback, der auf JEDEM Touchscreen im Hochformat greift, unabhängig davon, ob der Lock geklappt hat.
    Volldeckend + höherer z-index als alles andere im Overlay (inkl. Touch-Buttons), damit im Hochformat
    nichts darunter versehentlich bedienbar bleibt. */
-.sk-rotate-hint{display:none;position:fixed;inset:0;z-index:260;background:#05070a;color:#eee6d8;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;}
+.sk-rotate-hint{display:none;position:fixed;inset:0;z-index:260;background:radial-gradient(120% 90% at 50% -10%,#132a20 0%,#070b0d 55%,#030506 100%);color:#eee6d8;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;}
 .sk-rotate-hint .sk-rotate-icon{font-size:46px;display:inline-block;animation:sk-rotate-spin 1.8s ease-in-out infinite;}
 @keyframes sk-rotate-spin{0%,100%{transform:rotate(0deg);}50%{transform:rotate(90deg);}}
 @media (orientation:portrait) and (pointer:coarse){ .sk-overlay .sk-rotate-hint{display:flex;} }
 /* Kartenauswahl fürs Skill-Duell (siehe skCardPickTile) - echte Kartenvorschau statt reiner Textliste */
-.sk-pick-grid{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;padding:6px 0;}
-.sk-pick-tile{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;width:110px;transition:transform .15s;}
+.sk-pick-grid{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;padding:8px 4px;}
+.sk-pick-tile{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:7px;width:112px;padding:8px 6px 10px;border-radius:12px;border:1px solid transparent;background:transparent;transition:transform .15s,background .15s,border-color .15s;}
+.sk-pick-tile:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);transform:translateY(-3px);}
 .sk-pick-tile:active{transform:scale(.96);}
-.sk-pick-tile.picked{opacity:.4;pointer-events:none;}
+.sk-pick-tile.picked{opacity:.35;pointer-events:none;filter:grayscale(.4);}
 .sk-pick-moves{display:flex;flex-wrap:wrap;justify-content:center;gap:3px;margin-top:2px;}
-.sk-pick-move-chip{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;color:var(--gold);background:rgba(255,255,255,.06);border-radius:8px;padding:1px 5px;white-space:nowrap;}
+.sk-pick-move-chip{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;color:var(--gold);background:rgba(242,201,76,.1);border:1px solid rgba(242,201,76,.22);border-radius:8px;padding:1px 6px;white-space:nowrap;}
 .sk-pick-move-chip img{width:11px;height:11px;object-fit:contain;}
 .sk-pick-move-chip i{color:var(--muted);font-style:normal;font-size:8.5px;}
 
@@ -25060,10 +25074,10 @@ const SK_TOUCH_MARGIN = 22, SK_BASE_POWER = 480, SK_MOMENTUM_FACTOR = 0.9, SK_CU
 // in deriveSkillPhysics, wirkt auf JEDE Karte gleichermaßen (die PAC-Skalierung/den PAC-Tempo-Deckel
 // zwischen schnellen und langsamen Karten verändert das nicht, nur das gesamte Niveau).
 const SK_PLAYER_SPEED_MULT = 0.6;
-// "Beim Abschluss soll der Ball 50% schneller sein": genereller Multiplikator auf JEDEN Schuss (wirkt
-// vor allen move-spezifischen Multiplikatoren in skReleaseShot, also gleichermaßen auf Sofortschuss,
-// Finesse, Lupfer, Power Shot, Header/Volley, Low Driven Shot).
-const SK_SHOT_SPEED_BOOST = 1.5;
+// "Mehr Schusspower": genereller Multiplikator auf JEDEN Schuss (wirkt vor allen move-spezifischen
+// Multiplikatoren in skReleaseShot, also gleichermaßen auf Sofortschuss, Finesse, Lupfer, Power Shot,
+// Header/Volley, Low Driven Shot). Erst 1.5 (50% mehr), auf erneuten Wunsch weiter auf 1.85 angehoben.
+const SK_SHOT_SPEED_BOOST = 1.85;
 // Ball-Bremse: statt einer konstanten prozentualen Bremsung (fühlte sich bei hohem Tempo wie ein
 // gleitender Hockey-Puck an) wächst der Bremsanteil jetzt zusätzlich mit dem Balltempo selbst - ein
 // harter Schuss verliert dadurch kurz nach dem Abschluss sehr viel schneller an Fahrt, ein normal
@@ -25573,8 +25587,8 @@ function skRender(ctx, engine){
   const msgEl = document.getElementById('sk-msg');
   if(msgEl && engine.msg){
     const age = Date.now()-engine.msg.ts;
-    if(age<1100){ msgEl.textContent = engine.msg.text+(engine.msg.side===1?' — links':' — rechts'); msgEl.style.opacity='1'; }
-    else msgEl.style.opacity='0';
+    if(age<1100){ msgEl.textContent = engine.msg.text+(engine.msg.side===1?' — links':' — rechts'); msgEl.classList.add('show'); }
+    else msgEl.classList.remove('show');
   }
 }
 // Kurzer Skalier-Puls, wenn sich ein Zahlenwert ändert (Tor) - macht das Ereignis auch dann sichtbar,
@@ -25789,23 +25803,34 @@ function skSetupTouchControls(overlay, myMoves){
   return ()=>{ skTouchInput = null; wrap.remove(); };
 }
 
-function skEndMatch(engine, matchId, isHost, meLabel, oppLabel){
+// rematch (optional): nur für lokal laufende Modi (Bot) sicher - ein Online-Match hat sein Firestore-
+// Dokument bereits aufgeräumt (cleanupSkillMatchDoc), ein "nochmal spielen" müsste dort ein komplett
+// neues Matchmaking anstoßen statt nur denselben Match-Zustand neu zu starten. Deshalb übergibt nur
+// der Bot-Loop in startSkillMatch tatsächlich eine rematch-Funktion.
+function skEndMatch(engine, matchId, isHost, meLabel, oppLabel, rematch){
   if(engine.ended) return;
   engine.ended = true;
   const networked = !!(skillDuelState && skillDuelState.mode==='online');
   const meScore = engine.score[isHost?0:1], oppScore = engine.score[isHost?1:0];
-  const resultText = meScore>oppScore ? 'Gewonnen!' : meScore<oppScore ? 'Verloren.' : 'Unentschieden.';
+  const outcome = meScore>oppScore ? 'win' : meScore<oppScore ? 'lose' : 'draw';
+  const resultText = outcome==='win' ? 'Gewonnen!' : outcome==='lose' ? 'Verloren.' : 'Unentschieden.';
+  const badge = outcome==='win' ? '🏆' : outcome==='lose' ? '💀' : '🤝';
   if(networked && isHost && fb && fb.rtdb){
     fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), skSerializeState(engine, true)).catch(()=>{});
   }
   skTeardownMatch();
   openModal(`
     <div class="sk-result">
-      <h2 style="margin-bottom:6px;">${resultText}</h2>
-      <p class="hint" style="margin-bottom:4px;">${meLabel} ${meScore} : ${oppScore} ${oppLabel}</p>
-      <button class="action-btn" id="sk-result-close" style="width:auto;padding:9px 24px;margin-top:14px;">Schließen</button>
+      <div class="sk-result-badge">${badge}</div>
+      <div class="sk-result-title ${outcome}">${resultText}</div>
+      <div class="sk-result-score">${meLabel} ${meScore} : ${oppScore} ${oppLabel}</div>
+      <div class="sk-result-actions">
+        ${rematch ? '<button class="action-btn" id="sk-result-rematch" style="width:auto;padding:9px 22px;">Nochmal spielen</button>' : ''}
+        <button class="action-btn secondary" id="sk-result-close" style="width:auto;padding:9px 22px;">Schließen</button>
+      </div>
     </div>`);
   document.getElementById('sk-result-close').addEventListener('click', closeModal);
+  if(rematch) document.getElementById('sk-result-rematch').addEventListener('click', ()=>{ closeModal(); rematch(); });
   if(networked && isHost) cleanupSkillMatchDoc(matchId);
 }
 function skTeardownMatch(){
@@ -25865,7 +25890,7 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
       <div class="sk-team"><span class="sk-stamina"><span class="sk-stamina-fill" id="sk-stam-opp" style="background:#6f7bf0;"></span></span>${guestName}<span class="sk-dot" style="background:#6f7bf0;box-shadow:0 0 8px #6f7bf0;"></span></div>
     </div>
     <div class="sk-field-holder"><canvas id="sk-canvas" width="${SK_W}" height="${SK_H}"></canvas><div class="sk-msg" id="sk-msg"></div></div>
-    <div class="sk-controls-hint">WASD/Pfeile bewegen · Leertaste schießen · nur mit passendem PlayStyle+: E Dash · Q Technik · Shift Finesse · F Grätsche · C Lupfer · R Raserei · B Block · G Beinarbeit · J Abdrängen · T Trick · L Flacher Schuss</div>
+    <div class="sk-controls-hint"><kbd>WASD</kbd>/<kbd>Pfeile</kbd> bewegen · <kbd>Leertaste</kbd> schießen · <span style="opacity:.6;">nur mit passendem PlayStyle+:</span> <kbd>E</kbd> Dash · <kbd>Q</kbd> Technik · <kbd>Shift</kbd> Finesse · <kbd>F</kbd> Grätsche · <kbd>C</kbd> Lupfer · <kbd>R</kbd> Raserei · <kbd>B</kbd> Block · <kbd>G</kbd> Beinarbeit · <kbd>J</kbd> Abdrängen · <kbd>T</kbd> Trick · <kbd>L</kbd> Flacher Schuss</div>
     <div class="sk-controls-hint" id="sk-gamepad-hint" style="display:none;color:var(--gold);"></div>
     <div class="sk-rotate-hint"><span class="sk-rotate-icon">↻</span><div style="font-weight:700;">Bitte Gerät drehen</div><div class="hint">Skill-Duell läuft nur im Querformat.</div></div>`;
   document.body.appendChild(overlay);
@@ -25937,7 +25962,7 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
       engine.timeLeft -= dt;
       skRender(ctx, engine);
       if(engine.timeLeft<=0 || engine.score[0]>=SK_GOAL_LIMIT || engine.score[1]>=SK_GOAL_LIMIT){
-        skEndMatch(engine, matchId, true, meLabel, oppLabel);
+        skEndMatch(engine, matchId, true, meLabel, oppLabel, ()=>startSkillMatch(matchId, isHost, matchDoc, opts));
         return;
       }
       skillDuelState.rafId = requestAnimationFrame(loop);

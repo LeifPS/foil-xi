@@ -26,8 +26,10 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       return Math.hypot(ball.vx, ball.vy);
     }
 
-    // ---------- (1) 50% mehr Schusstempo ----------
-    const boostIs1_5 = SK_SHOT_SPEED_BOOST === 1.5;
+    // ---------- (1) deutlich mehr Schusstempo (>=50% mehr, seither auf erneuten Wunsch weiter erhöht -
+    // Untergrenze statt exaktem Wert, damit ein künftiger weiterer "mehr Schusspower"-Buff diesen Test
+    // nicht bricht) ----------
+    const boostIsAtLeastFiftyPercent = SK_SHOT_SPEED_BOOST >= 1.5;
     const powerAtRest = shoot(0, 0);
     // Erwartete Basis-Power ohne Boost wäre SK_BASE_POWER*shotPowerMult (kein Momentum bei vx=vy=0) -
     // mit Boost muss sie um genau den Faktor SK_SHOT_SPEED_BOOST höher liegen.
@@ -80,15 +82,15 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     BY_ID.delete(card.id);
 
     return {
-      boostIs1_5, shotIsFiftyPercentFaster, momentumShotAlsoBoosted,
+      boostIsAtLeastFiftyPercent, shotIsFiftyPercentFaster, momentumShotAlsoBoosted,
       newBrakingIsMuchStronger, fastBallLosesRelativelyMoreSpeed, slowBallMostlyUnaffected,
     };
   }));
 
   console.log('Skill-Duell-Schusstempo-und-Ballbremse-Test');
   noErrors(errors, 'Seite');
-  eq(result.boostIs1_5, true, 'SK_SHOT_SPEED_BOOST ist auf 1.5 gesetzt (50% mehr Schusstempo)');
-  eq(result.shotIsFiftyPercentFaster, true, 'ein Schuss ohne Anlaufgeschwindigkeit ist exakt 50% schneller als die unmultiplizierte Basis-Power');
+  eq(result.boostIsAtLeastFiftyPercent, true, 'SK_SHOT_SPEED_BOOST liegt bei mindestens 1.5 (mindestens 50% mehr Schusstempo)');
+  eq(result.shotIsFiftyPercentFaster, true, 'ein Schuss ohne Anlaufgeschwindigkeit ist exakt um den Faktor SK_SHOT_SPEED_BOOST schneller als die unmultiplizierte Basis-Power');
   eq(result.momentumShotAlsoBoosted, true, 'der 50%-Boost gilt auch für den Momentum-Anteil (Schuss mit Anlauf), nicht nur den Sofortschuss aus dem Stand');
   eq(result.newBrakingIsMuchStronger, true, 'ein harter Schuss (1200 Einheiten/s) verliert mit der neuen Bremse deutlich schneller an Tempo als mit der alten, rein konstanten Bremse');
   eq(result.fastBallLosesRelativelyMoreSpeed, true, 'ein schneller Ball verliert relativ zu seinem Ausgangstempo schneller an Fahrt als ein langsamer (kein gleichförmiges Hockey-Puck-Gleiten mehr)');
