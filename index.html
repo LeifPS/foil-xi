@@ -2857,7 +2857,10 @@ body.is-offline #offline-overlay{display:flex;}
 .sk-stamina-fill{height:100%;width:100%;}
 .sk-score{font-size:26px;font-weight:800;display:flex;gap:10px;align-items:baseline;color:#fff;}
 .sk-score .sk-sep{opacity:.4;font-size:18px;}
-.sk-timer{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
+.sk-timer{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;transition:color .3s;}
+.sk-timer-warn{animation:sk-timer-pulse 1s ease-in-out infinite;}
+@keyframes sk-timer-pulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+.sk-score span{display:inline-block;}
 .sk-field-holder{position:relative;max-width:100%;}
 #sk-canvas{display:block;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.55);max-width:100%;height:auto;background:#123;}
 .sk-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;font-weight:800;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.6);pointer-events:none;opacity:0;transition:opacity .25s;text-align:center;}
@@ -2933,7 +2936,10 @@ body.is-offline #offline-overlay{display:flex;}
 .sk-pick-tile{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;width:110px;transition:transform .15s;}
 .sk-pick-tile:active{transform:scale(.96);}
 .sk-pick-tile.picked{opacity:.4;pointer-events:none;}
-.sk-pick-moves{font-size:10px;text-align:center;color:var(--gold);line-height:1.3;}
+.sk-pick-moves{display:flex;flex-wrap:wrap;justify-content:center;gap:3px;margin-top:2px;}
+.sk-pick-move-chip{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;color:var(--gold);background:rgba(255,255,255,.06);border-radius:8px;padding:1px 5px;white-space:nowrap;}
+.sk-pick-move-chip img{width:11px;height:11px;object-fit:contain;}
+.sk-pick-move-chip i{color:var(--muted);font-style:normal;font-size:8.5px;}
 
 /* ---- login / entry gate ---- */
 .gate-overlay{background:radial-gradient(circle at 50% 20%,#132018 0%,#080a0f 62%);}
@@ -24618,9 +24624,39 @@ const SKILL_MOVE_BY_TRAIT = {
   'Lupfer':'chip', 'Lupfer+':'chip',                                          // Lupfer: gechippter Schuss, Ball ignoriert kurz jede Spieler-Kollision
   'Raserei':'rush', 'Raserei+':'rush',                                        // Raserei: gehaltener Sprint über das normale Tempolimit hinaus, kostet mehr Ausdauer
   'Block':'block', 'Block+':'block',                                         // Block: gehaltene Blockhaltung, schluckt Schüsse statt sie abprallen zu lassen
+  // ----- Erweiterung: alle übrigen PlayStyles+, die in einem torwartlosen 1-gegen-1-Duell ohne
+  // Mitspieler/Fouls/Einwürfe/Standards eine ECHTE eigene Mechanik ergeben. Aktive, per Knopf
+  // ausgelöste Moves (verbrauchen einen der 3 Knopf-Slots, siehe SK_MOVE_PRIORITY):
+  'Beinarbeit':'feint', 'Beinarbeit+':'feint',                                // Feint: sofortige Kehrtwende/Antritt ohne die normale Reversal-Bremse
+  'Abdrängen':'jockey', 'Abdrängen+':'jockey',                                // Jockey: gehaltene Abschirm-Haltung - mehr Zweikampfstärke, weniger Tempo
+  'Tricks':'trick', 'Tricks+':'trick',                                       // Trick: Übersteiger/Tunnel aus kurzer Distanz gegen den Gegenspieler
+  'Flacher Vollspannschuss':'lowshot', 'Flacher Vollspannschuss+':'lowshot',  // Low Driven Shot: Modifikator bei Schussauslösung - hart & platziert, keine Kurve
+  // Automatisch integriert in den normalen Schuss-Knopf (kein eigener Knopf-Slot nötig, genau wie
+  // Power Shot) - greifen nur, wenn der Ball gerade "in der Luft" ist (nach einem Lupfer):
+  'Präziser Kopfball':'header', 'Präziser Kopfball+':'header', 'Kopfballmacht':'header', // Header: präziser Abschluss aus der Luft
+  'Akrobat.':'volley', 'Akrobat.+':'volley',                                 // Volley/Fallrückzieher: kraftvoller, riskanterer Abschluss aus der Luft
+  // Passiv (kein Knopf, keine Eingabe nötig - wirken immer, sobald die Karte den Trait hat, genau wie
+  // im echten Spiel die meisten PlayStyles+ keine aktive Auslösung brauchen):
+  'Abfangen':'intercept', 'Abfangen+':'intercept',                           // größere Abfangreichweite
+  'Antizipation':'anticipate', 'Antizipation+':'anticipate',                 // großzügigeres Ballannahme-Timing
+  'Durchsetzungskraft':'enforcer', 'Durchsetzungskraft+':'enforcer',         // gewinnt Zweikämpfe zuverlässiger
+  'Kante':'bruiser', 'Kante+':'bruiser',                                     // körperlich robuster (schwerer wegzuschieben)
+  'Ruhepol':'pressproven', 'Ruhepol+':'pressproven',                         // verliert den Ball unter Druck seltener
+  'Unerbittlich':'relentless', 'Unerbittlich+':'relentless',                 // regeneriert Ausdauer schneller
+  'First Touch':'firsttouch', 'First Touch+':'firsttouch',                   // sauberere erste Ballannahme
+  // ----- Bewusst NICHT gemappt: reine Pass-Traits (Einfallsreich, Entsch. Pass, Gamechanger, Harter
+  // Pass, Schnittstellenpass, Tiki-Taka, Weiter Pass) haben ohne Mitspieler nichts, worauf sie wirken
+  // könnten; Ruhender Ball (Standards) und Langer Einwurf (Einwürfe) haben keine Entsprechung, weil es
+  // im Skill-Duell weder Fouls/Freistöße noch Einwürfe gibt; Deflector/Große Reichweite/Herauskommen/
+  // Flankenfang/Weiter Abwurf sind reine Torwart-PlayStyles - Torhüter sind im Skill-Duell ohnehin nie
+  // wählbar (siehe eligibleSkillCards).
 };
 const SKILL_MOVE_LABEL = {powershot:'Power Shot', finesse:'Finesse Shot', quickstep:'Quick Step', technical:'Technical',
-  slide:'Grätsche', chip:'Lupfer', rush:'Raserei', block:'Block'};
+  slide:'Grätsche', chip:'Lupfer', rush:'Raserei', block:'Block',
+  feint:'Beinarbeit', jockey:'Abdrängen', trick:'Tricks', lowshot:'Flacher Vollspannschuss',
+  header:'Kopfball', volley:'Volley', intercept:'Abfangen', anticipate:'Antizipation',
+  enforcer:'Durchsetzungskraft', bruiser:'Kante', pressproven:'Ruhepol', relentless:'Unerbittlich',
+  firsttouch:'First Touch'};
 // je Move-Schlüssel das echte EA-Icon des Basis-Traits - PLAYSTYLE_INFO wird erst weiter UNTEN in
 // dieser Datei als const definiert, ein Zugriff hier oben am Modul-Top-Level würde also mitten im
 // Boot mit "Cannot access before initialization" abstürzen (TDZ). Deshalb lazy + memoisiert, erst
@@ -24823,8 +24859,14 @@ function resolveSkillCardRef(ref){
   if(!ref) return null;
   const base = BY_ID.get(ref.id);
   if(!base) return null;
+  // Bugfix: manualTraits:true ist Pflicht hier - ohne das würde skillMovesForCard() (über
+  // resolveCardTraits) die schon fertig aufgelösten Traits ein ZWEITES Mal durch die automatische
+  // Elite-Hochstufung schicken, diesmal aber mit card.ov = base.ov (der rohen Basiskarten-Wertung, NICHT
+  // der tatsächlichen, ggf. level-geboosteten Bewertung des Absenders, die hier nie übertragen wird) -
+  // je nach Zufall der beiden Werte könnte das auf der Gegenseite eine andere Elite/Basis-Ausprägung
+  // ergeben als das, was beim Picker tatsächlich ausgewählt wurde.
   return {...base, level:ref.level||0, n:ref.n||base.n, img:ref.img||base.img, pos:ref.pos||base.pos,
-    pac:ref.pac, sho:ref.sho, pas:ref.pas, dri:ref.dri, defn:ref.defn, phy:ref.phy, traits:ref.traits};
+    pac:ref.pac, sho:ref.sho, pas:ref.pas, dri:ref.dri, defn:ref.defn, phy:ref.phy, traits:ref.traits, manualTraits:true};
 }
 function cleanupSkillMatchDoc(matchId){
   if(fb) fb.deleteDoc(fb.doc(fb.db,'skillMatches',matchId)).catch(()=>{});
@@ -24832,14 +24874,27 @@ function cleanupSkillMatchDoc(matchId){
 let skillPickPollTimer = null;
 // Echte Kartenvorschau (cardEl, dieselbe Darstellung wie überall sonst im Spiel) statt einer reinen
 // Textzeile - darunter die tatsächlich freigeschalteten Moves. Von beiden Picker-Funktionen geteilt.
+// Moves, die nie einen Knopf brauchen (automatisch im Schuss integriert oder rein passiv) - werden in
+// der Kartenauswahl mit einem kleinen Hinweis-Tag statt eines Knopf-Namens markiert, damit klar ist,
+// dass man dafür nichts drücken muss.
+const SK_MOVE_NO_BUTTON = new Set(['powershot','header','volley','intercept','anticipate','enforcer','bruiser','pressproven','relentless','firsttouch']);
 function skCardPickTile(card, onClick){
   const tile = document.createElement('div');
   tile.className = 'sk-pick-tile';
   tile.appendChild(cardEl(card, 'mini'));
-  const moves = [...skillMovesForCard(card)].map(m=>SKILL_MOVE_LABEL[m]);
+  const moveKeys = [...skillMovesForCard(card)];
+  const moveIcons = skMoveIconUrls();
   const caption = document.createElement('div');
   caption.className = 'sk-pick-moves';
-  caption.textContent = moves.length ? moves.join(' · ') : 'Keine Spezialmoves';
+  if(!moveKeys.length){
+    caption.textContent = 'Keine Spezialmoves';
+  } else {
+    caption.innerHTML = moveKeys.map(m=>{
+      const icon = moveIcons[m];
+      const passive = SK_MOVE_NO_BUTTON.has(m) ? ' <i>(auto)</i>' : '';
+      return `<span class="sk-pick-move-chip">${icon?`<img src="${icon}" alt="" loading="lazy" onerror="this.style.display='none';">`:''}${SKILL_MOVE_LABEL[m]||m}${passive}</span>`;
+    }).join('');
+  }
   tile.appendChild(caption);
   tile.addEventListener('click', onClick);
   return tile;
@@ -25020,13 +25075,38 @@ const SK_ELITE_TECHNICAL_STAMINA_MULT = 0.85, SK_ELITE_TECHNICAL_RESTITUTION_MUL
 const SK_ELITE_CHIP_AIRBORNE_TIME = 0.8, SK_ELITE_CHIP_POWER_MULT = 0.68; // statt 0.55 / 0.55
 const SK_ELITE_RUSH_SPEED_MULT = 1.55, SK_ELITE_RUSH_STAMINA_DRAIN_MULT = 1.5;
 const SK_ELITE_BLOCK_STAMINA_DRAIN = 6, SK_ELITE_BLOCK_SPEED_MULT = 0.7, SK_ELITE_BLOCK_RESTITUTION_MULT = 0.05, SK_ELITE_BLOCK_MASS_MULT = 2.0;
+// ----- Konstanten für die 13 neuen PlayStyles+ (siehe SKILL_MOVE_BY_TRAIT-Kommentar für die
+// Design-Entscheidungen, welcher Trait welche Mechanik bekommt und warum neun Traits bewusst
+// keine Entsprechung haben). Vier aktive Knopf-Moves (mit Elite-Variante):
+const SK_FEINT_STAMINA_COST = 9, SK_FEINT_COOLDOWN = 0.9, SK_FEINT_BOOST = 210;
+const SK_ELITE_FEINT_STAMINA_COST = 6, SK_ELITE_FEINT_COOLDOWN = 0.55, SK_ELITE_FEINT_BOOST = 250;
+const SK_JOCKEY_DUEL_MULT = 1.45, SK_JOCKEY_SPEED_MULT = 0.62, SK_JOCKEY_INTERCEPT_BONUS = 5;
+const SK_ELITE_JOCKEY_DUEL_MULT = 1.75, SK_ELITE_JOCKEY_SPEED_MULT = 0.74, SK_ELITE_JOCKEY_INTERCEPT_BONUS = 8;
+const SK_TRICK_RANGE = 46, SK_TRICK_COOLDOWN = 1.4, SK_TRICK_BALL_IMPULSE = 250, SK_TRICK_PLAYER_BOOST = 210;
+const SK_ELITE_TRICK_RANGE = 58, SK_ELITE_TRICK_COOLDOWN = 0.95, SK_ELITE_TRICK_BALL_IMPULSE = 300, SK_ELITE_TRICK_PLAYER_BOOST = 250;
+const SK_LOWSHOT_POWER_MULT = 1.16, SK_LOWSHOT_SPREAD_MULT = 0.55;
+const SK_ELITE_LOWSHOT_POWER_MULT = 1.28, SK_ELITE_LOWSHOT_SPREAD_MULT = 0.35;
+// Zwei in den Schuss-Knopf integrierte Moves (kein eigener Knopf-Slot, wie Power Shot), greifen nur
+// bei einem Ball, der gerade "in der Luft" ist (ball.airborne>0, ausgelöst durch einen Lupfer):
+const SK_HEADER_POWER_MULT = 1.15, SK_HEADER_SPREAD_MULT = 0.4;
+const SK_ELITE_HEADER_POWER_MULT = 1.3, SK_ELITE_HEADER_SPREAD_MULT = 0.25;
+const SK_VOLLEY_POWER_MULT = 1.55, SK_VOLLEY_SPREAD_MULT = 1.7;
+const SK_ELITE_VOLLEY_POWER_MULT = 1.8, SK_ELITE_VOLLEY_SPREAD_MULT = 1.3; // Elite: mehr Power, aber auch treffsicherer
+// Sieben rein passive Traits (keine Eingabe, wirken immer über ihre Substat-Randbedingungen hinaus):
+const SK_INTERCEPT_REACH_BONUS = 6, SK_ELITE_INTERCEPT_REACH_BONUS = 11;
+const SK_ANTICIPATE_TOUCH_MULT = 1.35, SK_ELITE_ANTICIPATE_TOUCH_MULT = 1.7;
+const SK_ENFORCER_DUEL_MULT = 1.18, SK_ELITE_ENFORCER_DUEL_MULT = 1.32;
+const SK_BRUISER_MASS_MULT = 1.14, SK_ELITE_BRUISER_MASS_MULT = 1.26;
+const SK_PRESSPROVEN_RESTITUTION_MULT = 0.85, SK_ELITE_PRESSPROVEN_RESTITUTION_MULT = 0.68;
+const SK_RELENTLESS_REGEN_MULT = 1.3, SK_ELITE_RELENTLESS_REGEN_MULT = 1.6;
+const SK_FIRSTTOUCH_RESTITUTION_MULT = 0.55, SK_ELITE_FIRSTTOUCH_RESTITUTION_MULT = 0.3;
 const SK_SYNC_HZ = 30, SK_SYNC_INTERVAL_MS = Math.round(1000/SK_SYNC_HZ);
 // Steht für sich allein still (AFK per Definition, siehe openSkillBotCardPicker) - dient nur zum
 // Testen der eigenen Steuerung/Touch/Gamepad-Bedienung an einem einzigen Gerät/Account, ohne echten
 // Gegner. Keine Traits, weil das AFK-Verhalten unabhängig davon ist (Input bleibt immer leer).
 const SK_BOT_CARD = {id:-1, n:'AFK-Bot', pos:'CB', ov:65, pac:55, sho:55, pas:55, dri:55, defn:55, phy:55, traits:[]};
 
-const SK_EMPTY_INPUT = Object.freeze({up:false,down:false,left:false,right:false,shoot:false,dash:false,tech:false,finesse:false,slide:false,chip:false,rush:false,block:false});
+const SK_EMPTY_INPUT = Object.freeze({up:false,down:false,left:false,right:false,shoot:false,dash:false,tech:false,finesse:false,slide:false,chip:false,rush:false,block:false,feint:false,jockey:false,trick:false,lowshot:false});
 
 function deriveSkillPhysics(card){
   // 100+-Karten haben in praktisch jedem Substat einen Wert nahe 99 - und weil dasselbe Substat hier in
@@ -25068,11 +25148,22 @@ function deriveSkillPhysics(card){
 }
 function makeSkillPlayer(x,y,color,dark,card){
   const d = deriveSkillPhysics(card);
-  return {x,y,vx:0,vy:0,r:22,color,dark,cooldown:0, card, moves:skillMovesForCard(card), eliteMoves:skillEliteMovesForCard(card), ...d,
+  const moves = skillMovesForCard(card), eliteMoves = skillEliteMovesForCard(card);
+  // Sieben passive PlayStyles+ wirken permanent auf die abgeleiteten Physik-Werte ein, statt über eine
+  // Eingabe ausgelöst zu werden (siehe SKILL_MOVE_BY_TRAIT-Kommentar) - genau wie im echten Spiel bei
+  // den meisten PlayStyles+ keine aktive Auslösung nötig ist.
+  if(moves.has('intercept')) d.interceptReach += eliteMoves.has('intercept') ? SK_ELITE_INTERCEPT_REACH_BONUS : SK_INTERCEPT_REACH_BONUS;
+  if(moves.has('anticipate')) d.touchBuffer *= eliteMoves.has('anticipate') ? SK_ELITE_ANTICIPATE_TOUCH_MULT : SK_ANTICIPATE_TOUCH_MULT;
+  if(moves.has('enforcer')) d.duelPower *= eliteMoves.has('enforcer') ? SK_ELITE_ENFORCER_DUEL_MULT : SK_ENFORCER_DUEL_MULT;
+  if(moves.has('bruiser')) d.mass *= eliteMoves.has('bruiser') ? SK_ELITE_BRUISER_MASS_MULT : SK_BRUISER_MASS_MULT;
+  if(moves.has('pressproven')) d.dribbleRestitution *= eliteMoves.has('pressproven') ? SK_ELITE_PRESSPROVEN_RESTITUTION_MULT : SK_PRESSPROVEN_RESTITUTION_MULT;
+  if(moves.has('relentless')) d.staminaRegen *= eliteMoves.has('relentless') ? SK_ELITE_RELENTLESS_REGEN_MULT : SK_RELENTLESS_REGEN_MULT;
+  return {x,y,vx:0,vy:0,r:22,color,dark,cooldown:0, card, moves, eliteMoves, ...d,
     stamina:100, touchTimer:0, lastTouchBallX:x, lastTouchBallY:y, lastTouchPlayerX:x, lastTouchPlayerY:y,
     isCharging:false, chargeTime:0, dashCooldown:0, dashBoostTimer:0, closeControl:false,
-    lastDirX:0, lastDirY:0, toastIcon:null, toastTimer:0, finesseHeld:false, chipHeld:false,
-    sliding:false, slideTimer:0, slideCooldown:0, slideRecovery:0, rushing:false, blocking:false, blockCooldown:0};
+    lastDirX:0, lastDirY:0, toastIcon:null, toastTimer:0, finesseHeld:false, chipHeld:false, lowshotHeld:false,
+    sliding:false, slideTimer:0, slideCooldown:0, slideRecovery:0, rushing:false, blocking:false, blockCooldown:0,
+    feintCooldown:0, jockeying:false, trickCooldown:0, trickPending:false, wasTouchingLastFrame:false};
 }
 function skShowIcon(p, key){ p.toastIcon = key; p.toastTimer = 0.9; }
 function skReadKeyboardInput(keyState){
@@ -25084,12 +25175,15 @@ function skReadKeyboardInput(keyState){
     shoot: !!keyState[' '], dash: !!(keyState['e']||keyState['E']), tech: !!(keyState['q']||keyState['Q']),
     finesse: !!keyState['Shift'], slide: !!(keyState['f']||keyState['F']), chip: !!(keyState['c']||keyState['C']),
     rush: !!(keyState['r']||keyState['R']), block: !!(keyState['b']||keyState['B']),
+    feint: !!(keyState['g']||keyState['G']), jockey: !!(keyState['j']||keyState['J']),
+    trick: !!(keyState['t']||keyState['T']), lowshot: !!(keyState['l']||keyState['L']),
   };
 }
 function skInputOr(a,b){
   return {up:a.up||b.up, down:a.down||b.down, left:a.left||b.left, right:a.right||b.right,
     shoot:a.shoot||b.shoot, dash:a.dash||b.dash, tech:a.tech||b.tech, finesse:a.finesse||b.finesse,
-    slide:a.slide||b.slide, chip:a.chip||b.chip, rush:a.rush||b.rush, block:a.block||b.block};
+    slide:a.slide||b.slide, chip:a.chip||b.chip, rush:a.rush||b.rush, block:a.block||b.block,
+    feint:a.feint||b.feint, jockey:a.jockey||b.jockey, trick:a.trick||b.trick, lowshot:a.lowshot||b.lowshot};
 }
 // Wird auch von skMovePlayer (Aufladen) UND skReleaseShot (chargeFrac-Nenner) UND dem Render-Ring
 // gebraucht - deshalb eine gemeinsame Quelle statt die Elite-Abfrage dreimal zu duplizieren.
@@ -25123,37 +25217,98 @@ function skTrySlide(p, ball){
   p.stamina = Math.max(0, p.stamina-cost);
   skShowIcon(p,'slide');
 }
+function skTryFeint(p){
+  if(!p.moves.has('feint') || p.feintCooldown>0) return;
+  const elite = p.eliteMoves.has('feint');
+  const cost = elite ? SK_ELITE_FEINT_STAMINA_COST : SK_FEINT_STAMINA_COST;
+  const cooldown = elite ? SK_ELITE_FEINT_COOLDOWN : SK_FEINT_COOLDOWN;
+  const boost = elite ? SK_ELITE_FEINT_BOOST : SK_FEINT_BOOST;
+  if(p.stamina<cost) return;
+  const len = Math.hypot(p.lastDirX,p.lastDirY);
+  if(len<0.1) return;
+  // Sofortige Kehrtwende/Antritt: springt direkt auf einen Gutteil Zieltempo in der zuletzt
+  // gehaltenen Richtung, statt sich normal über die Beschleunigungsrampe hochzuarbeiten - anders als
+  // Quick Step wird dabei nie das normale Tempolimit überschritten, es entfällt nur die Anlaufzeit.
+  p.vx = p.lastDirX*boost; p.vy = p.lastDirY*boost;
+  p.feintCooldown = cooldown;
+  p.stamina = Math.max(0, p.stamina-cost);
+  skShowIcon(p,'feint');
+}
+// Nutmeg/Übersteiger aus kurzer Distanz gegen den Gegenspieler - wird aus skApplyInput nur als Flag
+// vorgemerkt (dort fehlt der Gegner als Parameter) und hier von skStep für BEIDE Spieler aufgelöst,
+// sobald beide skApplyInput-Aufrufe für diesen Frame durch sind.
+function skResolveTrick(p, opp, ball){
+  if(!p.trickPending) return;
+  p.trickPending = false;
+  if(!p.moves.has('trick') || p.trickCooldown>0) return;
+  const elite = p.eliteMoves.has('trick');
+  const cooldown = elite ? SK_ELITE_TRICK_COOLDOWN : SK_TRICK_COOLDOWN;
+  const range = elite ? SK_ELITE_TRICK_RANGE : SK_TRICK_RANGE;
+  const dist = Math.hypot(opp.x-p.x, opp.y-p.y);
+  // Fehlversuch (kein Gegner in Reichweite oder Ball nicht am Fuß) - kurze, günstigere Sperre statt der
+  // vollen Cooldown-Strafe, damit Spammen trotzdem keinen Vorteil bringt.
+  if(dist > range || p.touchTimer<=0){ p.trickCooldown = cooldown*0.35; return; }
+  const impulse = elite ? SK_ELITE_TRICK_BALL_IMPULSE : SK_TRICK_BALL_IMPULSE;
+  const boost = elite ? SK_ELITE_TRICK_PLAYER_BOOST : SK_TRICK_PLAYER_BOOST;
+  const dx = opp.x-p.x, dy = opp.y-p.y, len = Math.hypot(dx,dy)||1;
+  ball.vx += (dx/len)*impulse; ball.vy += (dy/len)*impulse;
+  p.vx += (dx/len)*boost; p.vy += (dy/len)*boost;
+  p.trickCooldown = cooldown;
+  skShowIcon(p,'trick');
+}
 function skStartCharge(p){ if(p.isCharging) return; p.isCharging = true; p.chargeTime = 0; }
 function skReleaseShot(p, ball){
   const held = p.isCharging ? p.chargeTime : 0;
   p.isCharging = false; p.chargeTime = 0;
   if(p.touchTimer<=0 || p.cooldown>0){ p.cooldown = Math.max(p.cooldown, SK_WHIFF_COOLDOWN); return; }
+  // VOR jeder Modifikation erfassen - ein Lupfer-Schuss setzt ball.airborne selbst erst weiter unten
+  // in dieser Funktion, ein Header/Volley soll aber nur greifen, wenn der Ball SCHON vorher (durch
+  // einen früheren Lupfer) in der Luft war, nicht durch den gerade erst ausgelösten eigenen Schuss.
+  const wasAirborne = ball.airborne>0;
   const dx = p.lastTouchBallX-p.lastTouchPlayerX, dy = p.lastTouchBallY-p.lastTouchPlayerY;
   const isPowerElite = p.eliteMoves.has('powershot');
   const chargeFrac = p.moves.has('powershot') ? Math.min(1, held/skPowerShotChargeTime(p)) : 0;
   const powerShotBonus = isPowerElite ? SK_ELITE_POWERSHOT_POWER_BONUS : SK_POWER_SHOT_POWER_BONUS;
+  const isFinesse = p.finesseHeld, isFinesseElite = isFinesse && p.eliteMoves.has('finesse');
+  const isChip = p.chipHeld, isChipElite = isChip && p.eliteMoves.has('chip');
+  // Lupfer/Finesse sind eigene gehaltene Tasten und haben Vorrang vor Low Driven Shot, falls
+  // irgendwer absurderweise mehrere Modifikatoren gleichzeitig hält.
+  const isLowshot = p.lowshotHeld && !isFinesse && !isChip && !wasAirborne, isLowshotElite = isLowshot && p.eliteMoves.has('lowshot');
+  const isVolley = wasAirborne && p.moves.has('volley'), isVolleyElite = isVolley && p.eliteMoves.has('volley');
+  const isHeader = wasAirborne && !isVolley && p.moves.has('header'), isHeaderElite = isHeader && p.eliteMoves.has('header');
+  let spreadMult = 1;
+  if(isLowshot) spreadMult = isLowshotElite ? SK_ELITE_LOWSHOT_SPREAD_MULT : SK_LOWSHOT_SPREAD_MULT;
+  else if(isVolley) spreadMult = isVolleyElite ? SK_ELITE_VOLLEY_SPREAD_MULT : SK_VOLLEY_SPREAD_MULT;
+  else if(isHeader) spreadMult = isHeaderElite ? SK_ELITE_HEADER_SPREAD_MULT : SK_HEADER_SPREAD_MULT;
   let angle = Math.atan2(dy,dx);
-  angle += (Math.random()*2-1)*(p.shotSpread + chargeFrac*SK_POWER_SHOT_SPREAD_BONUS);
+  angle += (Math.random()*2-1)*(p.shotSpread*spreadMult + chargeFrac*SK_POWER_SHOT_SPREAD_BONUS);
   const dirx = Math.cos(angle), diry = Math.sin(angle);
   const perpx = -diry, perpy = dirx;
   const alongSpeed = p.vx*dirx + p.vy*diry, perpSpeed = p.vx*perpx + p.vy*perpy;
-  const isFinesse = p.finesseHeld, isFinesseElite = isFinesse && p.eliteMoves.has('finesse');
-  const isChip = p.chipHeld, isChipElite = isChip && p.eliteMoves.has('chip');
   let power = (SK_BASE_POWER + Math.max(0,alongSpeed)*SK_MOMENTUM_FACTOR) * p.shotPowerMult;
   power *= (1+chargeFrac*powerShotBonus);
-  let curve = SK_CURVE_FACTOR*p.curveMult;
+  // Kurve/Spin gibt es NUR bei einem bewussten Finesse Shot - jeder andere Schuss fliegt gerade
+  // (bis auf die geringe, SHO-abhängige Zufallsstreuung oben). Vorher lief seitliche Laufgeschwindigkeit
+  // IMMER in etwas Spin ein, was Finesse Shot optisch entwertete ("kurvt bei allen").
+  let curve = 0;
   if(isFinesse){
     power *= isFinesseElite ? SK_ELITE_FINESSE_POWER_MULT : 0.88;
-    curve *= isFinesseElite ? SK_ELITE_FINESSE_CURVE_MULT : 1.9;
+    curve = SK_CURVE_FACTOR*p.curveMult*(isFinesseElite ? SK_ELITE_FINESSE_CURVE_MULT : 1.9);
   }
   if(isChip) power *= isChipElite ? SK_ELITE_CHIP_POWER_MULT : 0.55;
+  if(isLowshot) power *= isLowshotElite ? SK_ELITE_LOWSHOT_POWER_MULT : SK_LOWSHOT_POWER_MULT;
+  if(isVolley) power *= isVolleyElite ? SK_ELITE_VOLLEY_POWER_MULT : SK_VOLLEY_POWER_MULT;
+  else if(isHeader) power *= isHeaderElite ? SK_ELITE_HEADER_POWER_MULT : SK_HEADER_POWER_MULT;
   ball.vx = dirx*power + perpx*perpSpeed*0.5;
   ball.vy = diry*power + perpy*perpSpeed*0.5;
   ball.spin = perpSpeed*curve;
   if(isChip) ball.airborne = isChipElite ? SK_ELITE_CHIP_AIRBORNE_TIME : SK_CHIP_AIRBORNE_TIME;
   p.cooldown = SK_SHOOT_COOLDOWN;
-  if(isChip) skShowIcon(p,'chip');
+  if(isVolley) skShowIcon(p,'volley');
+  else if(isHeader) skShowIcon(p,'header');
+  else if(isChip) skShowIcon(p,'chip');
   else if(isFinesse) skShowIcon(p,'finesse');
+  else if(isLowshot) skShowIcon(p,'lowshot');
   else if(chargeFrac>0.85) skShowIcon(p,'powershot');
 }
 function skMovePlayer(p, dt, input){
@@ -25180,6 +25335,9 @@ function skMovePlayer(p, dt, input){
   const blockElite = p.blocking && p.eliteMoves.has('block');
   if(p.blocking) staminaMult *= blockElite ? SK_ELITE_BLOCK_SPEED_MULT : SK_BLOCK_SPEED_MULT;
   if(p.sliding || p.slideRecovery>0) staminaMult *= 0.5;
+  // Jockey (Abdrängen, gehalten): klassisches Abschirmen/Verfolgen rückwärts - deutlich weniger Tempo,
+  // dafür mehr Zweikampfstärke und etwas mehr Abfangreichweite (siehe circleCollide-Aufruf in skStep).
+  if(p.jockeying) staminaMult *= p.eliteMoves.has('jockey') ? SK_ELITE_JOCKEY_SPEED_MULT : SK_JOCKEY_SPEED_MULT;
   p.vx += ax*p.accel*dt; p.vy += ay*p.accel*dt;
   const fr = Math.exp(-p.friction*dt);
   p.vx *= fr; p.vy *= fr;
@@ -25188,6 +25346,8 @@ function skMovePlayer(p, dt, input){
   if(p.dashBoostTimer>0){ capNow = Math.max(capNow, SK_DASH_PEAK_SPEED); p.dashBoostTimer -= dt; }
   if(p.dashCooldown>0) p.dashCooldown -= dt;
   if(p.slideCooldown>0) p.slideCooldown -= dt;
+  if(p.feintCooldown>0) p.feintCooldown -= dt;
+  if(p.trickCooldown>0) p.trickCooldown -= dt;
   if(p.sliding){ p.slideTimer -= dt; if(p.slideTimer<=0){ p.sliding=false; p.slideRecovery=SK_SLIDE_RECOVERY; } }
   else if(p.slideRecovery>0) p.slideRecovery -= dt;
   if(p.blocking) p.stamina = Math.max(0, p.stamina - (blockElite ? SK_ELITE_BLOCK_STAMINA_DRAIN : SK_BLOCK_STAMINA_DRAIN)*dt);
@@ -25211,13 +25371,17 @@ function skApplyInput(p, input, prev, ball){
   // auch ohne passenden PlayStyle+ nutzbar" strukturell aus, nicht nur am Verbrauchsort).
   p.finesseHeld = input.finesse && p.moves.has('finesse');
   p.chipHeld = input.chip && p.moves.has('chip');
+  p.lowshotHeld = input.lowshot && p.moves.has('lowshot');
   if(input.shoot && !prev.shoot){ if(p.moves.has('powershot')) skStartCharge(p); else skReleaseShot(p, ball); }
   if(!input.shoot && prev.shoot && p.isCharging) skReleaseShot(p, ball);
   if(input.dash && !prev.dash) skTryDash(p);
   if(input.slide && !prev.slide) skTrySlide(p, ball);
+  if(input.feint && !prev.feint) skTryFeint(p);
+  if(input.trick && !prev.trick) p.trickPending = true; // Gegner fehlt hier als Parameter - Auflösung in skStep, siehe skResolveTrick
   p.closeControl = input.tech && p.moves.has('technical');
   p.rushing = input.rush && p.moves.has('rush');
   p.blocking = input.block && p.moves.has('block');
+  p.jockeying = input.jockey && p.moves.has('jockey');
 }
 function skCircleCollide(a,b,restitution,massA,massB){
   const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy)||0.0001;
@@ -25234,10 +25398,22 @@ function skCircleCollide(a,b,restitution,massA,massB){
 }
 function skUpdateTouch(p, ball, dt){
   const dist = Math.hypot(ball.x-p.x, ball.y-p.y);
-  if(dist <= p.r+ball.r+SK_TOUCH_MARGIN+p.interceptReach){
+  // Jockey (gehalten): zusätzliche, temporäre Abfangreichweite obendrauf, solange die Abschirm-Haltung
+  // aktiv ist - passt zum "aufmerksam mitgehen statt reinstochern"-Charakter des Moves.
+  const jockeyReach = p.jockeying ? (p.eliteMoves.has('jockey') ? SK_ELITE_JOCKEY_INTERCEPT_BONUS : SK_JOCKEY_INTERCEPT_BONUS) : 0;
+  const touchingNow = dist <= p.r+ball.r+SK_TOUCH_MARGIN+p.interceptReach+jockeyReach;
+  if(touchingNow){
+    // First Touch (passiv): genau im Moment des ERSTEN Kontakts (nicht bei fortgesetzter Ballführung)
+    // wird der Ball zusätzlich stark abgebremst - eine sauber angenommene erste Berührung statt eines
+    // unkontrollierten Aufsetzers, unabhängig von DRI/Technical.
+    if(touchingNow && !p.wasTouchingLastFrame && p.moves.has('firsttouch')){
+      const mult = p.eliteMoves.has('firsttouch') ? SK_ELITE_FIRSTTOUCH_RESTITUTION_MULT : SK_FIRSTTOUCH_RESTITUTION_MULT;
+      ball.vx *= mult; ball.vy *= mult;
+    }
     p.touchTimer = p.touchBuffer;
     p.lastTouchBallX=ball.x; p.lastTouchBallY=ball.y; p.lastTouchPlayerX=p.x; p.lastTouchPlayerY=p.y;
   } else { p.touchTimer -= dt; }
+  p.wasTouchingLastFrame = touchingNow;
 }
 // Ballkontakt-Restitution für die Spieler-Ball-Kollision - kombiniert Grätsche (Ballgewinn),
 // Technical (enge Führung) und Block (Schuss schlucken statt abprallen), jeweils mit ausgeprägterem
@@ -25266,7 +25442,9 @@ function skStep(engine, dt){
   }
   ball.x += ball.vx*dt; ball.y += ball.vy*dt;
   if(ball.airborne>0) ball.airborne -= dt;
-  const duelBoost1 = p1.sliding?1.8:1, duelBoost2 = p2.sliding?1.8:1;
+  skResolveTrick(p1, p2, ball); skResolveTrick(p2, p1, ball);
+  const duelBoost1 = (p1.sliding?1.8:1) * (p1.jockeying?(p1.eliteMoves.has('jockey')?SK_ELITE_JOCKEY_DUEL_MULT:SK_JOCKEY_DUEL_MULT):1);
+  const duelBoost2 = (p2.sliding?1.8:1) * (p2.jockeying?(p2.eliteMoves.has('jockey')?SK_ELITE_JOCKEY_DUEL_MULT:SK_JOCKEY_DUEL_MULT):1);
   skCircleCollide(p1, p2, 0.3, p1.mass*p1.duelPower*duelBoost1, p2.mass*p2.duelPower*duelBoost2);
   if(ball.airborne<=0){
     const rest1 = skBallRestitution(p1), rest2 = skBallRestitution(p2);
@@ -25318,6 +25496,8 @@ function skDrawPlayer(ctx, p){
     ctx.beginPath(); ctx.arc(p.x,p.y,p.r+11,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
   if(p.sliding){ ctx.save(); ctx.lineWidth=3; ctx.strokeStyle='rgba(255,180,80,0.85)';
     ctx.beginPath(); ctx.arc(p.x,p.y,p.r+11,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+  if(p.jockeying){ ctx.save(); ctx.setLineDash([2,5]); ctx.lineWidth=2.5; ctx.strokeStyle='rgba(180,255,140,0.85)';
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r+13,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
   if(p.cooldown>0){ ctx.beginPath(); ctx.arc(p.x,p.y,p.r+6,-Math.PI/2,-Math.PI/2+(1-p.cooldown/SK_SHOOT_COOLDOWN)*Math.PI*2);
     ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2; ctx.stroke(); }
   if(p.isCharging){ const frac=Math.min(1,p.chargeTime/skPowerShotChargeTime(p));
@@ -25347,22 +25527,42 @@ function skDrawBall(ctx, ball){
   ctx.save(); ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur = ball.airborne>0?18:8;
   skDrawCircle(ctx, ball.x, ball.y, ball.airborne>0?ball.r*1.3:ball.r, '#f3efe4', 'rgba(30,20,10,0.3)'); ctx.restore();
 }
+// Ampel-Farben für die Ausdauer-Anzeige statt einer einzigen Farbe - macht auf einen Blick sichtbar,
+// wann ein Spieler "leer" läuft, ohne erst die genaue Zahl ablesen zu müssen.
+function skStaminaColor(stamina){
+  if(stamina>60) return 'var(--turf-bright, #3ddc84)';
+  if(stamina>30) return '#f2c94c';
+  return '#ff5a4d';
+}
 function skRender(ctx, engine){
   skDrawField(ctx); skDrawPlayer(ctx, engine.p1); skDrawPlayer(ctx, engine.p2); skDrawBall(ctx, engine.ball);
   const stam1 = document.getElementById('sk-stam-me'), stam2 = document.getElementById('sk-stam-opp');
-  if(stam1) stam1.style.width = engine.p1.stamina+'%';
-  if(stam2) stam2.style.width = engine.p2.stamina+'%';
+  if(stam1){ stam1.style.width = engine.p1.stamina+'%'; stam1.style.background = skStaminaColor(engine.p1.stamina); }
+  if(stam2){ stam2.style.width = engine.p2.stamina+'%'; stam2.style.background = skStaminaColor(engine.p2.stamina); }
   const s1El = document.getElementById('sk-s1'), s2El = document.getElementById('sk-s2');
-  if(s1El) s1El.textContent = engine.score[0];
-  if(s2El) s2El.textContent = engine.score[1];
+  if(s1El && s1El.textContent!=String(engine.score[0])){ s1El.textContent = engine.score[0]; skPulseOnce(s1El); }
+  if(s2El && s2El.textContent!=String(engine.score[1])){ s2El.textContent = engine.score[1]; skPulseOnce(s2El); }
   const timerEl = document.getElementById('sk-timer');
-  if(timerEl){ const t=Math.max(0,Math.ceil(engine.timeLeft)); timerEl.textContent = Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); }
+  if(timerEl){
+    const t=Math.max(0,Math.ceil(engine.timeLeft));
+    timerEl.textContent = Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+    // Warnfarbe unter 30 Sekunden - "es wird knapp" ist auf einen Blick sichtbar, ohne ständig auf die
+    // Uhr starren zu müssen.
+    timerEl.style.color = t<=30 ? '#ff5a4d' : '';
+    timerEl.classList.toggle('sk-timer-warn', t<=30 && t>0);
+  }
   const msgEl = document.getElementById('sk-msg');
   if(msgEl && engine.msg){
     const age = Date.now()-engine.msg.ts;
     if(age<1100){ msgEl.textContent = engine.msg.text+(engine.msg.side===1?' — links':' — rechts'); msgEl.style.opacity='1'; }
     else msgEl.style.opacity='0';
   }
+}
+// Kurzer Skalier-Puls, wenn sich ein Zahlenwert ändert (Tor) - macht das Ereignis auch dann sichtbar,
+// wenn man gerade nicht auf die Ecke mit der Anzeige geschaut hat.
+function skPulseOnce(el){
+  el.style.transition = 'none'; el.style.transform = 'scale(1.6)';
+  requestAnimationFrame(()=>{ el.style.transition = 'transform .35s ease-out'; el.style.transform = 'scale(1)'; });
 }
 
 // ---------- Lokale Eingaben (Tastatur + Touch + Gamepad, siehe skComposeLocalInput) ----------
@@ -25373,9 +25573,15 @@ let skTouchInput = null; // von den Touch-Controls gesetzt (siehe skSetupTouchCo
 // Power Shot (das braucht keinen eigenen Button, siehe skApplyInput - läuft über den Schuss-Button
 // selbst). Dieselbe Liste treibt sowohl die Touch-Buttons als auch die Gamepad-Zuordnung, damit ein
 // Move auf jedem Eingabeweg an derselben "Stelle" (Ost=B, Nordost=X, Nord=Y) liegt.
-const SK_MOVE_PRIORITY = ['quickstep','slide','technical','finesse','chip','rush','block'];
-const SK_MOVE_INPUT_KEY = {quickstep:'dash', slide:'slide', technical:'tech', finesse:'finesse', chip:'chip', rush:'rush', block:'block'};
-const SK_MOVE_BUTTON_LABEL = {dash:'DASH', slide:'TACKLE', tech:'TECH', finesse:'FINESSE', chip:'LUPFER', rush:'RUSH', block:'BLOCK'};
+// Nur die per Knopf ausgelösten Moves konsumieren einen der 3 Knopf-Slots (Touch: Ost/Nordost/Nord,
+// Gamepad: B/X/Y) - header/volley (automatisch über den Schuss-Knopf) und die sieben passiven Traits
+// (intercept/anticipate/enforcer/bruiser/pressproven/relentless/firsttouch) tauchen hier bewusst NICHT
+// auf, brauchen aber trotzdem keinen Knopf, um zu wirken (siehe skReleaseShot/makeSkillPlayer/skUpdateTouch).
+const SK_MOVE_PRIORITY = ['quickstep','slide','technical','finesse','chip','rush','block','feint','jockey','trick','lowshot'];
+const SK_MOVE_INPUT_KEY = {quickstep:'dash', slide:'slide', technical:'tech', finesse:'finesse', chip:'chip', rush:'rush', block:'block',
+  feint:'feint', jockey:'jockey', trick:'trick', lowshot:'lowshot'};
+const SK_MOVE_BUTTON_LABEL = {dash:'DASH', slide:'TACKLE', tech:'TECH', finesse:'FINESSE', chip:'LUPFER', rush:'RUSH', block:'BLOCK',
+  feint:'FEINT', jockey:'JOCKEY', trick:'TRICK', lowshot:'FLACH'};
 function skMoveButtonKeys(myMoves){
   return SK_MOVE_PRIORITY.filter(m=>myMoves.has(m)).slice(0,3).map(m=>SK_MOVE_INPUT_KEY[m]);
 }
@@ -25640,7 +25846,7 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
       <div class="sk-team"><span class="sk-stamina"><span class="sk-stamina-fill" id="sk-stam-opp" style="background:#6f7bf0;"></span></span>${guestName}<span class="sk-dot" style="background:#6f7bf0;box-shadow:0 0 8px #6f7bf0;"></span></div>
     </div>
     <div class="sk-field-holder"><canvas id="sk-canvas" width="${SK_W}" height="${SK_H}"></canvas><div class="sk-msg" id="sk-msg"></div></div>
-    <div class="sk-controls-hint">WASD/Pfeile bewegen · Leertaste schießen · nur mit passendem PlayStyle+: E Dash · Q Technik · Shift Finesse · F Grätsche · C Lupfer · R Raserei · B Block</div>
+    <div class="sk-controls-hint">WASD/Pfeile bewegen · Leertaste schießen · nur mit passendem PlayStyle+: E Dash · Q Technik · Shift Finesse · F Grätsche · C Lupfer · R Raserei · B Block · G Beinarbeit · J Abdrängen · T Trick · L Flacher Schuss</div>
     <div class="sk-controls-hint" id="sk-gamepad-hint" style="display:none;color:var(--gold);"></div>
     <div class="sk-rotate-hint"><span class="sk-rotate-icon">↻</span><div style="font-weight:700;">Bitte Gerät drehen</div><div class="hint">Skill-Duell läuft nur im Querformat.</div></div>`;
   document.body.appendChild(overlay);
