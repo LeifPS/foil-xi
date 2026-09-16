@@ -25043,9 +25043,21 @@ function deriveSkillPhysics(card){
     const capped = v<=SK_STAT_SOFT_CAP ? v : SK_STAT_SOFT_CAP + (v-SK_STAT_SOFT_CAP)*SK_STAT_SOFT_CAP_RATE;
     return capped/99;
   };
+  // Tempo/Beschleunigung bekommen zusätzlich zum allgemeinen Deckel oben einen EIGENEN, früher
+  // greifenden Deckel ("schnelle Spieler etwas langsamer machen, ohne die langsamen noch langsamer zu
+  // machen"): unterhalb von 70 PAC bleibt die Kurve exakt linear, also für jede Karte bis dahin
+  // WORT-WÖRTLICH dasselbe Tempo wie bisher - erst darüber wird der weitere Zuwachs gedämpft, sodass
+  // ein 99er-PAC-Spieler spürbar langsamer wird als vorher, ohne dass sich für einen 60er- oder
+  // 70er-PAC-Spieler auch nur ein einziger Pixel Höchstgeschwindigkeit ändert.
+  const SK_PAC_SPEED_SOFT_CAP = 70, SK_PAC_SPEED_SOFT_CAP_RATE = 0.4;
+  const nPacSpeed = raw => {
+    const v = Math.max(1, Math.min(99, raw||50));
+    const capped = v<=SK_PAC_SPEED_SOFT_CAP ? v : SK_PAC_SPEED_SOFT_CAP + (v-SK_PAC_SPEED_SOFT_CAP)*SK_PAC_SPEED_SOFT_CAP_RATE;
+    return capped/99;
+  };
   const PAC=card.pac||50, SHO=card.sho||50, PAS=card.pas||50, DRI=card.dri||50, DEF=card.defn||50, PHY=card.phy||50;
   return {
-    accel: 1600 + n(PAC)*1800, maxSpeed: 250 + n(PAC)*150,
+    accel: 1600 + nPacSpeed(PAC)*1800, maxSpeed: 250 + nPacSpeed(PAC)*150,
     shotPowerMult: 0.75 + n(SHO)*0.6, shotSpread: (1-n(SHO))*0.22,
     curveMult: 0.5 + n(PAS)*1.3, touchBuffer: 0.08 + n(PAS)*0.16,
     friction: 6 + n(DRI)*7, dribbleRestitution: 0.72 - n(DRI)*0.42,

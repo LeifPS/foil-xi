@@ -52,16 +52,30 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // abgeschwächt weiterwirken (weicher Deckel), weil dasselbe Substat gleichzeitig in ~10
     // Mechaniken einfließt und sich sonst zu einem uneinholbaren Gesamtvorteil aufsummiert. Der
     // Abstand 99 vs. 85 muss also spürbar kleiner ausfallen als der (gleich große) Abstand 85 vs. 71.
-    const card85 = {...fakeCard, pac:85}, card99 = {...fakeCard, pac:99}, card71 = {...fakeCard, pac:71};
-    const speed85 = deriveSkillPhysics(card85).maxSpeed, speed99 = deriveSkillPhysics(card99).maxSpeed, speed71 = deriveSkillPhysics(card71).maxSpeed;
-    const gap99v85 = speed99-speed85, gap85v71 = speed85-speed71;
+    // Getestet über SHO/shotPowerMult statt PAC/maxSpeed - Tempo hat inzwischen einen eigenen,
+    // separaten Deckel (siehe nächster Test-Block), der allgemeine 85er-Deckel bleibt aber für alle
+    // anderen Substate (SHO/PAS/DRI/DEF/PHY) unverändert in Kraft.
+    const card85 = {...fakeCard, sho:85}, card99 = {...fakeCard, sho:99}, card71 = {...fakeCard, sho:71};
+    const pow85 = deriveSkillPhysics(card85).shotPowerMult, pow99 = deriveSkillPhysics(card99).shotPowerMult, pow71 = deriveSkillPhysics(card71).shotPowerMult;
+    const gap99v85 = pow99-pow85, gap85v71 = pow85-pow71;
     const eliteAdvantageIsSoftCapped = gap99v85>0 && gap99v85<gap85v71;
     // Unterhalb des Deckels bleibt die Skalierung unverändert linear - zwei Karten mit demselben
-    // Abstand (60 vs. 74 wie 71 vs. 85) müssen also denselben Geschwindigkeitsgewinn bringen.
-    const card60 = {...fakeCard, pac:60}, card74 = {...fakeCard, pac:74};
-    const speed60 = deriveSkillPhysics(card60).maxSpeed, speed74 = deriveSkillPhysics(card74).maxSpeed;
-    const gap74v60 = speed74-speed60;
-    const belowCapStaysLinear = Math.abs(gap74v60-gap85v71)<0.01;
+    // Abstand (60 vs. 74 wie 71 vs. 85) müssen also denselben Vorteil bringen.
+    const card60 = {...fakeCard, sho:60}, card74 = {...fakeCard, sho:74};
+    const pow60 = deriveSkillPhysics(card60).shotPowerMult, pow74 = deriveSkillPhysics(card74).shotPowerMult;
+    const gap74v60 = pow74-pow60;
+    const belowCapStaysLinear = Math.abs(gap74v60-gap85v71)<0.0001;
+
+    // Neuer, separater Tempo-Deckel ("schnelle Spieler etwas langsamer machen, ohne die langsamen noch
+    // langsamer zu machen"): unterhalb von 70 PAC exakt dieselbe Geschwindigkeit wie vorher (linear,
+    // Deckel unten überhaupt nicht aktiv), oberhalb von 70 wird der weitere Tempozuwachs gedämpft.
+    const pacLowA = {...fakeCard, pac:40}, pacLowB = {...fakeCard, pac:65};
+    const speedLowA = deriveSkillPhysics(pacLowA).maxSpeed, speedLowB = deriveSkillPhysics(pacLowB).maxSpeed;
+    const belowSpeedCapUnaffected = Math.abs(speedLowA - (250 + (40/99)*150)) < 0.0001 && Math.abs(speedLowB - (250 + (65/99)*150)) < 0.0001;
+    const pac70 = {...fakeCard, pac:70}, pac99forSpeed = {...fakeCard, pac:99};
+    const speed70 = deriveSkillPhysics(pac70).maxSpeed, speed99forSpeed = deriveSkillPhysics(pac99forSpeed).maxSpeed;
+    const linearProjectionAt99 = 250 + (99/99)*150; // was ein 99er ohne Deckel hätte (400)
+    const fastPlayersAreSlowerThanLinear = speed99forSpeed < linearProjectionAt99 && speed99forSpeed > speed70;
 
     // Elite-Variante desselben Traits (Grätsche+ statt Grätsche) muss denselben Move freischalten -
     // sonst wäre ein Move nur für Nicht-Elite-Karten nutzbar, was PLAYSTYLE_ELITE_OF widerspräche.
@@ -71,7 +85,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
     BY_ID.delete(fakeCard.id); BY_ID.delete(fakeGk.id);
 
-    return {hasOnlyExpectedMoves, hasNoUngatedMoves, gkExcluded, fieldIncluded, roundtripStatsMatch, roundtripMovesMatch, statsScaleUp, eliteAlsoUnlocks, eliteAdvantageIsSoftCapped, belowCapStaysLinear};
+    return {hasOnlyExpectedMoves, hasNoUngatedMoves, gkExcluded, fieldIncluded, roundtripStatsMatch, roundtripMovesMatch, statsScaleUp, eliteAlsoUnlocks, eliteAdvantageIsSoftCapped, belowCapStaysLinear, belowSpeedCapUnaffected, fastPlayersAreSlowerThanLinear};
   }));
 
   console.log('Skill-Modus-Fundament-Test');
@@ -86,6 +100,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.eliteAlsoUnlocks, true, 'die Elite-Variante eines Traits (z.B. Grätsche+) schaltet denselben Move frei wie die Basis-Variante');
   eq(result.eliteAdvantageIsSoftCapped, true, 'Balance-Fix: der Vorteil von 99 gegenüber 85 fällt kleiner aus als der gleich große Abstand 85 gegenüber 71 (100+-Karten nicht mehr grotesk überlegen)');
   eq(result.belowCapStaysLinear, true, 'unterhalb des weichen Deckels (85) bleibt die Skalierung unverändert linear');
+  eq(result.belowSpeedCapUnaffected, true, 'Tempo-Deckel: unterhalb von 70 PAC exakt dieselbe Höchstgeschwindigkeit wie ohne Deckel (langsame Spieler werden nicht noch langsamer)');
+  eq(result.fastPlayersAreSlowerThanLinear, true, 'Tempo-Deckel: ein 99er-PAC-Spieler ist spürbar langsamer als ohne Deckel, aber immer noch schneller als ein 70er');
 
   summary('Skill-Modus-Fundament-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });
