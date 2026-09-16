@@ -25113,7 +25113,7 @@ const SK_ELITE_SLIDE_IMPULSE = 500, SK_ELITE_SLIDE_COOLDOWN = 1.6, SK_ELITE_SLID
 const SK_ELITE_TECHNICAL_STAMINA_MULT = 0.85, SK_ELITE_TECHNICAL_RESTITUTION_MULT = 0.2; // statt 0.72 / 0.35
 const SK_ELITE_CHIP_AIRBORNE_TIME = 0.8, SK_ELITE_CHIP_POWER_MULT = 0.68; // statt 0.55 / 0.55
 const SK_ELITE_RUSH_SPEED_MULT = 1.55, SK_ELITE_RUSH_STAMINA_DRAIN_MULT = 1.5;
-const SK_ELITE_BLOCK_STAMINA_DRAIN = 6, SK_ELITE_BLOCK_SPEED_MULT = 0.7, SK_ELITE_BLOCK_RESTITUTION_MULT = 0.05, SK_ELITE_BLOCK_MASS_MULT = 2.0;
+const SK_ELITE_BLOCK_STAMINA_DRAIN = 6, SK_ELITE_BLOCK_SPEED_MULT = 0.7, SK_ELITE_BLOCK_RESTITUTION_MULT = 0.05;
 // ----- Konstanten für die 13 neuen PlayStyles+ (siehe SKILL_MOVE_BY_TRAIT-Kommentar für die
 // Design-Entscheidungen, welcher Trait welche Mechanik bekommt und warum neun Traits bewusst
 // keine Entsprechung haben). Vier aktive Knopf-Moves (mit Elite-Variante):
@@ -25435,6 +25435,23 @@ function skCircleCollide(a,b,restitution,massA,massB){
   const impx=j*nx, impy=j*ny;
   a.vx -= impx/massA; a.vy -= impy/massA; b.vx += impx/massB; b.vy += impy/massB;
 }
+// Ball hat KEINEN Widerstand gegen den Spieler ("wenn ich mit dem Ball laufe ist es sonst zu schwer") -
+// anders als skCircleCollide (echte Zwei-Körper-Physik mit Massenverhältnis) wird hier der Spieler
+// wie eine unendlich schwere, unbewegliche Wand behandelt: NUR der Ball wird aus der Überlappung
+// herausgeschoben und bekommt den Rückstoß-Impuls, die Position UND Geschwindigkeit des Spielers
+// bleiben komplett unberührt. Mathematisch der Grenzfall massA→∞ von skCircleCollide (dort verschwindet
+// jeder 1/massA-Term), deshalb ohne jeden Massenparameter.
+function skBallCollide(p, ball, restitution){
+  const dx=ball.x-p.x, dy=ball.y-p.y, dist=Math.hypot(dx,dy)||0.0001;
+  const overlap = p.r+ball.r-dist;
+  if(overlap<=0) return;
+  const nx=dx/dist, ny=dy/dist;
+  ball.x += nx*overlap; ball.y += ny*overlap;
+  const rvx=ball.vx-p.vx, rvy=ball.vy-p.vy, velAlongNormal=rvx*nx+rvy*ny;
+  if(velAlongNormal>0) return;
+  const scale = -(1+restitution)*velAlongNormal;
+  ball.vx += scale*nx; ball.vy += scale*ny;
+}
 function skUpdateTouch(p, ball, dt){
   const dist = Math.hypot(ball.x-p.x, ball.y-p.y);
   // Jockey (gehalten): zusätzliche, temporäre Abfangreichweite obendrauf, solange die Abschirm-Haltung
@@ -25488,8 +25505,7 @@ function skStep(engine, dt){
   skCircleCollide(p1, p2, 0.3, p1.mass*p1.duelPower*duelBoost1, p2.mass*p2.duelPower*duelBoost2);
   if(ball.airborne<=0){
     const rest1 = skBallRestitution(p1), rest2 = skBallRestitution(p2);
-    skCircleCollide(p1, ball, rest1, p1.mass*(p1.blocking?(p1.eliteMoves.has('block')?SK_ELITE_BLOCK_MASS_MULT:1.6):1), 1);
-    skCircleCollide(p2, ball, rest2, p2.mass*(p2.blocking?(p2.eliteMoves.has('block')?SK_ELITE_BLOCK_MASS_MULT:1.6):1), 1);
+    skBallCollide(p1, ball, rest1); skBallCollide(p2, ball, rest2);
   }
   if(ball.y-ball.r<SK_WALL){ ball.y=SK_WALL+ball.r; ball.vy*=-0.7; }
   if(ball.y+ball.r>SK_H-SK_WALL){ ball.y=SK_H-SK_WALL-ball.r; ball.vy*=-0.7; }
