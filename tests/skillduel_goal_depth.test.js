@@ -38,30 +38,19 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // wenn auch kleinerer Schritt auf dem bereits verstärkten Schusstempo.
     const shotIsStrongerThanBefore = SK_SHOT_SPEED_BOOST > 1.85;
 
-    // ---------- (3) Spieler deutlich langsamer (~ein Drittel dessen, was ein 99er GERADE hat) ----------
-    const fastCard = {...fakeCard, pac:99};
-    const speedNow = deriveSkillPhysics(fastCard).maxSpeed;
-    // "Gerade hat" bezog sich auf den Stand VOR diesem Buff (SK_PLAYER_SPEED_MULT war 0.6) - das neue
-    // Tempo muss also ungefähr bei einem Drittel dessen liegen, was ein 99er mit dem alten Multiplikator
-    // gehabt hätte (großzügiger Korridor 25-45%, da "ungefähr" keine Punktlandung verlangt).
-    const SK_PAC_SPEED_SOFT_CAP = 50, SK_PAC_SPEED_SOFT_CAP_RATE = 0.12;
-    const nPacSpeedRef = raw => {
-      const v = Math.max(1, Math.min(99, raw||50));
-      const capped = v<=SK_PAC_SPEED_SOFT_CAP ? v : SK_PAC_SPEED_SOFT_CAP + (v-SK_PAC_SPEED_SOFT_CAP)*SK_PAC_SPEED_SOFT_CAP_RATE;
-      return capped/99;
-    };
-    const unmultipliedMaxSpeed99 = 250 + nPacSpeedRef(99)*150;
-    const speedBefore = unmultipliedMaxSpeed99 * 0.6; // Stand direkt vor diesem Buff
-    const ratio = speedNow / speedBefore;
-    const playerIsRoughlyAThirdOfBefore = ratio >= 0.25 && ratio <= 0.45;
-    const playerIsSubstantiallySlowerOverall = SK_PLAYER_SPEED_MULT <= 0.25;
+    // ---------- (3) Tempo-Verlauf: 0.6 -> 0.2 (ein Drittel) -> "schneller 2x" -> 0.4 ----------
+    // SK_PLAYER_SPEED_MULT muss exakt beim Zwischenstand (0.2) verdoppelt worden sein, aber deutlich
+    // unter dem allerersten Stand (0.6) bleiben - "schneller 2x" bezog sich auf den zuletzt gesetzten
+    // Wert, nicht auf eine Rückkehr zur ursprünglichen Geschwindigkeit.
+    const playerIsTwiceAsFastAsPreviousStep = Math.abs(SK_PLAYER_SPEED_MULT - 0.2*2) < 0.0001;
+    const playerStillSlowerThanOriginal = SK_PLAYER_SPEED_MULT < 0.6;
 
     BY_ID.delete(fakeCard.id);
 
     return {
       goalDepthExists, canvasHasExtraWidthForGoalDepth, fieldHeightUnchanged,
       renderErrorFrame1, renderErrorFrame2, transformDoesNotAccumulate,
-      shotIsStrongerThanBefore, playerIsRoughlyAThirdOfBefore, playerIsSubstantiallySlowerOverall,
+      shotIsStrongerThanBefore, playerIsTwiceAsFastAsPreviousStep, playerStillSlowerThanOriginal,
     };
   }));
 
@@ -74,8 +63,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.renderErrorFrame2, null, 'ein zweiter aufeinanderfolgender Render-Frame läuft ebenfalls fehlerfrei');
   eq(result.transformDoesNotAccumulate, true, 'die Canvas-Transform-Verschiebung summiert sich nicht über mehrere Frames auf');
   eq(result.shotIsStrongerThanBefore, true, 'SK_SHOT_SPEED_BOOST wurde gegenüber dem vorherigen Stand (1.85) nochmal erhöht');
-  eq(result.playerIsRoughlyAThirdOfBefore, true, 'ein 99er-PAC-Spieler ist jetzt ungefähr ein Drittel so schnell wie vor diesem Tempo-Buff');
-  eq(result.playerIsSubstantiallySlowerOverall, true, 'SK_PLAYER_SPEED_MULT liegt deutlich niedriger als zuvor (<=0.25)');
+  eq(result.playerIsTwiceAsFastAsPreviousStep, true, '"schneller 2x": SK_PLAYER_SPEED_MULT ist exakt doppelt so hoch wie der zuletzt gesetzte Zwischenstand (0.2)');
+  eq(result.playerStillSlowerThanOriginal, true, 'trotz der Verdopplung bleibt das Tempo deutlich unter dem allerersten Stand (0.6)');
 
   summary('Skill-Duell-Tor-Tiefe-Power-Tempo-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

@@ -25076,12 +25076,11 @@ const SK_GOAL_DEPTH = 30;
 const SK_WALL = 6, SK_PLAYER_OOB = 34;
 const SK_MATCH_SECONDS = 180, SK_GOAL_LIMIT = 5;
 const SK_TOUCH_MARGIN = 22, SK_BASE_POWER = 480, SK_MOMENTUM_FACTOR = 0.9, SK_CURVE_FACTOR = 0.55;
-// "Deutlich deutlich langsamere Spieler": genereller Multiplikator auf Beschleunigung UND Höchsttempo
-// in deriveSkillPhysics, wirkt auf JEDE Karte gleichermaßen (die PAC-Skalierung/den PAC-Tempo-Deckel
-// zwischen schnellen und langsamen Karten verändert das nicht, nur das gesamte Niveau). Erst 0.6, auf
-// erneuten Wunsch ("ein 99er soll ungefähr ein Drittel von dem haben, was er gerade hat") nochmal um
-// den Faktor 1/3 weiter gesenkt: 0.6 * (1/3) ≈ 0.2.
-const SK_PLAYER_SPEED_MULT = 0.2;
+// Genereller Multiplikator auf Beschleunigung UND Höchsttempo in deriveSkillPhysics, wirkt auf JEDE
+// Karte gleichermaßen (die PAC-Skalierung/den PAC-Tempo-Deckel zwischen schnellen und langsamen Karten
+// verändert das nicht, nur das gesamte Niveau). Verlauf: 0.6 -> 0.2 (ein Drittel) -> auf Wunsch
+// "schneller 2x" wieder verdoppelt auf 0.4.
+const SK_PLAYER_SPEED_MULT = 0.4;
 // "Mehr Schusspower": genereller Multiplikator auf JEDEN Schuss (wirkt vor allen move-spezifischen
 // Multiplikatoren in skReleaseShot, also gleichermaßen auf Sofortschuss, Finesse, Lupfer, Power Shot,
 // Header/Volley, Low Driven Shot). Erst 1.5 (50% mehr), dann 1.85, jetzt nochmal etwas angehoben.
