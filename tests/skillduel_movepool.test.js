@@ -66,20 +66,22 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const gap74v60 = pow74-pow60;
     const belowCapStaysLinear = Math.abs(gap74v60-gap85v71)<0.0001;
 
-    // Neuer, separater Tempo-Deckel ("schnelle Spieler DEUTLICH langsamer machen, ohne die langsamen
-    // noch langsamer zu machen"): unterhalb von 65 PAC exakt dieselbe Geschwindigkeit wie vorher
-    // (linear, Deckel unten überhaupt nicht aktiv), oberhalb von 65 wird der weitere Tempozuwachs stark
-    // gedämpft (nur noch 15% Wirkung).
-    const pacLowA = {...fakeCard, pac:40}, pacLowB = {...fakeCard, pac:65};
+    // Neuer, separater Tempo-Deckel ("viel langsamer, ungefähr die Hälfte davon"): unterhalb von 50
+    // PAC exakt dieselbe Geschwindigkeit wie vorher (linear, Deckel unten überhaupt nicht aktiv),
+    // oberhalb von 50 wird der weitere Tempozuwachs auf nur noch 12% Wirkung gedrückt.
+    const pacLowA = {...fakeCard, pac:30}, pacLowB = {...fakeCard, pac:50};
     const speedLowA = deriveSkillPhysics(pacLowA).maxSpeed, speedLowB = deriveSkillPhysics(pacLowB).maxSpeed;
-    const belowSpeedCapUnaffected = Math.abs(speedLowA - (250 + (40/99)*150)) < 0.0001 && Math.abs(speedLowB - (250 + (65/99)*150)) < 0.0001;
+    const belowSpeedCapUnaffected = Math.abs(speedLowA - (250 + (30/99)*150)) < 0.0001 && Math.abs(speedLowB - (250 + (50/99)*150)) < 0.0001;
     const pac70 = {...fakeCard, pac:70}, pac99forSpeed = {...fakeCard, pac:99};
     const speed70 = deriveSkillPhysics(pac70).maxSpeed, speed99forSpeed = deriveSkillPhysics(pac99forSpeed).maxSpeed;
     const linearProjectionAt99 = 250 + (99/99)*150; // was ein 99er ohne Deckel hätte (400)
     const fastPlayersAreSlowerThanLinear = speed99forSpeed < linearProjectionAt99 && speed99forSpeed > speed70;
-    // "Deutlich" heißt messbar mehr als eine kosmetische Änderung - ein 99er-PAC-Spieler muss
-    // mindestens 10% langsamer sein als die ungedeckelte lineare Projektion.
-    const reductionIsSubstantial = (linearProjectionAt99 - speed99forSpeed) / linearProjectionAt99 >= 0.1;
+    // "Ungefähr die Hälfte" heißt: der Tempo-BONUS (nicht die absolute Geschwindigkeit, die ja immer
+    // mindestens die Basis 250 ist) eines 99er-PAC-Spielers muss ungefähr auf die Hälfte dessen sinken,
+    // was er ganz ohne Deckel hätte (150) - großzügiger Korridor (35-65%) statt eines exakten Werts,
+    // da "ungefähr" ausdrücklich keine Punktlandung verlangt.
+    const bonusAt99 = speed99forSpeed - 250, linearBonusAt99 = linearProjectionAt99 - 250;
+    const reductionIsSubstantial = bonusAt99/linearBonusAt99 >= 0.35 && bonusAt99/linearBonusAt99 <= 0.65;
 
     // Elite-Variante desselben Traits (Grätsche+ statt Grätsche) muss denselben Move freischalten -
     // sonst wäre ein Move nur für Nicht-Elite-Karten nutzbar, was PLAYSTYLE_ELITE_OF widerspräche.
@@ -104,9 +106,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.eliteAlsoUnlocks, true, 'die Elite-Variante eines Traits (z.B. Grätsche+) schaltet denselben Move frei wie die Basis-Variante');
   eq(result.eliteAdvantageIsSoftCapped, true, 'Balance-Fix: der Vorteil von 99 gegenüber 85 fällt kleiner aus als der gleich große Abstand 85 gegenüber 71 (100+-Karten nicht mehr grotesk überlegen)');
   eq(result.belowCapStaysLinear, true, 'unterhalb des weichen Deckels (85) bleibt die Skalierung unverändert linear');
-  eq(result.belowSpeedCapUnaffected, true, 'Tempo-Deckel: unterhalb von 70 PAC exakt dieselbe Höchstgeschwindigkeit wie ohne Deckel (langsame Spieler werden nicht noch langsamer)');
+  eq(result.belowSpeedCapUnaffected, true, 'Tempo-Deckel: unterhalb von 50 PAC exakt dieselbe Höchstgeschwindigkeit wie ohne Deckel (langsame Spieler werden nicht noch langsamer)');
   eq(result.fastPlayersAreSlowerThanLinear, true, 'Tempo-Deckel: ein 99er-PAC-Spieler ist spürbar langsamer als ohne Deckel, aber immer noch schneller als ein 70er');
-  eq(result.reductionIsSubstantial, true, 'Tempo-Deckel: die Reduktion bei PAC 99 beträgt mindestens 10% (spürbar/deutlich, nicht nur kosmetisch)');
+  eq(result.reductionIsSubstantial, true, 'Tempo-Deckel: der Tempo-Bonus bei PAC 99 liegt bei ungefähr der Hälfte (35-65%) dessen, was er ohne Deckel wäre');
 
   summary('Skill-Modus-Fundament-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });
