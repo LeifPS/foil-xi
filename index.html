@@ -25267,6 +25267,17 @@ function skRender(ctx, engine){
 // ---------- Lokale Eingaben (Tastatur + Touch + Gamepad, siehe skComposeLocalInput) ----------
 const skKeyState = {};
 let skTouchInput = null; // von den Touch-Controls gesetzt (siehe skSetupTouchControls), sonst null
+// Feste Priorität, in der Moves Buttons zugewiesen bekommen (Touch: Ost/Nordost/Nord: Gamepad: B/X/Y) -
+// eine Karte hat nie mehr als 3 Traits (resolveCardTraits kappt hart), also nie mehr als 3 Moves neben
+// Power Shot (das braucht keinen eigenen Button, siehe skApplyInput - läuft über den Schuss-Button
+// selbst). Dieselbe Liste treibt sowohl die Touch-Buttons als auch die Gamepad-Zuordnung, damit ein
+// Move auf jedem Eingabeweg an derselben "Stelle" (Ost=B, Nordost=X, Nord=Y) liegt.
+const SK_MOVE_PRIORITY = ['quickstep','slide','technical','finesse','chip','rush','block'];
+const SK_MOVE_INPUT_KEY = {quickstep:'dash', slide:'slide', technical:'tech', finesse:'finesse', chip:'chip', rush:'rush', block:'block'};
+const SK_MOVE_BUTTON_LABEL = {dash:'DASH', slide:'TACKLE', tech:'TECH', finesse:'FINESSE', chip:'LUPFER', rush:'RUSH', block:'BLOCK'};
+function skMoveButtonKeys(myMoves){
+  return SK_MOVE_PRIORITY.filter(m=>myMoves.has(m)).slice(0,3).map(m=>SK_MOVE_INPUT_KEY[m]);
+}
 function skReadGamepadInput(){
   if(skillDuelState==null || !navigator.getGamepads) return SK_EMPTY_INPUT;
   const pads = navigator.getGamepads();
@@ -25274,11 +25285,16 @@ function skReadGamepadInput(){
   if(!gp) return SK_EMPTY_INPUT;
   const ax0 = gp.axes[0]||0, ax1 = gp.axes[1]||0, dead=0.35;
   const btn = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
-  return {
+  const input = {...SK_EMPTY_INPUT,
     up: ax1<-dead, down: ax1>dead, left: ax0<-dead, right: ax0>dead,
-    shoot: btn(0), dash: btn(1), slide: btn(2), block: btn(3),
-    tech: btn(4), finesse: btn(5), chip: btn(6), rush: btn(7),
+    shoot: btn(0), // Button 0 (A)
   };
+  // Button 1 (B) = erste verfügbare PlayStyle-Fähigkeit, Button 2 (X) = zweite, Button 3 (Y) = dritte.
+  const keys = skillDuelState.gamepadMoveKeys || [];
+  if(keys[0]) input[keys[0]] = btn(1);
+  if(keys[1]) input[keys[1]] = btn(2);
+  if(keys[2]) input[keys[2]] = btn(3);
+  return input;
 }
 function skComposeLocalInput(){
   const kb = skReadKeyboardInput(skKeyState);
@@ -25296,9 +25312,20 @@ function skSetupKeyboard(){
   window.addEventListener('keyup', up);
   return ()=>{ window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
 }
+// Solange ein Controller verbunden ist, blendet sich das Touch-Overlay aus (siehe skUpdateTouchVisibility)
+// - es würde sonst auf einem Touchscreen-Gerät mit angeschlossenem Controller (z.B. Tablet/Handy per
+// Bluetooth-Gamepad) einen Teil des Spielfelds blockieren, obwohl niemand mehr draufdrückt.
+function skUpdateTouchVisibility(){
+  if(!skillDuelState || !skillDuelState.touchWrap) return;
+  skillDuelState.touchWrap.classList.toggle('active', skillDuelState.gamepadIndex==null);
+}
 function skSetupGamepad(){
-  const onConnect = e=>{ if(skillDuelState && skillDuelState.gamepadIndex==null) skillDuelState.gamepadIndex = e.gamepad.index; };
-  const onDisconnect = e=>{ if(skillDuelState && skillDuelState.gamepadIndex===e.gamepad.index) skillDuelState.gamepadIndex = null; };
+  const onConnect = e=>{
+    if(skillDuelState && skillDuelState.gamepadIndex==null){ skillDuelState.gamepadIndex = e.gamepad.index; skUpdateTouchVisibility(); }
+  };
+  const onDisconnect = e=>{
+    if(skillDuelState && skillDuelState.gamepadIndex===e.gamepad.index){ skillDuelState.gamepadIndex = null; skUpdateTouchVisibility(); }
+  };
   window.addEventListener('gamepadconnected', onConnect);
   window.addEventListener('gamepaddisconnected', onDisconnect);
   const already = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -25338,12 +25365,17 @@ function skSetupTouchControls(overlay, myMoves){
   if(!isSkillTouchDevice()) return ()=>{};
   skTouchInput = {...SK_EMPTY_INPUT};
   const wrap = document.createElement('div');
-  wrap.className = 'sk-touch active';
+  // Startet unsichtbar, wenn beim Matchstart schon ein Controller verbunden ist (skSetupGamepad läuft
+  // vor dieser Funktion und hat gamepadIndex dann schon gesetzt) - sonst würde das Overlay kurz
+  // aufblitzen, obwohl von Anfang an ein Controller da ist. skUpdateTouchVisibility() hält das ab hier
+  // synchron mit dem tatsächlichen Verbindungsstatus.
+  wrap.className = 'sk-touch' + (skillDuelState.gamepadIndex==null ? ' active' : '');
   wrap.id = 'sk-touch';
   wrap.innerHTML = `
     <div class="sk-stick-zone" id="sk-stick"><div class="sk-stick-nub" id="sk-stick-nub"></div></div>
     <div class="sk-action-cluster" id="sk-actions"></div>`;
   overlay.appendChild(wrap);
+  skillDuelState.touchWrap = wrap;
   const stick = wrap.querySelector('#sk-stick'), nub = wrap.querySelector('#sk-stick-nub');
   let stickPointerId = null;
   const stickHandle = (clientX, clientY)=>{
@@ -25377,21 +25409,14 @@ function skSetupTouchControls(overlay, myMoves){
   stick.addEventListener('pointercancel', stickEnd);
 
   const actionsEl = wrap.querySelector('#sk-actions');
-  // Höchstens 3 Move-Buttons: eine Karte hat nie mehr als 3 Traits (resolveCardTraits kappt hart), also
-  // nie mehr als 3 gleichzeitig nutzbare Moves. SCHUSS ist der Anker unten rechts (größer, immer da),
-  // die Move-Buttons fächern sich von dort in einem Viertelkreis auf - Ost (direkt links vom Schuss),
-  // Nordost (diagonal), Nord (direkt darüber) - der Reihe nach befüllt, egal ob 1, 2 oder 3 Moves
-  // verfügbar sind (siehe SK_TOUCH_DIRS/die zugehörigen CSS-Klassen sk-dir-e/ne/n).
+  // Höchstens 3 Move-Buttons (skMoveButtonKeys, geteilt mit der Gamepad-Zuordnung B/X/Y - siehe
+  // skReadGamepadInput). SCHUSS ist der Anker unten rechts (größer, immer da), die Move-Buttons
+  // fächern sich von dort in einem Viertelkreis auf - Ost (direkt links vom Schuss), Nordost
+  // (diagonal), Nord (direkt darüber) - der Reihe nach befüllt, egal ob 1, 2 oder 3 Moves verfügbar
+  // sind (siehe SK_TOUCH_DIRS/die zugehörigen CSS-Klassen sk-dir-e/ne/n).
   const SK_TOUCH_DIRS = ['sk-dir-e', 'sk-dir-ne', 'sk-dir-n'];
-  const moveDefs = [];
-  if(myMoves.has('quickstep')) moveDefs.push({key:'dash', label:'DASH'});
-  if(myMoves.has('slide')) moveDefs.push({key:'slide', label:'TACKLE'});
-  if(myMoves.has('technical')) moveDefs.push({key:'tech', label:'TECH'});
-  if(myMoves.has('finesse')) moveDefs.push({key:'finesse', label:'FINESSE'});
-  if(myMoves.has('chip')) moveDefs.push({key:'chip', label:'LUPFER'});
-  if(myMoves.has('rush')) moveDefs.push({key:'rush', label:'RUSH'});
-  if(myMoves.has('block')) moveDefs.push({key:'block', label:'BLOCK'});
-  const buttonDefs = moveDefs.slice(0,3).map((def,i)=>({...def, dirClass:SK_TOUCH_DIRS[i]}));
+  const moveKeys = skMoveButtonKeys(myMoves);
+  const buttonDefs = moveKeys.map((key,i)=>({key, label:SK_MOVE_BUTTON_LABEL[key], dirClass:SK_TOUCH_DIRS[i]}));
   buttonDefs.push({key:'shoot', label:'SCHUSS', primary:true});
   buttonDefs.forEach(def=>{
     const btn = document.createElement('div');
@@ -25506,7 +25531,7 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
     p1Input: {...SK_EMPTY_INPUT}, p2Input: {...SK_EMPTY_INPUT}, p1Prev: {...SK_EMPTY_INPUT}, p2Prev: {...SK_EMPTY_INPUT},
   };
   const myMoves = isHost ? engine.p1.moves : engine.p2.moves;
-  skillDuelState = {matchId, isHost, engine, overlay, gamepadIndex:null, vsBot};
+  skillDuelState = {matchId, isHost, engine, overlay, gamepadIndex:null, vsBot, gamepadMoveKeys:skMoveButtonKeys(myMoves)};
   skillDuelState.removeKeyboard = skSetupKeyboard();
   skillDuelState.removeGamepad = skSetupGamepad();
   skillDuelState.removeTouch = skSetupTouchControls(overlay, myMoves);
