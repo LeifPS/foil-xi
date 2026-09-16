@@ -24770,10 +24770,11 @@ async function renderSkillDuelPanel(){
   if(!content) return;
   const rtdbReady = !!(fb && fb.rtdb);
   content.innerHTML = `
-    <div class="toolbar" style="margin-bottom:16px;">
+    <div class="toolbar" style="margin-bottom:8px;flex-wrap:wrap;">
       <button class="action-btn secondary" id="skillduel-bot-btn" style="width:auto;padding:9px 18px;">Allein gegen AFK-Bot testen</button>
+      <button class="action-btn secondary" id="skillduel-local-btn" style="width:auto;padding:9px 18px;">Lokal zu zweit (2 Controller)</button>
     </div>
-    <p class="hint" style="margin-top:-10px;margin-bottom:16px;">Braucht keinen zweiten Account und keine Realtime Database — der Bot bewegt sich nie, nur zum Ausprobieren der eigenen Steuerung (Tastatur/Touch/Gamepad).</p>
+    <p class="hint" style="margin-top:0;margin-bottom:16px;">Beide brauchen keinen zweiten Account und keine Realtime Database — der Bot bewegt sich nie (nur zum Ausprobieren der eigenen Steuerung), lokal zu zweit teilt sich ein Gerät zwei Controller.</p>
     <div class="play-grid">
       <div>
         <h3 style="font-size:15px;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Freunde herausfordern</h3>
@@ -24788,6 +24789,7 @@ async function renderSkillDuelPanel(){
       </div>
     </div>`;
   document.getElementById('skillduel-bot-btn').addEventListener('click', openSkillBotCardPicker);
+  document.getElementById('skillduel-local-btn').addEventListener('click', openLocalTwoPlayerSetup);
   const listEl = document.getElementById('skillduel-friend-list');
   (profile.friends||[]).forEach(friend=>{
     const row = document.createElement('div');
@@ -24914,9 +24916,80 @@ function openSkillBotCardPicker(){
   const grid = document.getElementById('sk-pick-grid');
   renderLazyGrid(grid, eligible, ({uid, card})=>skCardPickTile(card, ()=>{
     closeModal();
-    startSkillMatch(null, true, {hostName:profile.displayName||profile.userId, guestName:'AFK-Bot', hostPick:card, guestPick:SK_BOT_CARD}, {vsBot:true});
+    startSkillMatch(null, true, {hostName:profile.displayName||profile.userId, guestName:'AFK-Bot', hostPick:card, guestPick:SK_BOT_CARD}, {mode:'bot'});
   }));
   document.getElementById('sk-pick-cancel').addEventListener('click', closeModal);
+}
+// Generischer Karten-Picker fürs lokale Zwei-Spieler-Match (beide wählen nacheinander aus derselben
+// Sammlung, da nur EIN Account/Gerät beteiligt ist) - ruft onPicked(card) statt selbst das Match zu
+// starten, damit sich zwei Aufrufe (Spieler 1, dann Spieler 2) sauber verketten lassen.
+function openLocalCardPicker(playerLabel, onPicked){
+  const eligible = eligibleSkillCards();
+  if(!eligible.length){ toast('Du besitzt keine einsetzbaren Feldspieler-Karten.'); return; }
+  openModal(`
+    <h2 style="margin-bottom:4px;">${playerLabel}: Karte wählen</h2>
+    <p class="hint" style="margin-bottom:14px;">Beide Controller-Spieler wählen nacheinander aus derselben Sammlung.</p>
+    <div id="sk-pick-grid" class="sk-pick-grid" style="max-height:56vh;overflow:auto;"></div>
+    <div style="display:flex;justify-content:center;margin-top:12px;">
+      <button class="action-btn secondary" id="sk-pick-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
+    </div>`);
+  const grid = document.getElementById('sk-pick-grid');
+  renderLazyGrid(grid, eligible, ({uid, card})=>skCardPickTile(card, ()=>{ closeModal(); onPicked(card); }));
+  document.getElementById('sk-pick-cancel').addEventListener('click', closeModal);
+}
+// Lokaler Zwei-Spieler-Modus: zwei Controller an EINEM Gerät, kein zweiter Account/keine Internet-
+// verbindung nötig. Weil beide Controller einfach als "Gamepad 0/1/..." im Browser ankommen (die
+// physische USB-/Bluetooth-Reihenfolge ist nicht vorhersagbar), lässt sich Spieler 1/2 nicht einfach
+// per Index festlegen - stattdessen drückt jede Person selbst einen Knopf auf IHREM Controller, und
+// wer zuerst drückt, wird genau dem nächsten freien Slot zugeordnet ("wer zuerst kommt, wählt zuerst").
+function openLocalTwoPlayerSetup(){
+  if(skillDuelState) return;
+  const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+  if(pads.length < 2){
+    toast('Schließe mindestens zwei Controller an, um lokal zu zweit zu spielen.');
+    return;
+  }
+  openModal(`
+    <h2 style="margin-bottom:4px;">Lokal zu zweit</h2>
+    <p class="hint" style="margin-bottom:16px;">Jede Person drückt einen beliebigen Knopf auf dem eigenen Controller, um sich zuzuordnen.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+      <div class="leader-row"><span style="flex:1;">Spieler 1</span><span class="hint" id="sk-local-p1-status">wartet auf Tastendruck…</span></div>
+      <div class="leader-row"><span style="flex:1;">Spieler 2</span><span class="hint" id="sk-local-p2-status">wartet auf Tastendruck…</span></div>
+    </div>
+    <div style="display:flex;justify-content:center;">
+      <button class="action-btn secondary" id="sk-local-cancel" style="width:auto;padding:9px 20px;">Abbrechen</button>
+    </div>`);
+  let cancelled = false;
+  document.getElementById('sk-local-cancel').addEventListener('click', ()=>{ cancelled = true; });
+  const assigned = []; // Reihenfolge der zugeordneten Gamepad-Indizes - assigned[0]=Spieler 1, assigned[1]=Spieler 2
+  const prevPressed = {}; // Gamepad-Index -> war im letzten Frame schon irgendein Knopf gedrückt (Flanken-Erkennung)
+  const poll = ()=>{
+    if(cancelled) return;
+    const live = navigator.getGamepads ? navigator.getGamepads() : [];
+    for(const gp of live){
+      if(!gp || assigned.includes(gp.index)) continue;
+      const anyPressed = gp.buttons.some(b=>b && b.pressed);
+      if(anyPressed && !prevPressed[gp.index]){
+        assigned.push(gp.index);
+        const statusEl = document.getElementById(assigned.length===1 ? 'sk-local-p1-status' : 'sk-local-p2-status');
+        if(statusEl) statusEl.textContent = `Controller ${gp.index+1} zugeordnet ✓`;
+      }
+      prevPressed[gp.index] = anyPressed;
+    }
+    if(assigned.length>=2){
+      closeModal();
+      openLocalCardPicker('Spieler 1', p1Card=>{
+        openLocalCardPicker('Spieler 2', p2Card=>{
+          startSkillMatch(null, true,
+            {hostName:'Spieler 1', guestName:'Spieler 2', hostPick:p1Card, guestPick:p2Card},
+            {mode:'local', gamepadIndices:[assigned[0], assigned[1]]});
+        });
+      });
+      return;
+    }
+    requestAnimationFrame(poll);
+  };
+  requestAnimationFrame(poll);
 }
 
 // ---------- Physik/Engine-Konstanten (adaptiert aus dem lokalen Hot-Seat-Prototyp) ----------
@@ -25293,10 +25366,14 @@ const SK_MOVE_BUTTON_LABEL = {dash:'DASH', slide:'TACKLE', tech:'TECH', finesse:
 function skMoveButtonKeys(myMoves){
   return SK_MOVE_PRIORITY.filter(m=>myMoves.has(m)).slice(0,3).map(m=>SK_MOVE_INPUT_KEY[m]);
 }
-function skReadGamepadInput(){
-  if(skillDuelState==null || !navigator.getGamepads) return SK_EMPTY_INPUT;
+// Liest EINEN bestimmten Controller (per Index) aus, unabhängig vom Singleton skillDuelState.gamepadIndex
+// - gebraucht sowohl vom "ein lokaler Mensch"-Fall (skReadGamepadInput, unten) als auch vom lokalen
+// Zwei-Spieler-Modus, wo zwei Controller GLEICHZEITIG und unabhängig voneinander gelesen werden müssen
+// (siehe startSkillMatch mode==='local').
+function skReadGamepadInputFor(gamepadIndex, moveKeys){
+  if(gamepadIndex==null || !navigator.getGamepads) return SK_EMPTY_INPUT;
   const pads = navigator.getGamepads();
-  const gp = pads && pads[skillDuelState.gamepadIndex];
+  const gp = pads && pads[gamepadIndex];
   if(!gp) return SK_EMPTY_INPUT;
   const ax0 = gp.axes[0]||0, ax1 = gp.axes[1]||0, dead=0.35;
   const btn = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
@@ -25305,11 +25382,15 @@ function skReadGamepadInput(){
     shoot: btn(0), // Button 0 (A)
   };
   // Button 1 (B) = erste verfügbare PlayStyle-Fähigkeit, Button 2 (X) = zweite, Button 3 (Y) = dritte.
-  const keys = skillDuelState.gamepadMoveKeys || [];
+  const keys = moveKeys || [];
   if(keys[0]) input[keys[0]] = btn(1);
   if(keys[1]) input[keys[1]] = btn(2);
   if(keys[2]) input[keys[2]] = btn(3);
   return input;
+}
+function skReadGamepadInput(){
+  if(skillDuelState==null) return SK_EMPTY_INPUT;
+  return skReadGamepadInputFor(skillDuelState.gamepadIndex, skillDuelState.gamepadMoveKeys);
 }
 function skComposeLocalInput(){
   const kb = skReadKeyboardInput(skKeyState);
@@ -25473,10 +25554,10 @@ function skSetupTouchControls(overlay, myMoves){
 function skEndMatch(engine, matchId, isHost, meLabel, oppLabel){
   if(engine.ended) return;
   engine.ended = true;
-  const vsBot = !!(skillDuelState && skillDuelState.vsBot);
+  const networked = !!(skillDuelState && skillDuelState.mode==='online');
   const meScore = engine.score[isHost?0:1], oppScore = engine.score[isHost?1:0];
   const resultText = meScore>oppScore ? 'Gewonnen!' : meScore<oppScore ? 'Verloren.' : 'Unentschieden.';
-  if(!vsBot && isHost && fb && fb.rtdb){
+  if(networked && isHost && fb && fb.rtdb){
     fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), skSerializeState(engine, true)).catch(()=>{});
   }
   skTeardownMatch();
@@ -25487,7 +25568,7 @@ function skEndMatch(engine, matchId, isHost, meLabel, oppLabel){
       <button class="action-btn" id="sk-result-close" style="width:auto;padding:9px 24px;margin-top:14px;">Schließen</button>
     </div>`);
   document.getElementById('sk-result-close').addEventListener('click', closeModal);
-  if(!vsBot && isHost) cleanupSkillMatchDoc(matchId);
+  if(networked && isHost) cleanupSkillMatchDoc(matchId);
 }
 function skTeardownMatch(){
   if(!skillDuelState) return;
@@ -25498,9 +25579,9 @@ function skTeardownMatch(){
   if(st.removeKeyboard) st.removeKeyboard();
   if(st.removeGamepad) st.removeGamepad();
   if(st.removeTouch) st.removeTouch();
-  // AFK-Bot-Testmatches (siehe openSkillBotCardPicker) laufen komplett lokal ohne matchId/Netzwerk -
-  // da gibt's nichts, das über RTDB aufzuräumen wäre.
-  if(!st.vsBot){
+  // AFK-Bot- und lokale Zwei-Spieler-Matches laufen komplett lokal ohne matchId/Netzwerk - da gibt's
+  // nichts, das über RTDB aufzuräumen wäre.
+  if(st.mode==='online'){
     if(st.rtdbInputRef && fb && fb.rtdb){ try{ fb.rtdb.off(st.rtdbInputRef); }catch(_){} }
     if(st.rtdbStateRef && fb && fb.rtdb){ try{ fb.rtdb.off(st.rtdbStateRef); }catch(_){} }
     if(st.isHost && fb && fb.rtdb){ fb.rtdb.remove(fb.rtdb.ref(fb.rtdb.db, `skillLive/${st.matchId}`)).catch(()=>{}); }
@@ -25525,12 +25606,15 @@ function skApplyRemoteState(engine, state){
 
 async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
   if(skillDuelState) return;
-  const vsBot = !!opts.vsBot;
-  // Im Bot-Testmatch sind hostPick/guestPick schon fertige Kartenobjekte (siehe openSkillBotCardPicker) -
-  // kein Firestore-Roundtrip nötig, weil beide "Seiten" im selben Tab laufen.
-  const hostCard = vsBot ? matchDoc.hostPick : resolveSkillCardRef(matchDoc.hostPick);
-  const guestCard = vsBot ? matchDoc.guestPick : resolveSkillCardRef(matchDoc.guestPick);
-  if(!hostCard || !guestCard){ toast('Karte konnte nicht geladen werden.'); if(!vsBot) cleanupSkillMatchDoc(matchId); return; }
+  // mode: 'online' (echtes Duell über Firestore/RTDB) | 'bot' (allein gegen AFK-Bot) |
+  // 'local' (zwei Controller an einem Gerät, siehe openLocalTwoPlayerSetup). Nur 'online' braucht
+  // überhaupt ein Backend - bei 'bot'/'local' sind hostPick/guestPick schon fertige Kartenobjekte
+  // (kein Firestore-Roundtrip nötig, weil alle Seiten im selben Tab laufen).
+  const mode = opts.mode || (opts.vsBot ? 'bot' : 'online');
+  const networked = mode==='online';
+  const hostCard = networked ? resolveSkillCardRef(matchDoc.hostPick) : matchDoc.hostPick;
+  const guestCard = networked ? resolveSkillCardRef(matchDoc.guestPick) : matchDoc.guestPick;
+  if(!hostCard || !guestCard){ toast('Karte konnte nicht geladen werden.'); if(networked) cleanupSkillMatchDoc(matchId); return; }
   const hostName = matchDoc.hostName, guestName = matchDoc.guestName;
   const meLabel = isHost ? hostName : guestName, oppLabel = isHost ? guestName : hostName;
   const overlay = document.createElement('div');
@@ -25557,19 +25641,51 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
     p1Input: {...SK_EMPTY_INPUT}, p2Input: {...SK_EMPTY_INPUT}, p1Prev: {...SK_EMPTY_INPUT}, p2Prev: {...SK_EMPTY_INPUT},
   };
   const myMoves = isHost ? engine.p1.moves : engine.p2.moves;
-  skillDuelState = {matchId, isHost, engine, overlay, gamepadIndex:null, vsBot, gamepadMoveKeys:skMoveButtonKeys(myMoves)};
-  skillDuelState.gamepadHintEl = document.getElementById('sk-gamepad-hint');
-  skillDuelState.gamepadHintEl.textContent = skGamepadHintText(skillDuelState.gamepadMoveKeys);
+  skillDuelState = {matchId, isHost, engine, overlay, mode, gamepadIndex:null, gamepadMoveKeys:skMoveButtonKeys(myMoves)};
   skillDuelState.removeKeyboard = skSetupKeyboard();
-  skillDuelState.removeGamepad = skSetupGamepad();
-  skillDuelState.removeTouch = skSetupTouchControls(overlay, myMoves);
-  skUpdateTouchVisibility(); // deckt auch den Fall ab, dass beim Matchstart schon ein Controller verbunden ist
+  if(mode==='local'){
+    // Zwei echte, an diesem Gerät angeschlossene Controller sind hier bereits fest zugeordnet (siehe
+    // openLocalTwoPlayerSetup) - kein Auto-Erkennen/Touch-Overlay/Ein-Controller-Legende nötig, das ist
+    // alles für den "ein lokaler Mensch"-Fall (gegen Bot/online) gedacht.
+    skillDuelState.removeGamepad = ()=>{};
+    skillDuelState.removeTouch = ()=>{};
+    skillDuelState.p1MoveKeys = skMoveButtonKeys(engine.p1.moves);
+    skillDuelState.p2MoveKeys = skMoveButtonKeys(engine.p2.moves);
+    skillDuelState.p1GamepadIndex = opts.gamepadIndices[0];
+    skillDuelState.p2GamepadIndex = opts.gamepadIndices[1];
+  } else {
+    skillDuelState.gamepadHintEl = document.getElementById('sk-gamepad-hint');
+    skillDuelState.gamepadHintEl.textContent = skGamepadHintText(skillDuelState.gamepadMoveKeys);
+    skillDuelState.removeGamepad = skSetupGamepad();
+    skillDuelState.removeTouch = skSetupTouchControls(overlay, myMoves);
+    skUpdateTouchVisibility(); // deckt auch den Fall ab, dass beim Matchstart schon ein Controller verbunden ist
+  }
   document.getElementById('sk-close-btn').addEventListener('click', ()=>{
-    if(!vsBot && isHost && fb && fb.rtdb) fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), {...skSerializeState(engine,true)}).catch(()=>{});
+    if(networked && isHost && fb && fb.rtdb) fb.rtdb.set(fb.rtdb.ref(fb.rtdb.db, `skillLive/${matchId}/state`), {...skSerializeState(engine,true)}).catch(()=>{});
     skTeardownMatch();
   });
 
-  if(vsBot){
+  if(mode==='local'){
+    // Beide Spieler sitzen am selben Gerät mit je einem eigenen, fest zugeordneten Controller - reine
+    // lokale Schleife, kein Firestore/RTDB, kein Host/Gast-Unterschied (beide Eingaben kommen direkt
+    // von echten Menschen statt von einem Netzwerk-Peer oder einem untätigen Bot).
+    let last = performance.now();
+    const loop = now=>{
+      if(!skillDuelState) return;
+      const dt = Math.min(0.033, (now-last)/1000); last = now;
+      engine.p1Input = skReadGamepadInputFor(skillDuelState.p1GamepadIndex, skillDuelState.p1MoveKeys);
+      engine.p2Input = skReadGamepadInputFor(skillDuelState.p2GamepadIndex, skillDuelState.p2MoveKeys);
+      skStep(engine, dt);
+      engine.timeLeft -= dt;
+      skRender(ctx, engine);
+      if(engine.timeLeft<=0 || engine.score[0]>=SK_GOAL_LIMIT || engine.score[1]>=SK_GOAL_LIMIT){
+        skEndMatch(engine, matchId, true, meLabel, oppLabel);
+        return;
+      }
+      skillDuelState.rafId = requestAnimationFrame(loop);
+    };
+    skillDuelState.rafId = requestAnimationFrame(loop);
+  } else if(mode==='bot'){
     // Rein lokale Schleife, kein Firestore/RTDB - der Bot lässt seinen Input für immer auf
     // SK_EMPTY_INPUT stehen (AFK per Definition). Dient nur zum Alleine-Testen von Steuerung/Touch/
     // Gamepad, nicht als echter Gegner-Modus.

@@ -16,10 +16,10 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const savedCollection = collection;
     collection = [{uid:'sk-bot-test', cardId:fakeCard.id, xp:0}];
 
-    startSkillMatch(null, true, {hostName:'Ich', guestName:'AFK-Bot', hostPick:fakeCard, guestPick:SK_BOT_CARD}, {vsBot:true});
+    startSkillMatch(null, true, {hostName:'Ich', guestName:'AFK-Bot', hostPick:fakeCard, guestPick:SK_BOT_CARD}, {mode:'bot'});
     await new Promise(r=>setTimeout(r, 50));
     const overlayPresentAfterStart = !!document.getElementById('sk-overlay');
-    const stateAfterStart = skillDuelState ? {vsBot:skillDuelState.vsBot, isHost:skillDuelState.isHost, matchId:skillDuelState.matchId} : null;
+    const stateAfterStart = skillDuelState ? {mode:skillDuelState.mode, isHost:skillDuelState.isHost, matchId:skillDuelState.matchId} : null;
     const p2InputIsEmpty = skillDuelState ? JSON.stringify(skillDuelState.engine.p2Input)===JSON.stringify(SK_EMPTY_INPUT) : false;
     const p1HasQuickstep = skillDuelState ? skillDuelState.engine.p1.moves.has('quickstep') : false;
 
@@ -41,7 +41,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   console.log('Skill-Duell-AFK-Bot-Test');
   noErrors(errors, 'Seite');
   eq(result.overlayPresentAfterStart, true, 'das Match-Overlay öffnet sich, obwohl fb=null ist (Bot-Modus braucht kein Backend)');
-  eq(result.stateAfterStart && result.stateAfterStart.vsBot, true, 'skillDuelState.vsBot ist gesetzt');
+  eq(result.stateAfterStart && result.stateAfterStart.mode, 'bot', 'skillDuelState.mode ist auf "bot" gesetzt');
   eq(result.stateAfterStart && result.stateAfterStart.matchId, null, 'Bot-Match hat keine matchId (kein Firestore/RTDB-Dokument dahinter)');
   eq(result.p2InputIsEmpty, true, 'der Bot-Input bleibt für immer SK_EMPTY_INPUT (echtes AFK-Verhalten)');
   eq(result.p1HasQuickstep, true, 'die eigene gewählte Karte behält ihre echten PlayStyle+-Moves auch im Bot-Modus');
