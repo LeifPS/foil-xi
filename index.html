@@ -24969,8 +24969,8 @@ function skReleaseShot(p, ball){
   const dirx = Math.cos(angle), diry = Math.sin(angle);
   const perpx = -diry, perpy = dirx;
   const alongSpeed = p.vx*dirx + p.vy*diry, perpSpeed = p.vx*perpx + p.vy*perpy;
-  const isFinesse = p.moves.has('finesse') && p.finesseHeld;
-  const isChip = p.moves.has('chip') && p.chipHeld;
+  const isFinesse = p.finesseHeld;
+  const isChip = p.chipHeld;
   let power = (SK_BASE_POWER + Math.max(0,alongSpeed)*SK_MOMENTUM_FACTOR) * p.shotPowerMult;
   power *= (1+chargeFrac*SK_POWER_SHOT_POWER_BONUS);
   let curve = SK_CURVE_FACTOR*p.curveMult;
@@ -25027,11 +25027,20 @@ function skMovePlayer(p, dt, input){
 }
 function skApplyInput(p, input, prev, ball){
   skMovePlayer(p, 1/60, input); // dt wird vom Aufrufer separat für den restlichen Physik-Step verwendet - siehe skStep
+  // WICHTIG: finesseHeld/chipHeld (und die Trait-Gates generell) MÜSSEN aktualisiert werden, BEVOR
+  // skReleaseShot() weiter unten aufgerufen wird - sonst liest ein Schuss, der im selben Frame wie das
+  // Drücken von Shift/C ausgelöst wird, noch den Stand vom VORHERIGEN Frame (meldete sich als "Finesse-
+  // Symbol kommt nie" - bei gleichzeitigem Space+Shift-Druck, dem naheliegendsten Bedienmuster, griff
+  // die Erkennung dadurch praktisch nie). Zusätzlich jetzt direkt hier per p.moves gegated statt erst
+  // in skReleaseShot - exakt dasselbe Muster wie closeControl/rushing/blocking unten, damit
+  // p.finesseHeld/p.chipHeld niemals true sind, wenn die Karte den Trait gar nicht hat (schließt "Move
+  // auch ohne passenden PlayStyle+ nutzbar" strukturell aus, nicht nur am Verbrauchsort).
+  p.finesseHeld = input.finesse && p.moves.has('finesse');
+  p.chipHeld = input.chip && p.moves.has('chip');
   if(input.shoot && !prev.shoot){ if(p.moves.has('powershot')) skStartCharge(p); else skReleaseShot(p, ball); }
   if(!input.shoot && prev.shoot && p.isCharging) skReleaseShot(p, ball);
   if(input.dash && !prev.dash) skTryDash(p);
   if(input.slide && !prev.slide) skTrySlide(p, ball);
-  p.finesseHeld = input.finesse; p.chipHeld = input.chip;
   p.closeControl = input.tech && p.moves.has('technical');
   p.rushing = input.rush && p.moves.has('rush');
   p.blocking = input.block && p.moves.has('block');
