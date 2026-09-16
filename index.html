@@ -25053,6 +25053,15 @@ const SK_GOAL_Y0 = SK_H/2 - SK_GOAL_H/2, SK_GOAL_Y1 = SK_H/2 + SK_GOAL_H/2;
 const SK_WALL = 6, SK_PLAYER_OOB = 34;
 const SK_MATCH_SECONDS = 180, SK_GOAL_LIMIT = 5;
 const SK_TOUCH_MARGIN = 22, SK_BASE_POWER = 480, SK_MOMENTUM_FACTOR = 0.9, SK_CURVE_FACTOR = 0.55;
+// "Beim Abschluss soll der Ball 50% schneller sein": genereller Multiplikator auf JEDEN Schuss (wirkt
+// vor allen move-spezifischen Multiplikatoren in skReleaseShot, also gleichermaßen auf Sofortschuss,
+// Finesse, Lupfer, Power Shot, Header/Volley, Low Driven Shot).
+const SK_SHOT_SPEED_BOOST = 1.5;
+// Ball-Bremse: statt einer konstanten prozentualen Bremsung (fühlte sich bei hohem Tempo wie ein
+// gleitender Hockey-Puck an) wächst der Bremsanteil jetzt zusätzlich mit dem Balltempo selbst - ein
+// harter Schuss verliert dadurch kurz nach dem Abschluss sehr viel schneller an Fahrt, ein normal
+// gespielter/gedribbelter Ball (niedriges Tempo) rollt dagegen weiterhin fast wie vorher aus.
+const SK_BALL_FRICTION = 1.3, SK_BALL_HIGH_SPEED_DRAG = 0.0035;
 const SK_SHOOT_COOLDOWN = 0.28, SK_WHIFF_COOLDOWN = 0.16;
 const SK_POWER_SHOT_CHARGE_TIME = 0.5, SK_POWER_SHOT_POWER_BONUS = 0.7, SK_POWER_SHOT_SPREAD_BONUS = 0.16;
 const SK_DASH_IMPULSE = 300, SK_DASH_COOLDOWN_TIME = 1.6, SK_DASH_BOOST_WINDOW = 0.22, SK_DASH_PEAK_SPEED = 520, SK_DASH_STAMINA_COST = 18;
@@ -25285,7 +25294,7 @@ function skReleaseShot(p, ball){
   const dirx = Math.cos(angle), diry = Math.sin(angle);
   const perpx = -diry, perpy = dirx;
   const alongSpeed = p.vx*dirx + p.vy*diry, perpSpeed = p.vx*perpx + p.vy*perpy;
-  let power = (SK_BASE_POWER + Math.max(0,alongSpeed)*SK_MOMENTUM_FACTOR) * p.shotPowerMult;
+  let power = (SK_BASE_POWER + Math.max(0,alongSpeed)*SK_MOMENTUM_FACTOR) * p.shotPowerMult * SK_SHOT_SPEED_BOOST;
   power *= (1+chargeFrac*powerShotBonus);
   // Kurve/Spin gibt es NUR bei einem bewussten Finesse Shot - jeder andere Schuss fliegt gerade
   // (bis auf die geringe, SHO-abhängige Zufallsstreuung oben). Vorher lief seitliche Laufgeschwindigkeit
@@ -25431,7 +25440,8 @@ function skStep(engine, dt){
   skApplyInput(p1, engine.p1Input, engine.p1Prev, ball); engine.p1Prev = engine.p1Input;
   skApplyInput(p2, engine.p2Input, engine.p2Prev, ball); engine.p2Prev = engine.p2Input;
   skUpdateTouch(p1, ball, dt); skUpdateTouch(p2, ball, dt);
-  ball.vx *= Math.exp(-1.3*dt); ball.vy *= Math.exp(-1.3*dt);
+  const ballDecay = Math.exp(-(SK_BALL_FRICTION + SK_BALL_HIGH_SPEED_DRAG*Math.hypot(ball.vx,ball.vy))*dt);
+  ball.vx *= ballDecay; ball.vy *= ballDecay;
   if(Math.abs(ball.spin)>1){
     const speed = Math.hypot(ball.vx,ball.vy);
     if(speed>5){
