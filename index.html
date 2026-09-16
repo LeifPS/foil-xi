@@ -25066,6 +25066,7 @@ function openLocalTwoPlayerSetup(){
 // alle abhängigen Werte (Tor-Y-Position, Anstoßpunkte, Wand-/Spielfeldgrenzen, Canvas-Auflösung)
 // beziehen sich ausschließlich auf SK_W/SK_H, wachsen also automatisch mit.
 const SK_W = 1100, SK_H = 660, SK_GOAL_H = 180; // Torgröße im selben Verhältnis zur Feldhöhe wie vorher (150/540) mitskaliert
+const SK_PLAYER_RADIUS = 22, SK_BALL_RADIUS = 25; // Ball etwas größer als der Spieler (war vorher deutlich kleiner, r:13)
 const SK_GOAL_Y0 = SK_H/2 - SK_GOAL_H/2, SK_GOAL_Y1 = SK_H/2 + SK_GOAL_H/2;
 const SK_WALL = 6, SK_PLAYER_OOB = 34;
 const SK_MATCH_SECONDS = 180, SK_GOAL_LIMIT = 5;
@@ -25190,7 +25191,7 @@ function makeSkillPlayer(x,y,color,dark,card){
   if(moves.has('bruiser')) d.mass *= eliteMoves.has('bruiser') ? SK_ELITE_BRUISER_MASS_MULT : SK_BRUISER_MASS_MULT;
   if(moves.has('pressproven')) d.dribbleRestitution *= eliteMoves.has('pressproven') ? SK_ELITE_PRESSPROVEN_RESTITUTION_MULT : SK_PRESSPROVEN_RESTITUTION_MULT;
   if(moves.has('relentless')) d.staminaRegen *= eliteMoves.has('relentless') ? SK_ELITE_RELENTLESS_REGEN_MULT : SK_RELENTLESS_REGEN_MULT;
-  return {x,y,vx:0,vy:0,r:22,color,dark,cooldown:0, card, moves, eliteMoves, ...d,
+  return {x,y,vx:0,vy:0,r:SK_PLAYER_RADIUS,color,dark,cooldown:0, card, moves, eliteMoves, ...d,
     stamina:100, touchTimer:0, lastTouchBallX:x, lastTouchBallY:y, lastTouchPlayerX:x, lastTouchPlayerY:y,
     isCharging:false, chargeTime:0, dashCooldown:0, dashBoostTimer:0, closeControl:false,
     lastDirX:0, lastDirY:0, toastIcon:null, toastTimer:0, finesseHeld:false, chipHeld:false, lowshotHeld:false,
@@ -25899,7 +25900,7 @@ async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
   const engine = {
     p1: makeSkillPlayer(SK_W*0.22, SK_H/2, '#f2a93b', '#b9781f', hostCard),
     p2: makeSkillPlayer(SK_W*0.78, SK_H/2, '#6f7bf0', '#4750b3', guestCard),
-    ball: {x:SK_W/2, y:SK_H/2, vx:0, vy:0, r:13, mass:0.35, spin:0, airborne:0},
+    ball: {x:SK_W/2, y:SK_H/2, vx:0, vy:0, r:SK_BALL_RADIUS, mass:0.35, spin:0, airborne:0},
     score:[0,0], timeLeft: SK_MATCH_SECONDS, ended:false, msg:null,
     p1Input: {...SK_EMPTY_INPUT}, p2Input: {...SK_EMPTY_INPUT}, p1Prev: {...SK_EMPTY_INPUT}, p2Prev: {...SK_EMPTY_INPUT},
   };
