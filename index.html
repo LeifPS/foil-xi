@@ -24616,6 +24616,20 @@ function skillMovesForCard(card){
   traits.forEach(t=>{ const m = SKILL_MOVE_BY_TRAIT[t]; if(m) moves.add(m); });
   return moves;
 }
+// Golden (Elite/"+") PlayStyles+ schalten nicht nur denselben Move frei wie ihre Basis-Variante,
+// sondern eine spürbar ausgeprägtere Version davon (siehe die SK_ELITE_*-Konstanten weiter unten) -
+// dafür muss pro Move bekannt sein, ob die Karte konkret die Elite- oder nur die Basis-Ausprägung des
+// Traits trägt. PLAYSTYLE_INFO[label].elite ist dieselbe Quelle, die auch sonst im Spiel Basis von
+// Elite unterscheidet (siehe PLAYSTYLE_ELITE_OF).
+function skillEliteMovesForCard(card){
+  const traits = resolveCardTraits(card)||[];
+  const elite = new Set();
+  traits.forEach(t=>{
+    const m = SKILL_MOVE_BY_TRAIT[t];
+    if(m && PLAYSTYLE_INFO[t] && PLAYSTYLE_INFO[t].elite) elite.add(m);
+  });
+  return elite;
+}
 
 let skillDuelState = null; // laufender Matchzustand während ein Skill-Duell-Overlay offen ist, sonst null
 let pendingSkillDuelId = null, pendingSkillDuelTimer = null;
@@ -24882,6 +24896,21 @@ const SK_SLIDE_IMPULSE = 380, SK_SLIDE_DURATION = 0.35, SK_SLIDE_COOLDOWN = 2.2,
 const SK_CHIP_AIRBORNE_TIME = 0.55; // solange ignoriert der Ball jede Spieler-Kollision (fliegt über Köpfe hinweg)
 const SK_RUSH_SPEED_MULT = 1.35, SK_RUSH_STAMINA_DRAIN_MULT = 1.9;
 const SK_BLOCK_STAMINA_DRAIN = 10, SK_BLOCK_SPEED_MULT = 0.55;
+// Goldene (Elite/"+") PlayStyles+ sind keine reine Freischalt-Kopie der Basis-Variante, sondern eine
+// spürbar AUSGEPRÄGTERE Version derselben Mechanik - pro Move individuell abgestimmt (nicht ein
+// pauschaler Multiplikator für alle acht gleichermaßen), siehe skHasElite()/die jeweiligen Verbraucher
+// unten (skPowerShotChargeTime, skReleaseShot, skTryDash, skTrySlide, skMovePlayer für Technik/Raserei/
+// Block). Elite-Erkennung läuft über PLAYSTYLE_INFO[label].elite - dieselbe Quelle, die auch das
+// restliche Spiel für Basis-vs-Elite-Unterscheidung nutzt (siehe PLAYSTYLE_ELITE_OF).
+const SK_ELITE_POWERSHOT_CHARGE_MULT = 0.65; // 35% schnelleres Aufladen
+const SK_ELITE_POWERSHOT_POWER_BONUS = 0.95; // statt SK_POWER_SHOT_POWER_BONUS=0.7
+const SK_ELITE_FINESSE_POWER_MULT = 0.94, SK_ELITE_FINESSE_CURVE_MULT = 2.6; // statt 0.88 / 1.9
+const SK_ELITE_DASH_IMPULSE = 340, SK_ELITE_DASH_COOLDOWN_TIME = 1.0, SK_ELITE_DASH_STAMINA_COST = 14;
+const SK_ELITE_SLIDE_IMPULSE = 460, SK_ELITE_SLIDE_COOLDOWN = 1.6, SK_ELITE_SLIDE_STAMINA_COST = 11;
+const SK_ELITE_TECHNICAL_STAMINA_MULT = 0.85, SK_ELITE_TECHNICAL_RESTITUTION_MULT = 0.2; // statt 0.72 / 0.35
+const SK_ELITE_CHIP_AIRBORNE_TIME = 0.8, SK_ELITE_CHIP_POWER_MULT = 0.68; // statt 0.55 / 0.55
+const SK_ELITE_RUSH_SPEED_MULT = 1.55, SK_ELITE_RUSH_STAMINA_DRAIN_MULT = 1.5;
+const SK_ELITE_BLOCK_STAMINA_DRAIN = 6, SK_ELITE_BLOCK_SPEED_MULT = 0.7, SK_ELITE_BLOCK_RESTITUTION_MULT = 0.05, SK_ELITE_BLOCK_MASS_MULT = 2.0;
 const SK_SYNC_HZ = 30, SK_SYNC_INTERVAL_MS = Math.round(1000/SK_SYNC_HZ);
 // Steht für sich allein still (AFK per Definition, siehe openSkillBotCardPicker) - dient nur zum
 // Testen der eigenen Steuerung/Touch/Gamepad-Bedienung an einem einzigen Gerät/Account, ohne echten
@@ -24917,7 +24946,7 @@ function deriveSkillPhysics(card){
 }
 function makeSkillPlayer(x,y,color,dark,card){
   const d = deriveSkillPhysics(card);
-  return {x,y,vx:0,vy:0,r:22,color,dark,cooldown:0, card, moves:skillMovesForCard(card), ...d,
+  return {x,y,vx:0,vy:0,r:22,color,dark,cooldown:0, card, moves:skillMovesForCard(card), eliteMoves:skillEliteMovesForCard(card), ...d,
     stamina:100, touchTimer:0, lastTouchBallX:x, lastTouchBallY:y, lastTouchPlayerX:x, lastTouchPlayerY:y,
     isCharging:false, chargeTime:0, dashCooldown:0, dashBoostTimer:0, closeControl:false,
     lastDirX:0, lastDirY:0, toastIcon:null, toastTimer:0, finesseHeld:false, chipHeld:false,
@@ -24940,21 +24969,36 @@ function skInputOr(a,b){
     shoot:a.shoot||b.shoot, dash:a.dash||b.dash, tech:a.tech||b.tech, finesse:a.finesse||b.finesse,
     slide:a.slide||b.slide, chip:a.chip||b.chip, rush:a.rush||b.rush, block:a.block||b.block};
 }
+// Wird auch von skMovePlayer (Aufladen) UND skReleaseShot (chargeFrac-Nenner) UND dem Render-Ring
+// gebraucht - deshalb eine gemeinsame Quelle statt die Elite-Abfrage dreimal zu duplizieren.
+function skPowerShotChargeTime(p){
+  return p.eliteMoves.has('powershot') ? SK_POWER_SHOT_CHARGE_TIME*SK_ELITE_POWERSHOT_CHARGE_MULT : SK_POWER_SHOT_CHARGE_TIME;
+}
 function skTryDash(p){
-  if(!p.moves.has('quickstep') || p.dashCooldown>0 || p.stamina<SK_DASH_STAMINA_COST) return;
+  if(!p.moves.has('quickstep') || p.dashCooldown>0) return;
+  const elite = p.eliteMoves.has('quickstep');
+  const impulse = elite ? SK_ELITE_DASH_IMPULSE : SK_DASH_IMPULSE;
+  const cooldown = elite ? SK_ELITE_DASH_COOLDOWN_TIME : SK_DASH_COOLDOWN_TIME;
+  const cost = elite ? SK_ELITE_DASH_STAMINA_COST : SK_DASH_STAMINA_COST;
+  if(p.stamina<cost) return;
   const len = Math.hypot(p.lastDirX,p.lastDirY);
   if(len<0.1) return;
-  p.vx += p.lastDirX*SK_DASH_IMPULSE; p.vy += p.lastDirY*SK_DASH_IMPULSE;
-  p.dashCooldown = SK_DASH_COOLDOWN_TIME; p.dashBoostTimer = SK_DASH_BOOST_WINDOW;
-  p.stamina = Math.max(0, p.stamina-SK_DASH_STAMINA_COST);
+  p.vx += p.lastDirX*impulse; p.vy += p.lastDirY*impulse;
+  p.dashCooldown = cooldown; p.dashBoostTimer = SK_DASH_BOOST_WINDOW;
+  p.stamina = Math.max(0, p.stamina-cost);
   skShowIcon(p,'quickstep');
 }
 function skTrySlide(p, ball){
-  if(!p.moves.has('slide') || p.slideCooldown>0 || p.sliding || p.stamina<SK_SLIDE_STAMINA_COST) return;
+  if(!p.moves.has('slide') || p.slideCooldown>0 || p.sliding) return;
+  const elite = p.eliteMoves.has('slide');
+  const impulse = elite ? SK_ELITE_SLIDE_IMPULSE : SK_SLIDE_IMPULSE;
+  const cooldown = elite ? SK_ELITE_SLIDE_COOLDOWN : SK_SLIDE_COOLDOWN;
+  const cost = elite ? SK_ELITE_SLIDE_STAMINA_COST : SK_SLIDE_STAMINA_COST;
+  if(p.stamina<cost) return;
   const dx = ball.x-p.x, dy = ball.y-p.y, dist = Math.hypot(dx,dy)||1;
-  p.vx += (dx/dist)*SK_SLIDE_IMPULSE; p.vy += (dy/dist)*SK_SLIDE_IMPULSE;
-  p.sliding = true; p.slideTimer = SK_SLIDE_DURATION; p.slideCooldown = SK_SLIDE_COOLDOWN;
-  p.stamina = Math.max(0, p.stamina-SK_SLIDE_STAMINA_COST);
+  p.vx += (dx/dist)*impulse; p.vy += (dy/dist)*impulse;
+  p.sliding = true; p.slideTimer = SK_SLIDE_DURATION; p.slideCooldown = cooldown;
+  p.stamina = Math.max(0, p.stamina-cost);
   skShowIcon(p,'slide');
 }
 function skStartCharge(p){ if(p.isCharging) return; p.isCharging = true; p.chargeTime = 0; }
@@ -24963,23 +25007,28 @@ function skReleaseShot(p, ball){
   p.isCharging = false; p.chargeTime = 0;
   if(p.touchTimer<=0 || p.cooldown>0){ p.cooldown = Math.max(p.cooldown, SK_WHIFF_COOLDOWN); return; }
   const dx = p.lastTouchBallX-p.lastTouchPlayerX, dy = p.lastTouchBallY-p.lastTouchPlayerY;
-  const chargeFrac = p.moves.has('powershot') ? Math.min(1, held/SK_POWER_SHOT_CHARGE_TIME) : 0;
+  const isPowerElite = p.eliteMoves.has('powershot');
+  const chargeFrac = p.moves.has('powershot') ? Math.min(1, held/skPowerShotChargeTime(p)) : 0;
+  const powerShotBonus = isPowerElite ? SK_ELITE_POWERSHOT_POWER_BONUS : SK_POWER_SHOT_POWER_BONUS;
   let angle = Math.atan2(dy,dx);
   angle += (Math.random()*2-1)*(p.shotSpread + chargeFrac*SK_POWER_SHOT_SPREAD_BONUS);
   const dirx = Math.cos(angle), diry = Math.sin(angle);
   const perpx = -diry, perpy = dirx;
   const alongSpeed = p.vx*dirx + p.vy*diry, perpSpeed = p.vx*perpx + p.vy*perpy;
-  const isFinesse = p.finesseHeld;
-  const isChip = p.chipHeld;
+  const isFinesse = p.finesseHeld, isFinesseElite = isFinesse && p.eliteMoves.has('finesse');
+  const isChip = p.chipHeld, isChipElite = isChip && p.eliteMoves.has('chip');
   let power = (SK_BASE_POWER + Math.max(0,alongSpeed)*SK_MOMENTUM_FACTOR) * p.shotPowerMult;
-  power *= (1+chargeFrac*SK_POWER_SHOT_POWER_BONUS);
+  power *= (1+chargeFrac*powerShotBonus);
   let curve = SK_CURVE_FACTOR*p.curveMult;
-  if(isFinesse){ power*=0.88; curve*=1.9; }
-  if(isChip) power*=0.55;
+  if(isFinesse){
+    power *= isFinesseElite ? SK_ELITE_FINESSE_POWER_MULT : 0.88;
+    curve *= isFinesseElite ? SK_ELITE_FINESSE_CURVE_MULT : 1.9;
+  }
+  if(isChip) power *= isChipElite ? SK_ELITE_CHIP_POWER_MULT : 0.55;
   ball.vx = dirx*power + perpx*perpSpeed*0.5;
   ball.vy = diry*power + perpy*perpSpeed*0.5;
   ball.spin = perpSpeed*curve;
-  if(isChip) ball.airborne = SK_CHIP_AIRBORNE_TIME;
+  if(isChip) ball.airborne = isChipElite ? SK_ELITE_CHIP_AIRBORNE_TIME : SK_CHIP_AIRBORNE_TIME;
   p.cooldown = SK_SHOOT_COOLDOWN;
   if(isChip) skShowIcon(p,'chip');
   else if(isFinesse) skShowIcon(p,'finesse');
@@ -24998,25 +25047,28 @@ function skMovePlayer(p, dt, input){
   const speedNow = Math.hypot(p.vx,p.vy);
   const sprinting = len>0 && speedNow>p.maxSpeed*0.7;
   const rushActive = p.rushing && p.stamina>0;
-  const drainMult = rushActive ? SK_RUSH_STAMINA_DRAIN_MULT : 1;
+  const rushElite = rushActive && p.eliteMoves.has('rush');
+  const rushSpeedMult = rushElite ? SK_ELITE_RUSH_SPEED_MULT : SK_RUSH_SPEED_MULT;
+  const drainMult = rushActive ? (rushElite ? SK_ELITE_RUSH_STAMINA_DRAIN_MULT : SK_RUSH_STAMINA_DRAIN_MULT) : 1;
   if(sprinting || rushActive){ p.stamina = Math.max(0, p.stamina - p.staminaDrain*22*dt*drainMult); }
   else { p.stamina = Math.min(100, p.stamina + p.staminaRegen*16*dt); }
   let staminaMult = 0.55 + (p.stamina/100)*0.45;
-  if(p.isCharging){ p.chargeTime = Math.min(SK_POWER_SHOT_CHARGE_TIME*1.4, p.chargeTime+dt); staminaMult*=0.55; }
-  if(p.closeControl) staminaMult *= 0.72;
-  if(p.blocking) staminaMult *= SK_BLOCK_SPEED_MULT;
+  if(p.isCharging){ const cap = skPowerShotChargeTime(p)*1.4; p.chargeTime = Math.min(cap, p.chargeTime+dt); staminaMult*=0.55; }
+  if(p.closeControl) staminaMult *= p.eliteMoves.has('technical') ? SK_ELITE_TECHNICAL_STAMINA_MULT : 0.72;
+  const blockElite = p.blocking && p.eliteMoves.has('block');
+  if(p.blocking) staminaMult *= blockElite ? SK_ELITE_BLOCK_SPEED_MULT : SK_BLOCK_SPEED_MULT;
   if(p.sliding || p.slideRecovery>0) staminaMult *= 0.5;
   p.vx += ax*p.accel*dt; p.vy += ay*p.accel*dt;
   const fr = Math.exp(-p.friction*dt);
   p.vx *= fr; p.vy *= fr;
   let capNow = p.maxSpeed*staminaMult;
-  if(rushActive) capNow = Math.max(capNow, p.maxSpeed*SK_RUSH_SPEED_MULT);
+  if(rushActive) capNow = Math.max(capNow, p.maxSpeed*rushSpeedMult);
   if(p.dashBoostTimer>0){ capNow = Math.max(capNow, SK_DASH_PEAK_SPEED); p.dashBoostTimer -= dt; }
   if(p.dashCooldown>0) p.dashCooldown -= dt;
   if(p.slideCooldown>0) p.slideCooldown -= dt;
   if(p.sliding){ p.slideTimer -= dt; if(p.slideTimer<=0){ p.sliding=false; p.slideRecovery=SK_SLIDE_RECOVERY; } }
   else if(p.slideRecovery>0) p.slideRecovery -= dt;
-  if(p.blocking) p.stamina = Math.max(0, p.stamina - SK_BLOCK_STAMINA_DRAIN*dt);
+  if(p.blocking) p.stamina = Math.max(0, p.stamina - (blockElite ? SK_ELITE_BLOCK_STAMINA_DRAIN : SK_BLOCK_STAMINA_DRAIN)*dt);
   const speed = Math.hypot(p.vx,p.vy);
   if(speed>capNow){ p.vx=p.vx/speed*capNow; p.vy=p.vy/speed*capNow; }
   p.x += p.vx*dt; p.y += p.vy*dt;
@@ -25065,6 +25117,15 @@ function skUpdateTouch(p, ball, dt){
     p.lastTouchBallX=ball.x; p.lastTouchBallY=ball.y; p.lastTouchPlayerX=p.x; p.lastTouchPlayerY=p.y;
   } else { p.touchTimer -= dt; }
 }
+// Ballkontakt-Restitution für die Spieler-Ball-Kollision - kombiniert Grätsche (Ballgewinn),
+// Technical (enge Führung) und Block (Schuss schlucken statt abprallen), jeweils mit ausgeprägterem
+// Effekt bei der goldenen (Elite/"+") Variante des jeweiligen Traits.
+function skBallRestitution(p){
+  if(p.sliding) return 0.1;
+  const techMult = p.closeControl ? (p.eliteMoves.has('technical') ? SK_ELITE_TECHNICAL_RESTITUTION_MULT : 0.35) : 1;
+  const blockMult = p.blocking ? (p.eliteMoves.has('block') ? SK_ELITE_BLOCK_RESTITUTION_MULT : 0.15) : 1;
+  return p.dribbleRestitution * techMult * blockMult;
+}
 // Ein voller Physik-Schritt für BEIDE Spieler+Ball - läuft ausschließlich beim Host (siehe
 // skHostLoop); der Gast bekommt das Ergebnis fertig aus RTDB und ruft diese Funktion nie auf.
 function skStep(engine, dt){
@@ -25086,10 +25147,9 @@ function skStep(engine, dt){
   const duelBoost1 = p1.sliding?1.8:1, duelBoost2 = p2.sliding?1.8:1;
   skCircleCollide(p1, p2, 0.3, p1.mass*p1.duelPower*duelBoost1, p2.mass*p2.duelPower*duelBoost2);
   if(ball.airborne<=0){
-    const rest1 = (p1.sliding?0.1:p1.dribbleRestitution*(p1.closeControl?0.35:1)) * (p1.blocking?0.15:1);
-    const rest2 = (p2.sliding?0.1:p2.dribbleRestitution*(p2.closeControl?0.35:1)) * (p2.blocking?0.15:1);
-    skCircleCollide(p1, ball, rest1, p1.mass*(p1.blocking?1.6:1), 1);
-    skCircleCollide(p2, ball, rest2, p2.mass*(p2.blocking?1.6:1), 1);
+    const rest1 = skBallRestitution(p1), rest2 = skBallRestitution(p2);
+    skCircleCollide(p1, ball, rest1, p1.mass*(p1.blocking?(p1.eliteMoves.has('block')?SK_ELITE_BLOCK_MASS_MULT:1.6):1), 1);
+    skCircleCollide(p2, ball, rest2, p2.mass*(p2.blocking?(p2.eliteMoves.has('block')?SK_ELITE_BLOCK_MASS_MULT:1.6):1), 1);
   }
   if(ball.y-ball.r<SK_WALL){ ball.y=SK_WALL+ball.r; ball.vy*=-0.7; }
   if(ball.y+ball.r>SK_H-SK_WALL){ ball.y=SK_H-SK_WALL-ball.r; ball.vy*=-0.7; }
@@ -25138,7 +25198,7 @@ function skDrawPlayer(ctx, p){
     ctx.beginPath(); ctx.arc(p.x,p.y,p.r+11,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
   if(p.cooldown>0){ ctx.beginPath(); ctx.arc(p.x,p.y,p.r+6,-Math.PI/2,-Math.PI/2+(1-p.cooldown/SK_SHOOT_COOLDOWN)*Math.PI*2);
     ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2; ctx.stroke(); }
-  if(p.isCharging){ const frac=Math.min(1,p.chargeTime/SK_POWER_SHOT_CHARGE_TIME);
+  if(p.isCharging){ const frac=Math.min(1,p.chargeTime/skPowerShotChargeTime(p));
     ctx.beginPath(); ctx.arc(p.x,p.y,p.r+13,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
     ctx.strokeStyle = frac>=1?'#ff5a4d':'rgba(255,255,255,0.9)'; ctx.lineWidth=3; ctx.stroke(); }
   if(p.dashCooldown>0){ ctx.beginPath(); ctx.arc(p.x,p.y,p.r+17,-Math.PI/2,-Math.PI/2+(1-p.dashCooldown/SK_DASH_COOLDOWN_TIME)*Math.PI*2);
