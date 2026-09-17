@@ -423,7 +423,6 @@ body.gfx-no-fxlayers .pcard .breakout-fx,
 body.gfx-no-fxlayers .pcard .iconpromo-fx,
 body.gfx-no-fxlayers .pcard .iconswap2-fx,
 body.gfx-no-fxlayers .pcard .uclchamp-fx{ display:none !important; }
-body.gfx-no-fxlayers .pcard .toty-fx{ display:none !important; }
 body.gfx-no-confetti .wm26-trophy-cutscene *{ animation:none !important; }
 body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
@@ -668,37 +667,31 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ffd76a;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 46px 1px #ff8a3d;}
 }
-/* TOTY (Team of the Year): "Foil-Shards"-Design - viele große, unregelmäßige, aneinandergrenzende
-   Facetten über der GESAMTEN Karte, blau mit goldenem Blickwinkel-Schimmer. Der Glanzstreifen nutzt
-   bewusst KEIN mix-blend-mode (war in einer früheren Fassung die teuerste einzelne Eigenschaft im
-   ganzen Design) - ein einfacher halbtransparenter Verlauf liefert optisch fast denselben "golden
-   aufblitzenden Streifen"-Effekt, bleibt aber günstig genug, auch wenn mehrere TOTY-Karten gleichzeitig
-   sichtbar sind (siehe adminFullCardPool-Ausschluss weiter unten für den Rest dieser Absicherung). */
-.pcard.theme-toty{--acc:#3d8bff;border:2px solid transparent;
+/* TOTY (Team of the Year): Design 1:1 wie Diamant (theme-dia) übernommen - derselbe Aufbau (dunkle
+   Basis, feine diagonale Streifentextur, rotierender Regenbogen-Rahmen, Breathe/Glow-Animationen) -
+   nur mit dunkelblau/hellblau/gold statt Diamants eisigem Cyan/Weiß/Lila. Das Oberflächen-Muster ist
+   bewusst NICHT Diamants eigenes .gem-facets, sondern dasselbe .pattern-layer-Muster wie bei den
+   Prime-Karten (goldener Radial-Burst + rotierende Sonnenstrahlen, siehe PATTERN_FAMILY['toty']).
+   */
+.pcard.theme-toty{border:2.5px solid transparent;
   background:
-    linear-gradient(155deg,#050b18 0%,#0a1226 45%,#04060f 100%) padding-box,
-    linear-gradient(160deg,#0a2a66,#3d8bff,#ffd76a,#3d8bff,#0a2a66) border-box !important;
-  animation: totyBorderGlow 2.8s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
-.pcard.theme-toty::before{animation:autoShine 1.4s ease-in-out infinite;}
-.pcard.theme-toty .name{color:#eaf4ff;text-shadow:0 0 8px rgba(61,139,255,.6);}
-@keyframes totyBorderGlow{
-  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 18px -3px #3d8bff;}
-  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #ffd76a;}
+    repeating-linear-gradient(115deg, rgba(255,255,255,.12) 0 2px, transparent 2px 8px) padding-box,
+    linear-gradient(160deg,#0e1620,#050709 55%) padding-box,
+    linear-gradient(90deg,#0a1e4d,#3d8bff,#ffd76a,#0a1e4d,#3d8bff,#ffd76a) border-box;
+  background-size:100% 100%,100% 100%,320% 320%;
+  animation:totyBorderShift 3.4s linear infinite, totyBreathe 1.6s ease-in-out infinite, totyGlow 2.2s ease-in-out infinite;}
+.pcard.theme-toty::before{animation:autoShine 1s ease-in-out infinite;}
+.pcard.theme-toty .name.name-variant{
+  background:linear-gradient(90deg,#0a1e4d,#3d8bff,#ffd76a,#0a1e4d,#3d8bff,#ffd76a);
+  background-size:320% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:totyBorderShift 3.4s linear infinite; text-shadow:none;
 }
-.pcard .toty-fx{position:absolute;inset:0;z-index:0;pointer-events:none;
-  overflow:hidden;border-radius:var(--radius);}
-.pcard .toty-shards{position:absolute;inset:0;
-  background:
-    repeating-linear-gradient(23deg, rgba(157,205,255,.3) 0 2px, transparent 2px 62px),
-    repeating-linear-gradient(-52deg, rgba(157,205,255,.26) 0 2px, transparent 2px 78px),
-    repeating-linear-gradient(97deg, rgba(157,205,255,.2) 0 2px, transparent 2px 54px),
-    repeating-linear-gradient(-8deg, rgba(157,205,255,.18) 0 2px, transparent 2px 46px),
-    linear-gradient(160deg,#0a1c48 0%,#123572 45%,#08133a 100%);}
-.pcard .toty-shard-shine{position:absolute;inset:0;
-  background:linear-gradient(100deg, transparent 42%, rgba(255,215,106,.4) 49%, rgba(255,243,207,.55) 50%, rgba(255,215,106,.4) 51%, transparent 58%);
-  background-size:220% 100%;
-  animation:totyShardShine 4.2s ease-in-out infinite;}
-@keyframes totyShardShine{0%{background-position:130% 0;}100%{background-position:-70% 0;}}
+@keyframes totyBorderShift{0%{background-position:0% 0%,0% 0%,0% 50%;}100%{background-position:0% 0%,0% 0%,320% 50%;}}
+@keyframes totyBreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.035);}}
+@keyframes totyGlow{
+  0%,100%{box-shadow:0 18px 40px rgba(0,0,0,.7), 0 0 30px -2px #3d8bff;}
+  50%{box-shadow:0 18px 40px rgba(0,0,0,.7), 0 0 54px 2px #ffd76a;}
+}
 /* GOAT (ov>99, hand-picked real-world superstars - the single rarest pull in the whole game, only via
    the GOAT-Quest): previously just inherited the generic .r-ultimate look (same violet card any other
    95+ base card without its own theme gets), so the single best card in the game was visually
@@ -9427,13 +9420,13 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
-// ===== TOTY Pack (Team of the Year, Männer + Frauen gemischt): 24 der aktuell besten realen Spieler,
+// ===== TOTY (Team of the Year, Männer + Frauen gemischt): 24 der aktuell besten realen Spieler,
 // Rating über die gesamte Bandbreite 105-112 verstreut (nach individueller Stärke, nicht in wenigen
-// groben Stufen geklumpt wie im ursprünglichen Entwurf) - nutzt den bereits bestehenden pickCount-
-// Mechanismus (siehe showPickScreen, schon von talentpick/championspick/twoof95 verwendet): das Pack
-// zieht 2 zufällige, GARANTIERT unterschiedliche Karten, der Spieler behält nur EINE davon. Eager statt
-// lazy gebaut (wie Kronjuwelen/Kapitäne oben), bewusst NICHT wie Breakout/WM26 lazy-on-first-use - genau
-// dieses "wird erst gebaut, wenn irgendwer das Pack tatsächlich zieht" hat zuvor schon bei UCL/UEL-
+// groben Stufen geklumpt wie im ursprünglichen Entwurf). KEIN Kartenladen-Pack (mehr) - nur als
+// Belohnung der TOTY-SBC erhältlich (siehe SBC_DEFS, id:'toty_sbc'): 4-3-3-Kader abgeben, jede Karte
+// 100+ OVR UND auf ihrer eigenen "++"-Position (Hauptposition) eingesetzt, einmal pro Account. Eager
+// statt lazy gebaut (wie Kronjuwelen/Kapitäne oben), bewusst NICHT wie Breakout/WM26 lazy-on-first-use -
+// genau dieses "wird erst gebaut, wenn irgendwer das Pack tatsächlich zieht" hat zuvor schon bei UCL/UEL-
 // Siegerkarten dazu geführt, dass eine bereits besessene Karte in einer neuen Session unauflösbar war
 // (siehe ensureOwnedUclRewardCardsRegistered) - eager vermeidet diese ganze Fehlerklasse von vornherein.
 const TOTY_ROSTER = [
@@ -9497,11 +9490,6 @@ const TOTY_SPECIALS = TOTY_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 TOTY_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
-// Die normalen Basis-Karten derselben 24 Spieler ("in diesem Pack sind auch die Basis-Version von allen
-// diesen Karten") - existieren schon ganz normal in ALL_BASE/BY_ID, hier nur noch einmal referenziert
-// für den gemeinsamen Pack-Pool (siehe PACKS-Eintrag 'toty' unten). findBaseCard liefert dieselbe
-// Karteninstanz, die auch überall sonst im Spiel für diesen Spieler verwendet wird - keine Duplikate.
-const TOTY_BASE_CARDS = TOTY_ROSTER.map(r=>findBaseCard(r.baseId)).filter(Boolean);
 // ===== Kapitäne Pack: real NATIONAL TEAM captains only (not just club captains), boosted to 100-107,
 // one flat tier (no saph/rub/dia split like Kronjuwelen) - a distinct standalone pack/theme, own
 // steel/anthracite design with an armband badge instead of a gemstone icon. =====
@@ -11352,20 +11340,14 @@ const PACKS = [
   {id:'goat',name:'GOAT Pack',cost:0,tier:'ultimate',count:1,hidden:true,
     desc:'1 Spieler mit Rating \u00fcber 99 \u2014 die absolute Ausnahmekarte. Nicht k\u00e4uflich, nur durch die GOAT-Quest erh\u00e4ltlich.',
     draw(){ return [pick(GOAT_SPECIALS)]; }},
-  // pickCount:1 bei count:2 nutzt den bestehenden showPickScreen-Mechanismus (siehe talentpick/
-  // championspick/twoof95). draw() liefert 2 GARANTIERT unterschiedliche Karten aus dem gemeinsamen
-  // Pool (TOTY-Variante ODER Basis-Karte desselben Spielers) - pro gezogenem Slot 25% Chance auf die
-  // geboostete TOTY-Version, sonst die normale Basis-Karte ("in diesem Pack sind auch die Basis-Version
-  // von allen diesen Karten").
-  {id:'toty',name:'TOTY Pack',cost:200000,tier:'ultimate',count:2,pickCount:1,
-    desc:'Team of the Year: 24 der aktuell besten realen Spieler (M\u00e4nner und Frauen gemischt), TOTY-Variante Rating 105 bis 112 je nach individueller St\u00e4rke verstreut. Das Pack zieht 2 zuf\u00e4llige, unterschiedliche Karten aus einem gemeinsamen Pool aus TOTY-Varianten UND den normalen Basis-Karten derselben 24 Spieler \u2014 du entscheidest, welche der beiden du beh\u00e4ltst.',
-    draw(){
-      const pickOne = () => Math.random()<0.25 ? pick(TOTY_SPECIALS) : pick(TOTY_BASE_CARDS);
-      const a = pickOne();
-      let b = pickOne();
-      while(b.id===a.id) b = pickOne();
-      return [a, b];
-    }},
+  // Kein Kartenladen-Pack mehr, nur noch reine Belohnungsh\u00fclle f\u00fcr die TOTY-SBC (siehe SBC_DEFS weiter
+  // unten, id:'toty_sbc') - hidden:true+cost:0 genau wie 'goat'/'uclwinners' oben: taucht im Shop nicht
+  // auf, existiert nur, damit submitSBC() (das jeden Reward \u00fcber PACKS.find(p=>p.id===sbc.reward) aufl\u00f6st)
+  // eine Karte ziehen kann. count:1 (kein "1 von 2 Pick" mehr) - nur noch die geboostete TOTY-Variante,
+  // keine Basis-Karten mehr im Pool.
+  {id:'toty',name:'TOTY Pack',cost:0,tier:'ultimate',count:1,hidden:true,
+    desc:'1 zuf\u00e4llige TOTY-Karte (Team of the Year, Rating 105-112 je nach individueller St\u00e4rke) - nur als Belohnung der TOTY-SBC erh\u00e4ltlich, nicht k\u00e4uflich.',
+    draw(){ return [pick(TOTY_SPECIALS)]; }},
   {id:'uclwinners',name:'UCL Winners Pack',cost:0,tier:'ultimate',count:3,hidden:true,
     desc:'3 Karten aus der echten PSG-Startelf \u2014 amtierender Doppel-Champions-League-Sieger 2025 und 2026 \u2014 als seltene Cup-Winner-Variante. Die ersten beiden Karten sind auf Rating 92-94 begrenzt, die dritte liegt meist um 95-96, kann aber auch dar\u00fcber oder darunter landen. Richtig selten (nur bei der dritten Karte m\u00f6glich): Trainer Luis Enrique pers\u00f6nlich, mit +7% Team-Bonus. Nicht k\u00e4uflich, nur als Pokalsieg im Turnier-Modus erh\u00e4ltlich.',
     draw(){
@@ -12343,6 +12325,18 @@ const SBC_DEFS = [
            req('Kein Spieler unter 88 OVR', c=>c.every(x=>x.ov>=88), c=>`${c.filter(x=>x.ov<88).length} unter 88`),
            req('2+ Torh\u00fcter', c=>c.filter(x=>cardInPosGroup(x,'GK')).length>=2, c=>`${c.filter(x=>cardInPosGroup(x,'GK')).length} / 2`),
            req('3+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=3, c=>`${c.filter(x=>x.variant!=='base').length} / 3 Sonderkarten`) ]},
+  // TOTY-SBC: statt eines Kartenladen-Packs (siehe PACKS-Eintrag 'toty', jetzt hidden:true/cost:0 -
+  // reine Belohnungshülle für hier) - Belohnung ist eine der 24 TOTY_SPECIALS-Karten (105-112 OVR),
+  // maxCompletions:1 ("kann jeder Spieler genau 1x machen"). "4-3-3 wo jede Karte 100+ ist und auf ihrer
+  // ++ Position spielt" braucht mehr als die üblichen Mengen-Checks (avgOv/cardInPosGroup usw.) - eine
+  // reine "11 Karten mit irgendeinem ++ irgendwo"-Prüfung würde nicht ausschließen, dass zwei Karten sich
+  // rechnerisch denselben einzigen Slot teilen müssten. canFillFormationWithBonus() löst das echte
+  // bipartite Zuordnungsproblem (Kuhn-Algorithmus): existiert eine 1:1-Zuordnung der 11 Karten auf die
+  // 11 4-3-3-Slots, in der JEDE Karte in ihrem Slot bonus===2 ("++", siehe positionEligibility) bekommt.
+  {id:'toty_sbc', name:'Team of the Year', reward:'toty', size:11, tier:'Einzigartig', maxCompletions:1,
+    desc:'Stelle ein komplettes 4-3-3 aus 11 Karten mit 100+ OVR, jede auf ihrer eigenen "++"-Position (Hauptposition). Belohnung: 1 zufällige TOTY-Karte (105-112 OVR, untradable). Nur einmal machbar.',
+    reqs:[ req('Alle 11 Karten 100+ OVR', c=>c.every(x=>x.ov>=100), c=>`${c.filter(x=>x.ov>=100).length} / 11 mit 100+`),
+           req('Gültiges 4-3-3 mit ++ auf jeder Position', c=>c.length===11 && canFillFormationWithBonus(c,'433',2), c=>c.length===11 && canFillFormationWithBonus(c,'433',2) ? '✓ erfüllt' : '✗ noch nicht möglich') ]},
   // --- 10-minute flash SBC: give up Paul Breitner or Jürgen Kohler for a WM Winners Pack, one-time
   // only. Gated by activeCheck (see BREITNER_KOHLER_SBC_START/_DEADLINE below and its use in
   // standaloneSbcDefs) rather than a whole quest-hub tile like the WM/PROMO events above - this is a
@@ -16544,6 +16538,39 @@ function positionEligibility(card, slotLabel){
   if(idx===-1) return null;
   return {rankIndex:idx, bonus: positionBonusTier(card.ov, idx)};
 }
+// Prüft, ob sich die gegebenen Karten (Reihenfolge egal) auf die Slots einer Formation verteilen lassen,
+// sodass JEDE Karte in ihrem zugewiesenen Slot mindestens den geforderten Bonus (2="++") bekommt -
+// klassisches bipartites Matching-Problem (Kuhn/Ungarische-Methode-Variante), nicht einfach "hat
+// irgendeine der Karten diese Position" wie posMatch/cardInPosGroup. Gebraucht von der TOTY-SBC
+// ("4-3-3, jede Karte auf ihrer ++ Position") - eine reine Mengen-Prüfung ("11 Karten mit ++ irgendwo")
+// würde nicht ausschließen, dass zwei Karten sich denselben einzigen Slot "teilen" müssten, in dem
+// beide ++ hätten, aber sonst nirgends.
+function canFillFormationWithBonus(cards, formationKey, minBonus=2){
+  const slots = FORMATIONS[formationKey].slots;
+  if(cards.length !== slots.length) return false;
+  const adj = slots.map(slot => cards.map((c,i)=>i).filter(i=>{
+    const elig = positionEligibility(cards[i], slot.label);
+    return elig && elig.bonus>=minBonus;
+  }));
+  const cardToSlot = new Array(cards.length).fill(-1);
+  function augment(slotIdx, visited){
+    for(const cardIdx of adj[slotIdx]){
+      if(visited.has(cardIdx)) continue;
+      visited.add(cardIdx);
+      if(cardToSlot[cardIdx]===-1 || augment(cardToSlot[cardIdx], visited)){
+        cardToSlot[cardIdx] = slotIdx;
+        return true;
+      }
+    }
+    return false;
+  }
+  let matched = 0;
+  for(let s=0; s<slots.length; s++){
+    if(augment(s, new Set())) matched++;
+  }
+  return matched === slots.length;
+}
+
 // inverse of formatCoins() - lets coin input fields accept shorthand like "1.2m"/"52.2m"/"921m"/"1.53b"
 // (also every tier up through "te", same ladder as formatCoins), in addition to a plain number. Returns
 // NaN if the string isn't a valid number/shorthand. The end-anchor ($) makes alternative order harmless
@@ -16709,6 +16736,7 @@ const PATTERN_FAMILY = {
   semifinalist:'attack', quarterfinalist:'creative',
   derbyicon:'rivalry', underdog:'underdogpattern',
   uclw:'psgpattern', uclw_mgr:'psgpattern', ballondor:'ballondorpattern', wm_mgr:'wmmgrpattern', prime:'primepattern',
+  toty:'primepattern', // "das Pattern das ist von den PRIME Karten" - bewusst dasselbe Muster wie Prime, nicht neu erfunden.
   sigicon:'signaturepattern', eradef:'erapattern', sigseason:'sigseasonpattern',
   ogicon:'ogpattern', og_mgr:'ogpattern',
   iconswap:'iconswappattern',
@@ -16795,15 +16823,8 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="breakout-halo"></div>
       ${Array.from({length:10},(_,i)=>`<i class="breakout-shard b${i+1}"></i>`).join('')}
     </div>` : '';
-  // TOTY (Team of the Year): "Foil-Shards" - eine Fläche aus vielen großen, unregelmäßigen Facetten
-  // (per CSS-Gradienten erzeugt, siehe .toty-shards) plus einem golden schimmernden Glanzstreifen
-  // darüber, über die GESAMTE Karte (das Spielerfoto hat einen transparenten Hintergrund und liegt
-  // per z-index darüber, siehe .toty-fx CSS).
-  const isTotyTier = card.theme==='toty';
-  const totyFxHTML = isTotyTier ? `<div class="toty-fx">
-      <div class="toty-shards"></div>
-      <div class="toty-shard-shine"></div>
-    </div>` : '';
+  // TOTY (Team of the Year) braucht keine eigene HTML-FX mehr - nutzt das ganz normale, generische
+  // .pattern-layer-Muster (siehe PATTERN_FAMILY['toty']='primepattern', identisch zum Prime-Muster).
   // GOAT (rarest pull in the game): a slowly-rotating golden/crimson sunburst behind the photo plus a
   // handful of thin molten-gold cracks that individually flicker across the face - own mechanism, not
   // a recolor of any other tier's FX (no falling/rising particles like Legikone/WM-Kapitän, no rotating
@@ -17019,7 +17040,6 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${legikoneFxHTML}
     ${wm26kFxHTML}
     ${breakoutFxHTML}
-    ${totyFxHTML}
     ${goatFxHTML}
     ${iconswap2FxHTML}
     ${ogiconFxHTML}
@@ -26271,24 +26291,27 @@ const TOURNAMENT_ROUNDS = [
 // (pickRealisticOpponent) is exempt from this helper, since it needs to stay matched close to the
 // player's own rating rather than get boosted further.
 const BOT_ELITE_MANAGER_POOL = MANAGERS.filter(m=>m.tier==='Elite'||m.tier==='Legendär').concat(MEISTERTRAINER);
-function boostBotXI(xi, slots, forceManager){
+function boostBotXI(xi, slots, forceManager, cpuLevel=4){
   const mgr = forceManager || (BOT_ELITE_MANAGER_POOL.length ? pick(BOT_ELITE_MANAGER_POOL) : null);
   const list = xi.map((card,i)=>{
     // level:4 (Diamant) heißt nicht nur der Badge/die FX (siehe unten), sondern genau der +4-OVR/+4-je-
     // Unterstat-Bonus, den eine eigene komplett hochgelevelte Karte über applyCardLevel auch bekäme -
     // sonst zeigt die Karte zwar das Diamant-Abzeichen, spielt aber mit den blanken Grundwerten. Zuerst
     // angewendet, genau wie bei einer echten Karte, bevor Trainer-/Positions-Bonus obendrauf kommen.
-    const baseLevelOv = card.ov+4;
+    // cpuLevel ist per Default weiterhin 4 (Diamant) für jeden normalen Bot-Gegner (Freundschaftsspiele/
+    // UCL/UEL) - die WM-Nationalelf-Gegner (wm26NationXI) übergeben stattdessen 0 ("Basis-Level", auf
+    // Wunsch: CPUs in der WM sollen keine Diamant- sondern Basis-Karten haben).
+    const baseLevelOv = card.ov+cpuLevel;
     let ov = baseLevelOv;
     const boostedSubstats = {};
-    BLACK_HOLE_STAT_KEYS.forEach(k=>{ boostedSubstats[k] = (typeof card[k]==='number' ? card[k]+4 : card[k]); });
+    BLACK_HOLE_STAT_KEYS.forEach(k=>{ boostedSubstats[k] = (typeof card[k]==='number' ? card[k]+cpuLevel : card[k]); });
     if(mgr) ov = mgr.boostType==='percent' ? ov*(1+mgr.boostValue/100) : ov+mgr.boostValue;
     const info = positionEligibility(card, slots[i].label);
     if(info) ov += info.bonus;
     // baseLevelOv (Basis+Level, ohne Trainer/Position/Chemie) - fürs Anzeigen der einzelnen Karte, genau
     // wie im Kader-Editor jetzt auch nur Basis+Level gezeigt wird. Das volle ov (mit allem) bleibt
     // unverändert das, was Team-Rating und die Match-Engine tatsächlich benutzen.
-    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), baseLevelOv:Math.round(baseLevelOv), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, ...boostedSubstats, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card), level:4};
+    return {n:card.n, pos:slots[i].label, ov:Math.round(ov), baseLevelOv:Math.round(baseLevelOv), img:card.img, club:card.club, nat:card.nat, lg:card.lg, variant:card.variant, id:card.id, ...boostedSubstats, traits:resolveCardTraits(card), substats:detailedSubstatsFor(card), level:cpuLevel};
   });
   const players = computeChemistry(list, mgr?mgr.nat:null).map(p=>({...p, ov:p.chemOv}));
   // mgrCard (the full manager object, not just its name) - lets callers actually render the manager as
@@ -29779,7 +29802,9 @@ function wm26NationXI(nation){
     nameCount.set(candidate.n, (nameCount.get(candidate.n)||0)+1);
     return candidate;
   });
-  const {players, managerName, mgrCard} = boostBotXI(xi, slots);
+  // cpuLevel:0 (Basis, kein Level) statt der sonst üblichen Diamant-CPU (4) - auf Wunsch: WM-Gegner
+  // sollen keine Diamant-, sondern Basis-Karten haben.
+  const {players, managerName, mgrCard} = boostBotXI(xi, slots, null, 0);
   const rating = Math.round(players.reduce((s,p)=>s+p.ov,0)/players.length);
   const result = {owner:`Nationalmannschaft ${natDE(nation)}`, rating, players, isBot:true, managerName, mgrCard, nation};
   WM26_XI_CACHE.set(nation, result);
