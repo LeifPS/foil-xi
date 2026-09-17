@@ -25954,6 +25954,11 @@ function skApplyRemoteState(engine, state){
 
 async function startSkillMatch(matchId, isHost, matchDoc, opts={}){
   if(skillDuelState) return;
+  // Move-Icons lazy vorladen, sobald wirklich ein Match beginnt (nicht mehr unconditioned bei jedem
+  // App-Boot) - startet den Netzwerk-Request früh genug, dass die Bilder da sind, bevor im Match
+  // tatsächlich ein Move-Icon gezeigt wird (skMoveIconImgs()/skMoveEliteIconImgs() sind memoisiert,
+  // ein wiederholter Aufruf bei jedem Matchstart kostet also nichts).
+  skMoveIconImgs(); skMoveEliteIconImgs();
   // mode: 'online' (echtes Duell über Firestore/RTDB) | 'bot' (allein gegen AFK-Bot) |
   // 'local' (zwei Controller an einem Gerät, siehe openLocalTwoPlayerSetup). Nur 'online' braucht
   // überhaupt ein Backend - bei 'bot'/'local' sind hostPick/guestPick schon fertige Kartenobjekte
@@ -35059,7 +35064,9 @@ const PLAYSTYLE_BASE_OF = Object.fromEntries(Object.entries(PLAYSTYLE_ELITE_OF).
 // unsichtbar (meldete sich als "Symbol kommt nie"). skDrawPlayer zeigt trotzdem IMMER einen
 // Text-Fallback, falls das Icon selbst nie lädt (Netzwerk/geblockte URL) - das hier ist nur der
 // zusätzliche Kopfstart, damit der Normalfall (funktionierendes Netz) das echte Icon zeigt.
-skMoveIconImgs(); skMoveEliteIconImgs();
+// (Vorladen der Move-Icons passiert jetzt lazy beim tatsächlichen Matchstart, siehe startSkillMatch -
+// nicht mehr unconditioned hier beim App-Boot, das lud ~40 externe Bilder für JEDEN Seitenaufruf,
+// auch für Leute, die Skill-Duell nie öffnen - unnötige Netzwerk-/Speicherlast v.a. auf Mobilgeräten.)
 
 // ===== PlayStyle-Training: pay to permanently add a base PlayStyle or upgrade one to "+" on ONE owned
 // card copy (not the shared card type - see psOverride/applyCardLevel's traitsOverride param). Applies
