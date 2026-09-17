@@ -423,6 +423,7 @@ body.gfx-no-fxlayers .pcard .breakout-fx,
 body.gfx-no-fxlayers .pcard .iconpromo-fx,
 body.gfx-no-fxlayers .pcard .iconswap2-fx,
 body.gfx-no-fxlayers .pcard .uclchamp-fx{ display:none !important; }
+body.gfx-no-fxlayers .pcard .toty-fx{ display:none !important; }
 body.gfx-no-confetti .wm26-trophy-cutscene *{ animation:none !important; }
 body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-fs{--acc:#3ddc84;} .pcard.theme-otw{--acc:#4da8ff;} .pcard.theme-pm{--acc:#b98bff;}
@@ -667,6 +668,37 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 20px -3px #ffd76a;}
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 46px 1px #ff8a3d;}
 }
+/* TOTY (Team of the Year): "Foil-Shards"-Design - viele große, unregelmäßige, aneinandergrenzende
+   Facetten über der GESAMTEN Karte, blau mit goldenem Blickwinkel-Schimmer. Der Glanzstreifen nutzt
+   bewusst KEIN mix-blend-mode (war in einer früheren Fassung die teuerste einzelne Eigenschaft im
+   ganzen Design) - ein einfacher halbtransparenter Verlauf liefert optisch fast denselben "golden
+   aufblitzenden Streifen"-Effekt, bleibt aber günstig genug, auch wenn mehrere TOTY-Karten gleichzeitig
+   sichtbar sind (siehe adminFullCardPool-Ausschluss weiter unten für den Rest dieser Absicherung). */
+.pcard.theme-toty{--acc:#3d8bff;border:2px solid transparent;
+  background:
+    linear-gradient(155deg,#050b18 0%,#0a1226 45%,#04060f 100%) padding-box,
+    linear-gradient(160deg,#0a2a66,#3d8bff,#ffd76a,#3d8bff,#0a2a66) border-box !important;
+  animation: totyBorderGlow 2.8s ease-in-out infinite, ultimateBreathe 2.4s ease-in-out infinite;}
+.pcard.theme-toty::before{animation:autoShine 1.4s ease-in-out infinite;}
+.pcard.theme-toty .name{color:#eaf4ff;text-shadow:0 0 8px rgba(61,139,255,.6);}
+@keyframes totyBorderGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 18px -3px #3d8bff;}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 40px 1px #ffd76a;}
+}
+.pcard .toty-fx{position:absolute;inset:0;z-index:0;pointer-events:none;
+  overflow:hidden;border-radius:var(--radius);}
+.pcard .toty-shards{position:absolute;inset:0;
+  background:
+    repeating-linear-gradient(23deg, rgba(157,205,255,.3) 0 2px, transparent 2px 62px),
+    repeating-linear-gradient(-52deg, rgba(157,205,255,.26) 0 2px, transparent 2px 78px),
+    repeating-linear-gradient(97deg, rgba(157,205,255,.2) 0 2px, transparent 2px 54px),
+    repeating-linear-gradient(-8deg, rgba(157,205,255,.18) 0 2px, transparent 2px 46px),
+    linear-gradient(160deg,#0a1c48 0%,#123572 45%,#08133a 100%);}
+.pcard .toty-shard-shine{position:absolute;inset:0;
+  background:linear-gradient(100deg, transparent 42%, rgba(255,215,106,.4) 49%, rgba(255,243,207,.55) 50%, rgba(255,215,106,.4) 51%, transparent 58%);
+  background-size:220% 100%;
+  animation:totyShardShine 4.2s ease-in-out infinite;}
+@keyframes totyShardShine{0%{background-position:130% 0;}100%{background-position:-70% 0;}}
 /* GOAT (ov>99, hand-picked real-world superstars - the single rarest pull in the whole game, only via
    the GOAT-Quest): previously just inherited the generic .r-ultimate look (same violet card any other
    95+ base card without its own theme gets), so the single best card in the game was visually
@@ -9395,6 +9427,81 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// ===== TOTY Pack (Team of the Year, Männer + Frauen gemischt): 24 der aktuell besten realen Spieler,
+// Rating über die gesamte Bandbreite 105-112 verstreut (nach individueller Stärke, nicht in wenigen
+// groben Stufen geklumpt wie im ursprünglichen Entwurf) - nutzt den bereits bestehenden pickCount-
+// Mechanismus (siehe showPickScreen, schon von talentpick/championspick/twoof95 verwendet): das Pack
+// zieht 2 zufällige, GARANTIERT unterschiedliche Karten, der Spieler behält nur EINE davon. Eager statt
+// lazy gebaut (wie Kronjuwelen/Kapitäne oben), bewusst NICHT wie Breakout/WM26 lazy-on-first-use - genau
+// dieses "wird erst gebaut, wenn irgendwer das Pack tatsächlich zieht" hat zuvor schon bei UCL/UEL-
+// Siegerkarten dazu geführt, dass eine bereits besessene Karte in einer neuen Session unauflösbar war
+// (siehe ensureOwnedUclRewardCardsRegistered) - eager vermeidet diese ganze Fehlerklasse von vornherein.
+const TOTY_ROSTER = [
+  {baseId:231443, ov:112}, // Ousmane Dembélé
+  {baseId:241667, ov:111}, // Aitana Bonmatí
+  {baseId:231747, ov:111}, // Kylian Mbappé
+  {baseId:239085, ov:110}, // Erling Haaland
+  {baseId:258980, ov:110}, // Alessia Russo
+  {baseId:252145, ov:109}, // Nuno Mendes
+  {baseId:241846, ov:109}, // Ewa Pajor
+  {baseId:255253, ov:108}, // Vitinha
+  {baseId:251854, ov:108}, // Pedri
+  {baseId:203376, ov:108}, // Virgil van Dijk
+  {baseId:227203, ov:107}, // Alexia Putellas
+  {baseId:237288, ov:107}, // Mariona
+  {baseId:230621, ov:107}, // Gianluigi Donnarumma
+  {baseId:233419, ov:107}, // Raphinha
+  {baseId:262531, ov:106}, // Claudia Pina
+  {baseId:227246, ov:106}, // Lucy Bronze
+  {baseId:246426, ov:106}, // Leah Williamson
+  {baseId:234378, ov:106}, // Declan Rice
+  {baseId:227102, ov:105}, // Caroline Graham Hansen
+  {baseId:245956, ov:105}, // Christiane Endler
+  {baseId:241486, ov:105}, // Jules Koundé
+  {baseId:265674, ov:105}, // Selma Bacha
+  {baseId:243715, ov:105}, // William Saliba
+  {baseId:238257, ov:105}, // Millie Bright
+];
+const TOTY_IMG_OVERRIDE = {
+  231443: 'https://cdn3.futbin.com/content/fifa26/img/players/p100894739.png?fm=png&ixlib=java-2.1.0&verzion=5&w=485&s=00b6818565a3c73eb207de1018968456', // Dembélé
+  241667: 'https://cdn3.futbin.com/content/fifa26/img/players/p67350531.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=43eb698fdc244ba32e922ddcccf59888', // Bonmatí
+  231747: 'https://cdn3.futbin.com/content/fifa26/img/players/p117672259.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=ba72171ab9226c4fecf90218cdee0695', // Mbappé
+  239085: 'https://cdn3.futbin.com/content/fifa26/img/players/p100902381.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=a354093582d72262c0dbc7fdaf04d1a8', // Haaland
+  258980: 'https://cdn3.futbin.com/content/fifa26/img/players/p67367844.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=3790ff7bcd1f67656bec08e9d0b4641d', // Russo
+  252145: 'https://cdn3.futbin.com/content/fifa26/img/players/p50583793.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=522aa130d79e8987323b9991128ed0bc', // Nuno Mendes
+  241846: 'https://cdn3.futbin.com/content/fifa26/img/players/p84127926.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=bc22463d5783cbe5c8b68b9570771ebc', // Pajor
+  255253: 'https://cdn3.futbin.com/content/fifa26/img/players/p100918549.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=6bc14a5d5cfcbbe6fcc087c0926312c7', // Vitinha
+  251854: 'https://cdn3.futbin.com/content/fifa26/img/players/p67360718.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=3b155c3dd023cf904b4bba67a6f4b07b', // Pedri
+  203376: 'https://cdn3.futbin.com/content/fifa26/img/players/p67312240.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=0a611af47b47f261f6fd3c60a362ccd0', // Van Dijk
+  227203: 'https://cdn3.futbin.com/content/fifa26/img/players/p84113283.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=506d532bb1e2814355b0d72b434a12cd', // Putellas
+  237288: 'https://cdn3.futbin.com/content/fifa26/img/players/p67346152.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=fcac8ff4639e9d56571b316902e5cc9d', // Mariona
+  230621: 'https://cdn3.futbin.com/content/fifa26/img/players/p84116701.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=fe8375306dd32745aa7b2077b46e545f', // Donnarumma
+  233419: 'https://cdn3.futbin.com/content/fifa26/img/players/p84119499.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=900c531c1e54d402f8fb205d62dfbd27', // Raphinha
+  262531: 'https://cdn3.futbin.com/content/fifa26/img/players/p117703043.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=e6c5cf6ef43fa0b634d6ac407df350f6', // Pina
+  227246: 'https://cdn3.futbin.com/content/fifa26/img/players/p84113326.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=02210d4749e10ff3b2713a8d7055a4e4', // Bronze
+  246426: 'https://cdn3.futbin.com/content/fifa26/img/players/p67355290.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=8034a7b83e94750db836b76f6c616169', // Williamson
+  234378: 'https://cdn3.futbin.com/content/fifa26/img/players/p100897674.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=77df4695c4cf1193e50c695cf5366de0', // Rice
+  227102: 'https://cdn3.futbin.com/content/fifa26/img/players/p67335966.png?fm=png&ixlib=java-2.1.0&verzion=1&w=485&s=9819452586c2c64c86413478e7463242', // Graham Hansen
+  245956: 'https://cdn3.futbin.com/content/fifa26/img/players/p67354820.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=e2edf486a9030cd84a58e07ebfad6864', // Endler
+  241486: 'https://cdn3.futbin.com/content/fifa26/img/players/p67350350.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=d8914cec54da4c22c5addb3ca0fbddba', // Koundé
+  265674: 'https://cdn3.futbin.com/content/fifa26/img/players/p84151754.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=0eb6bd932bd71ad421e8de9937ee2f31', // Bacha
+  243715: 'https://cdn3.futbin.com/content/fifa26/img/players/p67352579.png?fm=png&ixlib=java-2.1.0&verzion=3&w=485&s=e1e833d1f3b3a82d59f745351bd434a4', // Saliba
+  238257: 'https://cdn3.futbin.com/content/fifa26/img/players/p67347121.png?fm=png&ixlib=java-2.1.0&verzion=4&w=485&s=28d8d2e1de54792f70e9b1320444c7ca', // Bright
+};
+const TOTY_ID_BASE = 9805600;
+const TOTY_SPECIALS = TOTY_ROSTER.map((r,i)=>{
+  const base = findBaseCard(r.baseId);
+  if(!base) return null;
+  const card = boostBaseToOv(base, r.ov, TOTY_ID_BASE+i, 'toty', 'TOTY', 'toty');
+  if(TOTY_IMG_OVERRIDE[r.baseId]) card.img = TOTY_IMG_OVERRIDE[r.baseId];
+  return card;
+}).filter(Boolean);
+TOTY_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// Die normalen Basis-Karten derselben 24 Spieler ("in diesem Pack sind auch die Basis-Version von allen
+// diesen Karten") - existieren schon ganz normal in ALL_BASE/BY_ID, hier nur noch einmal referenziert
+// für den gemeinsamen Pack-Pool (siehe PACKS-Eintrag 'toty' unten). findBaseCard liefert dieselbe
+// Karteninstanz, die auch überall sonst im Spiel für diesen Spieler verwendet wird - keine Duplikate.
+const TOTY_BASE_CARDS = TOTY_ROSTER.map(r=>findBaseCard(r.baseId)).filter(Boolean);
 // ===== Kapitäne Pack: real NATIONAL TEAM captains only (not just club captains), boosted to 100-107,
 // one flat tier (no saph/rub/dia split like Kronjuwelen) - a distinct standalone pack/theme, own
 // steel/anthracite design with an armband badge instead of a gemstone icon. =====
@@ -11245,6 +11352,20 @@ const PACKS = [
   {id:'goat',name:'GOAT Pack',cost:0,tier:'ultimate',count:1,hidden:true,
     desc:'1 Spieler mit Rating \u00fcber 99 \u2014 die absolute Ausnahmekarte. Nicht k\u00e4uflich, nur durch die GOAT-Quest erh\u00e4ltlich.',
     draw(){ return [pick(GOAT_SPECIALS)]; }},
+  // pickCount:1 bei count:2 nutzt den bestehenden showPickScreen-Mechanismus (siehe talentpick/
+  // championspick/twoof95). draw() liefert 2 GARANTIERT unterschiedliche Karten aus dem gemeinsamen
+  // Pool (TOTY-Variante ODER Basis-Karte desselben Spielers) - pro gezogenem Slot 25% Chance auf die
+  // geboostete TOTY-Version, sonst die normale Basis-Karte ("in diesem Pack sind auch die Basis-Version
+  // von allen diesen Karten").
+  {id:'toty',name:'TOTY Pack',cost:200000,tier:'ultimate',count:2,pickCount:1,
+    desc:'Team of the Year: 24 der aktuell besten realen Spieler (M\u00e4nner und Frauen gemischt), TOTY-Variante Rating 105 bis 112 je nach individueller St\u00e4rke verstreut. Das Pack zieht 2 zuf\u00e4llige, unterschiedliche Karten aus einem gemeinsamen Pool aus TOTY-Varianten UND den normalen Basis-Karten derselben 24 Spieler \u2014 du entscheidest, welche der beiden du beh\u00e4ltst.',
+    draw(){
+      const pickOne = () => Math.random()<0.25 ? pick(TOTY_SPECIALS) : pick(TOTY_BASE_CARDS);
+      const a = pickOne();
+      let b = pickOne();
+      while(b.id===a.id) b = pickOne();
+      return [a, b];
+    }},
   {id:'uclwinners',name:'UCL Winners Pack',cost:0,tier:'ultimate',count:3,hidden:true,
     desc:'3 Karten aus der echten PSG-Startelf \u2014 amtierender Doppel-Champions-League-Sieger 2025 und 2026 \u2014 als seltene Cup-Winner-Variante. Die ersten beiden Karten sind auf Rating 92-94 begrenzt, die dritte liegt meist um 95-96, kann aber auch dar\u00fcber oder darunter landen. Richtig selten (nur bei der dritten Karte m\u00f6glich): Trainer Luis Enrique pers\u00f6nlich, mit +7% Team-Bonus. Nicht k\u00e4uflich, nur als Pokalsieg im Turnier-Modus erh\u00e4ltlich.',
     draw(){
@@ -16674,6 +16795,15 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="breakout-halo"></div>
       ${Array.from({length:10},(_,i)=>`<i class="breakout-shard b${i+1}"></i>`).join('')}
     </div>` : '';
+  // TOTY (Team of the Year): "Foil-Shards" - eine Fläche aus vielen großen, unregelmäßigen Facetten
+  // (per CSS-Gradienten erzeugt, siehe .toty-shards) plus einem golden schimmernden Glanzstreifen
+  // darüber, über die GESAMTE Karte (das Spielerfoto hat einen transparenten Hintergrund und liegt
+  // per z-index darüber, siehe .toty-fx CSS).
+  const isTotyTier = card.theme==='toty';
+  const totyFxHTML = isTotyTier ? `<div class="toty-fx">
+      <div class="toty-shards"></div>
+      <div class="toty-shard-shine"></div>
+    </div>` : '';
   // GOAT (rarest pull in the game): a slowly-rotating golden/crimson sunburst behind the photo plus a
   // handful of thin molten-gold cracks that individually flicker across the face - own mechanism, not
   // a recolor of any other tier's FX (no falling/rising particles like Legikone/WM-Kapitän, no rotating
@@ -16889,6 +17019,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${legikoneFxHTML}
     ${wm26kFxHTML}
     ${breakoutFxHTML}
+    ${totyFxHTML}
     ${goatFxHTML}
     ${iconswap2FxHTML}
     ${ogiconFxHTML}
@@ -19591,6 +19722,21 @@ function adminFullCardPool(){
   // Legacy Packs (variant 'legacy'/'legacystar') sind absichtlich noch NICHT im Index - die Packs sind
   // aktuell hidden:true/nur Admin-Test (siehe LEGACY_SQUADS), Roster/Fotos noch nicht final abgenommen.
   // Sobald sie im Kartenladen freigeschaltet werden, einfach diese Zeile wieder entfernen.
+  // TOTY (variant 'toty') bleibt dagegen DAUERHAFT ausgeschlossen, auch nachdem das Pack live ist - aus
+  // einem anderen Grund als bei Legacy: TOTY-Karten behalten (wie jede boostBaseToOv-Karte) card.club
+  // vom echten Basisspieler, und das Roster konzentriert sich auf sehr wenige echte Top-Klubs (FC
+  // Barcelona: Bonmatí/Pina/Pedri/Putellas/Raphinha/Graham Hansen/Koundé/Bacha - satte 8 von 24 Spielern;
+  // Paris Saint-Germain: Dembélé/Nuno Mendes/Vitinha). uclClubXI() (das genau diesen Pool über
+  // uclIndexPool() als "jede echte Karte für diesen Klub" nutzt und nach OV sortiert) würde die 105-112-
+  // OVR-TOTY-Varianten dadurch in FAST JEDEM UCL/UEL-Match gegen Barcelona/PSG automatisch als stärkste
+  // verfügbare Spieler wählen - potenziell mehrere der aufwendig gestalteten Foil-Shard-Karten
+  // gleichzeitig in einer einzigen simulierten Elf. Genau dieses Muster (mehrere gleichzeitig gerenderte
+  // TOTY-Karten in einer Klub-Elf) hatte in einer früheren Fassung bereits zu Abstürzen geführt (siehe
+  // Git-Historie); die CSS wurde seither zwar deutlich günstiger gemacht (kein mix-blend-mode mehr), aber
+  // "acht Foil-Shard-Karten gleichzeitig in Barcelonas Elf" bleibt unabhängig davon auch spielerisch
+  // unsinnig (Barcelonas Elf besteht dann quasi nur aus Sondereditionen ihrer eigenen Spieler). TOTY bleibt
+  // trotzdem ganz normal käuflich/besitzbar - der Ausschluss betrifft nur die "welche Karte bekommt die
+  // GEGNER-Elf" Simulation, nicht die eigene Sammlung.
   // KRITISCH: variant==='admin' (Michael Jackson/Trump/Musk/TimGiOh, die vier Admin-Easter-Eggs mit
   // OV 999-999999 auf JEDER Position, siehe ADMIN_JACKSON_CARD & Co.) MUSS ausgeschlossen bleiben - diese
   // Karten haben absichtlich absurd hohe Werte, damit ein Admin sie im Sandbox-Team-Sim testen kann, sind
@@ -19598,7 +19744,7 @@ function adminFullCardPool(){
   // uclClubXI (die diesen Pool über uclIndexPool() als "jede echte Karte" nutzen) sie automatisch als
   // stärkste verfügbare Karte für ihre jeweilige Nation (USA: Jackson/Trump/Musk, Deutschland: TimGiOh) -
   // sichtbar für JEDEN Spieler, der gegen diese Nation antritt, nicht nur für den Admin selbst.
-  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='admin' && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar' && (c.id<20000000 || c.id>=40000000));
+  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='admin' && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar' && c.variant!=='toty' && (c.id<20000000 || c.id>=40000000));
 }
 // Icon Promo Pack (see PACKS' 'ligapack' - id kept as-is so existing LIGA_REWARD_TABLE entries and any
 // already-scheduled reward keep working unchanged, only the display name/pool/odds changed): 7 brand-
