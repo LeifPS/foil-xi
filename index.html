@@ -15938,6 +15938,16 @@ function showEntryGate(prefill){
   hideBootLoader();
   const root = document.getElementById('modal-root');
   const nosaveBanner = NOSAVE_MODE ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);">Ohne-Speicherung-Modus: nur Test-Accounts k\u00f6nnen sich anmelden.</p>` : '';
+  // F\u00e4llt auf den zuletzt auf DIESEM Ger\u00e4t erfolgreich angemeldeten Vereinsnamen zur\u00fcck, wenn kein
+  // expliziter prefill \u00fcbergeben wurde (siehe rememberLastClubId) - verhindert, dass ein Spieler, dessen
+  // Firebase-Session weg ist (z.B. iPad-Homescreen-Icon, siehe dortiger Kommentar), seinen Vereinsnamen
+  // aus dem Ged\u00e4chtnis eintippen muss und sich dabei vertippt/verschreibt, was sonst eine neue, leere
+  // Karteikarte statt seines echten Spielstands anlegen w\u00fcrde. sanitizeClubId() r\u00e4umt auch einen
+  // manipulierten/veralteten localStorage-Wert sicher auf.
+  let effectivePrefill = prefill;
+  if(!effectivePrefill){
+    try{ effectivePrefill = sanitizeClubId(localStorage.getItem('foil11-last-club')||''); }catch(e){ effectivePrefill = ''; }
+  }
   root.innerHTML = `
     <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
       <div class="gate-box">
@@ -15945,7 +15955,7 @@ function showEntryGate(prefill){
         <h2>Willkommen bei FOIL ELEVEN</h2>
         ${nosaveBanner}
         <p class="hint" style="margin-top:0;margin-bottom:18px;">W\u00e4hle einen Vereinsnamen. Er wird Teil deiner Seiten-URL, damit ein Lesezeichen oder Neuladen dieser genauen Seite automatisch denselben Spielstand l\u00e4dt.</p>
-        <input id="gate-input" class="gate-field" placeholder="z. B. galaxyfc92" value="${prefill||''}" autocomplete="username">
+        <input id="gate-input" class="gate-field" placeholder="z. B. galaxyfc92" value="${effectivePrefill||''}" autocomplete="username">
         <button class="gate-btn" id="gate-submit">Verein betreten</button>
         <p class="gate-err" id="gate-err"></p>
       </div>
@@ -15969,6 +15979,22 @@ async function applyGatePersistence(keepSignedIn){
   try{ await fb.setPersistence(fb.auth, keepSignedIn ? fb.browserLocalPersistence : fb.browserSessionPersistence); }
   catch(e){ console.warn('setPersistence failed', e); }
 }
+// Merkt sich den zuletzt erfolgreich authentifizierten Vereinsnamen rein lokal auf diesem Gerät (kein
+// Passwort, keine sensiblen Daten) - Bugfix für gemeldete "Spielstand regelmäßig weg"-Fälle auf dem
+// iPad: wird die App als Homescreen-Icon genutzt, räumt iOS die Firebase-Auth-Session (IndexedDB) für
+// solche eigenständigen Web-Apps deutlich aggressiver weg als für normale Safari-Tabs - der Spieler
+// landet dann öfter als auf dem Desktop wieder am leeren Eingabe-Gate (showEntryGate) und muss seinen
+// Vereinsnamen aus dem Gedächtnis erneut eintippen. Ein Tippfehler/eine andere Schreibweise dabei führt
+// NICHT zu einer Fehlermeldung, sondern zu proceedWithClubId()->showSetPasswordModal() für eine
+// zufällig noch unbenutzte Variante des Namens - der Spieler setzt dort scheinbar ganz normal sein
+// Passwort und landet in einem brandneuen, leeren Account, während der echte Spielstand unter der
+// ursprünglichen Schreibweise unangetastet bleibt (sieht für ihn aber wie "mein Account ist leer" aus).
+// Das Gate schlägt diesen zuletzt genutzten Namen jetzt automatisch als Vorbelegung vor (siehe
+// showEntryGate), was das Risiko eines solchen Tippfehlers stark verringert, ohne die eigentliche
+// Sicherheitslogik (Passwort-Check über clubRegistry) anzufassen.
+function rememberLastClubId(id){
+  try{ localStorage.setItem('foil11-last-club', id); }catch(e){}
+}
 // Shared tail end of both sign-up and sign-in: claim the single-session lock, start the heartbeat,
 // and boot into the actual game. Returns false (without starting init()) if another tab/device
 // already holds this club's session.
@@ -15978,6 +16004,7 @@ async function finishSignIn(id){
     showSessionBlockedModal(id);
     return false;
   }
+  rememberLastClubId(id);
   startSessionHeartbeat();
   document.getElementById('modal-root').innerHTML = '';
   await init();
@@ -16028,11 +16055,21 @@ async function proceedWithClubId(id){
 }
 function showSetPasswordModal(id){
   const root = document.getElementById('modal-root');
+  // Bugfix "Spielstand regelm\u00e4\u00dfig weg" (v.a. iPad-Homescreen-Icon): ein Tippfehler/eine andere
+  // Schreibweise des eigentlich schon existierenden Vereinsnamens landet unbemerkt genau hier - der
+  // Spieler setzt scheinbar ganz normal sein Passwort und startet dabei tats\u00e4chlich einen brandneuen,
+  // leeren Account. Weicht der jetzt eingegebene Name vom zuletzt auf diesem Ger\u00e4t erfolgreich
+  // angemeldeten ab (siehe rememberLastClubId), warnt dieser Screen jetzt explizit davor, statt
+  // stillschweigend "neuer Verein" anzunehmen.
+  let lastId = null;
+  try{ lastId = sanitizeClubId(localStorage.getItem('foil11-last-club')||'') || null; }catch(e){}
+  const mismatchWarning = (lastId && lastId!==id) ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);">Achtung: Auf diesem Ger\u00e4t warst du zuletzt bei "${lastId}" angemeldet, nicht bei "${id}". Falls du eigentlich zu deinem bestehenden Verein zur\u00fcck willst, tippfehler-frei "Anderen Verein w\u00e4hlen" und den Namen genau wie zuvor eingeben - sonst legst du hier versehentlich einen zweiten, leeren Verein an.</p>` : '';
   root.innerHTML = `
     <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
       <div class="gate-box">
         ${gateMarkHTML()}
         <h2>Passwort f\u00fcr "${id}" festlegen</h2>
+        ${mismatchWarning}
         <p class="hint" style="margin-top:6px;margin-bottom:16px;">Dieser Verein hat noch kein Passwort \u2014 lege jetzt eins fest, um ihn ab sofort zu sch\u00fctzen. Merke es dir gut, es gibt keine Wiederherstellung.</p>
         <input id="pw-input1" type="password" class="gate-field" placeholder="Neues Passwort (mind. 6 Zeichen)" autocomplete="new-password">
         <input id="pw-input2" type="password" class="gate-field" placeholder="Passwort wiederholen" autocomplete="new-password">
