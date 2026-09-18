@@ -2005,15 +2005,28 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .pitch-slot:hover .empty-slot-inner{border-color:var(--turf-bright);color:var(--chalk);}
 .pitch-slot:hover .empty-slot-plus{opacity:1;color:var(--turf-bright);}
 /* ---- Draft-Modus: Land-Rollen-Bühne + Karten-Aufdeck-Animation ---- */
-.draft-roll-stage{text-align:center;padding:20px 14px;border-radius:14px;
+.draft-roll-stage{text-align:center;padding:22px 14px;border-radius:14px;
   background:radial-gradient(ellipse at 50% -10%, rgba(61,220,132,.14), transparent 60%), linear-gradient(160deg,#141a16,#0a0d0b);
   border:1px solid var(--line);}
+.draft-roll-flag{position:relative;display:inline-block;}
 .draft-roll-flag img{box-shadow:0 0 22px rgba(61,220,132,.35);border:2px solid var(--turf-bright);}
-.draft-roll-nation-name{margin-top:10px;font-family:'Anton';font-size:16px;letter-spacing:.02em;color:var(--chalk);}
+.draft-roll-nation-name{margin-top:10px;font-family:'Anton';font-size:17px;letter-spacing:.02em;color:var(--chalk);}
+/* Ein rotierender Ring hinter der Flagge während des Spins - macht aus dem reinen Flaggenwechsel ein
+   erkennbares "Glücksrad dreht sich"-Bild statt nur eines flackernden Bilds. */
+.draft-roll-spinning .draft-roll-flag::before{content:"";position:absolute;inset:-8px;border-radius:50%;
+  border:3px solid transparent;border-top-color:var(--turf-bright);border-right-color:#ffd76a;
+  animation:draftSpinRing .7s linear infinite;}
 .draft-roll-spinning .draft-roll-flag img{animation:draftSpinPulse .5s ease-in-out infinite;}
 .draft-roll-spinning .draft-roll-nation-name{color:var(--muted);}
+@keyframes draftSpinRing{to{transform:rotate(360deg);}}
 @keyframes draftSpinPulse{0%,100%{transform:scale(1);opacity:.8;}50%{transform:scale(1.1);opacity:1;}}
 .draft-card-reveal{animation:draftCardReveal .4s cubic-bezier(.2,.9,.3,1.3) both;}
+/* Aufwendigeres Aufdeck-Flourish, je besser die gezogene Karte - ein "guter Pull" soll sich auch
+   sichtbar besonderer anfühlen als eine 0815-Karte, ähnlich einem echten Pack-Opening. */
+.draft-card-reveal-rare{animation:draftCardRevealRare .55s cubic-bezier(.2,.9,.3,1.3) both;}
+@keyframes draftCardRevealRare{0%{opacity:0;transform:scale(.5) translateY(20px);filter:brightness(2.2);}55%{filter:brightness(1.4);}100%{opacity:1;transform:scale(1) translateY(0);filter:brightness(1);}}
+.draft-card-reveal-epic{animation:draftCardRevealEpic .7s cubic-bezier(.2,.9,.3,1.3) both;border-radius:10px;}
+@keyframes draftCardRevealEpic{0%{opacity:0;transform:scale(.4) rotate(-6deg);filter:brightness(2.6);box-shadow:0 0 0 rgba(255,215,106,0);}50%{filter:brightness(1.6);box-shadow:0 0 34px 8px rgba(255,215,106,.75);}100%{opacity:1;transform:scale(1) rotate(0deg);filter:brightness(1);box-shadow:0 0 18px 2px rgba(255,215,106,.45);}}
 /* Karten, die auf keine offene Position mehr passen, werden auf Wunsch klar erkennbar ausgegraut
    (echtes Graustufen-Bild, nicht nur reduzierte Deckkraft wie zuvor) statt nur leicht abgedunkelt. */
 .draft-card-unfit{filter:grayscale(1) brightness(.7);opacity:.6;}
@@ -2553,6 +2566,8 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 /* Turnier-Achievement-Nametags (Cupmeister/Mäzen) - selbe schlichte Gradient+Puls-Behandlung. */
 .nt-cupmeister{--glow:#3dc482;background:linear-gradient(90deg,#3dc482,#a0f0c8,#3dc482);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagFlash 2.6s ease-in-out infinite;}
 .nt-maezen{--glow:#c78bf5;background:linear-gradient(90deg,#c78bf5,#ecd3ff,#c78bf5);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.8s linear infinite, nametagGlow 2.4s ease-in-out infinite;}
+.nt-kaderschmied{--glow:#4da8ff;background:linear-gradient(90deg,#4da8ff,#a8d8ff,#4da8ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagGlow 2.4s ease-in-out infinite;}
+.nt-turnierlegende{--glow:#ffd76a;background:linear-gradient(90deg,#ffd76a,#fff3c4,#ffd76a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagFlash 2.6s ease-in-out infinite;}
 /* Champions-/Europa-League-Achievement-Nametag (Kontinentalkönig) - navy/gold, gleiche Gradient+Puls-Behandlung. */
 .nt-kontinentalkoenig{--glow:#ffd76a;background:linear-gradient(90deg,#4a6fff,#ffd76a,#4a6fff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 3.6s linear infinite, nametagGlow 2.2s ease-in-out infinite;}
 .ach-card{background:linear-gradient(165deg,var(--panel2),var(--panel) 140%);border:1px solid var(--line);border-left:3px solid var(--accent,var(--line));border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 4px 14px -8px rgba(0,0,0,.5);}
@@ -12491,14 +12506,19 @@ let sbcSelection = new Set();
 // 90+ ist jetzt fast 3x so wahrscheinlich, 100+/105+/111+ sogar 6-8x so wahrscheinlich wie ursprünglich.
 // Odds nach Feedback noch ein weiteres Stück nach oben gebuffed (auf die schon deutlich gebuffte
 // erste Fassung obendrauf): 90+ jetzt nochmal gut 50% wahrscheinlicher, 100+ fast verdoppelt.
+// 100+ auf Wunsch ("nerfe die Odds für 100+ Karten beträchtlich") deutlich zurückgenommen, seit der
+// Draft aus dem VOLLEN Karten-Index zieht (TOTY/GOAT/Kronjuwelen/... sind jetzt alle im Pool - eine
+// 100+ Karte ist damit ungleich mächtiger als vorher, als der Pool nur Basis-/normale Sonderkarten
+// enthielt). Zusammen genommen fallen 100-104/105-110/111+ von 12% auf nur noch 1% - der frei
+// gewordene Anteil geht an 80-89/90-99, damit "guter Pull" weiterhin regelmäßig vorkommt.
 const DRAFT_ROLL_TIERS = [
   {min:0, max:69, chance:0.02},
-  {min:70, max:79, chance:0.25},
-  {min:80, max:89, chance:0.38},
-  {min:90, max:99, chance:0.23},
-  {min:100, max:104, chance:0.075},
-  {min:105, max:110, chance:0.035},
-  {min:111, max:9999, chance:0.01},
+  {min:70, max:79, chance:0.28},
+  {min:80, max:89, chance:0.45},
+  {min:90, max:99, chance:0.24},
+  {min:100, max:104, chance:0.008},
+  {min:105, max:110, chance:0.0015},
+  {min:111, max:9999, chance:0.0005},
 ];
 // Land-Gewichtung fürs Rollen (NICHT die Rating-Verteilung der Spieler oben, rein welches Land gezogen
 // wird): bekannte Fußball-Großmächte sind spürbar wahrscheinlicher als der Rest, jede Nation mit
@@ -12721,7 +12741,7 @@ let draftTournamentState = null;
 // nur jeweils EIN Draft-Lauf gleichzeitig aktiv sein kann.
 let draftMoveSelectedSlotId = null;
 function draftClearRollTimers(state){
-  if(state.spinTimer){ clearInterval(state.spinTimer); state.spinTimer = null; }
+  if(state.spinTimer){ clearTimeout(state.spinTimer); state.spinTimer = null; }
   (state.revealTimers||[]).forEach(t=>clearTimeout(t));
   state.revealTimers = [];
 }
@@ -12763,6 +12783,25 @@ function draftScheduleReveals(state){
     state.revealTimers.push(t);
   }
 }
+// Verbesserte Land-Cutscene: statt eines konstant schnellen Flaggen-Flackerns läuft es wie ein echtes,
+// auslaufendes Glücksrad - anfangs schnell, wird zum Ende hin spürbar langsamer, und die letzten ~500ms
+// zeigen bereits garantiert das tatsächliche Ergebnis (das Rad "landet" sichtbar), statt bis zur letzten
+// Millisekunde zufällig weiterzuspringen.
+function draftRunSpinAnimation(state, finalNation, onDone){
+  const nations = draftAllNations();
+  let elapsed = 0, delay = 70;
+  function tick(){
+    const el = document.getElementById('draft-spin-flagname');
+    const remaining = DRAFT_SPIN_MS - elapsed;
+    const nation = remaining<=500 ? finalNation : nations[Math.floor(Math.random()*nations.length)];
+    if(el) el.innerHTML = `${natFlagImgHTML(nation, 64)}<div class="draft-roll-nation-name">${natDE(nation)}</div>`;
+    if(remaining<=0){ onDone(); return; }
+    delay = Math.min(280, delay+14); // wird mit jedem Tick etwas langsamer
+    elapsed += delay;
+    state.spinTimer = setTimeout(tick, delay);
+  }
+  tick();
+}
 function draftRunRevealSequence(state, rollResult, opts={}){
   state.currentRoll = rollResult;
   state.revealedCount = 0;
@@ -12774,20 +12813,12 @@ function draftRunRevealSequence(state, rollResult, opts={}){
   }
   state.rollPhase = 'spinning';
   renderDraftPanel();
-  const nations = draftAllNations();
-  state.spinTimer = setInterval(()=>{
-    const el = document.getElementById('draft-spin-flagname');
-    if(!el) return;
-    const randNat = nations[Math.floor(Math.random()*nations.length)];
-    el.innerHTML = `${natFlagImgHTML(randNat, 56)}<div class="draft-roll-nation-name">${natDE(randNat)}</div>`;
-  }, 90);
-  const spinTimeout = setTimeout(()=>{
-    if(state.spinTimer){ clearInterval(state.spinTimer); state.spinTimer = null; }
+  draftRunSpinAnimation(state, rollResult.nation, ()=>{
+    state.spinTimer = null;
     state.rollPhase = 'revealing';
     renderDraftPanel();
     draftScheduleReveals(state);
-  }, DRAFT_SPIN_MS);
-  state.revealTimers.push(spinTimeout);
+  });
 }
 // Interaktives Rollen: das eigentliche Ergebnis (Land + 4 Spieler) steht sofort fest (siehe
 // draftRollNationAndCards), wird dem Spieler aber erst nach ~1.5s "welches Land?"-Animation und dann
@@ -12844,6 +12875,7 @@ async function draftSaveSquad(idx, players, rating){
   while(squads.length<3) squads.push(null);
   squads[idx] = {players: players.map(p=>({id:p.id, pos:p.pos, slotId:p.slotId})), rating, savedAt:Date.now()};
   profile.draftSquads = squads;
+  applyAchievementDeltas({draftSquadsSaved:1});
   await sSet('profile', profile);
   toast(`Aufstellung in Slot ${idx+1} gespeichert (Rating ${rating}).`);
   await maybePublishDraftLeaderboardEntry(squads);
@@ -12873,6 +12905,21 @@ function draftRatingFromSlots(state){
 // tauschen), solange sie dort laut positionEligibility spielen kann. Klick 1 wählt eine besetzte Karte
 // aus, Klick 2 auf einen anderen Slot verschiebt/tauscht sie dorthin (oder hebt bei erneutem Klick auf
 // denselben Slot die Auswahl wieder auf).
+// Prüft, ob die Karte aus fromSlotId tatsächlich nach targetSlotId verschoben/getauscht werden könnte -
+// dieselbe Regel wird SOWOHL für die Ziel-Hervorhebung (renderDraftEditablePitch, behebt "man sieht
+// nicht, wohin man eine Karte sonst noch verschieben könnte") ALS AUCH für den eigentlichen Klick-
+// Handler benutzt, damit Anzeige und tatsächliches Verhalten niemals auseinanderlaufen.
+function draftIsValidMoveTarget(state, fromSlotId, targetSlotId){
+  if(fromSlotId===targetSlotId) return false;
+  const fromSlot = state.slots.find(s=>s.id===fromSlotId);
+  const targetSlot = state.slots.find(s=>s.id===targetSlotId);
+  const fromFslot = FORMATIONS['433'].slots.find(s=>s.id===fromSlotId);
+  const targetFslot = FORMATIONS['433'].slots.find(s=>s.id===targetSlotId);
+  if(!fromSlot || !fromSlot.card) return false;
+  if(positionEligibility(fromSlot.card, targetFslot.label)===null) return false;
+  if(targetSlot.card && positionEligibility(targetSlot.card, fromFslot.label)===null) return false;
+  return true;
+}
 function renderDraftEditablePitch(el, state){
   if(!el) return;
   const chemDetail = draftChemistryDetail(state);
@@ -12884,9 +12931,19 @@ function renderDraftEditablePitch(el, state){
     wrap.className = 'pitch-slot';
     wrap.style.left = fslot.x+'%'; wrap.style.top = fslot.y+'%';
     const isSelected = draftMoveSelectedSlotId===fslot.id;
+    const isValidTarget = draftMoveSelectedSlotId!==null && !isSelected && draftIsValidMoveTarget(state, draftMoveSelectedSlotId, fslot.id);
+    // Solange eine Karte zum Verschieben ausgewählt ist, werden ALLE anderen Positionen, die sie laut
+    // ihren gelisteten Positionen ebenfalls spielen könnte, klar gold hervorgehoben - alles andere wird
+    // sichtbar ausgegraut, statt es dem Spieler zu überlassen, jede Position einzeln durchzuprobieren.
+    // Ein höherer z-index auf den hervorgehobenen Zielen reduziert außerdem Fehlklicks auf den dicht
+    // gepackten Positionen (z.B. die 3er-Mittelfeldreihe), die sich an den Rändern leicht überlappen.
+    const dimmed = draftMoveSelectedSlotId!==null && !isSelected && !isValidTarget;
+    if(isValidTarget) wrap.style.zIndex = '5';
     if(stateSlot && stateSlot.card){
       const cardNode = cardEl(stateSlot.card, 'xs', null, fslot.label);
       if(isSelected){ cardNode.style.outline = '3px solid var(--turf-bright)'; cardNode.style.borderRadius = '10px'; cardNode.style.boxShadow = '0 0 16px rgba(61,220,132,.6)'; }
+      if(isValidTarget){ cardNode.style.outline = '3px solid #ffd76a'; cardNode.style.borderRadius = '10px'; cardNode.style.boxShadow = '0 0 16px rgba(255,215,106,.65)'; }
+      if(dimmed){ cardNode.style.filter = 'grayscale(.75) brightness(.6)'; cardNode.style.opacity = '.65'; }
       const chem = chemDetail.bySlot[fslot.id];
       if(chem!==undefined){
         cardNode.style.position = 'relative';
@@ -12901,6 +12958,8 @@ function renderDraftEditablePitch(el, state){
       const emptyEl = document.createElement('div');
       emptyEl.className = 'empty-slot-inner';
       if(isSelected) emptyEl.style.borderColor = 'var(--turf-bright)';
+      if(isValidTarget){ emptyEl.style.borderColor = '#ffd76a'; emptyEl.style.borderStyle = 'solid'; emptyEl.style.boxShadow = '0 0 12px rgba(255,215,106,.5)'; }
+      if(dimmed) emptyEl.style.opacity = '.4';
       emptyEl.textContent = posDE(fslot.label);
       wrap.appendChild(emptyEl);
     }
@@ -12915,24 +12974,21 @@ function draftHandlePitchSlotClick(state, clickedSlotId){
     return;
   }
   if(draftMoveSelectedSlotId===clickedSlotId){ draftMoveSelectedSlotId = null; renderDraftPanel(); return; }
-  const fromSlot = state.slots.find(s=>s.id===draftMoveSelectedSlotId);
-  const fromFslot = FORMATIONS['433'].slots.find(s=>s.id===draftMoveSelectedSlotId);
-  const targetFslot = FORMATIONS['433'].slots.find(s=>s.id===clickedSlotId);
-  const fromCard = fromSlot.card;
-  if(positionEligibility(fromCard, targetFslot.label)===null){
-    toast(`${fromCard.n} kann nicht auf ${posDE(targetFslot.label)} spielen.`);
+  if(!draftIsValidMoveTarget(state, draftMoveSelectedSlotId, clickedSlotId)){
+    const fromCard = state.slots.find(s=>s.id===draftMoveSelectedSlotId).card;
+    const targetFslot = FORMATIONS['433'].slots.find(s=>s.id===clickedSlotId);
+    const reason = (clickedSlot.card && positionEligibility(fromCard, targetFslot.label)!==null)
+      ? `${clickedSlot.card.n} kann nicht auf die freiwerdende Position spielen — Tausch nicht möglich.`
+      : `${fromCard.n} kann nicht auf ${posDE(targetFslot.label)} spielen.`;
+    toast(reason);
     draftMoveSelectedSlotId = null;
     renderDraftPanel();
     return;
   }
+  const fromSlot = state.slots.find(s=>s.id===draftMoveSelectedSlotId);
+  const fromCard = fromSlot.card;
   if(clickedSlot.card){
     const targetCard = clickedSlot.card;
-    if(positionEligibility(targetCard, fromFslot.label)===null){
-      toast(`${targetCard.n} kann nicht auf ${posDE(fromFslot.label)} spielen — Tausch nicht möglich.`);
-      draftMoveSelectedSlotId = null;
-      renderDraftPanel();
-      return;
-    }
     clickedSlot.card = fromCard;
     fromSlot.card = targetCard;
   } else {
@@ -13114,7 +13170,10 @@ function renderDraftRollPanel(box){
       wrap.style.textAlign = 'center';
       if(i < state.revealedCount){
         const fits = isReplaceFlow ? true : draftCardFitsAnyOpenSlot(card, openLabels);
-        wrap.className = 'draft-card-reveal' + (fits ? '' : ' draft-card-unfit');
+        // Aufwendigeres Aufdeck-Flourish für seltenere Ziehungen - fühlt sich mehr wie ein echtes
+        // Pack-Opening an, je besser die Karte, statt jede Karte identisch reinploppen zu lassen.
+        const rarityClass = card.ov>=100 ? ' draft-card-reveal-epic' : card.ov>=90 ? ' draft-card-reveal-rare' : '';
+        wrap.className = 'draft-card-reveal' + rarityClass + (fits ? '' : ' draft-card-unfit');
         wrap.style.cursor = (fits && state.rollPhase==='done') ? 'pointer' : 'default';
         wrap.appendChild(cardEl(card,'mini'));
         if(fits && state.rollPhase==='done'){
@@ -13233,6 +13292,11 @@ async function claimDraftTournamentReward(){
   const wonStages = state.stageIdx;
   const reward = wonStages>0 ? draftStageReward(wonStages-1) : 0;
   if(reward>0) await atomicCoinChange(reward);
+  // atomicCoinChange schreibt bei bestehender Firestore-Verbindung nur ein gezieltes Feld-Update (Coins
+  // + die coinsEarned-Achievement-Zeile) - draftStagesWon braucht daher einen eigenen, expliziten Write,
+  // sonst ginge der Fortschritt f\u00fcr den "Turnierlegende"-Erfolg beim n\u00e4chsten Neuladen wieder verloren.
+  applyAchievementDeltas({draftStagesWon: wonStages});
+  await sSet('profile', profile);
   toast(reward>0 ? `Lauf beendet: +${formatCoins(reward)} Coins (weiteste Stufe: ${draftStageLabel(wonStages-1)}).` : 'Lauf beendet ohne gewonnene Runde \u2014 keine Belohnung.');
   draftTournamentState = null;
   renderDraftPanel();
@@ -29448,6 +29512,28 @@ const ACHIEVEMENTS = [
       {coins:200000, packs:['zeitgeist']},
       {coins:500000, packs:['kronjuwelen'], nametag:'kontinentalkoenig'},
     ]},
+  // Zwei Erfolge fürs neue Draft-Modus: einer fürs Draften selbst (gespeicherte Aufstellungen, siehe
+  // draftSaveSquad), einer fürs Spielen (gewonnene Turnier-Stufen, siehe claimDraftTournamentReward).
+  {id:'draftSquadsSaved', name:'Kaderschmied', desc:'Speichere Aufstellungen im Draft-Modus.', icon:'🎯', stat:'draftSquadsSaved',
+    cond:n=>`${n} Draft-Aufstellungen gespeichert`,
+    tiers:[1,5,15,40,100],
+    rewards:[
+      {coins:1500},
+      {coins:4000},
+      {coins:10000},
+      {coins:22000, packs:['ratings27']},
+      {coins:50000, packs:['kronjuwelen'], nametag:'kaderschmied'},
+    ]},
+  {id:'draftStagesWon', name:'Turnierlegende', desc:'Gewinne Runden im Draft-Turnier (Achtelfinale, Viertelfinale, ...).', icon:'⚔️', stat:'draftStagesWon',
+    cond:n=>`${n} Draft-Turnierrunden gewonnen`,
+    tiers:[10,50,150,400,1000],
+    rewards:[
+      {coins:1500},
+      {coins:5000},
+      {coins:12000},
+      {coins:28000, packs:['ratings27']},
+      {coins:60000, packs:['kronjuwelen'], nametag:'turnierlegende'},
+    ]},
   // Icon Swap: Remastered event-only achievement lines - eventOnly:true hides both entirely (see
   // renderAchievementsPanel/achievementsClaimableCount) once iconSwap2Active() goes false, so they only
   // ever show up while the event itself is live. Rewards deliberately pay out Icon Swap Tokens instead
@@ -29523,6 +29609,10 @@ const NAMETAGS = {
   // Champions-/Europa-League-Achievement (siehe ACHIEVEMENTS' uclTrophies-Linie) - eigenes Navy/Gold,
   // klar von Pokalkönig (Wochenendpokal) und Cupmeister (Turnier-Modus) unterschieden.
   kontinentalkoenig: {label:'Kontinentalkönig', symbol:'⚜', cls:'nt-kontinentalkoenig', accent:'#ffd76a'},
+  // Draft-Modus-Achievements (siehe ACHIEVEMENTS draftSquadsSaved/draftStagesWon) - Draft-Blau (dieselbe
+  // Akzentfarbe wie die Herausforderungs-Kachel des Modus) statt einer der bereits vergebenen Paletten.
+  kaderschmied: {label:'Kaderschmied', symbol:'⚒', cls:'nt-kaderschmied', accent:'#4da8ff'},
+  turnierlegende: {label:'Turnierlegende', symbol:'★', cls:'nt-turnierlegende', accent:'#ffd76a'},
 };
 // Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
 // card types currently in the collection - captures every source (packs, Handel, Belohnungen, Admin-
