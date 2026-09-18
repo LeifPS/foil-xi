@@ -2014,8 +2014,12 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .draft-roll-spinning .draft-roll-nation-name{color:var(--muted);}
 @keyframes draftSpinPulse{0%,100%{transform:scale(1);opacity:.8;}50%{transform:scale(1.1);opacity:1;}}
 .draft-card-reveal{animation:draftCardReveal .4s cubic-bezier(.2,.9,.3,1.3) both;}
+/* Karten, die auf keine offene Position mehr passen, werden auf Wunsch klar erkennbar ausgegraut
+   (echtes Graustufen-Bild, nicht nur reduzierte Deckkraft wie zuvor) statt nur leicht abgedunkelt. */
+.draft-card-unfit{filter:grayscale(1) brightness(.7);opacity:.6;}
 @keyframes draftCardReveal{from{opacity:0;transform:scale(.6) translateY(14px);}to{opacity:1;transform:scale(1) translateY(0);}}
 .draft-slot-card{transition:.15s;}
+.draft-move-toolbox{background:rgba(61,220,132,.06);border:1px solid rgba(61,220,132,.35);border-radius:12px;padding:12px;margin-bottom:14px;}
 .side-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;height:fit-content;}
 .rating-hero{display:flex;align-items:center;gap:14px;}
 .rating-hero .num{font-family:'Anton';font-size:44px;line-height:1;}
@@ -12485,14 +12489,16 @@ let sbcSelection = new Set();
 // Kader-Rangliste 'squads').
 // Odds deutlich gebufft ggü. der ursprünglichen Vorgabe (auf Wunsch: "deutlich deutlich buffen") -
 // 90+ ist jetzt fast 3x so wahrscheinlich, 100+/105+/111+ sogar 6-8x so wahrscheinlich wie ursprünglich.
+// Odds nach Feedback noch ein weiteres Stück nach oben gebuffed (auf die schon deutlich gebuffte
+// erste Fassung obendrauf): 90+ jetzt nochmal gut 50% wahrscheinlicher, 100+ fast verdoppelt.
 const DRAFT_ROLL_TIERS = [
-  {min:0, max:69, chance:0.03},
-  {min:70, max:79, chance:0.35},
-  {min:80, max:89, chance:0.40},
-  {min:90, max:99, chance:0.15},
-  {min:100, max:104, chance:0.04},
-  {min:105, max:110, chance:0.025},
-  {min:111, max:9999, chance:0.005},
+  {min:0, max:69, chance:0.02},
+  {min:70, max:79, chance:0.25},
+  {min:80, max:89, chance:0.38},
+  {min:90, max:99, chance:0.23},
+  {min:100, max:104, chance:0.075},
+  {min:105, max:110, chance:0.035},
+  {min:111, max:9999, chance:0.01},
 ];
 // Land-Gewichtung fürs Rollen (NICHT die Rating-Verteilung der Spieler oben, rein welches Land gezogen
 // wird): bekannte Fußball-Großmächte sind spürbar wahrscheinlicher als der Rest, jede Nation mit
@@ -12524,13 +12530,25 @@ function draftStageReward(stageIdx){
   const table = [250,500,1000,2000,4000,8000,16000];
   return stageIdx<table.length ? table[stageIdx] : 16000 + 8000*(stageIdx-(table.length-1));
 }
+// Der Draft zieht aus GENAU demselben Pool wie der Karten-Index (adminFullCardPool() - "jede jemals
+// erwerbbare Karte", inkl. TOTY/Prime/Diamant/Icon/GOAT/Kronjuwelen/UCL-Sieger/... und jetzt auch WM-
+// Kapit\u00e4n) - NUR die WM-Variante-Basiskarten sind ausgenommen: wm26VarianteSpecials() erzeugt eine
+// solche Karte f\u00fcr JEDEN einzelnen realen Spieler aller 48 WM-2026-Nationen (+5 OVR gegen\u00fcber der
+// echten Basiskarte), was den Pool mit tausenden nahezu identischen Reskins fluten w\u00fcrde, ohne
+// sp\u00fcrbaren Unterschied zu den echten Basiskarten selbst. Die WM-Kapit\u00e4n-Karten (variant
+// 'wm26_kapitaen', +18 OVR, ein Flaggschiff je Nation) bleiben dagegen ausdr\u00fccklich enthalten.
+let DRAFT_CARD_POOL_CACHE = null;
+function draftCardPool(){
+  if(!DRAFT_CARD_POOL_CACHE) DRAFT_CARD_POOL_CACHE = adminFullCardPool().filter(c=>c.variant!=='wm26_variante');
+  return DRAFT_CARD_POOL_CACHE;
+}
 // Alle echten Nationen mit genug Kartenmaterial (mind. 6 Karten), damit eine Landes-Ziehung so gut wie
 // nie in den \u00e4u\u00dfersten Fallback (siehe draftRollNationAndCards) rutscht. Einmal berechnet, dann gecacht.
 let DRAFT_NATIONS_CACHE = null;
 function draftAllNations(){
   if(!DRAFT_NATIONS_CACHE){
     const counts = new Map();
-    ALL_BASE.concat(ALL_SPECIAL).forEach(c=>{ if(c.nat) counts.set(c.nat, (counts.get(c.nat)||0)+1); });
+    draftCardPool().forEach(c=>{ if(c.nat) counts.set(c.nat, (counts.get(c.nat)||0)+1); });
     DRAFT_NATIONS_CACHE = Array.from(counts.entries()).filter(([,n])=>n>=6).map(([nat])=>nat);
   }
   return DRAFT_NATIONS_CACHE;
@@ -12566,38 +12584,72 @@ function draftOpenSlotLabels(slots){
 function draftCardFitsAnyOpenSlot(card, openLabels){
   return openLabels.some(label=>positionEligibility(card, label)!==null);
 }
+// Zieht 4 Karten aus `pool` (Fallback `fullPool`, falls `pool` zu klein/leer ist) nach der
+// Rating-Verteilung, mit der Garantie, dass mindestens 1 der 4 auf einen der `openLabels` passt -
+// gemeinsam genutzt vom normalen Slot-Roll UND vom "Nur Spieler neu rollen"-Feature (siehe
+// draftRerollPlayersOnly), die sich nur darin unterscheiden, wie `pool` zustande kommt.
+function draftDrawFourFromPool(pool, fullPool, usedNames, openLabels){
+  const localUsed = new Set(usedNames);
+  const cards = [];
+  for(let i=0;i<4;i++){
+    const card = draftPickWeighted(pool, localUsed) || draftPickWeighted(fullPool, localUsed);
+    if(!card) break;
+    cards.push(card);
+    localUsed.add(card.n);
+  }
+  if(!cards.some(c=>draftCardFitsAnyOpenSlot(c, openLabels))){
+    const fitPoolNat = pool.filter(c=>draftCardFitsAnyOpenSlot(c, openLabels) && !localUsed.has(c.n) && !cards.includes(c));
+    const fitPoolAll = fullPool.filter(c=>draftCardFitsAnyOpenSlot(c, openLabels) && !localUsed.has(c.n) && !cards.includes(c));
+    const replacement = draftPickWeighted(fitPoolNat.length ? fitPoolNat : fitPoolAll, new Set());
+    if(replacement && cards.length) cards[cards.length-1] = replacement;
+  }
+  return cards;
+}
+// F\u00fcr die "Spieler ersetzen"-Funktion (siehe draftBeginReplaceRoll): alle 4 Kandidaten m\u00fcssen exakt
+// auf EINEN bestimmten, bereits besetzten Slot passen (nicht nur "irgendeinen offenen") - `pool`/
+// `fullPool` sind hier schon auf genau diese Position vorgefiltert, daher keine Garantie-Nachbesserung
+// n\u00f6tig wie bei draftDrawFourFromPool.
+function draftDrawFourForExactSlot(pool, fullPool, usedNames){
+  const localUsed = new Set(usedNames);
+  const cards = [];
+  for(let i=0;i<4;i++){
+    const card = draftPickWeighted(pool, localUsed) || draftPickWeighted(fullPool, localUsed);
+    if(!card) break;
+    cards.push(card);
+    localUsed.add(card.n);
+  }
+  return cards;
+}
+function draftNationPoolFor(nation, usedNames){
+  return draftCardPool().filter(c=>c.nat===nation && !usedNames.has(c.n));
+}
 // Rollt 1 Land + 4 Spieler dieses Landes (Positionen der 4 sind bewusst beliebig, nicht an einen
 // bestimmten Slot gebunden - man nimmt, wer passt). Garantie: mindestens 1 der 4 passt auf einen noch
 // offenen Slot, notfalls wird daf\u00fcr eine der 4 Karten gezielt ersetzt.
 function draftRollNationAndCards(slots, usedNames){
   const openLabels = draftOpenSlotLabels(slots);
   const nations = draftAllNations();
-  const fullPool = ALL_BASE.concat(ALL_SPECIAL);
+  const fullPool = draftCardPool();
   let nationPool = [], nation = null, tries = 0;
   while(tries<20){
     nation = draftPickWeightedNation(nations);
-    nationPool = fullPool.filter(c=>c.nat===nation && !usedNames.has(c.n));
+    nationPool = draftNationPoolFor(nation, usedNames);
     if(nationPool.length>=4) break;
     tries++;
   }
   // \u00c4u\u00dferster Fallback (sollte bei >=6-Karten-Nationen praktisch nie greifen): ganzer Pool statt nur
   // dieses einen Landes, damit ein Roll niemals komplett scheitert.
   if(nationPool.length<4) nationPool = fullPool.filter(c=>!usedNames.has(c.n));
-  const localUsed = new Set(usedNames);
-  const cards = [];
-  for(let i=0;i<4;i++){
-    const card = draftPickWeighted(nationPool, localUsed) || draftPickWeighted(fullPool, localUsed);
-    if(!card) break;
-    cards.push(card);
-    localUsed.add(card.n);
-  }
-  if(!cards.some(c=>draftCardFitsAnyOpenSlot(c, openLabels))){
-    const fitPoolNat = nationPool.filter(c=>draftCardFitsAnyOpenSlot(c, openLabels) && !localUsed.has(c.n) && !cards.includes(c));
-    const fitPoolAll = fullPool.filter(c=>draftCardFitsAnyOpenSlot(c, openLabels) && !localUsed.has(c.n) && !cards.includes(c));
-    const replacement = draftPickWeighted(fitPoolNat.length ? fitPoolNat : fitPoolAll, new Set());
-    if(replacement && cards.length) cards[cards.length-1] = replacement;
-  }
+  const cards = draftDrawFourFromPool(nationPool, fullPool, usedNames, openLabels);
   return {nation, cards};
+}
+// "Nur Spieler neu rollen" (1x pro Lauf): dasselbe Land bleibt, nur die 4 Kandidaten werden neu gezogen.
+function draftRerollPlayersOnly(nation, slots, usedNames){
+  const fullPool = draftCardPool();
+  let nationPool = draftNationPoolFor(nation, usedNames);
+  if(nationPool.length<4) nationPool = fullPool.filter(c=>!usedNames.has(c.n));
+  const openLabels = draftOpenSlotLabels(slots);
+  return draftDrawFourFromPool(nationPool, fullPool, usedNames, openLabels);
 }
 // Weist eine gew\u00e4hlte Karte automatisch dem ersten noch offenen Slot zu, f\u00fcr den sie berechtigt ist
 // (feste 4-3-3-Reihenfolge GK, LB, CB, CB, RB, CM, CM, CM, LW, ST, RW) - eine Karte, die gleichzeitig f\u00fcr
@@ -12665,12 +12717,16 @@ function draftEnsureSlotIds(players){
 function draftSquadsOf(){ return profile.draftSquads || [null,null,null]; }
 let draftRollState = null;
 let draftTournamentState = null;
+// Aktuell zum Verschieben ausgewählter Slot (Klick auf eine bereits platzierte Karte) - modulweit, da
+// nur jeweils EIN Draft-Lauf gleichzeitig aktiv sein kann.
+let draftMoveSelectedSlotId = null;
 function draftClearRollTimers(state){
   if(state.spinTimer){ clearInterval(state.spinTimer); state.spinTimer = null; }
   (state.revealTimers||[]).forEach(t=>clearTimeout(t));
   state.revealTimers = [];
 }
 function draftStartRoll(){
+  draftMoveSelectedSlotId = null;
   draftRollState = {
     slots: FORMATIONS['433'].slots.map(s=>({id:s.id, label:s.label, card:null})),
     usedNames: new Set(),
@@ -12679,6 +12735,12 @@ function draftStartRoll(){
     revealedCount: 0,
     spinTimer: null,
     revealTimers: [],
+    // 3 neue Werkzeuge, je 1x pro Lauf: (1) "full" - kompletter Neu-Wurf (Land + Spieler) für den
+    // aktuellen Slot, ohne die ganze Aufstellung neu starten zu müssen; (2) "playersOnly" - dasselbe
+    // Land bleibt, nur die 4 Spieler werden neu gezogen; (3) "replace" - eine BEREITS platzierte Karte
+    // gegen eine neu gewürfelte für exakt dieselbe Position austauschen.
+    rerolls: {full:1, playersOnly:1, replace:1},
+    replaceTargetSlotId: null,
   };
   renderDraftPanel();
 }
@@ -12687,14 +12749,30 @@ function draftRestartRoll(){
   draftStartRoll();
 }
 const DRAFT_SPIN_MS = 1500, DRAFT_REVEAL_STAGGER_MS = 450;
-// Interaktives Rollen: das eigentliche Ergebnis (Land + 4 Spieler) steht sofort fest (siehe
-// draftRollNationAndCards), wird dem Spieler aber erst nach ~1.5s "welches Land?"-Animation und dann
-// Karte für Karte nacheinander gezeigt statt alles sofort hinzuwerfen.
-function draftBeginRoll(){
-  const state = draftRollState;
-  state.currentRoll = draftRollNationAndCards(state.slots, state.usedNames);
-  state.rollPhase = 'spinning';
+// Gemeinsamer Animationsablauf für JEDE Art von Wurf (normaler Slot-Roll, kompletter Neu-Wurf, Nur-
+// Spieler-Neuwurf, Ersetzen-Wurf) - unterscheidet sich nur im übergebenen {nation,cards}-Ergebnis und
+// ob die ~1.5s "welches Land?"-Phase gezeigt wird (bei "nur Spieler" bleibt das Land ja gleich, die
+// Animation macht daher direkt mit dem Aufdecken weiter).
+function draftScheduleReveals(state){
+  for(let i=0;i<4;i++){
+    const t = setTimeout(()=>{
+      state.revealedCount = i+1;
+      if(state.revealedCount>=4) state.rollPhase = 'done';
+      renderDraftPanel();
+    }, i*DRAFT_REVEAL_STAGGER_MS);
+    state.revealTimers.push(t);
+  }
+}
+function draftRunRevealSequence(state, rollResult, opts={}){
+  state.currentRoll = rollResult;
   state.revealedCount = 0;
+  if(opts.skipSpin){
+    state.rollPhase = 'revealing';
+    renderDraftPanel();
+    draftScheduleReveals(state);
+    return;
+  }
+  state.rollPhase = 'spinning';
   renderDraftPanel();
   const nations = draftAllNations();
   state.spinTimer = setInterval(()=>{
@@ -12707,16 +12785,59 @@ function draftBeginRoll(){
     if(state.spinTimer){ clearInterval(state.spinTimer); state.spinTimer = null; }
     state.rollPhase = 'revealing';
     renderDraftPanel();
-    for(let i=0;i<4;i++){
-      const t = setTimeout(()=>{
-        state.revealedCount = i+1;
-        if(state.revealedCount>=4) state.rollPhase = 'done';
-        renderDraftPanel();
-      }, i*DRAFT_REVEAL_STAGGER_MS);
-      state.revealTimers.push(t);
-    }
+    draftScheduleReveals(state);
   }, DRAFT_SPIN_MS);
   state.revealTimers.push(spinTimeout);
+}
+// Interaktives Rollen: das eigentliche Ergebnis (Land + 4 Spieler) steht sofort fest (siehe
+// draftRollNationAndCards), wird dem Spieler aber erst nach ~1.5s "welches Land?"-Animation und dann
+// Karte für Karte nacheinander gezeigt statt alles sofort hinzuwerfen.
+function draftBeginRoll(){
+  const state = draftRollState;
+  draftRunRevealSequence(state, draftRollNationAndCards(state.slots, state.usedNames));
+}
+// (1) Kompletter Neu-Wurf für den aktuellen Slot - 1x pro Lauf, nur möglich solange man die 4
+// aufgedeckten Karten des laufenden Wurfs noch nicht ausgewählt hat.
+function draftUseFullReroll(){
+  const state = draftRollState;
+  if(!state.currentRoll || state.rollPhase!=='done' || state.currentRoll.isReplace || state.rerolls.full<=0) return;
+  state.rerolls.full--;
+  draftClearRollTimers(state);
+  draftRunRevealSequence(state, draftRollNationAndCards(state.slots, state.usedNames));
+}
+// (2) Nur die 4 Spieler neu würfeln, dasselbe Land bleibt - 1x pro Lauf.
+function draftUsePlayersOnlyReroll(){
+  const state = draftRollState;
+  if(!state.currentRoll || state.rollPhase!=='done' || state.currentRoll.isReplace || state.rerolls.playersOnly<=0) return;
+  state.rerolls.playersOnly--;
+  draftClearRollTimers(state);
+  const nation = state.currentRoll.nation;
+  const cards = draftRerollPlayersOnly(nation, state.slots, state.usedNames);
+  draftRunRevealSequence(state, {nation, cards}, {skipSpin:true});
+}
+// (3) Eine bereits platzierte Karte gegen eine neu gewürfelte, auf exakt derselben Position spielbare
+// Karte austauschen - 1x pro Lauf. Läuft über denselben Land+4-Spieler-Animationsablauf wie ein
+// normaler Slot-Roll, nur dass hier alle 4 garantiert genau auf DIESEN einen Slot passen (nicht nur
+// "irgendeinen offenen") und die Auswahl die alte Karte direkt ersetzt statt einen neuen Slot zu füllen.
+function draftBeginReplaceRoll(slotId){
+  const state = draftRollState;
+  if(state.rollPhase!=='idle' || state.rerolls.replace<=0) return;
+  const stateSlot = state.slots.find(s=>s.id===slotId);
+  if(!stateSlot || !stateSlot.card) return;
+  const fslot = FORMATIONS['433'].slots.find(s=>s.id===slotId);
+  state.rerolls.replace--;
+  state.replaceTargetSlotId = slotId;
+  draftMoveSelectedSlotId = null;
+  const nations = draftAllNations();
+  const nation = draftPickWeightedNation(nations);
+  const fullEligible = draftCardPool().filter(c=>positionEligibility(c, fslot.label)!==null);
+  // die aktuell ersetzte Karte selbst darf erneut auftauchen (sie verschwindet ja gleich) - alle
+  // ANDEREN bereits gedrafteten Namen bleiben weiterhin gesperrt.
+  const usedExcludingCurrent = new Set(Array.from(state.usedNames).filter(n=>n!==stateSlot.card.n));
+  let nationEligible = fullEligible.filter(c=>c.nat===nation && !usedExcludingCurrent.has(c.n));
+  if(!nationEligible.length) nationEligible = fullEligible.filter(c=>!usedExcludingCurrent.has(c.n));
+  const cards = draftDrawFourForExactSlot(nationEligible, fullEligible, usedExcludingCurrent);
+  draftRunRevealSequence(state, {nation, cards, isReplace:true});
 }
 async function draftSaveSquad(idx, players, rating){
   const squads = draftSquadsOf().slice();
@@ -12727,6 +12848,98 @@ async function draftSaveSquad(idx, players, rating){
   toast(`Aufstellung in Slot ${idx+1} gespeichert (Rating ${rating}).`);
   await maybePublishDraftLeaderboardEntry(squads);
   draftRollState = null;
+  draftMoveSelectedSlotId = null;
+  renderDraftPanel();
+}
+// Chemie (dieselbe Engine wie im echten Kader-Editor) live über den bisherigen Teil-Kader - schon
+// während des Rollens berechnet, nicht erst am Ende. `state.slots` mit weniger als 11 besetzten Slots
+// funktioniert hier genauso (computeChemistry kommt mit jeder Spieleranzahl klar).
+function draftChemistryDetail(state){
+  const roster = state.slots.filter(s=>s.card).map(s=>({slotId:s.id, card:s.card}));
+  const chemPlayers = computeChemistry(roster.map(r=>({ov:r.card.ov, club:r.card.club, nat:r.card.nat, lg:r.card.lg, variant:r.card.variant})), null);
+  const bySlot = {}, breakdownBySlot = {};
+  roster.forEach((r,idx)=>{ bySlot[r.slotId] = chemPlayers[idx].chem; breakdownBySlot[r.slotId] = chemPlayers[idx].chemBreakdown; });
+  return {bySlot, breakdownBySlot, total: chemPlayers.reduce((s,p)=>s+p.chem,0), max: roster.length*3};
+}
+function draftRatingFromSlots(state){
+  const players = state.slots.filter(s=>s.card).map(s=>({...s.card, pos:s.label}));
+  if(!players.length) return null;
+  const chem = computeChemistry(players, null);
+  return Math.round(chem.reduce((s,p)=>s+p.chemOv,0)/chem.length);
+}
+// Echtes, INTERAKTIVES Feld (Rollen-in-Arbeit + fertige Aufstellung, jeweils solange noch nicht
+// gespeichert): zeigt Chemie-Sterne wie der echte Kader-Editor UND erlaubt jederzeit, eine bereits
+// platzierte Karte auf eine andere Position zu verschieben (oder mit einer anderen platzierten Karte zu
+// tauschen), solange sie dort laut positionEligibility spielen kann. Klick 1 wählt eine besetzte Karte
+// aus, Klick 2 auf einen anderen Slot verschiebt/tauscht sie dorthin (oder hebt bei erneutem Klick auf
+// denselben Slot die Auswahl wieder auf).
+function renderDraftEditablePitch(el, state){
+  if(!el) return;
+  const chemDetail = draftChemistryDetail(state);
+  el.className = 'pitch';
+  el.innerHTML = '';
+  FORMATIONS['433'].slots.forEach(fslot=>{
+    const stateSlot = state.slots.find(s=>s.id===fslot.id);
+    const wrap = document.createElement('div');
+    wrap.className = 'pitch-slot';
+    wrap.style.left = fslot.x+'%'; wrap.style.top = fslot.y+'%';
+    const isSelected = draftMoveSelectedSlotId===fslot.id;
+    if(stateSlot && stateSlot.card){
+      const cardNode = cardEl(stateSlot.card, 'xs', null, fslot.label);
+      if(isSelected){ cardNode.style.outline = '3px solid var(--turf-bright)'; cardNode.style.borderRadius = '10px'; cardNode.style.boxShadow = '0 0 16px rgba(61,220,132,.6)'; }
+      const chem = chemDetail.bySlot[fslot.id];
+      if(chem!==undefined){
+        cardNode.style.position = 'relative';
+        const stars = document.createElement('div');
+        stars.className = 'chem-stars chem-'+chem;
+        stars.textContent = '★'.repeat(chem) + '☆'.repeat(3-chem);
+        stars.title = chemBreakdownText(chemDetail.breakdownBySlot[fslot.id]);
+        cardNode.appendChild(stars);
+      }
+      wrap.appendChild(cardNode);
+    } else {
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'empty-slot-inner';
+      if(isSelected) emptyEl.style.borderColor = 'var(--turf-bright)';
+      emptyEl.textContent = posDE(fslot.label);
+      wrap.appendChild(emptyEl);
+    }
+    wrap.addEventListener('click', ()=>draftHandlePitchSlotClick(state, fslot.id));
+    el.appendChild(wrap);
+  });
+}
+function draftHandlePitchSlotClick(state, clickedSlotId){
+  const clickedSlot = state.slots.find(s=>s.id===clickedSlotId);
+  if(draftMoveSelectedSlotId===null){
+    if(clickedSlot && clickedSlot.card){ draftMoveSelectedSlotId = clickedSlotId; renderDraftPanel(); }
+    return;
+  }
+  if(draftMoveSelectedSlotId===clickedSlotId){ draftMoveSelectedSlotId = null; renderDraftPanel(); return; }
+  const fromSlot = state.slots.find(s=>s.id===draftMoveSelectedSlotId);
+  const fromFslot = FORMATIONS['433'].slots.find(s=>s.id===draftMoveSelectedSlotId);
+  const targetFslot = FORMATIONS['433'].slots.find(s=>s.id===clickedSlotId);
+  const fromCard = fromSlot.card;
+  if(positionEligibility(fromCard, targetFslot.label)===null){
+    toast(`${fromCard.n} kann nicht auf ${posDE(targetFslot.label)} spielen.`);
+    draftMoveSelectedSlotId = null;
+    renderDraftPanel();
+    return;
+  }
+  if(clickedSlot.card){
+    const targetCard = clickedSlot.card;
+    if(positionEligibility(targetCard, fromFslot.label)===null){
+      toast(`${targetCard.n} kann nicht auf ${posDE(fromFslot.label)} spielen — Tausch nicht möglich.`);
+      draftMoveSelectedSlotId = null;
+      renderDraftPanel();
+      return;
+    }
+    clickedSlot.card = fromCard;
+    fromSlot.card = targetCard;
+  } else {
+    clickedSlot.card = fromCard;
+    fromSlot.card = null;
+  }
+  draftMoveSelectedSlotId = null;
   renderDraftPanel();
 }
 async function deleteDraftSquad(idx){
@@ -12818,11 +13031,39 @@ function renderDraftPanel(){
     }
   });
 }
+// Kleiner Werkzeugkasten unter dem Spielfeld, solange rollPhase==='idle' - immer sichtbar, sowohl
+// mitten im Rollen (Slots noch offen) als auch auf der fertigen Aufstellung (alle 11 besetzt): entweder
+// gerade eine Karte zum Verschieben ausgew\u00e4hlt (siehe draftMoveSelectedSlotId), oder der Hinweis, dass
+// man jederzeit eine platzierte Karte anklicken kann, um sie zu verschieben/tauschen.
+function draftMoveToolboxHTML(state){
+  if(draftMoveSelectedSlotId===null){
+    return `<p class="hint" style="margin:0 0 12px;text-align:center;">Tippe auf eine bereits platzierte Karte, um sie auf eine andere Position zu verschieben oder zu tauschen.</p>`;
+  }
+  const selSlot = state.slots.find(s=>s.id===draftMoveSelectedSlotId);
+  const canReplace = state.rerolls.replace>0;
+  return `<div class="draft-move-toolbox">
+    <p class="hint" style="margin:0 0 10px;text-align:center;"><b style="color:var(--turf-bright);">${selSlot.card.n}</b> ausgew\u00e4hlt \u2014 tippe auf ein anderes Feld zum Verschieben/Tauschen.</p>
+    <div style="display:flex;gap:8px;">
+      ${canReplace ? `<button class="action-btn secondary" id="draft-replace-selected-btn" style="flex:1;">\u267b Ersetzen (${state.rerolls.replace}x)</button>` : ''}
+      <button class="action-btn secondary" id="draft-deselect-btn" style="flex:1;">Auswahl aufheben</button>
+    </div>
+  </div>`;
+}
+function draftWireMoveToolbox(state){
+  const replaceBtn = document.getElementById('draft-replace-selected-btn');
+  if(replaceBtn) replaceBtn.addEventListener('click', ()=>draftBeginReplaceRoll(draftMoveSelectedSlotId));
+  const deselectBtn = document.getElementById('draft-deselect-btn');
+  if(deselectBtn) deselectBtn.addEventListener('click', ()=>{ draftMoveSelectedSlotId = null; renderDraftPanel(); });
+}
 function renderDraftRollPanel(box){
   const state = draftRollState;
   const filled = state.slots.filter(s=>s.card).length;
-  if(filled >= state.slots.length){ renderDraftFinishPanel(box, state); return; }
+  // Erst wirklich zum "fertig"-Screen wechseln, wenn AUCH kein Ersetzen-Wurf mehr l\u00e4uft - ein
+  // Ersetzen-Wurf h\u00e4lt die Karte im Slot bis zur Auswahl, filled bleibt also die ganze Zeit bei 11.
+  if(filled >= state.slots.length && state.rollPhase==='idle'){ renderDraftFinishPanel(box, state); return; }
   const openLabels = draftOpenSlotLabels(state.slots);
+  const isReplaceFlow = state.currentRoll && state.currentRoll.isReplace;
+  const rating = draftRatingFromSlots(state);
   let stageHTML;
   if(state.rollPhase==='idle'){
     stageHTML = `
@@ -12833,41 +13074,60 @@ function renderDraftRollPanel(box){
   } else if(state.rollPhase==='spinning'){
     stageHTML = `
       <div class="draft-roll-stage draft-roll-spinning">
+        ${isReplaceFlow ? `<p class="hint" style="margin:0 0 10px;">Karte wird ersetzt\u2026</p>` : ''}
         <div class="draft-roll-flag" id="draft-spin-flagname"><div class="draft-roll-nation-name">\u2026</div></div>
       </div>`;
   } else {
     const {nation} = state.currentRoll;
     stageHTML = `
       <div class="draft-roll-stage">
+        ${isReplaceFlow ? `<p class="hint" style="margin:0 0 8px;">Karte wird ersetzt</p>` : ''}
         <div class="draft-roll-flag">${natFlagImgHTML(nation, 56)}</div>
         <div class="draft-roll-nation-name">${natDE(nation)}</div>
       </div>
       <p class="hint" style="margin:0 0 10px;text-align:center;">W\u00e4hle einen der 4 Spieler \u2014 nur passende sind anklickbar.</p>
-      <div class="picker-list" id="draft-roll-pick-list" style="justify-content:center;"></div>`;
+      <div class="picker-list" id="draft-roll-pick-list" style="justify-content:center;"></div>
+      ${(state.rollPhase==='done' && !isReplaceFlow && (state.rerolls.full>0 || state.rerolls.playersOnly>0)) ? `
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+        ${state.rerolls.full>0 ? `<button class="action-btn secondary" id="draft-reroll-full-btn" style="width:auto;padding:8px 14px;font-size:12px;">\ud83d\udd01 Land neu rollen (${state.rerolls.full}x)</button>` : ''}
+        ${state.rerolls.playersOnly>0 ? `<button class="action-btn secondary" id="draft-reroll-players-btn" style="width:auto;padding:8px 14px;font-size:12px;">\ud83d\udd01 Nur Spieler neu (${state.rerolls.playersOnly}x)</button>` : ''}
+      </div>` : ''}`;
   }
   box.innerHTML = `
+    ${rating!==null ? `<p class="hint" style="margin:0 0 8px;text-align:center;">Bisheriges Team-Rating (inkl. Chemie): <b style="color:var(--turf-bright);">${rating}</b></p>` : ''}
     <div id="draft-pitch-wrap" style="margin-bottom:14px;"></div>
+    ${state.rollPhase==='idle' ? draftMoveToolboxHTML(state) : ''}
     ${stageHTML}
     <button class="action-btn secondary" id="draft-restart-btn" style="margin-top:16px;width:100%;">\u21ba Neu starten (komplett von vorne)</button>`;
-  renderDraftPitch(document.getElementById('draft-pitch-wrap'), state.slots.map(s=>({id:s.id, card:s.card})));
   if(state.rollPhase==='idle'){
+    renderDraftEditablePitch(document.getElementById('draft-pitch-wrap'), state);
+    draftWireMoveToolbox(state);
     document.getElementById('draft-roll-go-btn').addEventListener('click', draftBeginRoll);
-  } else if(state.rollPhase==='revealing' || state.rollPhase==='done'){
+  } else {
+    renderDraftPitch(document.getElementById('draft-pitch-wrap'), state.slots.map(s=>({id:s.id, card:s.card})));
+  }
+  if(state.rollPhase==='revealing' || state.rollPhase==='done'){
     const list = document.getElementById('draft-roll-pick-list');
     const {cards} = state.currentRoll;
     cards.forEach((card, i)=>{
       const wrap = document.createElement('div');
       wrap.style.textAlign = 'center';
       if(i < state.revealedCount){
-        const fits = draftCardFitsAnyOpenSlot(card, openLabels);
-        wrap.className = 'draft-card-reveal';
-        wrap.style.opacity = fits ? '1' : '.35';
+        const fits = isReplaceFlow ? true : draftCardFitsAnyOpenSlot(card, openLabels);
+        wrap.className = 'draft-card-reveal' + (fits ? '' : ' draft-card-unfit');
         wrap.style.cursor = (fits && state.rollPhase==='done') ? 'pointer' : 'default';
         wrap.appendChild(cardEl(card,'mini'));
         if(fits && state.rollPhase==='done'){
           wrap.addEventListener('click', ()=>{
             draftClearRollTimers(state);
-            draftAssignCardToSlot(state, card);
+            if(isReplaceFlow){
+              const targetSlot = state.slots.find(s=>s.id===state.replaceTargetSlotId);
+              state.usedNames.delete(targetSlot.card.n);
+              targetSlot.card = card;
+              state.replaceTargetSlotId = null;
+            } else {
+              draftAssignCardToSlot(state, card);
+            }
             state.usedNames.add(card.n);
             state.currentRoll = null;
             state.rollPhase = 'idle';
@@ -12880,30 +13140,34 @@ function renderDraftRollPanel(box){
       }
       list.appendChild(wrap);
     });
+    const fullBtn = document.getElementById('draft-reroll-full-btn');
+    if(fullBtn) fullBtn.addEventListener('click', draftUseFullReroll);
+    const playersBtn = document.getElementById('draft-reroll-players-btn');
+    if(playersBtn) playersBtn.addEventListener('click', draftUsePlayersOnlyReroll);
   }
   document.getElementById('draft-restart-btn').addEventListener('click', draftRestartRoll);
 }
 function renderDraftFinishPanel(box, state){
-  const players = state.slots.map(s=>({...s.card, pos:s.label, slotId:s.id}));
-  const chem = computeChemistry(players, null);
-  const rating = Math.round(chem.reduce((s,p)=>s+p.chemOv,0)/chem.length);
+  const rating = draftRatingFromSlots(state);
   const squads = draftSquadsOf();
   box.innerHTML = `
     <p class="hint" style="margin-top:0;text-align:center;">\ud83c\udf89 Aufstellung komplett \u2014 Rating <b style="color:var(--turf-bright);font-size:17px;">${rating}</b> (inkl. Chemie)</p>
-    <div id="draft-pitch-final" style="margin-bottom:16px;"></div>
+    <div id="draft-pitch-final" style="margin-bottom:14px;"></div>
+    ${draftMoveToolboxHTML(state)}
     <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase;">Verwerfen oder in einen Slot speichern?</div>
     <div id="draft-save-slots" style="display:flex;flex-direction:column;gap:8px;"></div>
     <button class="action-btn secondary" id="draft-discard-btn" style="margin-top:10px;width:100%;">Verwerfen</button>`;
-  renderDraftPitch(document.getElementById('draft-pitch-final'), players.map(p=>({id:p.slotId, card:p})));
+  renderDraftEditablePitch(document.getElementById('draft-pitch-final'), state);
+  draftWireMoveToolbox(state);
   const saveBox = document.getElementById('draft-save-slots');
   squads.forEach((sq, idx)=>{
     const btn = document.createElement('button');
     btn.className = 'action-btn';
     btn.textContent = sq ? `Slot ${idx+1} \u00fcberschreiben (bisher ${sq.rating} OVR)` : `In Slot ${idx+1} speichern (leer)`;
-    btn.addEventListener('click', ()=>draftSaveSquad(idx, players, rating));
+    btn.addEventListener('click', ()=>draftSaveSquad(idx, state.slots.map(s=>({...s.card, pos:s.label, slotId:s.id})), rating));
     saveBox.appendChild(btn);
   });
-  document.getElementById('draft-discard-btn').addEventListener('click', ()=>{ draftRollState = null; renderDraftPanel(); });
+  document.getElementById('draft-discard-btn').addEventListener('click', ()=>{ draftRollState = null; draftMoveSelectedSlotId = null; renderDraftPanel(); });
 }
 async function startDraftTournament(idx){
   const squads = draftSquadsOf();
