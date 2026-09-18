@@ -19742,21 +19742,11 @@ function adminFullCardPool(){
   // Legacy Packs (variant 'legacy'/'legacystar') sind absichtlich noch NICHT im Index - die Packs sind
   // aktuell hidden:true/nur Admin-Test (siehe LEGACY_SQUADS), Roster/Fotos noch nicht final abgenommen.
   // Sobald sie im Kartenladen freigeschaltet werden, einfach diese Zeile wieder entfernen.
-  // TOTY (variant 'toty') bleibt dagegen DAUERHAFT ausgeschlossen, auch nachdem das Pack live ist - aus
-  // einem anderen Grund als bei Legacy: TOTY-Karten behalten (wie jede boostBaseToOv-Karte) card.club
-  // vom echten Basisspieler, und das Roster konzentriert sich auf sehr wenige echte Top-Klubs (FC
-  // Barcelona: Bonmatí/Pina/Pedri/Putellas/Raphinha/Graham Hansen/Koundé/Bacha - satte 8 von 24 Spielern;
-  // Paris Saint-Germain: Dembélé/Nuno Mendes/Vitinha). uclClubXI() (das genau diesen Pool über
-  // uclIndexPool() als "jede echte Karte für diesen Klub" nutzt und nach OV sortiert) würde die 105-112-
-  // OVR-TOTY-Varianten dadurch in FAST JEDEM UCL/UEL-Match gegen Barcelona/PSG automatisch als stärkste
-  // verfügbare Spieler wählen - potenziell mehrere der aufwendig gestalteten Foil-Shard-Karten
-  // gleichzeitig in einer einzigen simulierten Elf. Genau dieses Muster (mehrere gleichzeitig gerenderte
-  // TOTY-Karten in einer Klub-Elf) hatte in einer früheren Fassung bereits zu Abstürzen geführt (siehe
-  // Git-Historie); die CSS wurde seither zwar deutlich günstiger gemacht (kein mix-blend-mode mehr), aber
-  // "acht Foil-Shard-Karten gleichzeitig in Barcelonas Elf" bleibt unabhängig davon auch spielerisch
-  // unsinnig (Barcelonas Elf besteht dann quasi nur aus Sondereditionen ihrer eigenen Spieler). TOTY bleibt
-  // trotzdem ganz normal käuflich/besitzbar - der Ausschluss betrifft nur die "welche Karte bekommt die
-  // GEGNER-Elf" Simulation, nicht die eigene Sammlung.
+  // TOTY (variant 'toty') bleibt HIER bewusst NICHT ausgeschlossen - Bugfix: der Ausschluss stand
+  // vorher fälschlich in adminFullCardPool() selbst, wodurch TOTY-Karten trotz echtem Besitz (über die
+  // TOTY-SBC) auch komplett aus dem Karten-Index verschwanden, der diesen Pool 1:1 als "jede jemals
+  // erwerbbare Karte" anzeigt. Der Ausschluss betrifft ausschließlich die GEGNER-Elf-Simulation
+  // (uclClubXI/wm26NationXI) und sitzt daher jetzt unten in uclIndexPool(), nicht hier.
   // KRITISCH: variant==='admin' (Michael Jackson/Trump/Musk/TimGiOh, die vier Admin-Easter-Eggs mit
   // OV 999-999999 auf JEDER Position, siehe ADMIN_JACKSON_CARD & Co.) MUSS ausgeschlossen bleiben - diese
   // Karten haben absichtlich absurd hohe Werte, damit ein Admin sie im Sandbox-Team-Sim testen kann, sind
@@ -19764,7 +19754,7 @@ function adminFullCardPool(){
   // uclClubXI (die diesen Pool über uclIndexPool() als "jede echte Karte" nutzen) sie automatisch als
   // stärkste verfügbare Karte für ihre jeweilige Nation (USA: Jackson/Trump/Musk, Deutschland: TimGiOh) -
   // sichtbar für JEDEN Spieler, der gegen diese Nation antritt, nicht nur für den Admin selbst.
-  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='admin' && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar' && c.variant!=='toty' && (c.id<20000000 || c.id>=40000000));
+  return Array.from(BY_ID.values()).filter(c=>!c.isManager && c.variant!=='admin' && c.variant!=='kontrahent' && c.variant!=='legacy' && c.variant!=='legacystar' && (c.id<20000000 || c.id>=40000000));
 }
 // Icon Promo Pack (see PACKS' 'ligapack' - id kept as-is so existing LIGA_REWARD_TABLE entries and any
 // already-scheduled reward keep working unchanged, only the display name/pool/odds changed): 7 brand-
@@ -30667,7 +30657,19 @@ function uclIndexPool(){
     // seine eigene, bereits vorab generierte Sieger-Kartenvariante seiner Top-Spieler nutzen können (auf
     // Wunsch reaktiviert). card.club auf so einer Karte ist immer der ECHTE Klub des abgebildeten Spielers
     // (siehe uclRewardCardsForClub), landet also nur im eigenen Kader dieses Klubs, nie bei einem anderen.
-    UCL_INDEX_POOL_CACHE = adminFullCardPool();
+    // TOTY (variant 'toty') dagegen DAUERHAFT ausgeschlossen - NUR hier, nicht in adminFullCardPool()
+    // selbst (siehe dessen Kommentar): TOTY-Karten behalten (wie jede boostBaseToOv-Karte) card.club vom
+    // echten Basisspieler, und das Roster konzentriert sich auf sehr wenige echte Top-Klubs (FC Barcelona:
+    // Bonmatí/Pina/Pedri/Putellas/Raphinha/Graham Hansen/Koundé/Bacha - satte 8 von 24 Spielern; Paris
+    // Saint-Germain: Dembélé/Nuno Mendes/Vitinha). uclClubXI() (das genau diesen Pool als "jede echte
+    // Karte für diesen Klub" nutzt und nach OV sortiert) würde die 105-112-OVR-TOTY-Varianten dadurch in
+    // FAST JEDEM UCL/UEL-Match gegen Barcelona/PSG automatisch als stärkste verfügbare Spieler wählen -
+    // potenziell mehrere der aufwendig gestalteten Karten gleichzeitig in einer einzigen simulierten Elf,
+    // genau das Muster, das in einer früheren Fassung bereits zu Abstürzen geführt hatte (siehe
+    // Git-Historie). TOTY bleibt trotzdem ganz normal käuflich/besitzbar UND taucht im Karten-Index auf
+    // (siehe adminFullCardPool) - der Ausschluss betrifft nur die "welche Karte bekommt die GEGNER-Elf"
+    // Simulation, nicht die eigene Sammlung/den Index.
+    UCL_INDEX_POOL_CACHE = adminFullCardPool().filter(c=>c.variant!=='toty');
   }
   return UCL_INDEX_POOL_CACHE;
 }
@@ -31111,10 +31113,20 @@ async function playUclPlayoffLeg(comp){
   let winnerClub;
   if(aAgg!==bAgg){ winnerClub = aAgg>bAgg ? tie.aClub : tie.bClub; }
   else {
-    const dec = uclMatchResultClubs(tie.aClub, tie.bClub, false); newTie.decider = {winnerSide:dec.winnerSide}; winnerClub = dec.winnerSide==='me' ? tie.aClub : tie.bClub;
-    // Gleicher Hinweis wie in playUclKnockoutLeg - eine Entscheidung bei Aggregat-Gleichstand darf nie
-    // unsichtbar bleiben, sonst wirkt ein Aggregat-Ausscheiden wie ein grundloser Sieg des Gegners.
-    toast(`Aggregat ${aAgg}:${bAgg} unentschieden — Verlängerung/Elfmeterschießen entscheidet: ${winnerClub===t.myClub?'Du ziehst weiter!':oppClub+' zieht weiter.'}`);
+    // Bugfix: bei Aggregat-Gleichstand wurde die Entscheidung bisher LAUTLOS im Hintergrund per
+    // uclMatchResultClubs() gewürfelt (kein spielbares/anschaubares Match) - das wirkte wie eine direkte
+    // Niederlage statt einer echten Verlängerung. Jetzt läuft die Entscheidung als echtes, live
+    // animiertes Spiel über uclPlayLegCore (allowDraw:false), inklusive sichtbarer Verlängerung und ggf.
+    // Elfmeterschießen genau wie bei jedem anderen unentschiedenen Pflichtspiel-Einzelspiel.
+    toast(`Aggregat ${aAgg}:${bAgg} unentschieden — Entscheidungsspiel: Verlängerung und ggf. Elfmeterschießen entscheiden!`);
+    inMatch = true;
+    let dec;
+    try{
+      dec = await uclPlayLegCore(oppClub, false, area, 'Entscheidungsspiel');
+      toast(`${dec.winnerSide==='me'?'Sieg':'Niederlage'} im Entscheidungsspiel gegen ${oppClub}: ${dec.myGoals}:${dec.oppGoals}${dec.wentToPK?' n.E.':dec.wentToET?' n.V.':''}`);
+    } finally { inMatch = false; }
+    newTie.decider = {winnerSide:dec.winnerSide, myGoals:dec.myGoals, oppGoals:dec.oppGoals, wentToPK:dec.wentToPK, wentToET:dec.wentToET};
+    winnerClub = dec.winnerSide==='me' ? t.myClub : oppClub;
   }
   newTie.winnerClub = winnerClub; newTie.pending = false;
   const won = winnerClub===t.myClub;
@@ -31216,13 +31228,23 @@ async function playUclKnockoutLeg(comp){
   let winnerClub;
   if(aAgg!==bAgg){ winnerClub = aAgg>bAgg ? m.aClub : m.bClub; }
   else {
-    const dec = uclMatchResultClubs(m.aClub, m.bClub, false); newM.decider = {winnerSide:dec.winnerSide}; winnerClub = dec.winnerSide==='me' ? m.aClub : m.bClub;
-    // Ohne diesen Hinweis lief die Entscheidung bei Aggregat-Gleichstand bisher komplett unsichtbar im
-    // Hintergrund ab - wer z.B. Hinspiel 1:0 gewann und Rückspiel 1:2 verlor (Aggregat 2:2), sah nur
-    // "Niederlage 1:2" und direkt danach "Ausgeschieden", ohne je zu erfahren, dass das Aggregat
-    // eigentlich unentschieden war und stattdessen eine Verlängerung/ein Elfmeterschießen entschieden
-    // hat - wirkte wie ein grundloser Sieg des Gegners statt einer fairen 50/50-Entscheidung.
-    toast(`Aggregat ${aAgg}:${bAgg} unentschieden — Verlängerung/Elfmeterschießen entscheidet: ${winnerClub===t.myClub?'Du ziehst weiter!':oppClub+' zieht weiter.'}`);
+    // Bugfix: bei Aggregat-Gleichstand lief die Entscheidung bisher komplett unsichtbar im Hintergrund
+    // per uclMatchResultClubs() ab (kein spielbares/anschaubares Match) - wer z.B. Hinspiel 1:0 gewann
+    // und Rückspiel 1:2 verlor (Aggregat 2:2), sah nur "Niederlage 1:2" und direkt danach
+    // "Ausgeschieden", ohne je eine echte Verlängerung/ein Elfmeterschießen zu erleben - wirkte wie ein
+    // grundloser Sieg des Gegners statt einer fairen Entscheidung. Jetzt läuft die Entscheidung als
+    // echtes, live animiertes Spiel über uclPlayLegCore (allowDraw:false), inklusive sichtbarer
+    // Verlängerung und ggf. Elfmeterschießen genau wie bei jedem anderen unentschiedenen
+    // Pflichtspiel-Einzelspiel.
+    toast(`Aggregat ${aAgg}:${bAgg} unentschieden — Entscheidungsspiel: Verlängerung und ggf. Elfmeterschießen entscheiden!`);
+    inMatch = true;
+    let dec;
+    try{
+      dec = await uclPlayLegCore(oppClub, false, area, 'Entscheidungsspiel');
+      toast(`${dec.winnerSide==='me'?'Sieg':'Niederlage'} im Entscheidungsspiel gegen ${oppClub}: ${dec.myGoals}:${dec.oppGoals}${dec.wentToPK?' n.E.':dec.wentToET?' n.V.':''}`);
+    } finally { inMatch = false; }
+    newM.decider = {winnerSide:dec.winnerSide, myGoals:dec.myGoals, oppGoals:dec.oppGoals, wentToPK:dec.wentToPK, wentToET:dec.wentToET};
+    winnerClub = dec.winnerSide==='me' ? t.myClub : oppClub;
   }
   newM.winnerClub = winnerClub; newM.pending = false;
   const won = winnerClub===t.myClub;
