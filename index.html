@@ -12457,221 +12457,363 @@ SBC_DEFS.forEach(sbc=>{
 let activeSBC = null;
 let ogPackTierPools = null;
 let sbcSelection = new Set();
-const DRAFT_ENTRY_COST = 10000;
-// Belohnungen deutlich angehoben gg\u00fc. der alten Tabelle (war bei 0-2 Siegen klar EV-negativ) und um
-// ein Leben (siehe DRAFT_START_LIVES) erg\u00e4nzt - beides zusammen macht einen Lauf im Erwartungswert
-// nicht mehr planm\u00e4\u00dfig ein Verlustgesch\u00e4ft, ohne die Eintrittsgeb\u00fchr selbst anzufassen.
-const DRAFT_REWARD_TABLE = {
-  0: {coins:1500, desc:'1.500 Coins Trostpreis'},
-  1: {coins:4000, desc:'4.000 Coins'},
-  2: {coins:8000, packId:null, desc:'8.000 Coins'},
-  3: {coins:14000, packId:'raregold', desc:'14.000 Coins + Rare Gold Pack'},
-  4: {coins:25000, packId:'iconmoment', desc:'25.000 Coins + Icon Moment Pack'},
-};
-const DRAFT_FORMATIONS = ['433','442','4231'];
-const DRAFT_START_LIVES = 1; // ein Fehlversuch pro Lauf ist verzeihlich, bevor der Lauf wirklich endet
-let draftState = null;
-function draftCandidatePool(slotLabel){
-  const pool = ALL_BASE.concat(ALL_SPECIAL).filter(c=>{
-    return positionEligibility(c, slotLabel)!==null && c.ov>=76 && c.ov<=91;
-  });
-  return pool.length ? pool : ALL_BASE;
+// ===== Draft-Modus (komplett neu) =====
+// Prinzip: feste 4-3-3-Formation, keine Kosten. Pro offenem Slot: 1 Land zuf\u00e4llig gezogen, davon 4 echte
+// Spieler nach der festen Rating-Verteilung unten (DRAFT_ROLL_TIERS) gezogen - mindestens 1 der 4 passt
+// garantiert auf einen der noch offenen Slots (siehe draftRollNationAndCards), man w\u00e4hlt EINEN, die
+// anderen 3 sind weg. Kein Reroll ohne Pick. Ist die Elf komplett (11/11), kann man sie verwerfen oder in
+// einen von 3 dauerhaften Slots speichern (die Karten selbst geh\u00f6ren einem trotzdem nicht - reine
+// Fantasie-Aufstellung, wie schon beim alten Draft). Ein "Neu starten"-Button wirft die KOMPLETTE
+// aktuelle Aufstellung weg, egal wie weit man schon war - kein Teil-Undo, das ist bewusst der Nervenkitzel
+// ("selbst bei drei krassen ersten Karten braucht man in den letzten noch Gl\u00fcck"). Gespeicherte Slots
+// lassen sich beliebig oft im "Spielen"-Zweig einsetzen: ein endloser K.o.-Turnierbaum ab dem
+// Achtelfinale (80 OVR) gegen +5 OVR pro weiterer Stufe, bis man einmal verliert - Belohnung nach der
+// weitesten gewonnenen Stufe. Die eigene beste gespeicherte Aufstellung (Rating) landet in einer
+// globalen Draft-Rangliste (Firestore-Collection 'draftLeaderboard', genau wie die bestehende
+// Kader-Rangliste 'squads').
+const DRAFT_ROLL_TIERS = [
+  {min:0, max:69, chance:0.103},
+  {min:70, max:79, chance:0.573},
+  {min:80, max:89, chance:0.260},
+  {min:90, max:99, chance:0.055},
+  {min:100, max:104, chance:0.0062},
+  {min:105, max:110, chance:0.0026},
+  {min:111, max:9999, chance:0.0006},
+];
+const DRAFT_STAGE_NAMES = ['Achtelfinale','Viertelfinale','Halbfinale','Finale'];
+// Ab der 5. Stufe (Index 4) gibt es kein echtes Achtelfinale/Viertelfinale/... mehr - der Baum geht
+// einfach als "Finale \u2605"/"Finale \u2605\u2605"/... immer weiter, bis der Spieler verliert.
+function draftStageLabel(stageIdx){
+  return stageIdx<DRAFT_STAGE_NAMES.length ? DRAFT_STAGE_NAMES[stageIdx] : 'Finale ' + '\u2605'.repeat(stageIdx-(DRAFT_STAGE_NAMES.length-1));
 }
-// Echte Trade-offs statt drei fast identischer Zufallskarten: ein Kandidat aus dem Top-Rating-Band,
-// einer aus der Mitte, einer aus dem unteren Band - h\u00f6heres Grund-Rating vs. (siehe
-// draftChemPreviewForCandidate) wom\u00f6glich bessere Chemie-Passung zum bisherigen Kader ist damit eine
-// echte Entscheidung statt eines reinen OV-Vergleichs.
-function draftOptionsForSlot(slotLabel){
-  const pool = draftCandidatePool(slotLabel);
-  const sorted = pool.slice().sort((a,b)=>b.ov-a.ov);
-  const topEnd = Math.max(1, Math.ceil(sorted.length*0.15));
-  const midEnd = Math.max(topEnd+1, Math.ceil(sorted.length*0.55));
-  const bands = [sorted.slice(0, topEnd), sorted.slice(topEnd, midEnd), sorted.slice(midEnd)];
-  const seen = new Set();
-  return bands.map(band=>{
-    const source = (band && band.length) ? band : sorted;
-    let cand = source[Math.floor(Math.random()*source.length)];
-    let tries = 0;
-    while(seen.has(cand.id) && tries<10){ cand = sorted[Math.floor(Math.random()*sorted.length)]; tries++; }
-    seen.add(cand.id);
-    return cand;
-  });
+function draftStageOv(stageIdx){ return 80 + stageIdx*5; }
+// 250, 500, 1000, 2000, 4000, 8000, 16000 verdoppelt sich bis Finale \u2605\u2605, danach nur noch +8000 pro
+// weiterer Stufe (sonst w\u00fcrde die Belohnung nach wenigen weiteren Sternen absurd explodieren).
+function draftStageReward(stageIdx){
+  const table = [250,500,1000,2000,4000,8000,16000];
+  return stageIdx<table.length ? table[stageIdx] : 16000 + 8000*(stageIdx-(table.length-1));
 }
-// Chemie-Vorschau (Idee "echte Chemie im Draft"): nutzt exakt dieselbe computeChemistry-Engine wie der
-// Kader-Editor, nur mit den bisherigen Draft-Picks statt einer echten Aufstellung - so lohnt sich
-// gezieltes Draften nach Verein/Liga/Nation genauso wie im echten Kader.
-function draftChemPreviewForCandidate(candidate, slotLabel){
-  const hypothetical = draftState.picks.concat([{...candidate, pos:slotLabel}]);
-  const withChem = computeChemistry(hypothetical, null);
-  return withChem[withChem.length-1].chem;
+// Alle echten Nationen mit genug Kartenmaterial (mind. 6 Karten), damit eine Landes-Ziehung so gut wie
+// nie in den \u00e4u\u00dfersten Fallback (siehe draftRollNationAndCards) rutscht. Einmal berechnet, dann gecacht.
+let DRAFT_NATIONS_CACHE = null;
+function draftAllNations(){
+  if(!DRAFT_NATIONS_CACHE){
+    const counts = new Map();
+    ALL_BASE.concat(ALL_SPECIAL).forEach(c=>{ if(c.nat) counts.set(c.nat, (counts.get(c.nat)||0)+1); });
+    DRAFT_NATIONS_CACHE = Array.from(counts.entries()).filter(([,n])=>n>=6).map(([nat])=>nat);
+  }
+  return DRAFT_NATIONS_CACHE;
 }
-function startDraft(){
-  if(inMatch || queueActive || pendingDuelId){ toast('Bitte zuerst dein aktuelles Match/deine Suche abschlie\u00dfen.'); return; }
-  if(profile.coins < DRAFT_ENTRY_COST){ toast('Nicht genug Coins f\u00fcr den Draft-Eintritt.'); return; }
-  openModal(`
-    <h2 style="margin-bottom:4px;">Draft starten?</h2>
-    <p class="hint" style="margin-top:0;margin-bottom:16px;">Kostet ${formatCoins(DRAFT_ENTRY_COST)} Coins. Du w\u00e4hlst eine Formation, draftest Spieler mit echten Chemie-Trade-offs, legst eine Taktik fest und spielst damit, bis du zweimal verlierst (ein Fehlversuch ist verzeihlich) oder 4 Siege holst. Der Kader geh\u00f6rt dir danach nicht \u2014 nur die Belohnung z\u00e4hlt.</p>
-    <button class="action-btn" id="draft-confirm-yes" style="width:100%;margin-bottom:8px;">Ja, Draft starten</button>
-    <button class="action-btn secondary" id="draft-confirm-no" style="width:100%;">Abbrechen</button>`);
-  document.getElementById('draft-confirm-no').addEventListener('click', closeModal);
-  document.getElementById('draft-confirm-yes').addEventListener('click', async ()=>{
-    closeModal();
-    await atomicCoinChange(-DRAFT_ENTRY_COST);
-    draftState = {formation:null, slotIdx:0, picks:[], wins:0, lives:DRAFT_START_LIVES, options:null, tactics:{...DEFAULT_TACTICS}};
-    renderDraftPanel();
+function draftPickTierIndex(){
+  const total = DRAFT_ROLL_TIERS.reduce((s,t)=>s+t.chance,0);
+  let r = Math.random()*total, acc = 0;
+  for(let i=0;i<DRAFT_ROLL_TIERS.length;i++){ acc += DRAFT_ROLL_TIERS[i].chance; if(r<=acc) return i; }
+  return DRAFT_ROLL_TIERS.length-1;
+}
+// Zieht 1 Karte aus `pool` nach der Rating-Verteilung oben (ohne bereits in diesem Lauf gezogene Namen,
+// siehe usedNames) - weicht auf die n\u00e4chstgelegene, in diesem Pool nicht-leere Stufe aus, falls die
+// eigentlich gezogene Stufe hier leer ist (kleine Nationen haben selten 100+-Karten).
+function draftPickWeighted(pool, usedNames){
+  const avail = pool.filter(c=>!usedNames.has(c.n));
+  if(!avail.length) return null;
+  const tierIdx = draftPickTierIndex();
+  const order = [tierIdx];
+  for(let d=1; d<DRAFT_ROLL_TIERS.length; d++){
+    if(tierIdx-d>=0) order.push(tierIdx-d);
+    if(tierIdx+d<DRAFT_ROLL_TIERS.length) order.push(tierIdx+d);
+  }
+  for(const i of order){
+    const {min,max} = DRAFT_ROLL_TIERS[i];
+    const candidates = avail.filter(c=>c.ov>=min && c.ov<=max);
+    if(candidates.length) return pick(candidates);
+  }
+  return pick(avail);
+}
+function draftOpenSlotLabels(slots){
+  return Array.from(new Set(slots.filter(s=>!s.card).map(s=>s.label)));
+}
+function draftCardFitsAnyOpenSlot(card, openLabels){
+  return openLabels.some(label=>positionEligibility(card, label)!==null);
+}
+// Rollt 1 Land + 4 Spieler dieses Landes (Positionen der 4 sind bewusst beliebig, nicht an einen
+// bestimmten Slot gebunden - man nimmt, wer passt). Garantie: mindestens 1 der 4 passt auf einen noch
+// offenen Slot, notfalls wird daf\u00fcr eine der 4 Karten gezielt ersetzt.
+function draftRollNationAndCards(slots, usedNames){
+  const openLabels = draftOpenSlotLabels(slots);
+  const nations = draftAllNations();
+  const fullPool = ALL_BASE.concat(ALL_SPECIAL);
+  let nationPool = [], nation = null, tries = 0;
+  while(tries<20){
+    nation = pick(nations);
+    nationPool = fullPool.filter(c=>c.nat===nation && !usedNames.has(c.n));
+    if(nationPool.length>=4) break;
+    tries++;
+  }
+  // \u00c4u\u00dferster Fallback (sollte bei >=6-Karten-Nationen praktisch nie greifen): ganzer Pool statt nur
+  // dieses einen Landes, damit ein Roll niemals komplett scheitert.
+  if(nationPool.length<4) nationPool = fullPool.filter(c=>!usedNames.has(c.n));
+  const localUsed = new Set(usedNames);
+  const cards = [];
+  for(let i=0;i<4;i++){
+    const card = draftPickWeighted(nationPool, localUsed) || draftPickWeighted(fullPool, localUsed);
+    if(!card) break;
+    cards.push(card);
+    localUsed.add(card.n);
+  }
+  if(!cards.some(c=>draftCardFitsAnyOpenSlot(c, openLabels))){
+    const fitPoolNat = nationPool.filter(c=>draftCardFitsAnyOpenSlot(c, openLabels) && !localUsed.has(c.n) && !cards.includes(c));
+    const fitPoolAll = fullPool.filter(c=>draftCardFitsAnyOpenSlot(c, openLabels) && !localUsed.has(c.n) && !cards.includes(c));
+    const replacement = draftPickWeighted(fitPoolNat.length ? fitPoolNat : fitPoolAll, new Set());
+    if(replacement && cards.length) cards[cards.length-1] = replacement;
+  }
+  return {nation, cards};
+}
+// Weist eine gew\u00e4hlte Karte automatisch dem ersten noch offenen Slot zu, f\u00fcr den sie berechtigt ist
+// (feste 4-3-3-Reihenfolge GK, LB, CB, CB, RB, CM, CM, CM, LW, ST, RW) - eine Karte, die gleichzeitig f\u00fcr
+// mehrere offene Slots infrage k\u00e4me (z.B. CB bei zwei offenen CB-Slots), bekommt bewusst KEINEN
+// zus\u00e4tzlichen Auswahldialog, um den Ablauf einfach zu halten.
+function draftAssignCardToSlot(state, card){
+  const openLabels = draftOpenSlotLabels(state.slots);
+  const eligibleLabels = openLabels.filter(label=>positionEligibility(card, label)!==null);
+  if(!eligibleLabels.length) return false;
+  const slot = state.slots.find(s=>!s.card && eligibleLabels.includes(s.label));
+  if(!slot) return false;
+  slot.card = card;
+  return true;
+}
+function natFlagImgHTML(nation){
+  const code = NAT_FLAG[nation];
+  return code ? `<img src="https://flagcdn.com/w40/${code}.png" alt="" style="width:20px;vertical-align:middle;border-radius:2px;">` : '';
+}
+function renderDraftSquadPreview(el, slots){
+  if(!el) return;
+  el.innerHTML = slots.map(s=>`<div class="mono" style="font-size:11px;display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.06);">
+    <span style="color:var(--muted);">${posDE(s.label)}</span>
+    <span style="color:${s.card?'var(--chalk)':'var(--muted)'};">${s.card ? `${s.card.n} (${s.card.ov})` : 'offen'}</span>
+  </div>`).join('');
+}
+function draftSquadsOf(){ return profile.draftSquads || [null,null,null]; }
+let draftRollState = null;
+let draftTournamentState = null;
+function draftStartRoll(){
+  draftRollState = {
+    slots: FORMATIONS['433'].slots.map(s=>({id:s.id, label:s.label, card:null})),
+    usedNames: new Set(),
+    currentRoll: null,
+  };
+  renderDraftPanel();
+}
+function draftRestartRoll(){
+  draftStartRoll();
+}
+async function draftSaveSquad(idx, players, rating){
+  const squads = draftSquadsOf().slice();
+  while(squads.length<3) squads.push(null);
+  squads[idx] = {players: players.map(p=>({id:p.id, pos:p.pos})), rating, savedAt:Date.now()};
+  profile.draftSquads = squads;
+  await sSet('profile', profile);
+  toast(`Aufstellung in Slot ${idx+1} gespeichert (Rating ${rating}).`);
+  await maybePublishDraftLeaderboardEntry(squads);
+  draftRollState = null;
+  renderDraftPanel();
+}
+async function deleteDraftSquad(idx){
+  const squads = draftSquadsOf().slice();
+  squads[idx] = null;
+  profile.draftSquads = squads;
+  await sSet('profile', profile);
+  renderDraftPanel();
+}
+// Nur bei einem neuen PERS\u00d6NLICHEN Bestwert ver\u00f6ffentlichen (nie schlechter \u00fcberschreiben) - dieselbe
+// Idee wie profile.draftBestWins beim alten Draft, nur jetzt als eigener globaler Leaderboard-Eintrag.
+async function maybePublishDraftLeaderboardEntry(squads){
+  const best = squads.filter(Boolean).sort((a,b)=>b.rating-a.rating)[0];
+  if(!best) return;
+  await fbReady;
+  if(!fb || !clubId) return;
+  try{
+    const ref = fb.doc(fb.db,'draftLeaderboard', profile.userId);
+    const snap = await fb.getDoc(ref);
+    if(snap.exists() && (snap.data().rating||0) >= best.rating) return;
+    await fb.setDoc(ref, {owner:profile.displayName, userId:profile.userId, crest:profile.crest, rating:best.rating, players:best.players, updatedAt:Date.now()});
+    invalidateReadCache('draft-leaderboard');
+  }catch(e){ console.warn('draft leaderboard publish failed', e); }
+}
+async function openDraftLeaderboardModal(){
+  openModal(`<h2 style="margin-bottom:10px;">Draft-Rangliste</h2><div id="draft-leaderboard-list"><p class="hint">L\u00e4dt\u2026</p></div>`);
+  const box = document.getElementById('draft-leaderboard-list');
+  await fbReady;
+  if(!fb){ if(box) box.innerHTML = '<p class="hint">Ben\u00f6tigt das Online-Backend.</p>'; return; }
+  const bannedIds = await getLeaderboardBannedUserIds();
+  let entries = [];
+  try{
+    entries = await cachedRead('draft-leaderboard', 30000, async ()=>{
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'draftLeaderboard'), fb.orderBy('rating','desc'), fb.limit(50)));
+      return snap.docs.map(d=>d.data());
+    });
+  }catch(e){ console.warn('draft leaderboard read failed', e); }
+  entries = entries.filter(e=>!LEADERBOARD_EXCLUDED_USERS.has(e.userId) && !bannedIds.has(e.userId)).slice(0,20);
+  if(!box) return;
+  if(!entries.length){ box.innerHTML = '<p class="hint">Noch keine ver\u00f6ffentlichten Draft-Aufstellungen.</p>'; return; }
+  box.innerHTML = '';
+  entries.forEach((e,i)=>{
+    const row = document.createElement('div');
+    row.className = 'leader-row';
+    const mine = e.userId===profile.userId;
+    row.innerHTML = `<span class="rk">${i+1}</span><span class="leader-crest">${renderCrestSVG(e.crest || fallbackCrestFor(e.owner), 20)}</span><span style="flex:1;${mine?'color:var(--turf-bright);font-weight:700;':''}">${e.owner||'Unbenannter Verein'}${mine?' (Du)':''}</span><span class="mono" style="color:var(--turf-bright);">${e.rating}</span>`;
+    box.appendChild(row);
   });
 }
 function renderDraftPanel(){
   const box = document.getElementById('draft-content');
   if(!box) return;
-  if(!draftState){
-    const best = profile.draftBestWins||0;
-    box.innerHTML = `
-      <p class="hint" style="margin-top:0;">W\u00e4hle eine Formation, draft dir daraus einen Kader mit echten Chemie-Trade-offs, leg eine Taktik fest und tritt damit gegen st\u00e4rker werdende Gegner an. Die Karten geh\u00f6ren dir nicht \u2014 nur die Belohnung z\u00e4hlt. Maximal 4 Siege m\u00f6glich, ein Fehlversuch ist verzeihlich (siehe Leben).</p>
-      ${best>0 ? `<p class="hint" style="margin-top:0;">Bestes Ergebnis bisher: <b style="color:var(--turf-bright);">${best}/4 Siege</b></p>` : ''}
-      <button class="action-btn" id="draft-start-btn">Draft starten (${formatCoins(DRAFT_ENTRY_COST)} Coins)</button>`;
-    document.getElementById('draft-start-btn').addEventListener('click', startDraft);
-    return;
-  }
-  if(!draftState.formation){
-    box.innerHTML = `
-      <p class="hint" style="margin-top:0;">Formation w\u00e4hlen \u2014 legt fest, welche 11 Positionen du gleich draftest.</p>
-      <div class="formation-select" id="draft-formation-select">
-        ${DRAFT_FORMATIONS.map(k=>`<div class="chip" data-f="${k}">${FORMATIONS[k].label}</div>`).join('')}
+  if(draftTournamentState){ renderDraftTournamentPanel(box); return; }
+  if(draftRollState){ renderDraftRollPanel(box); return; }
+  const squads = draftSquadsOf();
+  box.innerHTML = `
+    <p class="hint" style="margin-top:0;">Draft dir per Zufalls-Ziehungen (Land + 4 Spieler, einer passt immer) eine komplette 4-3-3-Elf zusammen \u2014 die Karten geh\u00f6ren dir nicht. Speichere sie in einen von 3 Slots und tritt damit in einem endlosen K.o.-Turnier gegen immer st\u00e4rkere Gegner an.</p>
+    <button class="action-btn" id="draft-roll-start-btn" style="margin-bottom:10px;">Neue Aufstellung draften</button>
+    <button class="action-btn secondary" id="draft-leaderboard-btn" style="margin-bottom:14px;">Draft-Rangliste ansehen</button>
+    <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;">Deine gespeicherten Draft-Aufstellungen</div>
+    <div id="draft-slots-list"></div>`;
+  document.getElementById('draft-roll-start-btn').addEventListener('click', draftStartRoll);
+  document.getElementById('draft-leaderboard-btn').addEventListener('click', openDraftLeaderboardModal);
+  const list = document.getElementById('draft-slots-list');
+  squads.forEach((sq, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'sbc-card';
+    row.style.marginBottom = '8px';
+    if(sq){
+      row.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;">
+        <div><b style="color:var(--turf-bright);">Slot ${idx+1}</b> \u2014 Rating ${sq.rating}</div>
+        <div style="display:flex;gap:6px;">
+          <button class="action-btn secondary" data-act="play" style="width:auto;padding:7px 12px;">Spielen</button>
+          <button class="action-btn secondary" data-act="delete" style="width:auto;padding:7px 12px;color:var(--danger);">L\u00f6schen</button>
+        </div>
       </div>`;
-    document.querySelectorAll('#draft-formation-select .chip').forEach(chip=>{
-      chip.addEventListener('click', ()=>{
-        draftState.formation = chip.dataset.f;
-        renderDraftPanel();
-      });
-    });
-    return;
-  }
-  const form = FORMATIONS[draftState.formation].slots;
-  if(draftState.slotIdx < form.length){
-    const slot = form[draftState.slotIdx];
-    if(!draftState.options) draftState.options = draftOptionsForSlot(slot.label);
+      row.querySelector('[data-act="play"]').addEventListener('click', ()=>startDraftTournament(idx));
+      row.querySelector('[data-act="delete"]').addEventListener('click', ()=>deleteDraftSquad(idx));
+    } else {
+      row.innerHTML = `<div class="hint" style="margin:0;">Slot ${idx+1}: leer</div>`;
+    }
+    list.appendChild(row);
+  });
+}
+function renderDraftRollPanel(box){
+  const state = draftRollState;
+  const filled = state.slots.filter(s=>s.card).length;
+  if(filled < state.slots.length){
+    if(!state.currentRoll) state.currentRoll = draftRollNationAndCards(state.slots, state.usedNames);
+    const {nation, cards} = state.currentRoll;
+    const openLabels = draftOpenSlotLabels(state.slots);
     box.innerHTML = `
-      <p class="hint" style="margin-top:0;">Position ${draftState.slotIdx+1}/${form.length}: <b style="color:var(--chalk);">${posDE(slot.label)}</b> \u2014 w\u00e4hle einen Spieler. H\u00f6heres Rating vs. bessere Chemie zum bisherigen Kader \u2014 beides z\u00e4hlt am Ende f\u00fcrs Team-Rating.</p>
-      <div class="picker-list" id="draft-pick-list"></div>`;
-    const list = document.getElementById('draft-pick-list');
-    draftState.options.forEach((card)=>{
-      const chem = draftChemPreviewForCandidate(card, slot.label);
+      <p class="hint" style="margin-top:0;">Slot ${filled+1}/11 \u2014 gezogenes Land: <b style="color:var(--chalk);">${natDE(nation)}</b> ${natFlagImgHTML(nation)}. W\u00e4hle einen der 4 Spieler (nur die passenden sind anklickbar, mindestens einer passt garantiert).</p>
+      <div class="picker-list" id="draft-roll-pick-list"></div>
+      <div id="draft-squad-preview" style="margin-top:14px;"></div>
+      <button class="action-btn secondary" id="draft-restart-btn" style="margin-top:14px;">Neu starten (komplett von vorne)</button>`;
+    const list = document.getElementById('draft-roll-pick-list');
+    cards.forEach(card=>{
+      const fits = draftCardFitsAnyOpenSlot(card, openLabels);
       const wrap = document.createElement('div');
-      wrap.style.cursor = 'pointer';
       wrap.style.textAlign = 'center';
+      wrap.style.opacity = fits ? '1' : '.35';
+      wrap.style.cursor = fits ? 'pointer' : 'not-allowed';
       wrap.appendChild(cardEl(card,'mini'));
-      const chemLabel = document.createElement('div');
-      chemLabel.className = 'mono';
-      chemLabel.style.cssText = 'font-size:11px;color:var(--muted);margin-top:2px;';
-      chemLabel.textContent = 'Chemie ' + '\u2605'.repeat(chem) + '\u2606'.repeat(3-chem);
-      wrap.appendChild(chemLabel);
-      wrap.addEventListener('click', ()=>{
-        draftState.picks.push({...card, pos:slot.label});
-        draftState.slotIdx++;
-        draftState.options = null;
-        renderDraftPanel();
-      });
+      if(fits){
+        wrap.addEventListener('click', ()=>{
+          draftAssignCardToSlot(state, card);
+          state.usedNames.add(card.n);
+          state.currentRoll = null;
+          renderDraftPanel();
+        });
+      }
       list.appendChild(wrap);
     });
+    renderDraftSquadPreview(document.getElementById('draft-squad-preview'), state.slots);
+    document.getElementById('draft-restart-btn').addEventListener('click', draftRestartRoll);
     return;
   }
-  if(!draftState.tacticsConfirmed){
-    const t = draftState.tactics;
-    box.innerHTML = `
-      <p class="hint" style="margin-top:0;">Kader komplett \u2014 leg deine Taktik f\u00fcr den Lauf fest, bevor es losgeht (sp\u00e4ter zwischen den Spielen \u00e4nderbar).</p>
-      <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Mentalit\u00e4t</div>
-      <div class="formation-select" style="margin-bottom:12px;">
-        ${Object.entries(TACTIC_MENTALITY).map(([key,tm])=>`<div class="chip draft-tactic-chip" data-group="mentality" data-key="${key}" style="${t.mentality===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${tm.desc}">${tm.label}</div>`).join('')}
-      </div>
-      <div class="lbl" style="margin-bottom:6px;color:var(--muted);font-size:11px;">Pressing</div>
-      <div class="formation-select" style="margin-bottom:14px;">
-        ${Object.entries(TACTIC_PRESSING).map(([key,tp])=>`<div class="chip draft-tactic-chip" data-group="pressing" data-key="${key}" style="${t.pressing===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${tp.desc}">${tp.label}</div>`).join('')}
-      </div>
-      <button class="action-btn" id="draft-tactics-confirm">Los geht's</button>`;
-    document.querySelectorAll('.draft-tactic-chip').forEach(chip=>{
-      chip.addEventListener('click', ()=>{
-        draftState.tactics[chip.dataset.group] = chip.dataset.key;
-        renderDraftPanel();
-      });
-    });
-    document.getElementById('draft-tactics-confirm').addEventListener('click', ()=>{
-      draftState.tacticsConfirmed = true;
-      renderDraftPanel();
-    });
-    return;
-  }
-  // squad + taktik komplett - Gauntlet-Ansicht
-  const chemPlayers = computeChemistry(draftState.picks, null);
-  const myRating = Math.round(chemPlayers.reduce((s,p)=>s+p.chemOv,0)/chemPlayers.length);
-  const doneCount = draftState.wins;
+  const players = state.slots.map(s=>({...s.card, pos:s.label}));
+  const chem = computeChemistry(players, null);
+  const rating = Math.round(chem.reduce((s,p)=>s+p.chemOv,0)/chem.length);
+  const squads = draftSquadsOf();
   box.innerHTML = `
-    <p class="hint" style="margin-top:0;">Rating ${myRating} (inkl. Chemie) \u2014 ${FORMATIONS[draftState.formation].label} \u2014 <b style="color:var(--turf-bright);">${(TACTIC_MENTALITY[draftState.tactics.mentality]||TACTIC_MENTALITY.balanced).label}</b> / <b style="color:var(--turf-bright);">${(TACTIC_PRESSING[draftState.tactics.pressing]||TACTIC_PRESSING.normal).label}</b>
-      ${draftState.lives>0 ? ` \u00b7 <span style="color:var(--turf-bright);">${draftState.lives} Leben \u00fcbrig</span>` : ''}</p>
-    <div class="sbc-progress-dots" style="margin-bottom:10px;" title="${doneCount} / 4 Siege">${Array.from({length:4},(_,i)=>`<span class="sbc-dot ${i<doneCount?'filled':''}"></span>`).join('')}</div>
-    ${draftState.wins>0 ? `<p class="hint" style="margin-top:0;">Belohnung bisher: ${DRAFT_REWARD_TABLE[draftState.wins].desc}</p>` : ''}
-    <div id="draft-match-area"></div>
-    <div id="draft-tactics-tweak" style="margin-top:10px;"></div>
-    ${draftState.wins<4 ? `<button class="action-btn" id="draft-play-btn">N\u00e4chstes Spiel (Sieg ${draftState.wins+1}/4)</button>` : `<button class="action-btn" id="draft-claim-btn">Maximalbelohnung abholen</button>`}`;
-  const playBtn = document.getElementById('draft-play-btn');
-  if(playBtn) playBtn.addEventListener('click', playDraftMatch);
-  const claimBtn = document.getElementById('draft-claim-btn');
-  if(claimBtn) claimBtn.addEventListener('click', ()=>claimDraftReward(true));
-  // Taktik zwischen den Spielen anpassbar (nicht w\u00e4hrend eines laufenden Matches) - ein echter
-  // Skill-Hebel statt einer Einmalentscheidung am Anfang
-  const tweakBox = document.getElementById('draft-tactics-tweak');
-  if(tweakBox && draftState.wins<4){
-    tweakBox.innerHTML = `<button class="action-btn secondary" id="draft-tactics-edit">Taktik anpassen</button>`;
-    document.getElementById('draft-tactics-edit').addEventListener('click', ()=>{
-      draftState.tacticsConfirmed = false;
-      renderDraftPanel();
-    });
-  }
+    <p class="hint" style="margin-top:0;">Aufstellung komplett \u2014 Rating <b style="color:var(--turf-bright);">${rating}</b> (inkl. Chemie). Verwerfen oder in einen Slot speichern?</p>
+    <div id="draft-squad-final-preview" style="margin-bottom:14px;"></div>
+    <div id="draft-save-slots"></div>
+    <button class="action-btn secondary" id="draft-discard-btn" style="margin-top:10px;">Verwerfen</button>`;
+  renderDraftSquadPreview(document.getElementById('draft-squad-final-preview'), state.slots);
+  const saveBox = document.getElementById('draft-save-slots');
+  squads.forEach((sq, idx)=>{
+    const btn = document.createElement('button');
+    btn.className = 'action-btn';
+    btn.style.marginBottom = '6px';
+    btn.textContent = sq ? `Slot ${idx+1} \u00fcberschreiben (bisher Rating ${sq.rating})` : `In Slot ${idx+1} speichern (leer)`;
+    btn.addEventListener('click', ()=>draftSaveSquad(idx, players, rating));
+    saveBox.appendChild(btn);
+  });
+  document.getElementById('draft-discard-btn').addEventListener('click', ()=>{ draftRollState = null; renderDraftPanel(); });
 }
-async function playDraftMatch(){
-  const chemPlayers = computeChemistry(draftState.picks, null).map(p=>({...p, ov:p.chemOv}));
-  const myRating = Math.round(chemPlayers.reduce((s,p)=>s+p.ov,0)/chemPlayers.length);
-  const oppRating = 74 + draftState.wins*7; // escalating difficulty each round
-  const opp = buildFixedRatingOpponent(oppRating);
-  const area = document.getElementById('draft-match-area');
+async function startDraftTournament(idx){
+  const squads = draftSquadsOf();
+  const sq = squads[idx];
+  if(!sq) return;
+  const players = sq.players.map(p=>{ const base = BY_ID.get(p.id); return base ? {...base, pos:p.pos} : null; }).filter(Boolean);
+  if(players.length!==11){ toast('Diese Draft-Aufstellung ist unvollst\u00e4ndig (eine Karte konnte nicht mehr aufgel\u00f6st werden).'); return; }
+  draftTournamentState = {slotIdx:idx, stageIdx:0, players};
+  renderDraftPanel();
+}
+function draftTournamentRating(){
+  const chem = computeChemistry(draftTournamentState.players, null);
+  return {chem, rating: Math.round(chem.reduce((s,p)=>s+p.chemOv,0)/chem.length)};
+}
+function renderDraftTournamentPanel(box){
+  const state = draftTournamentState;
+  const {rating} = draftTournamentRating();
+  const stageLabel = draftStageLabel(state.stageIdx);
+  const targetOv = draftStageOv(state.stageIdx);
+  box.innerHTML = `
+    <p class="hint" style="margin-top:0;">Draft-Elf Rating ${rating} \u2014 aktuelle Runde: <b style="color:var(--turf-bright);">${stageLabel}</b> gegen einen ${targetOv}-OVR-Gegner. Eine Niederlage beendet den Lauf sofort.</p>
+    ${state.stageIdx>0 ? `<p class="hint" style="margin-top:0;">Bisher gesichert: ${formatCoins(draftStageReward(state.stageIdx-1))} Coins.</p>` : ''}
+    <div id="draft-tourn-match-area"></div>
+    <button class="action-btn" id="draft-tourn-play-btn">${stageLabel} spielen</button>
+    <button class="action-btn secondary" id="draft-tourn-quit-btn" style="margin-top:8px;">Lauf beenden &amp; Belohnung abholen</button>`;
+  document.getElementById('draft-tourn-play-btn').addEventListener('click', playDraftTournamentMatch);
+  document.getElementById('draft-tourn-quit-btn').addEventListener('click', ()=>claimDraftTournamentReward());
+}
+async function playDraftTournamentMatch(){
+  const state = draftTournamentState;
+  const {chem, rating} = draftTournamentRating();
+  const chemPlayers = chem.map(p=>({...p, ov:p.chemOv}));
+  const targetOv = draftStageOv(state.stageIdx);
+  const opp = buildFixedRatingOpponent(targetOv);
+  const area = document.getElementById('draft-tourn-match-area');
   if(area) area.innerHTML = `
     <div class="vs-teams">
-      ${teamBlobHTML(myRating, profile.crest, 'Draft-Elf')}
+      ${teamBlobHTML(rating, profile.crest, 'Draft-Elf')}
       <div class="vs-x">VS</div>
       ${teamBlobHTML(opp.rating, opponentCrest(opp), ligaTeamAbbr(opp.owner, opp.abbr), opp.managerName)}
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  await runLocalMatch(myRating, opp, {friendly:true, overridePlayers:chemPlayers, overrideTactics:draftState.tactics, onComplete: async (outcome)=>{
+  await runLocalMatch(rating, opp, {friendly:true, overridePlayers:chemPlayers, onComplete: async (outcome)=>{
     if(outcome.result==='WIN'){
-      draftState.wins++;
-      toast(`Sieg ${draftState.wins}/4!`);
-      if(draftState.wins>=4){ toast('Maximalserie erreicht! Belohnung abholen.'); }
-      renderDraftPanel();
-    } else if(draftState.lives>0){
-      draftState.lives--;
-      toast('Niederlage \u2014 aber du hast noch ein Leben \u00fcbrig, der Lauf geht weiter!');
+      toast(`${draftStageLabel(state.stageIdx)} gewonnen!`);
+      state.stageIdx++;
       renderDraftPanel();
     } else {
-      toast('Niederlage \u2014 Draft-Lauf beendet.');
-      await claimDraftReward(false);
+      toast('Niederlage \u2014 Lauf beendet.');
+      await claimDraftTournamentReward();
     }
   }});
 }
-async function claimDraftReward(maxed){
-  const reward = DRAFT_REWARD_TABLE[draftState.wins];
-  await atomicCoinChange(reward.coins);
-  let msg = `Draft beendet mit ${draftState.wins}/4 Siegen: +${formatCoins(reward.coins)} Coins`;
-  if(reward.packId){
-    const pack = PACKS.find(p=>p.id===reward.packId);
-    if(pack){ msg += ` + ${pack.name}`; showPackOpening(pack, pack.draw(), {untradable:true}); }
-  }
-  toast(msg);
-  if(draftState.wins > (profile.draftBestWins||0)){
-    profile.draftBestWins = draftState.wins;
-    await sSet('profile', profile);
-  }
-  draftState = null;
+async function claimDraftTournamentReward(){
+  const state = draftTournamentState;
+  const wonStages = state.stageIdx;
+  const reward = wonStages>0 ? draftStageReward(wonStages-1) : 0;
+  if(reward>0) await atomicCoinChange(reward);
+  toast(reward>0 ? `Lauf beendet: +${formatCoins(reward)} Coins (weiteste Stufe: ${draftStageLabel(wonStages-1)}).` : 'Lauf beendet ohne gewonnene Runde \u2014 keine Belohnung.');
+  draftTournamentState = null;
   renderDraftPanel();
 }
 const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest', 'Vinicius-Quest':'viniciusquest'};
@@ -12742,7 +12884,7 @@ const CHALLENGE_DEFS = [
   {id:'uel', name:'Europa League', pill:'Match', accent:'#ff6b00', contentId:'uel-content', renderFn:()=>renderUclPanel('uel'),
     desc:'Wie die Champions League, aber mit den echten Europa-League-26/27-Teilnehmern — günstigerer Eintritt, geringere Belohnungen. Sieg schaltet einen Gratis-Startplatz für die Champions League frei.'},
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
-    desc:'Stelle aus Zufallsauswahlen einen Kader zusammen und spiele damit, bis du verlierst \u2014 bis zu 4 Siege m\u00f6glich. Die Karten geh\u00f6ren dir nicht.'},
+    desc:'Draft dir per Land+4-Spieler-Ziehungen eine 4-3-3-Elf (die Karten geh\u00f6ren dir nicht), speichere sie in einen von 3 Slots und spiele einen endlosen K.o.-Turnierbaum ab dem Achtelfinale gegen immer st\u00e4rkere Gegner.'},
   {id:'skillduel', name:'Skill-Duell', pill:'Arcade', accent:'#e64980', contentId:'skillduel-content', renderFn:()=>renderSkillDuelPanel(),
     desc:'Echtzeit-Arcade-1v1 gegen einen Freund (online, zwei Accounts) \u2014 jeder w\u00e4hlt eine Feldspieler-Karte aus der eigenen Sammlung. Werte bestimmen die St\u00e4rke, PlayStyles+ schalten Spezialmoves frei. Noch ohne Einsatz/Belohnung.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),
