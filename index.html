@@ -668,11 +668,9 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   50%{box-shadow:0 10px 26px rgba(0,0,0,.65), 0 0 46px 1px #ff8a3d;}
 }
 /* TOTY (Team of the Year): Design 1:1 wie Diamant (theme-dia) übernommen - derselbe Aufbau (dunkle
-   Basis, feine diagonale Streifentextur, rotierender Regenbogen-Rahmen, Breathe/Glow-Animationen) -
-   nur mit dunkelblau/hellblau/gold statt Diamants eisigem Cyan/Weiß/Lila. Das Oberflächen-Muster ist
-   bewusst NICHT Diamants eigenes .gem-facets, sondern dasselbe .pattern-layer-Muster wie bei den
-   Prime-Karten (goldener Radial-Burst + rotierende Sonnenstrahlen, siehe PATTERN_FAMILY['toty']).
-   */
+   Basis, feine diagonale Streifentextur, rotierender Regenbogen-Rahmen, Breathe/Glow-Animationen,
+   UND Diamants eigenes .gem-facets-Oberflächen-Muster, siehe isGemTier in cardEl) - nur mit
+   dunkelblau/hellblau/gold statt Diamants eisigem Cyan/Weiß/Lila. */
 .pcard.theme-toty{border:2.5px solid transparent;
   background:
     repeating-linear-gradient(115deg, rgba(255,255,255,.12) 0 2px, transparent 2px 8px) padding-box,
@@ -1034,6 +1032,11 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-dia .gem-facets .gf1{background:linear-gradient(135deg, rgba(234,252,255,.6), transparent 70%);}
 .pcard.theme-dia .gem-facets .gf2{background:linear-gradient(210deg, rgba(122,217,255,.5), transparent 65%);}
 .pcard.theme-dia .gem-facets .gf3{background:linear-gradient(320deg, rgba(201,168,255,.5), transparent 60%);}
+/* TOTY: exakt Diamants Facetten-Aufbau, nur in TOTYs eigener Palette (dunkelblau/hellblau/gold statt
+   Diamants Cyan/Weiß/Lila) - siehe isGemTier in cardEl. */
+.pcard.theme-toty .gem-facets .gf1{background:linear-gradient(135deg, rgba(61,139,255,.6), transparent 70%);}
+.pcard.theme-toty .gem-facets .gf2{background:linear-gradient(210deg, rgba(255,215,106,.5), transparent 65%);}
+.pcard.theme-toty .gem-facets .gf3{background:linear-gradient(320deg, rgba(10,30,77,.65), transparent 60%);}
 /* Wochen-MVP: the Wochen Pass exclusive - never sold, never packed, only earned by grinding to
    level 15. Trophy gold-on-black with a rotating laurel shimmer, distinct from every purchasable
    theme in the game. */
@@ -16736,7 +16739,8 @@ const PATTERN_FAMILY = {
   semifinalist:'attack', quarterfinalist:'creative',
   derbyicon:'rivalry', underdog:'underdogpattern',
   uclw:'psgpattern', uclw_mgr:'psgpattern', ballondor:'ballondorpattern', wm_mgr:'wmmgrpattern', prime:'primepattern',
-  toty:'primepattern', // "das Pattern das ist von den PRIME Karten" - bewusst dasselbe Muster wie Prime, nicht neu erfunden.
+  // toty: bewusst KEIN Eintrag mehr - TOTY nutzt jetzt Diamants .gem-facets (siehe isGemTier in
+  // cardEl), nicht mehr das Prime-Pattern-Layer-Muster.
   sigicon:'signaturepattern', eradef:'erapattern', sigseason:'sigseasonpattern',
   ogicon:'ogpattern', og_mgr:'ogpattern',
   iconswap:'iconswappattern',
@@ -16788,7 +16792,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // (clip-path polygons, not a gradient) that slowly shift, so the card looks like a slowly turning
   // cut stone - see .gem-facets below, a different mechanism from every other theme's rotating-
   // conic-gradient sparkle.
-  const isGemTier = card.theme==='saph' || card.theme==='rub' || card.theme==='dia';
+  const isGemTier = card.theme==='saph' || card.theme==='rub' || card.theme==='dia' || card.theme==='toty';
   const gemFacetsHTML = isGemTier ? `<div class="gem-facets"><i class="gf1"></i><i class="gf2"></i><i class="gf3"></i></div>` : '';
   // Ratings Reload: a big slowly-rotating circular refresh-arrow behind the photo, plus a field of small
   // shard fragments that independently fade in/out - same "own element, not the shared pattern-layer"
@@ -16823,8 +16827,9 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="breakout-halo"></div>
       ${Array.from({length:10},(_,i)=>`<i class="breakout-shard b${i+1}"></i>`).join('')}
     </div>` : '';
-  // TOTY (Team of the Year) braucht keine eigene HTML-FX mehr - nutzt das ganz normale, generische
-  // .pattern-layer-Muster (siehe PATTERN_FAMILY['toty']='primepattern', identisch zum Prime-Muster).
+  // TOTY (Team of the Year) braucht keine eigene HTML-FX mehr - nutzt jetzt exakt Diamants
+  // .gem-facets-Behandlung (siehe isGemTier oben), nur mit TOTYs eigener Farbpalette statt
+  // Diamants eisigem Cyan/Weiß/Lila (siehe .pcard.theme-toty .gem-facets weiter unten in der CSS).
   // GOAT (rarest pull in the game): a slowly-rotating golden/crimson sunburst behind the photo plus a
   // handful of thin molten-gold cracks that individually flicker across the face - own mechanism, not
   // a recolor of any other tier's FX (no falling/rising particles like Legikone/WM-Kapitän, no rotating
