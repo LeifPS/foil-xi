@@ -15495,6 +15495,36 @@ function showBootLoadFailedScreen(){
     </div>`;
   document.getElementById('boot-fail-retry').addEventListener('click', ()=>location.reload());
 }
+// Bugfix "iPad-Spieler verliert regelmäßig seinen Spielstand" (kein erneutes Login nötig, tritt beim
+// Öffnen/Fortsetzen der App auf): proceedWithClubId() (erreicht über boot()'s ?club=-URL-Fallback, genau
+// der Pfad einer wiederkehrenden Sitzung mit bereits bekanntem Vereinsnamen) ließ bei fb===null bisher
+// KOMPLETT UNGESCHÜTZT direkt init() laufen - "no backend reachable, fall back straight into local/
+// offline mode". Da window.storage in dieser Firebase-Deployment nirgends gesetzt wird, ist dieser
+// Fallback nie ein echtes alternatives Backend, sondern immer nur der leere memoryStore: init() liest
+// dann für jeden Key null zurück, hält das für "brandneuer Account" und rendert sofort ein Spiel mit
+// 0 Coins/0 Karten - OHNE jede Login-Abfrage (die wird ja komplett übersprungen) und ohne jede
+// Fehlermeldung außer dem leicht zu übersehenden Offline-Banner erst NACH dem Rendern. Genau das trifft
+// iPad-Spieler überdurchschnittlich oft: Firebase wird per dynamischem Import nachgeladen (siehe
+// initFirebase), und direkt nach dem Aufwecken aus dem Hintergrund (Homescreen-Icon, WLAN/Mobilfunk
+// verhandelt gerade neu) ist genau dieses eine Zeitfenster, in dem der Import scheitert, besonders
+// wahrscheinlich - wirkt für den Spieler wie "mein Spielstand ist weg", ist aber nur ein noch nicht
+// geladener echter Spielstand. Fix: bei fb===null (und ohne echtes window.storage-Backend) blockieren
+// wie beim analogen sGetMany-Lesefehler weiter oben, statt eine leere Fake-Session zu rendern - die
+// bereits vorhandene Hintergrund-Retry-Logik (siehe fbReady.then(...) bei initFirebase) lädt die Seite
+// ohnehin automatisch neu, sobald die Verbindung zurück ist; das Retry hier ist nur für den ungeduldigen
+// Spieler, der nicht abwarten will.
+function showOfflineBootScreen(){
+  hideBootLoader();
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:380px;text-align:center;">
+        <h2 style="margin-bottom:8px;color:var(--danger);">Keine Verbindung</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Dein Spielstand kann gerade nicht geladen werden (keine Verbindung zum Server) - das passiert z.B. direkt nach dem Aufwecken aus dem Hintergrund, während WLAN/Mobilfunk noch neu verhandeln. Er ist NICHT verloren. Die Seite versucht automatisch, es erneut zu laden, sobald die Verbindung wieder da ist.</p>
+        <button class="action-btn" id="offline-boot-retry" style="width:100%;">Jetzt erneut versuchen</button>
+      </div>
+    </div>`;
+  document.getElementById('offline-boot-retry').addEventListener('click', ()=>location.reload());
+}
 // Shown once, right after boot, whenever the session ends up with fb===null (Firestore unreachable -
 // see initFirebase's connectivity probe). Never auto-hides like toast() does: the whole risk this
 // guards against is a player not noticing they're on a local/offline fallback and continuing to play,
@@ -16037,9 +16067,21 @@ async function proceedWithClubId(id){
   try{ history.replaceState(null, '', location.pathname + '?club=' + encodeURIComponent(id)); }catch(e){}
   await fbReady;
   if(!fb){
-    // no backend reachable - can't authenticate, fall back straight into local/offline mode
-    document.getElementById('modal-root').innerHTML = '';
-    await init();
+    // Bugfix: früher "no backend reachable - fall back straight into local/offline mode" - siehe
+    // showOfflineBootScreen()'s Kommentar für den vollen Hergang. window.storage ist in dieser
+    // Deployment nie gesetzt, also war dieser Fallback nie ein echtes alternatives Backend, sondern
+    // erzeugte über den leeren memoryStore eine fälschlich-leere, komplett login-freie Session -
+    // exakt das gemeldete "Spielstand regelmäßig weg auf dem iPad" (kein erneutes Login nötig, tritt
+    // beim Öffnen/Fortsetzen der App auf). Blockieren statt eine leere Fake-Session zu rendern.
+    if(window.storage && typeof window.storage.get==='function'){
+      // Eine echte, tatsächlich konfigurierte alternative Storage-Backend-Implementierung (nicht in
+      // dieser Firebase-Deployment, aber falls doch einmal vorhanden) bleibt weiterhin ein legitimer
+      // Offline-Modus, kein Datenverlust-Risiko.
+      document.getElementById('modal-root').innerHTML = '';
+      await init();
+      return;
+    }
+    showOfflineBootScreen();
     return;
   }
   let hasPassword = false;
