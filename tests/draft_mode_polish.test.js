@@ -4,8 +4,8 @@
 //     Positionen nicht") - Anzeige (draftIsValidMoveTarget) und tatsächliches Klick-Verhalten teilen
 //     sich jetzt dieselbe Funktion, können also nicht mehr auseinanderlaufen ("Spieler switchen klappt
 //     nicht").
-// (2) die Land-Rollen-Cutscene läuft jetzt als auslaufendes Glücksrad (verlangsamt sich zum Ende hin)
-//     und landet trotzdem garantiert auf dem tatsächlich gewürfelten Land.
+// (2) die Land-Rollen-Cutscene läuft jetzt als echtes Walzen-/Slot-Machine-Reel (ein CSS-transform-
+//     Übergang statt wiederholtem JS-Ticking) und landet garantiert auf dem tatsächlich gewürfelten Land.
 // (3) 100+-Odds wurden beträchtlich gesenkt (siehe draft_mode_full_pool.test.js für die genauen Zahlen).
 // (4) zwei neue Erfolge fürs Draft-Modus: "Kaderschmied" (gespeicherte Aufstellungen) und
 //     "Turnierlegende" (gewonnene Turnier-Stufen), inkl. eigener Nametags.
@@ -60,20 +60,20 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     draftHandlePitchSlotClick(state, 'lb');
     const movedToLb = state.slots.find(s=>s.id==='lb').card === multiPosCard && state.slots.find(s=>s.id==='cb1').card === null;
 
-    // ---------- (2) Land-Cutscene: verlangsamt sich, landet aber garantiert auf dem echten Ergebnis ----------
+    // ---------- (2) Land-Cutscene (Walzen-Reel): landet exakt auf dem echten Ergebnis ----------
     draftClearRollTimers(state);
     state.currentRoll = null; state.rollPhase = 'idle'; state.revealedCount = 0;
     const roll = draftRollNationAndCards(state.slots, state.usedNames);
-    let spinDelays = [];
-    let lastDelay = null;
-    const realSetTimeout = window.setTimeout.bind(window);
-    // Delays der Spin-Kette mitschneiden, um die Verlangsamung nachzuweisen, ohne 1.5s echte Zeit zu warten.
-    window.setTimeout = (fn, ms) => { spinDelays.push(ms); return realSetTimeout(fn, 0); };
     draftRunRevealSequence(state, roll);
-    await new Promise(r => realSetTimeout(r, 50));
-    window.setTimeout = realSetTimeout;
-    const delaysIncreaseOverTime = spinDelays.length >= 3 && spinDelays[spinDelays.length-2] >= spinDelays[1];
-    await new Promise(r => setTimeout(r, 4*450 + 200)); // Aufdeck-Sequenz noch fertig laufen lassen
+    await new Promise(r => setTimeout(r, 30)); // requestAnimationFrame + Layout kurz abwarten
+    const strip = document.getElementById('draft-reel-strip');
+    const reelHasManyTiles = !!strip && strip.children.length === DRAFT_REEL_ITEM_COUNT+1;
+    // Die letzte Kachel der Walze ist immer das tatsächliche Ergebnis (siehe draftBuildReelHTML).
+    const lastTileText = strip ? strip.lastElementChild.querySelector('span').textContent : null;
+    const lastTileIsRealNation = lastTileText === natDE(roll.nation);
+    // Ein echter CSS-transform-Übergang wurde tatsächlich gestartet (kein JS-Ticking mehr).
+    const transitionStarted = !!strip && strip.style.transition.includes('transform') && strip.style.transform.startsWith('translateX');
+    await new Promise(r => setTimeout(r, 1500 + 4*450 + 300)); // Übergang + Aufdeck-Sequenz fertig laufen lassen
     const landedOnRealNation = state.currentRoll && state.currentRoll.nation === roll.nation;
 
     // ---------- (4) Erfolge: Kaderschmied (Aufstellung speichern) + Turnierlegende (Turnier-Stufen) ----------
@@ -116,7 +116,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
     return {
       highlightMatchesEligibility, cb2Highlighted, rejectedInvalidMove, movedToLb,
-      delaysIncreaseOverTime, landedOnRealNation,
+      reelHasManyTiles, lastTileIsRealNation, transitionStarted, landedOnRealNation,
       draftSquadsSavedIncremented, draftStagesWonIncremented, achievementsWellFormed,
     };
   }));
@@ -127,8 +127,10 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.cb2Highlighted, true, 'ein gültiges Ziel wird auch sichtbar (höherer z-index/Hervorhebung) markiert, nicht nur intern berechnet');
   eq(result.rejectedInvalidMove, true, 'ein Klick auf eine nicht-berechtigte Position lehnt das Verschieben ab und hebt die Auswahl korrekt auf');
   eq(result.movedToLb, true, 'das eigentliche Verschieben auf ein gültiges, leeres Ziel funktioniert zuverlässig');
-  eq(result.delaysIncreaseOverTime, true, 'die Land-Rollen-Animation verlangsamt sich zum Ende hin spürbar (Glücksrad-Gefühl) statt konstant schnell zu bleiben');
-  eq(result.landedOnRealNation, true, 'die Cutscene landet trotz der Verzögerungs-Änderung garantiert auf dem tatsächlich gewürfelten Land');
+  eq(result.reelHasManyTiles, true, 'die Cutscene zeigt ein echtes Walzen-Reel mit vielen Länder-Kacheln statt einer einzelnen wechselnden Flagge');
+  eq(result.lastTileIsRealNation, true, 'die letzte Kachel der Walze ist immer das tatsächlich gewürfelte Land');
+  eq(result.transitionStarted, true, 'die Walze läuft über einen echten CSS-transform-Übergang, nicht mehr über wiederholtes JS-Ticking');
+  eq(result.landedOnRealNation, true, 'die Cutscene landet garantiert auf dem tatsächlich gewürfelten Land');
   eq(result.draftSquadsSavedIncremented, true, 'das Speichern einer Draft-Aufstellung zählt für den "Kaderschmied"-Erfolg');
   eq(result.draftStagesWonIncremented, true, 'gewonnene Turnier-Stufen zählen für den "Turnierlegende"-Erfolg');
   eq(result.achievementsWellFormed, true, 'beide neuen Erfolge sind korrekt mit 5 Stufen, 5 Belohnungen und einem eigenen Tier-V-Nametag definiert');

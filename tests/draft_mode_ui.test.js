@@ -30,9 +30,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const pitchSlotCountIdle = document.querySelectorAll('#draft-pitch-wrap .pitch-slot').length;
 
     document.getElementById('draft-roll-go-btn').click();
-    // Sofort nach dem Klick: spinning-Phase - noch KEINE der 4 Spielerkarten sichtbar (die Länder-Animation läuft noch).
+    // Sofort nach dem Klick: spinning-Phase - noch KEINE der 4 Spielerkarten sichtbar (das Walzen-Reel läuft noch).
     const noCardsDuringSpin = !document.getElementById('draft-roll-pick-list');
-    const spinFlagPresent = !!document.getElementById('draft-spin-flagname');
+    const reelPresent = !!document.getElementById('draft-reel-strip') && document.getElementById('draft-reel-strip').children.length > 0;
 
     // Statt starrer Sleep-Zeitpunkte (anfällig für Jitter/langsame Testmaschinen) laufend pollen und
     // jeden tatsächlich auftretenden Aufdeck-Stand festhalten - beweist die STAGGERED Reihenfolge
@@ -71,7 +71,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     document.getElementById('modal-root') && (document.getElementById('modal-root').innerHTML = '');
 
     return {
-      bigNationsClearlyFavored, pitchSlotCountIdle, noCardsDuringSpin, spinFlagPresent,
+      bigNationsClearlyFavored, pitchSlotCountIdle, noCardsDuringSpin, reelPresent,
       zeroRevealedRightAfterSpin, oneRevealedMidway, allFourRevealed, atLeastOnePickable,
       pitchNowShowsOneRealCard, backToIdlePhaseAfterPick, restartedToIdleImmediately,
       stillCleanAfterOldTimersWouldHaveFired,
@@ -83,7 +83,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   ok(result.bigNationsClearlyFavored, 'bekannte Fußball-Großmächte (Deutschland/Frankreich/Argentinien/Brasilien) werden beim Land-Rollen klar häufiger gezogen als eine gewöhnliche Nation');
   eq(result.pitchSlotCountIdle, 11, 'die Aufstellung wird als echtes 11-Slot-Spielfeld angezeigt, nicht als Text-Liste');
   eq(result.noCardsDuringSpin, true, 'während der Land-Animation sind die 4 Spielerkarten noch nicht sichtbar');
-  eq(result.spinFlagPresent, true, 'die Land-Rollen-Animation zeigt eine sich drehende Flagge/Namen-Anzeige');
+  eq(result.reelPresent, true, 'die Land-Rollen-Animation zeigt ein Walzen-/Slot-Machine-Reel mit mehreren Länder-Kacheln');
   eq(result.zeroRevealedRightAfterSpin, true, 'direkt nach Ende der ~1.5s-Land-Animation ist noch keine der 4 Karten aufgedeckt');
   eq(result.oneRevealedMidway, true, 'die Karten werden nacheinander aufgedeckt (mindestens ein Zwischenstand zwischen 0 und 4 tatsächlich beobachtet), nicht alle gleichzeitig');
   eq(result.allFourRevealed, true, 'am Ende der Sequenz sind alle 4 Karten aufgedeckt');

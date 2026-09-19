@@ -74,6 +74,27 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const grayscaleClassApplied = foundUnfitCase && unfitCardEls.length > 0;
     const grayscaleFilterActuallySet = grayscaleClassApplied && getComputedStyle(unfitCardEls[0]).filter.includes('grayscale');
 
+    // (5) Regressionstest für den gemeldeten Bug "manche nicht ausgegraut, die ich gar nicht platzieren
+    // kann": eine nicht passende Karte mit 100+ OVR bekommt ZUSÄTZLICH die draft-card-reveal-epic-
+    // Animation auf dem Wrapper - deren eigene filter-Keyframes (fill-mode:both) überschrieben früher
+    // den Graustufen-Filter von draft-card-unfit, wenn beide Klassen auf demselben Element saßen. Jetzt
+    // sitzt draft-card-unfit auf der INNEREN Karte, nicht mehr auf dem animierten Wrapper.
+    const epicUnfitCard = {id:900555999, n:'Epic Unfit', pos:'ST', ov:105, pac:80,sho:90,pas:60,dri:80,defn:20,phy:75, traits:[], variant:'base', nat:'Germany'};
+    draftRollState.currentRoll = { nation:'Germany', cards:[epicUnfitCard, epicUnfitCard, epicUnfitCard, epicUnfitCard] };
+    draftRollState.revealedCount = 4;
+    draftRollState.rollPhase = 'done';
+    // Alle 11 Slots außer ST künstlich besetzt lassen (schon oben passiert), ST selbst auch besetzen,
+    // damit die Epic-Testkarte (nur ST) garantiert auf KEINEN offenen Slot mehr passt.
+    const stSlot = draftRollState.slots.find(s=>s.id==='st');
+    const stSlotWasOpen = !stSlot.card;
+    if(stSlotWasOpen) stSlot.card = {id:900555998, n:'Dummy ST', pos:'ST', ov:70, pac:60,sho:60,pas:60,dri:60,defn:60,phy:60, traits:[], variant:'base', nat:'Germany'};
+    renderDraftPanel();
+    const epicWrapper = Array.from(document.querySelectorAll('#draft-roll-pick-list > div')).find(el=>el.classList.contains('draft-card-reveal-epic'));
+    const epicWrapperHasEpicClass = !!epicWrapper;
+    const epicInnerCard = epicWrapper ? epicWrapper.querySelector('.pcard') : null;
+    const epicInnerHasUnfitClass = !!epicInnerCard && epicInnerCard.classList.contains('draft-card-unfit');
+    const epicCardActuallyGrayscale = !!epicInnerCard && getComputedStyle(epicInnerCard).filter.includes('grayscale');
+
     document.getElementById('modal-root') && (document.getElementById('modal-root').innerHTML = '');
 
     return {
@@ -82,6 +103,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       poolSizeMatchesIndexMinusWm26Variante,
       oddsSumIsOne, odds100PlusNerfed,
       foundUnfitCase, grayscaleClassApplied, grayscaleFilterActuallySet,
+      epicWrapperHasEpicClass, epicInnerHasUnfitClass, epicCardActuallyGrayscale,
     };
   }));
 
@@ -97,6 +119,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.foundUnfitCase, true, 'Testvorbedingung: ein Wurf mit mindestens einer nicht mehr passenden Karte konnte erzeugt werden');
   eq(result.grayscaleClassApplied, true, 'nicht mehr passende Karten bekommen die draft-card-unfit-Klasse');
   eq(result.grayscaleFilterActuallySet, true, 'nicht mehr passende Karten werden tatsächlich per Graustufen-Filter ausgegraut, nicht nur abgedunkelt');
+  eq(result.epicWrapperHasEpicClass, true, 'Testvorbedingung: die 105-OVR-Testkarte bekommt die draft-card-reveal-epic-Animation');
+  eq(result.epicInnerHasUnfitClass, true, 'eine nicht platzierbare 100+-Karte bekommt trotz der Epic-Aufdeck-Animation weiterhin die draft-card-unfit-Klasse (auf der inneren Karte, nicht dem animierten Wrapper)');
+  eq(result.epicCardActuallyGrayscale, true, 'eine nicht platzierbare 100+-Karte wird tatsächlich ausgegraut - die Epic-Animation überschreibt den Graustufen-Filter nicht mehr (der gemeldete Bug)');
 
   summary('Draft-Modus-Voller-Pool-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

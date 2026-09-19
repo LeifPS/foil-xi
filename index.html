@@ -2011,25 +2011,39 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .draft-roll-flag{position:relative;display:inline-block;}
 .draft-roll-flag img{box-shadow:0 0 22px rgba(61,220,132,.35);border:2px solid var(--turf-bright);}
 .draft-roll-nation-name{margin-top:10px;font-family:'Anton';font-size:17px;letter-spacing:.02em;color:var(--chalk);}
-/* Ein rotierender Ring hinter der Flagge während des Spins - macht aus dem reinen Flaggenwechsel ein
-   erkennbares "Glücksrad dreht sich"-Bild statt nur eines flackernden Bilds. */
-.draft-roll-spinning .draft-roll-flag::before{content:"";position:absolute;inset:-8px;border-radius:50%;
-  border:3px solid transparent;border-top-color:var(--turf-bright);border-right-color:#ffd76a;
-  animation:draftSpinRing .7s linear infinite;}
-.draft-roll-spinning .draft-roll-flag img{animation:draftSpinPulse .5s ease-in-out infinite;}
-.draft-roll-spinning .draft-roll-nation-name{color:var(--muted);}
-@keyframes draftSpinRing{to{transform:rotate(360deg);}}
-@keyframes draftSpinPulse{0%,100%{transform:scale(1);opacity:.8;}50%{transform:scale(1.1);opacity:1;}}
+/* Land-Cutscene, 2. Anlauf: echtes horizontales Walzen-/Slot-Machine-Reel statt einer sich
+   verlangsamenden Einzel-Flaggen-Anzeige - ein einziger CSS-transform-Übergang fährt die Walze über
+   viele zufällige Länder bis zum echten Ergebnis genau an den mittigen Indikator (siehe
+   draftStartReelAnimation). Die Randbereiche blenden per mask-image sanft aus, statt hart abzuschneiden. */
+.draft-reel-viewport{position:relative;height:92px;overflow:hidden;border-radius:12px;
+  background:linear-gradient(180deg,#0a0d0b,#141a16);border:1px solid var(--line);
+  -webkit-mask-image:linear-gradient(90deg, transparent, black 14%, black 86%, transparent);
+  mask-image:linear-gradient(90deg, transparent, black 14%, black 86%, transparent);}
+.draft-reel-strip{display:flex;align-items:center;height:100%;position:absolute;left:0;top:0;will-change:transform;}
+.draft-reel-item{display:flex;flex-direction:column;align-items:center;justify-content:center;width:90px;flex-shrink:0;gap:4px;}
+.draft-reel-item img{width:44px;height:32px;object-fit:cover;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+.draft-reel-item span{font-size:9.5px;color:var(--muted);font-family:'Anton';letter-spacing:.02em;white-space:nowrap;}
+.draft-reel-indicator{position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--turf-bright);
+  transform:translateX(-50%);box-shadow:0 0 10px var(--turf-bright);}
+.draft-reel-indicator::before,.draft-reel-indicator::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
+  border:5px solid transparent;}
+.draft-reel-indicator::before{top:-1px;border-top-color:var(--turf-bright);}
+.draft-reel-indicator::after{bottom:-1px;border-bottom-color:var(--turf-bright);}
 .draft-card-reveal{animation:draftCardReveal .4s cubic-bezier(.2,.9,.3,1.3) both;}
 /* Aufwendigeres Aufdeck-Flourish, je besser die gezogene Karte - ein "guter Pull" soll sich auch
-   sichtbar besonderer anfühlen als eine 0815-Karte, ähnlich einem echten Pack-Opening. */
+   sichtbar besonderer anfühlen als eine 0815-Karte, ähnlich einem echten Pack-Opening. Bewusst OHNE
+   eigene filter-Keyframes (nur noch box-shadow/scale/rotate) - eine Animation, die filter selbst
+   animiert, würde mit fill-mode:both den Graustufen-Filter einer gleichzeitig nicht passenden Karte
+   (.draft-card-unfit, siehe unten) am Ende wieder überschreiben und sie fälschlich bunt aussehen lassen.
+   .draft-card-unfit sitzt daher jetzt ohnehin auf der inneren Karte, nicht mehr auf diesem Wrapper. */
 .draft-card-reveal-rare{animation:draftCardRevealRare .55s cubic-bezier(.2,.9,.3,1.3) both;}
-@keyframes draftCardRevealRare{0%{opacity:0;transform:scale(.5) translateY(20px);filter:brightness(2.2);}55%{filter:brightness(1.4);}100%{opacity:1;transform:scale(1) translateY(0);filter:brightness(1);}}
-.draft-card-reveal-epic{animation:draftCardRevealEpic .7s cubic-bezier(.2,.9,.3,1.3) both;border-radius:10px;}
-@keyframes draftCardRevealEpic{0%{opacity:0;transform:scale(.4) rotate(-6deg);filter:brightness(2.6);box-shadow:0 0 0 rgba(255,215,106,0);}50%{filter:brightness(1.6);box-shadow:0 0 34px 8px rgba(255,215,106,.75);}100%{opacity:1;transform:scale(1) rotate(0deg);filter:brightness(1);box-shadow:0 0 18px 2px rgba(255,215,106,.45);}}
-/* Karten, die auf keine offene Position mehr passen, werden auf Wunsch klar erkennbar ausgegraut
-   (echtes Graustufen-Bild, nicht nur reduzierte Deckkraft wie zuvor) statt nur leicht abgedunkelt. */
-.draft-card-unfit{filter:grayscale(1) brightness(.7);opacity:.6;}
+@keyframes draftCardRevealRare{0%{opacity:0;transform:scale(.5) translateY(20px);}100%{opacity:1;transform:scale(1) translateY(0);}}
+.draft-card-reveal-epic{animation:draftCardRevealEpic .7s cubic-bezier(.2,.9,.3,1.3) both;}
+@keyframes draftCardRevealEpic{0%{opacity:0;transform:scale(.4) rotate(-6deg);box-shadow:0 0 0 rgba(255,215,106,0);}50%{box-shadow:0 0 34px 8px rgba(255,215,106,.75);}100%{opacity:1;transform:scale(1) rotate(0deg);box-shadow:0 0 18px 2px rgba(255,215,106,.45);}}
+/* Karten, die auf keine offene Position mehr passen, werden klar erkennbar ausgegraut (echtes
+   Graustufen-Bild, nicht nur reduzierte Deckkraft) - sitzt auf der INNEREN Karte (siehe cardEl-Aufruf),
+   nie auf demselben Element wie draft-card-reveal-rare/-epic (siehe deren Kommentar oben für den Grund). */
+.draft-card-unfit{filter:grayscale(1) brightness(.7) !important;opacity:.6 !important;}
 @keyframes draftCardReveal{from{opacity:0;transform:scale(.6) translateY(14px);}to{opacity:1;transform:scale(1) translateY(0);}}
 .draft-slot-card{transition:.15s;}
 .draft-move-toolbox{background:rgba(61,220,132,.06);border:1px solid rgba(61,220,132,.35);border-radius:12px;padding:12px;margin-bottom:14px;}
@@ -12783,24 +12797,37 @@ function draftScheduleReveals(state){
     state.revealTimers.push(t);
   }
 }
-// Verbesserte Land-Cutscene: statt eines konstant schnellen Flaggen-Flackerns läuft es wie ein echtes,
-// auslaufendes Glücksrad - anfangs schnell, wird zum Ende hin spürbar langsamer, und die letzten ~500ms
-// zeigen bereits garantiert das tatsächliche Ergebnis (das Rad "landet" sichtbar), statt bis zur letzten
-// Millisekunde zufällig weiterzuspringen.
-function draftRunSpinAnimation(state, finalNation, onDone){
+// Land-Cutscene komplett neu (2. Anlauf): statt einer sich verlangsamenden Flaggen-Anzeige läuft jetzt
+// ein echtes Walzen-/Slot-Machine-Reel horizontal durch und bremst sichtbar auf dem echten Ergebnis ab,
+// das exakt am Indikator in der Mitte des Viewports zum Stehen kommt - ein einziger, rein CSS-
+// getriebener transform-Übergang (kein wiederholtes JS-Umschreiben mehr), daher garantiert ruckelfrei
+// und garantiert exakt treffend.
+const DRAFT_REEL_ITEM_COUNT = 20;
+function draftReelItemHTML(nation){
+  return `<div class="draft-reel-item">${natFlagImgHTML(nation, 44)}<span>${natDE(nation)}</span></div>`;
+}
+function draftBuildReelHTML(finalNation){
   const nations = draftAllNations();
-  let elapsed = 0, delay = 70;
-  function tick(){
-    const el = document.getElementById('draft-spin-flagname');
-    const remaining = DRAFT_SPIN_MS - elapsed;
-    const nation = remaining<=500 ? finalNation : nations[Math.floor(Math.random()*nations.length)];
-    if(el) el.innerHTML = `${natFlagImgHTML(nation, 64)}<div class="draft-roll-nation-name">${natDE(nation)}</div>`;
-    if(remaining<=0){ onDone(); return; }
-    delay = Math.min(280, delay+14); // wird mit jedem Tick etwas langsamer
-    elapsed += delay;
-    state.spinTimer = setTimeout(tick, delay);
-  }
-  tick();
+  let html = '';
+  for(let i=0;i<DRAFT_REEL_ITEM_COUNT;i++) html += draftReelItemHTML(nations[Math.floor(Math.random()*nations.length)]);
+  html += draftReelItemHTML(finalNation);
+  return html;
+}
+function draftStartReelAnimation(){
+  const strip = document.getElementById('draft-reel-strip');
+  const viewport = document.getElementById('draft-reel-viewport');
+  if(!strip || !viewport || !strip.children.length) return;
+  const itemW = strip.children[0].getBoundingClientRect().width;
+  const viewportW = viewport.getBoundingClientRect().width;
+  const lastIdx = strip.children.length-1; // die letzte Kachel ist immer das echte Ergebnis
+  const targetX = viewportW/2 - (lastIdx*itemW + itemW/2);
+  strip.style.transition = 'none';
+  strip.style.transform = 'translateX(0px)';
+  void strip.offsetWidth; // Reflow erzwingen, damit der Übergang unten sicher neu (an)läuft
+  requestAnimationFrame(()=>{
+    strip.style.transition = `transform ${DRAFT_SPIN_MS}ms cubic-bezier(.1,.7,.15,1)`;
+    strip.style.transform = `translateX(${targetX}px)`;
+  });
 }
 function draftRunRevealSequence(state, rollResult, opts={}){
   state.currentRoll = rollResult;
@@ -12813,12 +12840,13 @@ function draftRunRevealSequence(state, rollResult, opts={}){
   }
   state.rollPhase = 'spinning';
   renderDraftPanel();
-  draftRunSpinAnimation(state, rollResult.nation, ()=>{
-    state.spinTimer = null;
+  draftStartReelAnimation();
+  const spinTimeout = setTimeout(()=>{
     state.rollPhase = 'revealing';
     renderDraftPanel();
     draftScheduleReveals(state);
-  });
+  }, DRAFT_SPIN_MS);
+  state.revealTimers.push(spinTimeout);
 }
 // Interaktives Rollen: das eigentliche Ergebnis (Land + 4 Spieler) steht sofort fest (siehe
 // draftRollNationAndCards), wird dem Spieler aber erst nach ~1.5s "welches Land?"-Animation und dann
@@ -13130,8 +13158,11 @@ function renderDraftRollPanel(box){
   } else if(state.rollPhase==='spinning'){
     stageHTML = `
       <div class="draft-roll-stage draft-roll-spinning">
-        ${isReplaceFlow ? `<p class="hint" style="margin:0 0 10px;">Karte wird ersetzt\u2026</p>` : ''}
-        <div class="draft-roll-flag" id="draft-spin-flagname"><div class="draft-roll-nation-name">\u2026</div></div>
+        <p class="hint" style="margin:0 0 10px;">${isReplaceFlow ? 'Karte wird ersetzt \u2014 welches Land?' : 'Welches Land?'}</p>
+        <div class="draft-reel-viewport" id="draft-reel-viewport">
+          <div class="draft-reel-strip" id="draft-reel-strip">${draftBuildReelHTML(state.currentRoll.nation)}</div>
+          <div class="draft-reel-indicator"></div>
+        </div>
       </div>`;
   } else {
     const {nation} = state.currentRoll;
@@ -13173,9 +13204,15 @@ function renderDraftRollPanel(box){
         // Aufwendigeres Aufdeck-Flourish für seltenere Ziehungen - fühlt sich mehr wie ein echtes
         // Pack-Opening an, je besser die Karte, statt jede Karte identisch reinploppen zu lassen.
         const rarityClass = card.ov>=100 ? ' draft-card-reveal-epic' : card.ov>=90 ? ' draft-card-reveal-rare' : '';
-        wrap.className = 'draft-card-reveal' + rarityClass + (fits ? '' : ' draft-card-unfit');
+        wrap.className = 'draft-card-reveal' + rarityClass;
         wrap.style.cursor = (fits && state.rollPhase==='done') ? 'pointer' : 'default';
-        wrap.appendChild(cardEl(card,'mini'));
+        const cardNode = cardEl(card,'mini');
+        // draft-card-unfit sitzt bewusst auf der INNEREN Karte, nicht auf `wrap` (das die
+        // draft-card-reveal-rare/-epic-Animation trägt) - siehe deren CSS-Kommentar: eine Animation, die
+        // filter selbst antastet, würde den Graustufen-Filter sonst mit fill-mode:both wieder
+        // überschreiben, sodass eine nicht mehr platzierbare 90+/100+-Karte fälschlich bunt bliebe.
+        if(!fits) cardNode.classList.add('draft-card-unfit');
+        wrap.appendChild(cardNode);
         if(fits && state.rollPhase==='done'){
           wrap.addEventListener('click', ()=>{
             draftClearRollTimers(state);
