@@ -16916,7 +16916,15 @@ function showSetPasswordModal(id){
   // stillschweigend "neuer Verein" anzunehmen.
   let lastId = null;
   try{ lastId = sanitizeClubId(localStorage.getItem('foil11-last-club')||'') || null; }catch(e){}
-  const mismatchWarning = (lastId && lastId!==id) ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);">Achtung: Auf diesem Ger\u00e4t warst du zuletzt bei "${lastId}" angemeldet, nicht bei "${id}". Falls du eigentlich zu deinem bestehenden Verein zur\u00fcck willst, tippfehler-frei "Anderen Verein w\u00e4hlen" und den Namen genau wie zuvor eingeben - sonst legst du hier versehentlich einen zweiten, leeren Verein an.</p>` : '';
+  // Zweiter, echter Vorfall (gemeldet: "Reset - alle Einstellungen weg, auch der Champions-League-
+  // Z\u00e4hler, so als h\u00e4tte man einen komplett neuen Verein angelegt"): genau dieser Tippfehler-Fall, aber
+  // auf einem Ger\u00e4t OHNE lokale Historie (z.B. frisch, oder Browser-Cache/-Daten gerade erst geleert -
+  // was nach einem Update wie diesem hier sogar ausdr\u00fccklich empfohlen wird). Ohne lastId feuert die
+  // obige Warnung NIE, ausgerechnet in dem Moment mit dem h\u00f6chsten Risiko f\u00fcr genau diesen Tippfehler.
+  // Ein schw\u00e4cherer, nicht alarmierender Hinweis gilt daher jetzt IMMER beim Neu-Anlegen.
+  const mismatchWarning = (lastId && lastId!==id)
+    ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);">Achtung: Auf diesem Ger\u00e4t warst du zuletzt bei "${lastId}" angemeldet, nicht bei "${id}". Falls du eigentlich zu deinem bestehenden Verein zur\u00fcck willst, tippfehler-frei "Anderen Verein w\u00e4hlen" und den Namen genau wie zuvor eingeben - sonst legst du hier versehentlich einen zweiten, leeren Verein an.</p>`
+    : (!lastId ? `<p class="hint" style="margin:0 0 14px;padding:8px 10px;border:1px solid var(--gold);border-radius:8px;color:var(--gold);">F\u00fcr "${id}" existiert noch kein Verein. Hast du bereits einen Verein, pr\u00fcfe die Schreibweise genau (Tippfehler legen sonst versehentlich einen zweiten, leeren Verein an) - andernfalls einfach fortfahren, um "${id}" neu zu erstellen.</p>` : '');
   root.innerHTML = `
     <div class="modal-overlay gate-overlay" id="gate-overlay" style="cursor:default;">
       <div class="gate-box">

@@ -11,6 +11,11 @@
 // verhindert die meisten Tippfehler von vornherein. (2) showSetPasswordModal() warnt zusätzlich
 // explizit, wenn der gerade eingegebene Name vom zuletzt genutzten abweicht, statt stillschweigend
 // "neuer Verein" anzunehmen.
+// Zweiter, tatsächlich gemeldeter Vorfall genau dieser Art ("Reset - alle Einstellungen weg, auch der
+// Champions-League-Zähler, als wäre ein komplett neuer Verein angelegt worden"): auf einem Gerät OHNE
+// jede lokale Historie (frisch, oder Browser-Daten gerade erst geleert) feuerte die obige Warnung NIE -
+// ausgerechnet im Moment mit dem höchsten Tippfehler-Risiko. (3) Ein schwächerer, nicht alarmierender
+// Hinweis erscheint daher jetzt IMMER beim Neu-Anlegen, auch ganz ohne lokale Historie.
 const { withPage } = require('./lib/browser');
 const { ok, eq, noErrors, summary } = require('./lib/assert');
 
@@ -53,18 +58,22 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     showSetPasswordModal('brandneuerverein');
     const noWarningWhenMatching = !document.querySelector('#modal-root').innerHTML.includes('Achtung');
 
-    // (2c) Ganz ohne jede Historie auf diesem Gerät (allererster Besuch überhaupt) erscheint ebenfalls
-    // keine Warnung - es gibt schlicht nichts, wovon der Name abweichen könnte.
+    // (2c) Ganz ohne jede Historie auf diesem Gerät (allererster Besuch überhaupt, oder Browser-Daten
+    // gerade erst geleert) erscheint KEINE der roten "Achtung"-Mismatch-Warnung (es gibt ja nichts,
+    // wovon der Name nachweislich abweicht) - aber (3) ein schwächerer, nicht alarmierender
+    // Rechtschreib-Hinweis erscheint trotzdem, weil genau dieser Moment das höchste Tippfehler-Risiko hat.
     localStorage.removeItem('foil11-last-club');
     showSetPasswordModal('irgendeinverein');
-    const noWarningWithoutHistory = !document.querySelector('#modal-root').innerHTML.includes('Achtung');
+    const noHardWarningWithoutHistory = !document.querySelector('#modal-root').innerHTML.includes('Achtung');
+    const softReminderShownWithoutHistory = document.querySelector('#modal-root').innerHTML.includes('irgendeinverein')
+      && document.querySelector('#modal-root').innerHTML.toLowerCase().includes('schreibweise');
 
     localStorage.removeItem('foil11-last-club');
     document.getElementById('modal-root').innerHTML = '';
 
     return {
       emptyByDefault, prefilledFromLocalStorage, explicitPrefillWins, sanitizedFallback,
-      warnsOnMismatch, noWarningWhenMatching, noWarningWithoutHistory,
+      warnsOnMismatch, noWarningWhenMatching, noHardWarningWithoutHistory, softReminderShownWithoutHistory,
     };
   }));
 
@@ -75,8 +84,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.explicitPrefillWins, true, 'ein explizit übergebener prefill hat weiterhin Vorrang vor dem localStorage-Fallback');
   eq(result.sanitizedFallback, 'meinverein-92', 'ein kaputter/manipulierter localStorage-Wert wird über sanitizeClubId() normalisiert, nie roh übernommen');
   ok(result.warnsOnMismatch, 'showSetPasswordModal warnt explizit, wenn der neue Name vom zuletzt genutzten abweicht (Tippfehler-Schutz)');
-  eq(result.noWarningWhenMatching, true, 'keine Warnung, wenn der Name exakt dem zuletzt genutzten entspricht');
-  eq(result.noWarningWithoutHistory, true, 'keine Warnung ganz ohne Geräte-Historie (echter Erstbesuch)');
+  eq(result.noWarningWhenMatching, true, 'keine rote Achtung-Warnung, wenn der Name exakt dem zuletzt genutzten entspricht');
+  eq(result.noHardWarningWithoutHistory, true, 'keine rote Achtung-Mismatch-Warnung ganz ohne Geräte-Historie (es gibt ja nichts, wovon der Name nachweislich abweicht)');
+  eq(result.softReminderShownWithoutHistory, true, 'ganz ohne Geräte-Historie erscheint trotzdem ein schwächerer Rechtschreib-Hinweis, weil dieser Moment das höchste Tippfehler-Risiko hat (Bugfix für "Reset - alle Einstellungen weg, wie ein neuer Verein")');
 
   summary('Entry-Gate-Letzter-Verein-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });
