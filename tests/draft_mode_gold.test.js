@@ -49,7 +49,10 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const deadline = Date.now() + 2200 + 4*2500 + 1500;
     while(draftRollState.rollPhase!=='done' && Date.now()<deadline){ await new Promise(r=>setTimeout(r, 40)); }
     const revealedGoldCardsAllHundredPlus = draftRollState.currentRoll.cards.every(c=>c.ov>=100);
-    const noNationShownDuringGoldReveal = !document.querySelector('.draft-roll-flag');
+    // Der Gold-Fund zeigt an derselben Stelle wie eine Länderflagge stattdessen ein goldenes
+    // Gradient-Quadrat (.draft-gold-spin-flag, kein Emoji) - hier zählt "kein echtes Land beteiligt",
+    // geprüft am Fehlen eines echten Flaggen-<img>, nicht am Fehlen des (wiederverwendeten) Wrappers.
+    const noNationShownDuringGoldReveal = !document.querySelector('.draft-roll-flag img') && !!document.querySelector('.draft-gold-spin-flag');
 
     // ---------- (3b) die Gold-Kachel ist auch unter den ganz normalen, zufällig durchlaufenden
     // Füll-Kacheln des Reels regelmäßig dabei - nicht nur, wenn sie tatsächlich das Ergebnis ist. Das
