@@ -72,12 +72,45 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       && draftRollState.currentRoll.cards.every(c=>c.ov>=100)
       && JSON.stringify(draftRollState.currentRoll.cards.map(c=>c.id)) !== JSON.stringify(cardsBeforeGoldPlayersReroll);
 
+    // ---------- (5) "Landen" und "Bekommen" sind IMMER dasselbe: die Walze bremst exakt auf der Kachel
+    // ab, die auch tatsächlich ausgezahlt wird - kein Sonderfall, wo Anzeige und echtes Ergebnis
+    // auseinanderlaufen könnten. Geprüft in beide Richtungen (Gold- UND Land-Ergebnis).
+    draftRestartRoll();
+    Math.random = () => 0; // garantierter Gold-Fund
+    draftBeginRoll();
+    Math.random = realMathRandom;
+    await new Promise(r => setTimeout(r, 30)); // requestAnimationFrame + Layout kurz abwarten
+    const goldStrip = document.getElementById('draft-reel-strip');
+    const goldFinalTile = goldStrip.querySelector('.draft-reel-final');
+    const goldTargetX = parseFloat(goldStrip.style.transform.replace(/[^\d.-]/g, ''));
+    const goldItemW = goldStrip.children[0].getBoundingClientRect().width;
+    const goldFinalIdx = Array.from(goldStrip.children).indexOf(goldFinalTile);
+    const goldViewportCenter = document.getElementById('draft-reel-viewport').getBoundingClientRect().width / 2;
+    // Die Zielposition der Walze zentriert exakt die Mitte der Ergebnis-Kachel unterm Indikator - das ist
+    // dieselbe Formel wie in draftStartReelAnimation, hier unabhängig nachgerechnet.
+    const goldAnimationTargetsTheGoldTile = Math.abs(goldTargetX - (goldViewportCenter - (goldFinalIdx*goldItemW + goldItemW/2))) < 0.5
+      && goldFinalTile.classList.contains('draft-reel-gold');
+    draftClearRollTimers(draftRollState);
+
+    draftRestartRoll();
+    Math.random = () => 0.99; // garantiert KEIN Gold-Fund
+    draftBeginRoll();
+    Math.random = realMathRandom;
+    await new Promise(r => setTimeout(r, 30));
+    const nationStrip = document.getElementById('draft-reel-strip');
+    const nationFinalTile = nationStrip.querySelector('.draft-reel-final');
+    const finalTileIsNotGoldWhenRollIsNotGold = !!nationFinalTile && !nationFinalTile.classList.contains('draft-reel-gold')
+      && draftRollState.currentRoll.isGold !== true;
+    const finalTileTextMatchesActualNation = nationFinalTile.querySelector('span').textContent === natDE(draftRollState.currentRoll.nation);
+    draftClearRollTimers(draftRollState);
+
     document.getElementById('modal-root') && (document.getElementById('modal-root').innerHTML = '');
 
     return {
       allGoldRollsValid, forcedRollIsGold, forcedRollAllHundredPlus,
       reelStripPresent, finalTileIsGold, revealedGoldCardsAllHundredPlus, noNationShownDuringGoldReveal,
       sawGoldAmongFillerTiles, goldPlayersOnlyRerollWorked,
+      goldAnimationTargetsTheGoldTile, finalTileIsNotGoldWhenRollIsNotGold, finalTileTextMatchesActualNation,
     };
   }));
 
@@ -92,6 +125,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.noNationShownDuringGoldReveal, true, 'beim Gold-Fund wird keine Länderflagge angezeigt (kein Land beteiligt)');
   eq(result.sawGoldAmongFillerTiles, true, 'die Gold-Kachel läuft regulär unter den zufälligen Füll-Kacheln jeder Walze mit, nicht nur wenn sie tatsächlich gewonnen wird');
   eq(result.goldPlayersOnlyRerollWorked, true, '"Nur Spieler neu" funktioniert auch bei einem Gold-Fund und liefert 4 neue 100+-Karten');
+  eq(result.goldAnimationTargetsTheGoldTile, true, 'die Walzen-Animation zentriert exakt auf die Gold-Kachel, wenn Gold tatsächlich gewonnen wurde - Landen und Bekommen sind garantiert dasselbe');
+  eq(result.finalTileIsNotGoldWhenRollIsNotGold, true, 'bei einem normalen Land-Ergebnis ist die Ergebnis-Kachel NIE golden markiert');
+  eq(result.finalTileTextMatchesActualNation, true, 'bei einem normalen Ergebnis zeigt die Ergebnis-Kachel exakt das Land, das auch tatsächlich gewürfelt wurde');
 
   summary('Draft-Modus-Gold-Fund-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });
