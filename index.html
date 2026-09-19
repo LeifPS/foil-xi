@@ -16296,9 +16296,47 @@ async function claimSession(){
   markTabAlive();
   return true;
 }
+// Gesetzt, sobald ein ANDERES Gerät die Sitzung übernommen hat (siehe startSessionHeartbeat) - ab dann
+// verweigert sSet() jeden weiteren Schreibvorgang dieses Tabs.
+let sessionLostToOtherDevice = false;
 function startSessionHeartbeat(){
   if(sessionHeartbeatTimer) clearInterval(sessionHeartbeatTimer);
-  sessionHeartbeatTimer = setInterval(()=>{ sSet('session', {id:mySessionId, ts:Date.now()}); markTabAlive(); }, SESSION_HEARTBEAT_MS);
+  // Der Heartbeat hat sich bisher blind alle 75s selbst als Besitzer eingetragen, OHNE je zu prüfen, ob
+  // die Sperre inzwischen an ein anderes Gerät gegangen ist. Genau daraus entsteht der gemeldete
+  // "mindestens einmal täglich wird mein Verein gelöscht"-Effekt bei zwei Apple-Geräten: iOS hält ein
+  // altes Tab (iPhone) im Hintergrund am Leben oder weckt es später wieder auf; dessen Sitzungssperre
+  // ist längst abgelaufen und das andere Gerät (iPad) hat übernommen und weitergespielt - trotzdem
+  // schreibt das alte Tab munter weiter und drückt seinen veralteten (im schlimmsten Fall leeren, weil
+  // dort beim Aufwachen ein Ladefehler zu einem "neuen" Account geführt hat) Stand über den echten.
+  // Jetzt wird vor jedem Heartbeat die Besitzverhältnis geprüft; verloren = sofort alle Writes stoppen.
+  sessionHeartbeatTimer = setInterval(async ()=>{
+    let existing = null;
+    try{ existing = await sGet('session'); }catch(e){ return; } // Lesefehler: im Zweifel NICHT aussperren
+    if(existing && existing.id && existing.id!==mySessionId && (Date.now()-existing.ts) < SESSION_STALE_MS){
+      handleSessionTakenOver();
+      return;
+    }
+    sSet('session', {id:mySessionId, ts:Date.now()});
+    markTabAlive();
+  }, SESSION_HEARTBEAT_MS);
+}
+// Ein anderes Gerät spielt jetzt diesen Verein. Dieses Tab darf ab sofort NICHTS mehr schreiben (sonst
+// überschreibt es den Fortschritt des anderen Geräts) und sagt das auch klar statt still weiterzulaufen.
+function handleSessionTakenOver(){
+  if(sessionLostToOtherDevice) return;
+  sessionLostToOtherDevice = true;
+  if(sessionHeartbeatTimer){ clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
+  try{
+    document.getElementById('modal-root').innerHTML = `
+      <div class="modal-overlay" style="cursor:default;">
+        <div class="modal-box" style="max-width:400px;text-align:center;">
+          <h2 style="margin-bottom:8px;color:var(--danger);">Auf anderem Gerät übernommen</h2>
+          <p class="hint" style="margin-top:0;margin-bottom:16px;">Dieser Verein wird gerade auf einem anderen Gerät gespielt. Damit dieses Fenster den dortigen Fortschritt nicht überschreibt, wurde das Speichern hier gestoppt. Lade die Seite neu, wenn du hier weiterspielen möchtest.</p>
+          <button class="action-btn" id="session-lost-reload" style="width:100%;">Neu laden</button>
+        </div>
+      </div>`;
+    document.getElementById('session-lost-reload').addEventListener('click', ()=>location.reload());
+  }catch(e){}
 }
 async function releaseSession(){
   if(sessionHeartbeatTimer){ clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
@@ -16343,6 +16381,25 @@ function showBootLoadFailedScreen(){
       </div>
     </div>`;
   document.getElementById('boot-fail-retry').addEventListener('click', ()=>location.reload());
+}
+// Das Save-Dokument existiert, hat aber kein profile-Feld (halb geschriebener Zustand / ein früherer
+// fehlgeschlagener Write / ein Fremdschreiber). Früher hat init() daraus kommentarlos einen frischen,
+// leeren Account gebaut und ihn über das bestehende Dokument geschrieben - der gemeldete "mein Verein
+// wird täglich gelöscht"-Effekt. Jetzt wird stattdessen blockiert und explizit auf die Wiederherstellung
+// hingewiesen: der eigentliche Spielstand liegt in aller Regel noch in der automatischen Versionshistorie
+// (saveHistory/{clubId}/versions, siehe recordSaveSnapshot) und ist über das Admin-Panel in Sekunden
+// zurückholbar - im Gegensatz zu einem stillschweigend überschriebenen Dokument.
+function showSaveIncompleteScreen(){
+  hideBootLoader();
+  document.getElementById('modal-root').innerHTML = `
+    <div class="modal-overlay" style="cursor:default;">
+      <div class="modal-box" style="max-width:420px;text-align:center;">
+        <h2 style="margin-bottom:8px;color:var(--danger);">Spielstand unvollständig</h2>
+        <p class="hint" style="margin-top:0;margin-bottom:16px;">Dein Spielstand-Dokument existiert, enthält aber gerade kein Profil. Es wurde <b>nichts überschrieben</b> - ein neuer, leerer Verein wird hier bewusst NICHT angelegt. Melde dich bei einem Administrator: der letzte Stand lässt sich über die automatische Versionshistorie wiederherstellen.</p>
+        <button class="action-btn" id="save-incomplete-retry" style="width:100%;">Erneut versuchen</button>
+      </div>
+    </div>`;
+  document.getElementById('save-incomplete-retry').addEventListener('click', ()=>location.reload());
 }
 // Bugfix "iPad-Spieler verliert regelmäßig seinen Spielstand" (kein erneutes Login nötig, tritt beim
 // Öffnen/Fortsetzen der App auf): proceedWithClubId() (erreicht über boot()'s ?club=-URL-Fallback, genau
@@ -16422,6 +16479,12 @@ async function sGetMany(keys, shared=false){
           const d = snap.exists() ? snap.data() : {};
           const out = {};
           keys.forEach(k=>{ out[k] = (k in d) ? d[k] : null; });
+          // Nicht-enumerierbar, damit nichts, was über die Keys iteriert (oder das Objekt serialisiert),
+          // diesen reinen Diagnose-Marker mitschleppt: unterscheidet "Save-Dokument existiert gar nicht"
+          // (echter neuer Account) von "Dokument existiert, aber der profile-Key fehlt/ist null" (defekt
+          // oder halb geschrieben) - siehe init(), das daraus NIE mehr stillschweigend einen frischen,
+          // leeren Account bauen darf.
+          Object.defineProperty(out, '__saveDocExisted', {value: snap.exists(), enumerable: false});
           return out;
         }catch(e){
           lastErr = e;
@@ -16474,6 +16537,10 @@ async function sGet(key, shared=false){
 // match animation has played, so the coin pill ticking up/down doesn't give the result away early.
 // The caller is responsible for calling updateCoinDisplay() itself once the reveal actually happens.
 async function atomicCoinChange(delta, extraSets={}, opts={}){
+  // Schreibt unten bewusst per updateDoc/increment AN sSet VORBEI - die Sitzungs-Übernahme-Sperre muss
+  // deshalb hier eigens greifen, sonst bliebe ein Zombie-Tab (siehe handleSessionTakenOver) ausgerechnet
+  // über den Coin-Pfad weiter schreibfähig.
+  if(sessionLostToOtherDevice) return;
   // "Verdiene X Coins" Wochen Pass quest - any positive delta counts as earned, regardless of source
   // (match reward, sale, quest/reward payout, admin grant, ...)
   const questsChanged = delta>0 ? bumpWeekPassQuest('earnCoins', delta) : false;
@@ -16521,9 +16588,42 @@ let _lastKnownCollectionLen = null;
 // this guard blocks.
 const COLLECTION_COLLAPSE_FLOOR = 20;
 const COLLECTION_COLLAPSE_MIN_PRIOR = 50;
+// Dasselbe Prinzip wie der Collection-Wächter direkt darüber, aber für profile - das war die einzige
+// große Lücke, die beim gemeldeten "mindestens einmal täglich wird mein Verein gelöscht" (iPad) übrig
+// blieb: collection war geschützt, profile (Coins, Siege, Prestige, Champions-League-Fortschritt, ...)
+// überhaupt nicht. Statt einer unscharfen "sieht leer aus"-Heuristik nutzt der Wächter die zwei Werte,
+// die im ganzen Spiel per Design NIEMALS sinken dürfen:
+//   - careerWins: ausdrücklich "never wiped by a Great Reset" (siehe init()'s Migration)
+//   - prestige:   wird ausschließlich hochgezählt (greatResetProfilePatch: prestige+1)
+// Ein frisch angelegtes Profil hat beide auf 0. Jeder Schreibversuch, der einen dieser Werte gegenüber
+// dem zuletzt bekannten guten Stand senkt, ist deshalb garantiert kein legitimer Spielzug, sondern
+// genau das Überschreiben-mit-Leerem, das hier verhindert werden soll - egal aus welchem Code-Pfad,
+// welchem Zombie-Tab oder welchem Fremdschreiber es kommt.
+let _lastKnownProfileFloor = null; // {careerWins, prestige} des zuletzt geladenen/geschriebenen Profils
+function rememberProfileFloor(p){
+  if(!p) return;
+  const cw = p.careerWins||0, pr = p.prestige||0;
+  if(!_lastKnownProfileFloor) _lastKnownProfileFloor = {careerWins:cw, prestige:pr};
+  else _lastKnownProfileFloor = {careerWins:Math.max(_lastKnownProfileFloor.careerWins, cw), prestige:Math.max(_lastKnownProfileFloor.prestige, pr)};
+}
+function profileWriteWouldCollapse(value){
+  if(!_lastKnownProfileFloor) return null;
+  if(!value || typeof value!=='object') return 'profile ist kein Objekt';
+  const cw = value.careerWins||0, pr = value.prestige||0;
+  if(cw < _lastKnownProfileFloor.careerWins) return `careerWins ${_lastKnownProfileFloor.careerWins} -> ${cw}`;
+  if(pr < _lastKnownProfileFloor.prestige) return `prestige ${_lastKnownProfileFloor.prestige} -> ${pr}`;
+  return null;
+}
 async function sSet(key, value, shared=false){
   if(!shared){
     await fbReady;
+    // Sitzung wurde von einem anderen Gerät übernommen (siehe handleSessionTakenOver) - ab hier darf
+    // dieses Tab GAR NICHTS mehr schreiben, sonst überschreibt sein veralteter Stand den Fortschritt,
+    // den der Spieler gerade auf dem anderen Gerät macht.
+    if(sessionLostToOtherDevice){
+      console.warn(`sSet('${key}', ...) übersprungen: die Sitzung läuft inzwischen auf einem anderen Gerät.`);
+      return null;
+    }
     // Refuse to persist a collapse of the player's own card collection down to near-nothing in a single
     // write. This is deliberately blunt (no per-call-site "is this shrink legitimate" allowlist) rather
     // than clever, because the exact failure mode it exists to stop is a silent one: a bug elsewhere in a
@@ -16535,10 +16635,19 @@ async function sSet(key, value, shared=false){
       toast('Speichern übersprungen: verdächtig große Änderung an deiner Kartensammlung wurde blockiert. Bitte lade die Seite neu.');
       return null;
     }
+    if(key==='profile'){
+      const collapse = profileWriteWouldCollapse(value);
+      if(collapse){
+        console.error(`sSet('profile', ...) blocked: ${collapse}. Diese Werte können im normalen Spiel nie sinken - der Schreibversuch hätte einen bestehenden Spielstand mit einem leeren/fremden überschrieben. Nichts geschrieben; der echte Spielstand auf dem Server ist unangetastet.`);
+        toast('Speichern übersprungen: ein Schreibversuch hätte deinen Spielstand zurückgesetzt und wurde blockiert. Bitte lade die Seite neu.');
+        return null;
+      }
+    }
     if(fb && clubId){
       try{
         await fb.setDoc(fb.doc(fb.db,'saves',clubId), {[key]:value}, {merge:true});
         if(key==='collection' && Array.isArray(value)) _lastKnownCollectionLen = value.length;
+        if(key==='profile') rememberProfileFloor(value);
         return true;
       }
       catch(e){ console.warn('Firestore private write failed, falling back', e); }
@@ -17160,6 +17269,19 @@ async function init(){
   }
   const _bootWasExistingAccount = !!_boot.profile; // gates recordSaveSnapshot() below - a brand new account has nothing worth a history entry yet
   profile = _boot.profile;
+  // Gemeldeter Vorfall "mindestens einmal täglich wird mein Verein gelöscht" (iPad): ein Account-Anlegen
+  // darf NUR passieren, wenn es wirklich noch gar kein Save-Dokument gibt. Existiert das Dokument, hat
+  // aber (aus welchem Grund auch immer - halb geschriebener Zustand, ein früherer fehlgeschlagener
+  // profile-Write, ein Fremdschreiber) keinen profile-Key, war das bisher nicht unterscheidbar: init()
+  // hat daraus stillschweigend einen frischen, leeren Account gebaut und ihn sofort per sSet über das
+  // bestehende Dokument geschrieben - also genau den "Verein ist plötzlich blank"-Effekt erzeugt, statt
+  // den Schaden sichtbar zu machen. Existiert das Dokument, wird jetzt hart blockiert (wiederherstellbar
+  // über die Versionshistorie im Admin-Panel), niemals überschrieben.
+  if(!profile && _boot.__saveDocExisted){
+    console.error(`init(): saves/${clubId} existiert, enthält aber kein profile-Feld - Account-Neuanlage wird NICHT durchgeführt (das würde den bestehenden Spielstand überschreiben). Nichts geschrieben.`);
+    showSaveIncompleteScreen();
+    return;
+  }
   if(!profile){
     profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:defaultGraphicsPresetForThisDevice(), showDecimalEffOv:false, pendingLigaPacks:[]};
     await sSet('profile', profile);
@@ -17229,6 +17351,9 @@ async function init(){
   // write, so the guard is armed from this session's very first collection write onward, not just from
   // its second.
   _lastKnownCollectionLen = collection.length;
+  // Gleiche Idee für profile (siehe profileWriteWouldCollapse): ab dem gerade geladenen, echten
+  // Serverstand ist der Wächter scharf, nicht erst ab dem zweiten Write dieser Sitzung.
+  rememberProfileFloor(profile);
   // WM26_VARIANTE_SPECIALS/WM26_KAPITAEN_SPECIALS (World Cup Pack cards, ids 50000000+/60000000+) are
   // built LAZILY on first use (opening that pack, or the admin card tools) to avoid thousands of
   // wasted boostBaseToOv calls at every single page load for the vast majority of players who never
