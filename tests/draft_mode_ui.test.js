@@ -37,8 +37,11 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // Statt starrer Sleep-Zeitpunkte (anfällig für Jitter/langsame Testmaschinen) laufend pollen und
     // jeden tatsächlich auftretenden Aufdeck-Stand festhalten - beweist die STAGGERED Reihenfolge
     // (0 -> 1 -> 2 -> 3 -> 4, nicht alles auf einmal), ohne von exakten Millisekunden abzuhängen.
+    // Großzügiger Deadline-Puffer: bei einem seltenen Gold-Fund (DRAFT_GOLD_CHANCE) sind ALLE 4 Karten
+    // 100+ und lösen damit jeweils die verlangsamte Legendary-Pause+Reveal-Sequenz aus (worst case ~4x
+    // 2.5s zusätzlich zur ~2.2s-Spin-Phase) - der Deadline muss auch diesen seltenen Fall sicher abdecken.
     const seenCounts = [0];
-    const deadline = Date.now() + 2200 + 4*450 + 1500;
+    const deadline = Date.now() + 2200 + 4*2500 + 1500;
     while(Date.now() < deadline){
       const c = document.querySelectorAll('#draft-roll-pick-list .draft-card-reveal').length;
       if(seenCounts[seenCounts.length-1] !== c) seenCounts.push(c);

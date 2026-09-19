@@ -34,15 +34,16 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const expectedSize = indexPool.filter(c=>c.variant!=='wm26_variante').length;
     const poolSizeMatchesIndexMinusWm26Variante = pool.length === expectedSize;
 
-    // (3) Odds: 100+ wurde auf Wunsch ("nerfe die Odds für 100+ Karten beträchtlich") stark gesenkt,
-    // seit der Draft aus dem VOLLEN Karten-Index zieht - Summe bleibt trotzdem exakt 1.
+    // (3) Odds: 100+ wurde erst auf Wunsch ("nerfe die Odds für 100+ Karten beträchtlich") stark von 12%
+    // auf 1% gesenkt, dann auf Wunsch ("mach 100+ Karten ein wenig wahrscheinlicher") wieder leicht auf
+    // ~2% angehoben - bleibt aber weit unter der ursprünglichen Fassung. Summe bleibt trotzdem exakt 1.
     const oddsSum = DRAFT_ROLL_TIERS.reduce((s,t)=>s+t.chance,0);
     const oddsSumIsOne = Math.abs(oddsSum-1) < 0.0001;
     const tier100 = DRAFT_ROLL_TIERS.find(t=>t.min===100).chance;
     const tier105 = DRAFT_ROLL_TIERS.find(t=>t.min===105).chance;
     const tier111 = DRAFT_ROLL_TIERS.find(t=>t.min===111).chance;
     const total100Plus = tier100 + tier105 + tier111;
-    const odds100PlusNerfed = total100Plus <= 0.02; // deutlich unter der vorigen Fassung (12%)
+    const odds100PlusStillFarBelowOriginal = total100Plus > 0.015 && total100Plus <= 0.03; // ~2%, weit unter den ursprünglichen 12%
 
     // (4) Graues Ausgrauen nicht mehr passender Karten - echte UI-Prüfung über die Roll-Klasse.
     const def = CHALLENGE_DEFS.find(d=>d.id==='draft');
@@ -101,7 +102,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       hasSpecialVariantsBeyondBase, specialVariantsPresent,
       wm26VarianteInPool, wm26KapitaenInPool, wm26KapitaenAlsoInIndex,
       poolSizeMatchesIndexMinusWm26Variante,
-      oddsSumIsOne, odds100PlusNerfed,
+      oddsSumIsOne, odds100PlusStillFarBelowOriginal,
       foundUnfitCase, grayscaleClassApplied, grayscaleFilterActuallySet,
       epicWrapperHasEpicClass, epicInnerHasUnfitClass, epicCardActuallyGrayscale,
     };
@@ -115,7 +116,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.wm26KapitaenInPool, result.wm26KapitaenAlsoInIndex, 'WM-Kapitän-Karten (variant wm26_kapitaen) bleiben dagegen VOLLSTÄNDIG im Draft-Pool enthalten');
   eq(result.poolSizeMatchesIndexMinusWm26Variante, true, 'der Draft-Pool entspricht exakt dem Karten-Index minus der WM-Variante-Karten, keine anderen Abweichungen');
   eq(result.oddsSumIsOne, true, 'die Odds-Verteilung summiert sich weiterhin exakt auf 100%');
-  eq(result.odds100PlusNerfed, true, 'die 100+/105+/111+ Odds wurden gegenüber der vorherigen Fassung stark gesenkt (zusammen ≤2%, vorher 12%)');
+  eq(result.odds100PlusStillFarBelowOriginal, true, 'die 100+/105+/111+ Odds liegen zusammen bei ~2% (leicht angehoben von vorher 1%), weit unter der ursprünglichen Fassung (12%)');
   eq(result.foundUnfitCase, true, 'Testvorbedingung: ein Wurf mit mindestens einer nicht mehr passenden Karte konnte erzeugt werden');
   eq(result.grayscaleClassApplied, true, 'nicht mehr passende Karten bekommen die draft-card-unfit-Klasse');
   eq(result.grayscaleFilterActuallySet, true, 'nicht mehr passende Karten werden tatsächlich per Graustufen-Filter ausgegraut, nicht nur abgedunkelt');

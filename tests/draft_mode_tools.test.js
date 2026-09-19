@@ -26,6 +26,13 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       draftStartRoll();
       return draftRollState;
     }
+    // Statt eines festen Sleeps (der bei einem seltenen Gold-Fund oder mehreren 100+-Karten in einem Zug
+    // - beide verlangsamen das Aufdecken deutlich, siehe DRAFT_GOLD_CHANCE/DRAFT_LEGENDARY_* - zu kurz
+    // sein könnte) wird aktiv auf rollPhase==='done' gewartet, mit großzügigem Timeout als Absicherung.
+    async function waitForRollDone(state, maxMs=16000){
+      const deadline = Date.now() + maxMs;
+      while(state.rollPhase!=='done' && Date.now() < deadline){ await new Promise(r=>setTimeout(r, 40)); }
+    }
 
     // ---------- (1a) Eine Karte, die NUR EINEN offenen Slot spielen kann, wird direkt ohne Modal zugewiesen ----------
     let state = freshState();
@@ -63,11 +70,11 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // ---------- (3a) Kompletter Neu-Wurf (1x pro Lauf) ----------
     state = freshState();
     draftBeginRoll();
-    await new Promise(r=>setTimeout(r, 2200 + 4*450 + 300)); // bis Phase 'done' durchlaufen lassen
+    await waitForRollDone(state); // bis Phase 'done' durchlaufen lassen
     const firstRollCards = state.currentRoll.cards.map(c=>c.id);
     const rerollsFullBefore = state.rerolls.full;
     draftUseFullReroll();
-    await new Promise(r=>setTimeout(r, 2200 + 4*450 + 300));
+    await waitForRollDone(state);
     const secondRollCards = state.currentRoll.cards.map(c=>c.id);
     const fullRerollConsumed = state.rerolls.full === rerollsFullBefore - 1;
     const fullRerollGaveDifferentOffer = JSON.stringify(firstRollCards) !== JSON.stringify(secondRollCards);
@@ -80,7 +87,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const nationBeforePlayersReroll = state.currentRoll.nation;
     const cardsBeforePlayersReroll = state.currentRoll.cards.map(c=>c.id);
     draftUsePlayersOnlyReroll();
-    await new Promise(r=>setTimeout(r, 4*450 + 300)); // kein Spin, nur die Aufdeck-Sequenz
+    await waitForRollDone(state); // kein Spin, nur die Aufdeck-Sequenz
     const nationStayedSame = state.currentRoll.nation === nationBeforePlayersReroll;
     const playersActuallyChanged = JSON.stringify(state.currentRoll.cards.map(c=>c.id)) !== JSON.stringify(cardsBeforePlayersReroll);
     const playersOnlyRerollConsumed = state.rerolls.playersOnly === 0;
@@ -106,7 +113,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     cardWraps[filledIdx].click();
     const confirmModalShown = !!document.getElementById('draft-confirm-replace-yes');
     document.getElementById('draft-confirm-replace-yes').click();
-    await new Promise(r=>setTimeout(r, 2200 + 4*450 + 300));
+    await waitForRollDone(state);
     const replaceRollActive = !!(state.currentRoll && state.currentRoll.isReplace);
     // ALLE 4 beim Ersetzen-Wurf gezogenen Kandidaten müssen exakt auf DIESE eine Position passen.
     const allFourFitExactSlot = state.currentRoll.cards.every(c => positionEligibility(c, filledSlotLabel)!==null);
