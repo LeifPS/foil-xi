@@ -12858,7 +12858,10 @@ const DRAFT_REEL_ITEM_COUNT = 20, DRAFT_REEL_TRAILING_COUNT = 8;
 // landet die Walze am Ende genau darauf, gibt es den Gold-Fund - exakt derselbe Mechanismus wie bei
 // jedem anderen Land.
 const DRAFT_GOLD_TILE = 'GOLD';
-const DRAFT_REEL_GOLD_TILE_CHANCE = 0.08;
+// Dieselbe Wahrscheinlichkeit wie DRAFT_GOLD_CHANCE (die tatsächliche Gewinnchance) - die Kachel soll im
+// Reel nicht häufiger auftauchen, als man sie wirklich gewinnen kann, sonst wirkt der Gold-Fund optisch
+// viel häufiger als er tatsächlich ist.
+const DRAFT_REEL_GOLD_TILE_CHANCE = DRAFT_GOLD_CHANCE;
 function draftReelItemHTML(nation, isFinal){
   const cls = 'draft-reel-item' + (nation===DRAFT_GOLD_TILE ? ' draft-reel-gold' : '') + (isFinal ? ' draft-reel-final' : '');
   const inner = nation===DRAFT_GOLD_TILE
