@@ -95,6 +95,44 @@ der bleibt stabil, solange der jeweilige Abschnitts-Kommentar nicht umformuliert
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<!-- Active stale-cache self-heal, runs before anything else in <head>: the meta tags above are only
+     honored by SOME clients (notably NOT reliably by iOS Safari for the top-level document itself), so
+     a browser can still boot from an old cached copy of this exact file after a deploy - which is
+     exactly what caused several real, confirmed incidents this session (an old client hitting a
+     since-fixed bug where a failed/transient Firestore read on boot got silently treated as "brand new
+     account" and wiped a real save, see sGetMany's comment further down). A cheap HEAD request (no body
+     download, this file is multiple MB) compares the server's current ETag/Last-Modified against the
+     one this browser last saw for this exact page; a mismatch means a newer deploy exists but THIS load
+     came from cache, so it forces one real network fetch by navigating to a cache-busted URL (a
+     different query string bypasses most static hosts' default URL-keyed caching). Silently does
+     nothing if the host doesn't send either header, or the request fails (offline) - never blocks boot. -->
+<script>
+// Named (not a bare IIFE) so tests can call it directly with fetch/the reload step stubbed, instead of
+// relying on the timing of a real network navigation. The actual navigation is one line
+// (foil11ForceReload) deliberately factored out onto window - Location's own methods are non-
+// configurable in real browsers (can't just reassign location.replace from a test), so this is the
+// override seam tests use instead.
+window.foil11ForceReload = function(url){ location.replace(url); };
+function foil11CheckStaleCache(){
+  try{
+    var VERSION_KEY = 'foil11-last-seen-version', RELOAD_GUARD_KEY = 'foil11-cachebust-inflight';
+    if(sessionStorage.getItem(RELOAD_GUARD_KEY)){ sessionStorage.removeItem(RELOAD_GUARD_KEY); return; } // already force-reloaded once this tab session - never loop
+    fetch(location.pathname, {method:'HEAD', cache:'no-store'}).then(function(res){
+      var v = res.headers.get('etag') || res.headers.get('last-modified');
+      if(!v) return;
+      var last = localStorage.getItem(VERSION_KEY);
+      localStorage.setItem(VERSION_KEY, v);
+      if(last && last!==v){
+        sessionStorage.setItem(RELOAD_GUARD_KEY, '1');
+        var url = new URL(location.href);
+        url.searchParams.set('_v', String(Date.now()));
+        window.foil11ForceReload(url.toString());
+      }
+    }).catch(function(){});
+  }catch(e){}
+}
+foil11CheckStaleCache();
+</script>
 <title>FOIL ELEVEN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
