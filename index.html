@@ -13088,7 +13088,7 @@ function renderDraftPanel(){
   if(draftRollState){ renderDraftRollPanel(box); return; }
   const squads = draftSquadsOf();
   box.innerHTML = `
-    <p class="hint" style="margin-top:0;">Draft dir per Zufalls-Ziehungen (Land + 4 Spieler, einer passt immer) eine komplette 4-3-3-Elf zusammen \u2014 die Karten geh\u00f6ren dir nicht. Speichere sie in einen von 3 Slots und tritt damit in einem endlosen K.o.-Turnier gegen immer st\u00e4rkere Gegner an.</p>
+    <p class="hint" style="margin-top:0;">Draft dir per Zufalls-Ziehungen (Land + 4 Spieler, einer passt immer) eine komplette 4-3-3-Elf zusammen \u2014 die Karten geh\u00f6ren dir nicht. Speichere sie in einen von 3 Slots und tritt damit in einem endlosen K.o.-Turnier gegen immer st\u00e4rkere Gegner an. <b style="color:var(--gold);">Wichtig:</b> die Coins gibt es nur, wenn du rechtzeitig \u201eauscashst\u201c \u2014 verlierst du ein Match, bevor du abgeholt hast, ist die gesamte Belohnung weg.</p>
     <div style="display:flex;gap:10px;margin-bottom:16px;">
       <button class="action-btn" id="draft-roll-start-btn" style="flex:1;">\ud83c\udfaf Neue Aufstellung draften</button>
       <button class="action-btn secondary" id="draft-leaderboard-btn" style="flex:1;">\ud83c\udfc6 Rangliste</button>
@@ -13278,11 +13278,11 @@ function renderDraftTournamentPanel(box){
     <div class="draft-roll-stage" style="margin-bottom:14px;">
       <div class="draft-roll-nation-name" style="font-size:17px;">${stageLabel}</div>
       <p class="hint" style="margin:4px 0 0;">gegen einen <b style="color:var(--chalk);">${targetOv}-OVR</b>-Gegner \u2014 eine Niederlage beendet den Lauf sofort.</p>
-      ${state.stageIdx>0 ? `<p class="hint" style="margin:6px 0 0;">Bisher gesichert: <b style="color:var(--gold);">${formatCoins(draftStageReward(state.stageIdx-1))} Coins</b></p>` : ''}
+      <p class="hint" style="margin:6px 0 0;color:var(--gold);">${state.stageIdx>0 ? `Bereit zum Auscashen: <b>${formatCoins(draftStageReward(state.stageIdx-1))} Coins</b> \u2014 nur wenn du JETZT abholst, bevor du verlierst!` : 'Noch keine Stufe gewonnen \u2014 bei einer Niederlage jetzt g\u00e4be es 0 Coins.'}</p>
     </div>
     <div id="draft-tourn-match-area"></div>
     <button class="action-btn" id="draft-tourn-play-btn" style="width:100%;">${stageLabel} spielen</button>
-    <button class="action-btn secondary" id="draft-tourn-quit-btn" style="margin-top:8px;width:100%;">Lauf beenden &amp; Belohnung abholen</button>`;
+    <button class="action-btn secondary" id="draft-tourn-quit-btn" style="margin-top:8px;width:100%;">${state.stageIdx>0 ? `\ud83d\udcb0 Jetzt auscashen (${formatCoins(draftStageReward(state.stageIdx-1))} Coins)` : 'Lauf ohne Belohnung abbrechen'}</button>`;
   renderDraftPitch(document.getElementById('draft-tourn-pitch'), state.players.map(p=>({id:p.slotId, card:p})));
   document.getElementById('draft-tourn-play-btn').addEventListener('click', playDraftTournamentMatch);
   document.getElementById('draft-tourn-quit-btn').addEventListener('click', ()=>claimDraftTournamentReward());
@@ -13308,11 +13308,15 @@ async function playDraftTournamentMatch(){
       state.stageIdx++;
       renderDraftPanel();
     } else {
-      toast('Niederlage \u2014 Lauf beendet.');
-      await claimDraftTournamentReward();
+      // Wichtige Regel (klar kommuniziert, siehe renderDraftTournamentPanel/renderDraftPanel-Hinweise):
+      // Coins gibt es NUR, wenn VOR einer Niederlage aktiv per "Jetzt auscashen" abgeholt wurde - eine
+      // Niederlage selbst zahlt NICHTS aus, egal wie viele Stufen zuvor gewonnen wurden.
+      await draftTournamentLoseWithoutPayout();
     }
   }});
 }
+// Aktives Auscashen VOR einer Niederlage - einzige M\u00f6glichkeit, \u00fcberhaupt Coins aus einem Lauf zu
+// bekommen. Zahlt die Belohnung der weitesten bereits gewonnenen Stufe aus.
 async function claimDraftTournamentReward(){
   const state = draftTournamentState;
   const wonStages = state.stageIdx;
@@ -13323,7 +13327,21 @@ async function claimDraftTournamentReward(){
   // sonst ginge der Fortschritt f\u00fcr den "Turnierlegende"-Erfolg beim n\u00e4chsten Neuladen wieder verloren.
   applyAchievementDeltas({draftStagesWon: wonStages});
   await sSet('profile', profile);
-  toast(reward>0 ? `Lauf beendet: +${formatCoins(reward)} Coins (weiteste Stufe: ${draftStageLabel(wonStages-1)}).` : 'Lauf beendet ohne gewonnene Runde \u2014 keine Belohnung.');
+  toast(reward>0 ? `Ausgecasht: +${formatCoins(reward)} Coins (weiteste Stufe: ${draftStageLabel(wonStages-1)}).` : 'Lauf abgebrochen ohne gewonnene Runde \u2014 keine Belohnung.');
+  draftTournamentState = null;
+  renderDraftPanel();
+}
+// Eine Niederlage, OHNE dass zuvor ausgecasht wurde - zahlt bewusst NICHTS aus (siehe obige Regel), auch
+// wenn zuvor mehrere Stufen gewonnen wurden. Der Fortschritt f\u00fcr den "Turnierlegende"-Erfolg (gewonnene
+// Stufen) z\u00e4hlt trotzdem, da er die sportliche Leistung misst, nicht die Auszahlung.
+async function draftTournamentLoseWithoutPayout(){
+  const state = draftTournamentState;
+  const wonStages = state.stageIdx;
+  applyAchievementDeltas({draftStagesWon: wonStages});
+  await sSet('profile', profile);
+  toast(wonStages>0
+    ? `Niederlage \u2014 keine Belohnung, weil nicht rechtzeitig ausgecasht wurde (${draftStageLabel(wonStages-1)} erreicht, aber nicht abgeholt).`
+    : 'Niederlage \u2014 keine Coins.');
   draftTournamentState = null;
   renderDraftPanel();
 }
@@ -13395,7 +13413,7 @@ const CHALLENGE_DEFS = [
   {id:'uel', name:'Europa League', pill:'Match', accent:'#ff6b00', contentId:'uel-content', renderFn:()=>renderUclPanel('uel'),
     desc:'Wie die Champions League, aber mit den echten Europa-League-26/27-Teilnehmern — günstigerer Eintritt, geringere Belohnungen. Sieg schaltet einen Gratis-Startplatz für die Champions League frei.'},
   {id:'draft', name:'Draft-Modus', pill:'Match', accent:'#4da8ff', contentId:'draft-content', renderFn:()=>renderDraftPanel(),
-    desc:'Draft dir per Land+4-Spieler-Ziehungen eine 4-3-3-Elf (die Karten geh\u00f6ren dir nicht), speichere sie in einen von 3 Slots und spiele einen endlosen K.o.-Turnierbaum ab dem Achtelfinale gegen immer st\u00e4rkere Gegner.'},
+    desc:'Draft dir per Land+4-Spieler-Ziehungen eine 4-3-3-Elf (die Karten geh\u00f6ren dir nicht), speichere sie in einen von 3 Slots und spiele einen endlosen K.o.-Turnierbaum ab dem Achtelfinale gegen immer st\u00e4rkere Gegner. Coins gibt es NUR, wenn du VOR einer Niederlage auscashst \u2014 verlierst du, ist die Belohnung komplett futsch.'},
   {id:'skillduel', name:'Skill-Duell', pill:'Arcade', accent:'#e64980', contentId:'skillduel-content', renderFn:()=>renderSkillDuelPanel(),
     desc:'Echtzeit-Arcade-1v1 gegen einen Freund (online, zwei Accounts) \u2014 jeder w\u00e4hlt eine Feldspieler-Karte aus der eigenen Sammlung. Werte bestimmen die St\u00e4rke, PlayStyles+ schalten Spezialmoves frei. Noch ohne Einsatz/Belohnung.'},
   {id:'ballondor', name:"Ballon d'Or Herausforderung", pill:'Match', accent:'var(--gold)', contentId:'ballondor-content', renderFn:()=>renderBallonDorPanel(),

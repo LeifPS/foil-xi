@@ -94,12 +94,29 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     await claimDraftTournamentReward();
     atomicCoinChange = realAtomicCoinChange;
 
+    // ---------- (7) Geld gibt es NUR beim aktiven Auscashen VOR einer Niederlage - eine Niederlage
+    // selbst zahlt NICHTS aus, auch wenn zuvor mehrere Stufen gewonnen wurden.
+    await startDraftTournament(0);
+    draftTournamentState.stageIdx = 3; // dieselben 3 gewonnenen Stufen wie oben, diesmal aber verloren statt ausgecasht
+    const coinsBeforeLoss = profile.coins;
+    const statBeforeLoss = profile.achievementStats.draftStagesWon||0;
+    const coinCalls3 = [];
+    atomicCoinChange = async (delta) => { coinCalls3.push(delta); profile.coins += delta; };
+    await draftTournamentLoseWithoutPayout();
+    atomicCoinChange = realAtomicCoinChange;
+    const noPayoutOnLossDespiteWonStages = coinCalls3.length === 0 && profile.coins === coinsBeforeLoss;
+    const tournamentStateResetAfterLoss = draftTournamentState === null;
+    // Der sportliche Fortschritt (gewonnene Stufen) für den "Turnierlegende"-Erfolg zählt trotzdem, auch
+    // ohne Auszahlung - er misst die Leistung, nicht das Geld.
+    const achievementStillCountedOnLoss = (profile.achievementStats.draftStagesWon||0) === statBeforeLoss + 3;
+
     return {
       oddsSumIsOne, stageLabels, stageOvs, stageRewards,
       allRollsHadAFit, fullSquadFilled, noDuplicatePlayers, restartWipesEverything,
       savedCorrectly, collectionUnchanged, rollStateResetAfterSave,
       tournamentStartedAtStage0, rewardForThreeWins, tournamentStateResetAfterClaim,
       noRewardWithoutAWin: coinCalls2.length === 0,
+      noPayoutOnLossDespiteWonStages, tournamentStateResetAfterLoss, achievementStillCountedOnLoss,
     };
   }));
 
@@ -120,6 +137,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.rewardForThreeWins, 1000, '3 gewonnene Stufen (bis Halbfinale) zahlen die Belohnung der zuletzt gewonnenen Stufe (draftStageReward(2)=1000)');
   eq(result.tournamentStateResetAfterClaim, true, 'nach dem Abholen der Belohnung ist der Turnierlauf beendet/zurückgesetzt');
   eq(result.noRewardWithoutAWin, true, 'ein Lauf ohne eine einzige gewonnene Stufe zahlt keine Belohnung aus');
+  eq(result.noPayoutOnLossDespiteWonStages, true, 'eine Niederlage OHNE vorheriges Auscashen zahlt nichts aus, selbst nach mehreren gewonnenen Stufen');
+  eq(result.tournamentStateResetAfterLoss, true, 'nach einer Niederlage ohne Auszahlung ist der Turnierlauf trotzdem beendet/zurückgesetzt');
+  eq(result.achievementStillCountedOnLoss, true, 'der "Turnierlegende"-Fortschritt (gewonnene Stufen) zählt auch ohne Auszahlung, da er die sportliche Leistung misst');
 
   summary('Draft-Modus-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

@@ -69,5 +69,8 @@ service cloud.firestore {
     match /networth/{clubId} { allow read, write: if true; }
     match /legacy/{clubId} { allow read, write: if true; }
     match /tournaments/{tournamentId} { allow read, write: if true; }
+    // Draft-Modus-Rangliste (maybePublishDraftLeaderboardEntry/openDraftLeaderboardModal) - ein Dokument
+    // pro Nutzer (Doc-ID = profile.userId), dieselbe offene Regel wie networth/legacy/tournaments.
+    match /draftLeaderboard/{userId} { allow read, write: if true; }
   }
 }
