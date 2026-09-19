@@ -27,10 +27,14 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     draftRunRevealSequence(state, roll);
     await new Promise(r => setTimeout(r, 30)); // requestAnimationFrame + Layout kurz abwarten
     const strip = document.getElementById('draft-reel-strip');
-    const reelHasManyTiles = !!strip && strip.children.length === DRAFT_REEL_ITEM_COUNT+1;
-    // Die letzte Kachel der Walze ist immer das tatsächliche Ergebnis (siehe draftBuildReelHTML).
-    const lastTileText = strip ? strip.lastElementChild.querySelector('span').textContent : null;
-    const lastTileIsRealNation = lastTileText === natDE(roll.nation);
+    // Die Ergebnis-Kachel steht bewusst NICHT am Ende der Walze, sondern hat noch ein paar irrelevante
+    // Kacheln danach (siehe draftBuildReelHTML-Kommentar: sonst würde das fehlende Ende der Walze das
+    // Ergebnis schon vor der eigentlichen Verlangsamung verraten).
+    const reelHasManyTiles = !!strip && strip.children.length === DRAFT_REEL_ITEM_COUNT+1+DRAFT_REEL_TRAILING_COUNT;
+    const finalTile = strip ? strip.querySelector('.draft-reel-final') : null;
+    const finalTileIsNotLastChild = !!finalTile && finalTile !== strip.lastElementChild;
+    const finalTileText = finalTile ? finalTile.querySelector('span').textContent : null;
+    const lastTileIsRealNation = finalTileText === natDE(roll.nation);
     // Ein echter CSS-transform-Übergang wurde tatsächlich gestartet (kein JS-Ticking mehr).
     const transitionStarted = !!strip && strip.style.transition.includes('transform') && strip.style.transform.startsWith('translateX');
     await new Promise(r => setTimeout(r, 1500 + 4*450 + 300)); // Übergang + Aufdeck-Sequenz fertig laufen lassen
@@ -106,7 +110,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     document.getElementById('modal-root') && (document.getElementById('modal-root').innerHTML = '');
 
     return {
-      reelHasManyTiles, lastTileIsRealNation, transitionStarted, landedOnRealNation,
+      reelHasManyTiles, finalTileIsNotLastChild, lastTileIsRealNation, transitionStarted, landedOnRealNation,
       legendaryGapClearlyLongerThanNormal, gapAfterLegendaryReflectsSlowReveal, epicAnimationIsSlow,
       draftSquadsSavedIncremented, draftStagesWonIncremented, achievementsWellFormed,
     };
@@ -115,7 +119,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   console.log('Draft-Modus-Politur-Test');
   noErrors(errors, 'Seite');
   eq(result.reelHasManyTiles, true, 'die Cutscene zeigt ein echtes Walzen-Reel mit vielen Länder-Kacheln statt einer einzelnen wechselnden Flagge');
-  eq(result.lastTileIsRealNation, true, 'die letzte Kachel der Walze ist immer das tatsächlich gewürfelte Land');
+  eq(result.finalTileIsNotLastChild, true, 'die Ergebnis-Kachel steht NICHT am Ende der Walze (sonst würde das fehlende Ende das Ergebnis vorzeitig verraten)');
+  eq(result.lastTileIsRealNation, true, 'die markierte Ergebnis-Kachel der Walze ist immer das tatsächlich gewürfelte Land');
   eq(result.transitionStarted, true, 'die Walze läuft über einen echten CSS-transform-Übergang, nicht mehr über wiederholtes JS-Ticking');
   eq(result.landedOnRealNation, true, 'die Cutscene landet garantiert auf dem tatsächlich gewürfelten Land');
   eq(result.legendaryGapClearlyLongerThanNormal, true, 'vor dem Aufdecken einer 100+-Karte wird spürbar länger pausiert als zwischen zwei normalen Karten');

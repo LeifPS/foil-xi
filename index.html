@@ -12806,25 +12806,32 @@ function draftScheduleReveals(state){
 // das exakt am Indikator in der Mitte des Viewports zum Stehen kommt - ein einziger, rein CSS-
 // getriebener transform-Übergang (kein wiederholtes JS-Umschreiben mehr), daher garantiert ruckelfrei
 // und garantiert exakt treffend.
-const DRAFT_REEL_ITEM_COUNT = 20;
-function draftReelItemHTML(nation){
-  return `<div class="draft-reel-item">${natFlagImgHTML(nation, 44)}<span>${natDE(nation)}</span></div>`;
+const DRAFT_REEL_ITEM_COUNT = 20, DRAFT_REEL_TRAILING_COUNT = 8;
+function draftReelItemHTML(nation, isFinal){
+  return `<div class="draft-reel-item${isFinal ? ' draft-reel-final' : ''}">${natFlagImgHTML(nation, 44)}<span>${natDE(nation)}</span></div>`;
 }
+// Die echte Ergebnis-Kachel sitzt bewusst NICHT mehr als allerletztes Element der Walze, sondern hat
+// danach noch ein paar weitere (irrelevante) Kacheln - sonst würde ein aufmerksamer Spieler ("wenn nach
+// dem was man bekommt gar nix mehr ist, weiß man sofort, was kommt") am fehlenden Ende der Walze schon
+// vor der eigentlichen Verlangsamung erkennen können, dass genau diese Kachel das Ergebnis sein muss.
 function draftBuildReelHTML(finalNation){
   const nations = draftAllNations();
   let html = '';
   for(let i=0;i<DRAFT_REEL_ITEM_COUNT;i++) html += draftReelItemHTML(nations[Math.floor(Math.random()*nations.length)]);
-  html += draftReelItemHTML(finalNation);
+  html += draftReelItemHTML(finalNation, true);
+  for(let i=0;i<DRAFT_REEL_TRAILING_COUNT;i++) html += draftReelItemHTML(nations[Math.floor(Math.random()*nations.length)]);
   return html;
 }
 function draftStartReelAnimation(){
   const strip = document.getElementById('draft-reel-strip');
   const viewport = document.getElementById('draft-reel-viewport');
   if(!strip || !viewport || !strip.children.length) return;
+  const items = Array.from(strip.children);
+  const finalIdx = items.findIndex(el=>el.classList.contains('draft-reel-final'));
+  const targetIdx = finalIdx>=0 ? finalIdx : items.length-1;
   const itemW = strip.children[0].getBoundingClientRect().width;
   const viewportW = viewport.getBoundingClientRect().width;
-  const lastIdx = strip.children.length-1; // die letzte Kachel ist immer das echte Ergebnis
-  const targetX = viewportW/2 - (lastIdx*itemW + itemW/2);
+  const targetX = viewportW/2 - (targetIdx*itemW + itemW/2);
   strip.style.transition = 'none';
   strip.style.transform = 'translateX(0px)';
   void strip.offsetWidth; // Reflow erzwingen, damit der Übergang unten sicher neu (an)läuft
