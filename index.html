@@ -3243,6 +3243,7 @@ body.boot-loader-done #boot-loader{opacity:0;pointer-events:none;}
     <div class="brand"><div class="brand-mark">FE</div><h1>FOIL<span>ELEVEN</span></h1></div>
     <div class="wallet">
       <button id="switch-club-btn" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;">Verein wechseln</button>
+      <button id="manual-save-btn" title="Fortschritt jetzt sichern" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">\u{1F4BE}</button>
       <button id="sound-toggle" title="Sound an/aus" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;">\u{1F50A}</button>
       <div class="coin-pill"><svg class="coin-icon" width="18" height="18" viewBox="0 0 20 20" style="vertical-align:-3px;margin-right:3px;flex-shrink:0;" aria-hidden="true">
         <circle cx="10" cy="10" r="9" fill="#e8c468"/>
@@ -16833,8 +16834,11 @@ function sanitizeClubId(raw){
 // recovery a real incident just required. Deliberately NOT run on every sSet() - once per boot keeps
 // the write volume tiny while still giving a snapshot for essentially every session.
 const SAVE_HISTORY_KEEP = 10;
+// Gibt true/false zurück (statt nur zu loggen), damit ein Aufrufer, der dem Spieler eine echte
+// Erfolgs-/Fehler-Rückmeldung geben will (siehe der manuelle "Jetzt sichern"-Knopf im Topbar), das auch
+// tun kann - der bisherige reine Fire-and-forget-Gebrauch (Boot-Snapshot) bleibt davon unberührt.
 async function recordSaveSnapshot(){
-  if(!fb || !clubId) return;
+  if(!fb || !clubId) return false;
   try{
     const versionId = String(Date.now());
     await fb.setDoc(fb.doc(fb.db,'saveHistory',clubId,'versions',versionId), {
@@ -16843,7 +16847,8 @@ async function recordSaveSnapshot(){
     const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'saveHistory',clubId,'versions'), fb.orderBy('savedAt','desc')));
     const extra = snap.docs.slice(SAVE_HISTORY_KEEP);
     if(extra.length) await Promise.all(extra.map(d=>fb.deleteDoc(d.ref)));
-  }catch(e){ console.warn('save history snapshot failed', e); }
+    return true;
+  }catch(e){ console.warn('save history snapshot failed', e); return false; }
 }
 // Set when arriving via the "Fortfahren ohne Speicherung" button on the down page
 // (foil-eleven-down.html?...&nosave=1 -> index.html?nosave=1). While active, only the
@@ -17626,7 +17631,27 @@ async function init(){
       if(soundEnabled) playSfx('click');
     });
   }
+  // Manueller "Jetzt sichern"-Knopf: der eigentliche Spielstand ist zwar schon nach jeder Aktion live
+  // gesichert (siehe sSet), aber genau das war für den Spieler bisher unsichtbar - kein Wunder, dass sich
+  // "gerade eine gute Karte bekommen" nicht wie ein sicherer Moment anfühlt. Der Knopf legt zusätzlich
+  // sofort einen eigenen Wiederherstellungspunkt in der Versionshistorie an (statt nur einmal pro Login,
+  // siehe recordSaveSnapshot) und bestätigt das explizit per Toast, statt den Erfolg nur stillschweigend
+  // vorauszusetzen.
+  const manualSaveBtn = document.getElementById('manual-save-btn');
+  if(manualSaveBtn) manualSaveBtn.addEventListener('click', ()=>performManualSave(manualSaveBtn));
   initGlobalSfxListeners();
+}
+// Als eigene Funktion (statt inline im Klick-Listener) ausgelagert, damit sie unabhängig vom kompletten
+// init()-Ablauf testbar ist (siehe manual_save_button.test.js).
+async function performManualSave(btn){
+  if(btn.disabled) return;
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '⏳';
+  const ok = await recordSaveSnapshot();
+  toast(ok ? '✓ Fortschritt gesichert.' : 'Speichern fehlgeschlagen - bitte erneut versuchen.');
+  btn.textContent = original;
+  btn.disabled = false;
 }
 
 // abbreviates coin amounts >=1,000,000 to 3 significant figures (1.32m, 52.2m, 921m, 1.53b, ...t, ...q);
