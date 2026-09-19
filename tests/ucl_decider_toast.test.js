@@ -1,12 +1,14 @@
 // Regressionstest: wenn Hin-/Rückspiel im Aggregat unentschieden enden (z.B. Hinspiel 1:0, Rückspiel
-// 1:2 -> Aggregat 2:2), lief die Verlängerung/Elfmeterschießen-Entscheidung bisher komplett unsichtbar
-// im Hintergrund ab (per uclMatchResultClubs() ohne jedes spielbare/anschaubare Match) - der Spieler sah
-// nur "Niederlage" und direkt danach "Ausgeschieden", ohne je eine echte Verlängerung zu erleben (wirkte
-// wie ein grundloser Sieg des Gegners statt einer fairen Entscheidung).
-// playUclKnockoutLeg/playUclPlayoffLeg müssen jetzt (1) einen expliziten Toast zeigen, sobald eine solche
-// Entscheidung greift, UND (2) die Entscheidung selbst als echtes drittes, live animiertes Spiel über
-// uclPlayLegCore(oppClub, false, ...) laufen lassen (Bugfix: "bei Unentschieden soll nicht verloren
-// sondern Verlängerung [kommen]") statt sie lautlos zu würfeln.
+// 1:2 -> Aggregat 2:2), lief die Verlängerung/Elfmeterschießen-Entscheidung erst komplett unsichtbar im
+// Hintergrund ab (per uclMatchResultClubs()), dann - nach einem ersten Bugfix - als eigenes, komplett
+// separates DRITTES Match ("Entscheidungsspiel", eigene Anstoß-Cutscene). Beides ist falsch: im echten
+// Fußball ist die Verlängerung Teil DESSELBEN Rückspiels, kein eigenes drittes Spiel. Der Nutzer meldete
+// das explizit: "wenn es ein Aggregat unentschieden ist [soll] das zweite Spiel fortgesetzt werden [...]
+// mit Verlängerung Elfmeterschießen und nicht ein eigenes drittes Spiel kommen soll."
+// playUclKnockoutLeg/playUclPlayoffLeg rufen uclPlayLegCore daher jetzt nur noch GENAU 2x auf (Hin- und
+// Rückspiel) - das Rückspiel selbst läuft mit tieBreakOnAggregate:true, geht also bei Aggregat-
+// Gleichstand SELBST nahtlos in Verlängerung/Elfmeterschießen (siehe buildDecisiveMatch), statt dass ein
+// separates drittes Match gestartet wird.
 const { withPage } = require('./lib/browser');
 const { ok, eq, noErrors, summary } = require('./lib/assert');
 
@@ -21,29 +23,21 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     document.body.innerHTML += '<div id="ucl-match-area-ucl"></div>';
     const toasts = []; toast = (m) => toasts.push(m);
     renderUclPanel = () => {};
-    // Der Aggregat-Entscheider ist ein echter 50/50-Zufallsausgang (uclMatchResultClubs simuliert ein
-    // echtes Match) - gewinnt die Testkarte diesen Münzwurf, läuft das gesamte K.o.-Turnier (nur 1 Runde
-    // hier) sofort durch bis zum Pokalsieg, und uclFinishRun würde auf showUclTrophyCutscene warten, das
-    // im echten Spiel erst durch einen Klick auf "Weiter" auflöst - in diesem headless Test kommt dieser
-    // Klick nie, also hinge page.evaluate hier ohne diesen Stub etwa jeden zweiten Lauf für immer (genau
-    // das reproduzierte "Target page ... has been closed"-Timeout-Verhalten). Stub löst sofort auf, exakt
-    // wie renderUclPanel oben schon gestubbt ist, und lässt den eigentlichen Testfokus (den Decider-Toast
-    // selbst) unangetastet, unabhängig davon, wer den Münzwurf gewinnt.
     showUclTrophyCutscene = async () => {};
 
     let callNum = 0;
-    // Genau das gemeldete Szenario: Hinspiel 1:0 (Sieg), Rückspiel 1:2 (Niederlage) -> Aggregat 2:2,
-    // gefolgt vom dritten, echten Entscheidungsspiel (Verlängerung + Elfmeterschießen), das der Spieler
-    // für sich entscheidet - alle drei Aufrufe laufen über dieselbe uclPlayLegCore-Funktion, beweist also,
-    // dass die Entscheidung kein stiller uclMatchResultClubs()-Münzwurf mehr ist, sondern ein echtes
-    // drittes Match.
-    const legOppClubArgs = [];
+    // Genau das gemeldete Szenario: Hinspiel 1:0 (Sieg), Rückspiel endet nach 90 Minuten ebenfalls im
+    // Aggregat unentschieden (2:2) und wird - noch als TEIL DESSELBEN Rückspiel-Aufrufs - über
+    // Verlängerung/Elfmeterschießen entschieden (wentToET/wentToPK bereits im zurückgegebenen md).
+    const callArgs = [];
     const scores = [
       { myGoals: 1, oppGoals: 0, winnerSide: 'me' },
-      { myGoals: 1, oppGoals: 2, winnerSide: 'opp' },
-      { myGoals: 2, oppGoals: 1, winnerSide: 'me', wentToET: true, wentToPK: true },
+      { myGoals: 1, oppGoals: 2, winnerSide: 'me', wentToET: true, wentToPK: true },
     ];
-    uclPlayLegCore = async (oppClub) => { legOppClubArgs.push(oppClub); return scores[callNum++]; };
+    uclPlayLegCore = async (oppClub, allowDraw, area, stageLabel, aggMyExtra, aggOppExtra, tieBreakOnAggregate) => {
+      callArgs.push({ oppClub, tieBreakOnAggregate });
+      return scores[callNum++];
+    };
 
     const rounds = [{ matches: [{ aClub: 'MyClub', bClub: 'OppClub', aIsPlayer: true, bIsPlayer: false, leg1: null, leg2: null, decider: null, pending: true, winnerClub: null }] }];
     profile.ucl = {
@@ -61,7 +55,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       deciderTriggered: !!m.decider,
       decider: m.decider,
       uclPlayLegCoreCallCount: callNum,
-      legOppClubArgs,
+      callArgs,
       winnerClub: m.winnerClub,
     };
   }));
@@ -70,20 +64,23 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   noErrors(errors, 'Seite');
   eq(result.aggMe, 2, 'Aggregat (eigene Tore) korrekt 2 (Hinspiel 1:0 + Rückspiel 1:2)');
   eq(result.aggOpp, 2, 'Aggregat (Gegner-Tore) korrekt 2 - echtes Aggregat-Unentschieden');
-  eq(result.deciderTriggered, true, 'Aggregat-Gleichstand löst tatsächlich eine Entscheidung aus');
-  const deciderToast = result.toasts.find(t => t.includes('Aggregat') && t.includes('unentschieden'));
-  ok(!!deciderToast, `ein expliziter Toast erklärt die Aggregat-Entscheidung (Toasts: ${JSON.stringify(result.toasts)})`);
-  ok(deciderToast && deciderToast.includes('2:2'), 'der Toast nennt das tatsächliche Aggregat (2:2)');
-  // Kernpunkt des Bugfixes: die Entscheidung ist ein DRITTER echter Aufruf von uclPlayLegCore (also ein
-  // live spielbares Match mit Verlängerung/Elfmeterschießen), nicht ein stiller uclMatchResultClubs()-Wurf.
-  eq(result.uclPlayLegCoreCallCount, 3, 'uclPlayLegCore wird für die Entscheidung ein drittes Mal aufgerufen (echtes Entscheidungsspiel statt stillem Würfeln)');
-  eq(result.legOppClubArgs[2], 'OppClub', 'das Entscheidungsspiel läuft gegen denselben Gegner-Klub wie Hin-/Rückspiel');
-  ok(!!result.decider, 'das Ergebnis des Entscheidungsspiels wird im Match gespeichert');
-  eq(result.decider.winnerSide, 'me', 'der Sieger des Entscheidungsspiels wird korrekt übernommen');
-  eq(result.decider.wentToPK, true, 'ein n.E.-Entscheidungsspiel wird als solches gespeichert (für die Anzeige "n.E.")');
-  eq(result.winnerClub, 'MyClub', 'der tatsächliche Sieger des Entscheidungsspiels gewinnt die Paarung, nicht automatisch der Gegner');
-  const resultToast = result.toasts.find(t => t.includes('Entscheidungsspiel') && t.includes('Sieg'));
-  ok(!!resultToast, `ein Toast zeigt das Ergebnis des Entscheidungsspiels selbst (Toasts: ${JSON.stringify(result.toasts)})`);
+  eq(result.deciderTriggered, true, 'Aggregat-Gleichstand wird als Entscheidung (Verlängerung/Elfmeterschießen) erkannt und gespeichert');
+  // Kernpunkt dieses Bugfixes: KEIN drittes, separates Match mehr - uclPlayLegCore wird exakt 2x
+  // aufgerufen (Hin- und Rückspiel), die Verlängerung/das Elfmeterschießen ist Teil des Rückspiel-Aufrufs.
+  eq(result.uclPlayLegCoreCallCount, 2, 'uclPlayLegCore wird NUR 2x aufgerufen (Hin-/Rückspiel) - kein separates drittes "Entscheidungsspiel" mehr');
+  eq(result.callArgs[0].tieBreakOnAggregate, false, 'das Hinspiel entscheidet nicht anhand des Aggregats (es gibt noch keins)');
+  eq(result.callArgs[1].tieBreakOnAggregate, true, 'das Rückspiel läuft mit tieBreakOnAggregate:true - es entscheidet bei Bedarf selbst per Verlängerung/Elfmeterschießen');
+  eq(result.callArgs[1].oppClub, 'OppClub', 'das Rückspiel läuft gegen denselben Gegner-Klub wie das Hinspiel');
+  ok(!!result.decider, 'das Verlängerungs-/Elfmeterschießen-Ergebnis des Rückspiels wird im Match gespeichert');
+  eq(result.decider.winnerSide, 'me', 'der Sieger nach Verlängerung/Elfmeterschießen wird korrekt übernommen');
+  eq(result.decider.wentToPK, true, 'ein Elfmeterschießen wird als solches gespeichert (für die Anzeige "n.E.")');
+  eq(result.winnerClub, 'MyClub', 'der tatsächliche Sieger nach Verlängerung/Elfmeterschießen gewinnt die Paarung');
+  // Das Rückspiel-Ergebnis selbst trägt jetzt direkt den n.E.-Hinweis im Toast (kein separater
+  // "Entscheidungsspiel"-Toast mehr nötig, da alles Teil desselben Spiels ist).
+  const legToast = result.toasts.find(t => t.includes('1:2') && t.includes('n.E.'));
+  ok(!!legToast, `der Rückspiel-Toast selbst zeigt bereits den n.E.-Hinweis (Toasts: ${JSON.stringify(result.toasts)})`);
+  const noSeparateDeciderToast = !result.toasts.some(t => t.includes('Entscheidungsspiel'));
+  ok(noSeparateDeciderToast, `es gibt keinen Toast mehr für ein separates "Entscheidungsspiel" (Toasts: ${JSON.stringify(result.toasts)})`);
 
   summary('UCL-Decider-Toast-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

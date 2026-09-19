@@ -111,5 +111,44 @@ async function runKnockoutScenario({ leg1, mockLegResult, extraRounds }) {
   ok(r4.withAggWin > r4.withoutAggWin, `Siegchance MIT 4-Tore-Aggregat-Vorsprung (${(r4.withAggWin*100).toFixed(1)}%) deutlich höher als ohne (${(r4.withoutAggWin*100).toFixed(1)}%)`);
   ok(r4.withAggWin > 0.95, 'Siegchance mit 4-Tore-Vorsprung bei 1:1 und 10 Minuten Restzeit ist sehr hoch (>95%)');
 
+  // --- Szenario 5: buildDecisiveMatch mit opts.tieBreakOnAggregate entscheidet Verlängerung/
+  // Elfmeterschießen ANHAND DES AGGREGATS, nicht anhand des Ergebnisses dieses einen Legs - das ist der
+  // eigentliche Kern des Bugfixes ("wenn es ein Aggregat unentschieden ist, soll das zweite Spiel
+  // fortgesetzt werden [...] mit Verlängerung Elfmeterschießen und nicht ein eigenes drittes Spiel").
+  // simGoals wird deterministisch gemockt, damit die 90-Minuten-Tore dieses Legs feststehen.
+  const { result: r5, errors: e5 } = await withPage(page => page.evaluate(() => {
+    const myPlayers = adminFullCardPool().slice(0, 11), oppPlayers = adminFullCardPool().slice(11, 22);
+    const realSimGoals = simGoals;
+    function withFixedGoals(queue, fn) {
+      let q = queue.slice();
+      simGoals = () => (q.length ? q.shift() : 0);
+      try { return fn(); } finally { simGoals = realSimGoals; }
+    }
+    // A) Leg selbst 1:1 (also für sich genommen unentschieden), KEIN Aggregat-Vorsprung mitgebracht ->
+    // Aggregat ist ebenfalls 1:1 -> MUSS in Verlängerung gehen (danach per Mock weiterhin 0:0 -> Elfmeterschießen).
+    const a = withFixedGoals([1, 1, 0, 0], () =>
+      buildDecisiveMatch(90, 90, myPlayers, oppPlayers, null, null, { allowDraw: true, tieBreakOnAggregate: true, aggMyExtra: 0, aggOppExtra: 0 }));
+    // B) Leg selbst GENAUSO 1:1, aber ich bringe aus dem Hinspiel bereits +2 Tore Vorsprung mit ->
+    // Aggregat 3:1 für mich -> KEINE Verlängerung, obwohl das Leg für sich genommen unentschieden war.
+    const b = withFixedGoals([1, 1], () =>
+      buildDecisiveMatch(90, 90, myPlayers, oppPlayers, null, null, { allowDraw: true, tieBreakOnAggregate: true, aggMyExtra: 2, aggOppExtra: 0 }));
+    // C) Leg selbst klar 2:0 FÜR MICH (kein Leg-Unentschieden!), aber der Gegner brachte aus dem Hinspiel
+    // bereits +2 Tore Vorsprung mit -> Aggregat 2:2 -> MUSS trotzdem in Verlängerung gehen, obwohl dieses
+    // eine Leg gar nicht unentschieden endete - genau der Kernfall des Bugfixes.
+    const c = withFixedGoals([2, 0, 0, 0], () =>
+      buildDecisiveMatch(90, 90, myPlayers, oppPlayers, null, null, { allowDraw: true, tieBreakOnAggregate: true, aggMyExtra: 0, aggOppExtra: 2 }));
+    return {
+      aWentToET: a.wentToET, aWentToPK: a.wentToPK,
+      bWentToET: b.wentToET,
+      cWentToET: c.wentToET, cWentToPK: c.wentToPK,
+    };
+  }));
+  noErrors(e5, 'Szenario 5 (tieBreakOnAggregate)');
+  eq(r5.aWentToET, true, 'Szenario 5a: Leg 1:1 ohne Aggregat-Vorsprung -> Aggregat ebenfalls 1:1 -> Verlängerung greift');
+  eq(r5.aWentToPK, true, 'Szenario 5a: bleibt auch die Verlängerung torlos -> Elfmeterschießen entscheidet (kein separates drittes Spiel nötig)');
+  eq(r5.bWentToET, false, 'Szenario 5b: dasselbe 1:1 im Leg, aber MIT 2-Tore-Aggregat-Vorsprung -> KEINE Verlängerung, weil das Aggregat klar ist');
+  eq(r5.cWentToET, true, 'Szenario 5c: das Leg selbst endet klar 2:0, aber der Aggregat-Rückstand (0:2 aus dem Hinspiel) gleicht das genau aus -> Verlängerung greift trotzdem');
+  eq(r5.cWentToPK, true, 'Szenario 5c: bleibt das Aggregat auch nach der Verlängerung gleich, entscheidet das Elfmeterschießen - alles noch innerhalb desselben Rückspiel-Aufrufs');
+
   summary('UCL-K.o.-Rückspiel-Aggregat-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

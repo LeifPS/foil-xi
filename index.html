@@ -2029,13 +2029,14 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
   border:5px solid transparent;}
 .draft-reel-indicator::before{top:-1px;border-top-color:var(--turf-bright);}
 .draft-reel-indicator::after{bottom:-1px;border-bottom-color:var(--turf-bright);}
-/* Gold-Fund (DRAFT_GOLD_CHANCE): ersetzt mit kleiner Wahrscheinlichkeit die normale Land-Cutscene -
-   kein Land, dafür direkt 4x 100+ OVR zur Auswahl. Eigene pulsierende Gold-Animation statt Reel/Flagge. */
-.draft-gold-spin{background:radial-gradient(ellipse at 50% -10%, rgba(255,215,106,.22), transparent 60%), linear-gradient(160deg,#241d0a,#0a0d0b);
-  border-color:rgba(255,215,106,.5);}
+/* Gold-Fund (DRAFT_GOLD_CHANCE): ganz normal EINE der Kacheln im Länder-Reel selbst (siehe
+   draftReelItemHTML/DRAFT_REEL_GOLD_TILE_CHANCE), kein separates aufploppendes Ereignis - landet die
+   Walze darauf, gibt es direkt 4x 100+ OVR statt eines Landes. Nur optisch als golden hervorgehoben. */
+.draft-reel-item.draft-reel-gold{background:radial-gradient(ellipse at 50% 30%, rgba(255,215,106,.28), transparent 70%);border-radius:8px;}
+.draft-reel-item.draft-reel-gold span{color:var(--gold);}
+.draft-reel-gold-icon{font-size:26px;filter:drop-shadow(0 0 8px rgba(255,215,106,.7));}
 .draft-gold-spin-icon{font-size:44px;animation:draftGoldPulse 1.1s ease-in-out infinite;filter:drop-shadow(0 0 14px rgba(255,215,106,.7));}
 @keyframes draftGoldPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.18);}}
-.draft-gold-spin-text{margin-top:8px;font-family:'Anton';font-size:17px;letter-spacing:.02em;color:var(--gold);}
 .draft-card-reveal{animation:draftCardReveal .4s cubic-bezier(.2,.9,.3,1.3) both;}
 /* Aufwendigeres Aufdeck-Flourish, je besser die gezogene Karte - ein "guter Pull" soll sich auch
    sichtbar besonderer anfühlen als eine 0815-Karte, ähnlich einem echten Pack-Opening. Bewusst OHNE
@@ -12851,19 +12852,34 @@ function draftScheduleReveals(state){
 // getriebener transform-Übergang (kein wiederholtes JS-Umschreiben mehr), daher garantiert ruckelfrei
 // und garantiert exakt treffend.
 const DRAFT_REEL_ITEM_COUNT = 20, DRAFT_REEL_TRAILING_COUNT = 8;
+// Der Gold-Fund ist ein ganz normales, jederzeit sichtbares Symbol IM Länder-Reel selbst (wie ein
+// seltenes Symbol auf einer Slot-Machine-Walze) - kein separates, aus dem Nichts auftauchendes Ereignis.
+// Er taucht als Kachel unter den vielen zufällig durchlaufenden Länder-Kacheln regelmäßig mit auf, und
+// landet die Walze am Ende genau darauf, gibt es den Gold-Fund - exakt derselbe Mechanismus wie bei
+// jedem anderen Land.
+const DRAFT_GOLD_TILE = 'GOLD';
+const DRAFT_REEL_GOLD_TILE_CHANCE = 0.08;
 function draftReelItemHTML(nation, isFinal){
-  return `<div class="draft-reel-item${isFinal ? ' draft-reel-final' : ''}">${natFlagImgHTML(nation, 44)}<span>${natDE(nation)}</span></div>`;
+  const cls = 'draft-reel-item' + (nation===DRAFT_GOLD_TILE ? ' draft-reel-gold' : '') + (isFinal ? ' draft-reel-final' : '');
+  const inner = nation===DRAFT_GOLD_TILE
+    ? `<div class="draft-reel-gold-icon">🌟</div><span>Gold-Fund</span>`
+    : `${natFlagImgHTML(nation, 44)}<span>${natDE(nation)}</span>`;
+  return `<div class="${cls}">${inner}</div>`;
+}
+function draftRandomReelTile(nations){
+  return Math.random()<DRAFT_REEL_GOLD_TILE_CHANCE ? DRAFT_GOLD_TILE : nations[Math.floor(Math.random()*nations.length)];
 }
 // Die echte Ergebnis-Kachel sitzt bewusst NICHT mehr als allerletztes Element der Walze, sondern hat
 // danach noch ein paar weitere (irrelevante) Kacheln - sonst würde ein aufmerksamer Spieler ("wenn nach
 // dem was man bekommt gar nix mehr ist, weiß man sofort, was kommt") am fehlenden Ende der Walze schon
 // vor der eigentlichen Verlangsamung erkennen können, dass genau diese Kachel das Ergebnis sein muss.
-function draftBuildReelHTML(finalNation){
+// `finalTile` ist entweder ein Land ODER DRAFT_GOLD_TILE, je nachdem, was tatsächlich gewürfelt wurde.
+function draftBuildReelHTML(finalTile){
   const nations = draftAllNations();
   let html = '';
-  for(let i=0;i<DRAFT_REEL_ITEM_COUNT;i++) html += draftReelItemHTML(nations[Math.floor(Math.random()*nations.length)]);
-  html += draftReelItemHTML(finalNation, true);
-  for(let i=0;i<DRAFT_REEL_TRAILING_COUNT;i++) html += draftReelItemHTML(nations[Math.floor(Math.random()*nations.length)]);
+  for(let i=0;i<DRAFT_REEL_ITEM_COUNT;i++) html += draftReelItemHTML(draftRandomReelTile(nations));
+  html += draftReelItemHTML(finalTile, true);
+  for(let i=0;i<DRAFT_REEL_TRAILING_COUNT;i++) html += draftReelItemHTML(draftRandomReelTile(nations));
   return html;
 }
 function draftStartReelAnimation(){
@@ -13217,15 +13233,14 @@ function renderDraftRollPanel(box){
         <button class="action-btn" id="draft-roll-go-btn" style="width:auto;padding:13px 32px;font-size:15px;">\ud83c\udfb2 Land rollen</button>
       </div>`;
   } else if(state.rollPhase==='spinning'){
-    stageHTML = isGoldFlow ? `
-      <div class="draft-roll-stage draft-gold-spin">
-        <div class="draft-gold-spin-icon">\ud83c\udf1f</div>
-        <p class="draft-gold-spin-text">Gold-Fund\u2026!</p>
-      </div>` : `
+    // Der Gold-Fund l\u00e4uft \u00fcber GENAU dieselbe Walze wie jedes Land - er ist eine der regul\u00e4r mit
+    // durchlaufenden Kacheln (siehe draftBuildReelHTML/DRAFT_REEL_GOLD_TILE_CHANCE), kein separates,
+    // pl\u00f6tzlich aufploppendes Ereignis.
+    stageHTML = `
       <div class="draft-roll-stage draft-roll-spinning">
         <p class="hint" style="margin:0 0 10px;">${isReplaceFlow ? 'Karte wird ersetzt \u2014 welches Land?' : 'Welches Land?'}</p>
         <div class="draft-reel-viewport" id="draft-reel-viewport">
-          <div class="draft-reel-strip" id="draft-reel-strip">${draftBuildReelHTML(state.currentRoll.nation)}</div>
+          <div class="draft-reel-strip" id="draft-reel-strip">${draftBuildReelHTML(isGoldFlow ? DRAFT_GOLD_TILE : state.currentRoll.nation)}</div>
           <div class="draft-reel-indicator"></div>
         </div>
       </div>`;
@@ -31862,7 +31877,7 @@ function uclRevealNextDrawSlot(comp){
   sSet('profile', profile);
   renderUclPanel(comp);
 }
-async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel, aggMyExtra=0, aggOppExtra=0){
+async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel, aggMyExtra=0, aggOppExtra=0, tieBreakOnAggregate=false){
   const {rating} = squadRating();
   const myPlayers = getMySquadPlayers();
   const opp = uclClubXI(oppClub);
@@ -31878,12 +31893,15 @@ async function uclPlayLegCore(oppClub, allowDraw, area, stageLabel, aggMyExtra=0
     </div>
     <div id="match-area"></div>
     <div id="result-area"></div>`;
-  const md = buildDecisiveMatch(rating, opp.rating, myPlayers, opp.players, squad.tactics, null, {allowDraw});
+  // tieBreakOnAggregate (nur das Rückspiel eines Zwei-Leg-Duells): entscheidet Verlängerung/
+  // Elfmeterschießen anhand des AGGREGATS (aggMyExtra/aggOppExtra = bereits im Hinspiel erzielte Tore),
+  // nicht anhand des Ergebnisses dieses einzelnen Legs - genau wie im echten Fußball läuft die
+  // Verlängerung dann als Fortsetzung DIESES Rückspiels, keine eigene dritte Partie (siehe playFullMatch,
+  // das md.wentToET/md.wentToPK nahtlos im selben Match-Ablauf weiterspielt).
+  const md = buildDecisiveMatch(rating, opp.rating, myPlayers, opp.players, squad.tactics, null, {allowDraw, aggMyExtra, aggOppExtra, tieBreakOnAggregate});
   md.startedAt = Date.now(); md.durationMs = MATCH_DURATION_MS;
-  // Rückspiel-Aggregat als reiner Vorsprung für die angezeigte Siegchance (siehe animateTimedMatch) -
-  // fließt NICHT in den tatsächlichen Spielstand/das Ergebnis dieses einzelnen Legs ein (md.myGoals/
-  // md.oppGoals bleiben unverändert nur die 90/120 Minuten dieses Legs), nur monteCarloWinProb bekommt
-  // den bereits mitgebrachten Vorsprung aus dem Hinspiel dazugerechnet.
+  // Für die angezeigte Live-Siegchance (siehe animateTimedMatch) - monteCarloWinProb bekommt den bereits
+  // mitgebrachten Aggregat-Vorsprung aus dem Hinspiel dazugerechnet.
   md.aggMyExtra = aggMyExtra; md.aggOppExtra = aggOppExtra;
   await playFullMatch(md, profile.displayName||'Dein Verein', opp.owner, oppClub);
   const myScorers = [], myAssists = [];
@@ -31964,15 +31982,15 @@ async function playUclPlayoffLeg(comp){
   const area = document.getElementById('ucl-match-area-'+comp);
   if(!area) return;
   // Rückspiel: die im Hinspiel bereits erzielten Tore als Aggregat-Vorsprung an uclPlayLegCore
-  // durchreichen, damit die live angezeigte Siegchance das Aggregat berücksichtigt statt nur diese
-  // einzelnen 90 Minuten zu bewerten (siehe uclPlayLegCore/animateTimedMatch).
+  // durchreichen - fließt sowohl in die live angezeigte Siegchance ALS AUCH (nur im Rückspiel, siehe
+  // tieBreakOnAggregate) in die Entscheidung ein, ob dieses Leg in die Verlängerung geht.
   const aggMyExtra = legNum===2 ? (tie.aIsPlayer ? tie.leg1.aGoals : tie.leg1.bGoals) : 0;
   const aggOppExtra = legNum===2 ? (tie.aIsPlayer ? tie.leg1.bGoals : tie.leg1.aGoals) : 0;
   inMatch = true;
   let md;
   try{
-    md = await uclPlayLegCore(oppClub, true, area, `Playoff · ${legNum===1?'Hinspiel':'Rückspiel'}`, aggMyExtra, aggOppExtra);
-    toast(`${md.winnerSide==='draw'?'Unentschieden':md.winnerSide==='me'?'Sieg':'Niederlage'} gegen ${oppClub}: ${md.myGoals}:${md.oppGoals}`);
+    md = await uclPlayLegCore(oppClub, true, area, `Playoff · ${legNum===1?'Hinspiel':'Rückspiel'}`, aggMyExtra, aggOppExtra, legNum===2);
+    toast(`${md.winnerSide==='draw'?'Unentschieden':md.winnerSide==='me'?'Sieg':'Niederlage'} gegen ${oppClub}: ${md.myGoals}:${md.oppGoals}${md.wentToPK?' n.E.':md.wentToET?' n.V.':''}`);
   } finally { inMatch = false; }
   const legResult = tie.aIsPlayer ? {aGoals:md.myGoals,bGoals:md.oppGoals} : {aGoals:md.oppGoals,bGoals:md.myGoals};
   const newTie = {...tie};
@@ -31988,20 +32006,14 @@ async function playUclPlayoffLeg(comp){
   let winnerClub;
   if(aAgg!==bAgg){ winnerClub = aAgg>bAgg ? tie.aClub : tie.bClub; }
   else {
-    // Bugfix: bei Aggregat-Gleichstand wurde die Entscheidung bisher LAUTLOS im Hintergrund per
-    // uclMatchResultClubs() gewürfelt (kein spielbares/anschaubares Match) - das wirkte wie eine direkte
-    // Niederlage statt einer echten Verlängerung. Jetzt läuft die Entscheidung als echtes, live
-    // animiertes Spiel über uclPlayLegCore (allowDraw:false), inklusive sichtbarer Verlängerung und ggf.
-    // Elfmeterschießen genau wie bei jedem anderen unentschiedenen Pflichtspiel-Einzelspiel.
-    toast(`Aggregat ${aAgg}:${bAgg} unentschieden — Entscheidungsspiel: Verlängerung und ggf. Elfmeterschießen entscheiden!`);
-    inMatch = true;
-    let dec;
-    try{
-      dec = await uclPlayLegCore(oppClub, false, area, 'Entscheidungsspiel');
-      toast(`${dec.winnerSide==='me'?'Sieg':'Niederlage'} im Entscheidungsspiel gegen ${oppClub}: ${dec.myGoals}:${dec.oppGoals}${dec.wentToPK?' n.E.':dec.wentToET?' n.V.':''}`);
-    } finally { inMatch = false; }
-    newTie.decider = {winnerSide:dec.winnerSide, myGoals:dec.myGoals, oppGoals:dec.oppGoals, wentToPK:dec.wentToPK, wentToET:dec.wentToET};
-    winnerClub = dec.winnerSide==='me' ? t.myClub : oppClub;
+    // Bugfix: bei Aggregat-Gleichstand wurde die Entscheidung früher als eigenes, komplett separates
+    // drittes "Entscheidungsspiel" gespielt (eigene Anstoß-Cutscene, eigenes Ergebnis) - das ist NICHT,
+    // wie Verlängerung im echten Fußball funktioniert: sie ist Teil DESSELBEN Rückspiels. Das Rückspiel
+    // lief oben bereits mit tieBreakOnAggregate:true, ist bei Aggregat-Gleichstand also selbst schon
+    // nahtlos in Verlängerung und ggf. Elfmeterschießen gegangen (siehe buildDecisiveMatch/playFullMatch)
+    // - hier wird nur noch dessen bereits feststehendes Ergebnis (md.winnerSide) übernommen.
+    newTie.decider = {winnerSide:md.winnerSide, myGoals:md.myGoals, oppGoals:md.oppGoals, wentToPK:md.wentToPK, wentToET:md.wentToET};
+    winnerClub = md.winnerSide==='me' ? t.myClub : oppClub;
   }
   newTie.winnerClub = winnerClub; newTie.pending = false;
   const won = winnerClub===t.myClub;
@@ -32074,19 +32086,18 @@ async function playUclKnockoutLeg(comp){
   const legNum = !m.leg1 ? 1 : 2;
   const area = document.getElementById('ucl-match-area-'+comp);
   if(!area) return;
-  // Bugfix: das Rückspiel selbst lief bisher mit allowDraw:false, also löste JEDES 90-Minuten-
-  // Unentschieden in diesem einzelnen Leg sofort dessen eigene Verlängerung/Elfmeterschießen aus -
-  // komplett unabhängig vom Aggregat (z.B. Verlängerung bei 1:1 im Rückspiel trotz 4:0 aus dem
-  // Hinspiel). Verlängerung/Elfmeterschießen sollen nur greifen, wenn das AGGREGAT nach 90 Minuten
-  // Rückspiel noch unentschieden ist - das übernimmt bereits der "decider" weiter unten (aAgg===bAgg).
-  // Beide Legs laufen daher jetzt mit allowDraw:true, wie auch schon beim Playoff.
+  // Verlängerung/Elfmeterschießen sollen nur greifen, wenn das AGGREGAT nach 90 Minuten Rückspiel noch
+  // unentschieden ist, nicht das Rückspiel für sich allein (z.B. keine Verlängerung bei 1:1 im
+  // Rückspiel, wenn das Hinspiel 4:0 stand) - das steuert tieBreakOnAggregate unten (nur im Rückspiel
+  // gesetzt), das dieses SELBE Leg bei Bedarf nahtlos in Verlängerung/Elfmeterschießen weiterspielt,
+  // statt dafür ein eigenes drittes "Entscheidungsspiel" zu starten (siehe buildDecisiveMatch).
   const aggMyExtra = legNum===2 ? (m.aIsPlayer ? m.leg1.aGoals : m.leg1.bGoals) : 0;
   const aggOppExtra = legNum===2 ? (m.aIsPlayer ? m.leg1.bGoals : m.leg1.aGoals) : 0;
   inMatch = true;
   let md;
   try{
-    md = await uclPlayLegCore(oppClub, true, area, `${UCL_ROUND_LABEL[roundKey]} · ${legNum===1?'Hinspiel':'Rückspiel'}`, aggMyExtra, aggOppExtra);
-    toast(`${md.winnerSide==='draw'?'Unentschieden':md.winnerSide==='me'?'Sieg':'Niederlage'} gegen ${oppClub}: ${md.myGoals}:${md.oppGoals}`);
+    md = await uclPlayLegCore(oppClub, true, area, `${UCL_ROUND_LABEL[roundKey]} · ${legNum===1?'Hinspiel':'Rückspiel'}`, aggMyExtra, aggOppExtra, legNum===2);
+    toast(`${md.winnerSide==='draw'?'Unentschieden':md.winnerSide==='me'?'Sieg':'Niederlage'} gegen ${oppClub}: ${md.myGoals}:${md.oppGoals}${md.wentToPK?' n.E.':md.wentToET?' n.V.':''}`);
   } finally { inMatch = false; }
   const legResult = m.aIsPlayer ? {aGoals:md.myGoals,bGoals:md.oppGoals} : {aGoals:md.oppGoals,bGoals:md.myGoals};
   let newM = {...m};
@@ -32103,23 +32114,14 @@ async function playUclKnockoutLeg(comp){
   let winnerClub;
   if(aAgg!==bAgg){ winnerClub = aAgg>bAgg ? m.aClub : m.bClub; }
   else {
-    // Bugfix: bei Aggregat-Gleichstand lief die Entscheidung bisher komplett unsichtbar im Hintergrund
-    // per uclMatchResultClubs() ab (kein spielbares/anschaubares Match) - wer z.B. Hinspiel 1:0 gewann
-    // und Rückspiel 1:2 verlor (Aggregat 2:2), sah nur "Niederlage 1:2" und direkt danach
-    // "Ausgeschieden", ohne je eine echte Verlängerung/ein Elfmeterschießen zu erleben - wirkte wie ein
-    // grundloser Sieg des Gegners statt einer fairen Entscheidung. Jetzt läuft die Entscheidung als
-    // echtes, live animiertes Spiel über uclPlayLegCore (allowDraw:false), inklusive sichtbarer
-    // Verlängerung und ggf. Elfmeterschießen genau wie bei jedem anderen unentschiedenen
-    // Pflichtspiel-Einzelspiel.
-    toast(`Aggregat ${aAgg}:${bAgg} unentschieden — Entscheidungsspiel: Verlängerung und ggf. Elfmeterschießen entscheiden!`);
-    inMatch = true;
-    let dec;
-    try{
-      dec = await uclPlayLegCore(oppClub, false, area, 'Entscheidungsspiel');
-      toast(`${dec.winnerSide==='me'?'Sieg':'Niederlage'} im Entscheidungsspiel gegen ${oppClub}: ${dec.myGoals}:${dec.oppGoals}${dec.wentToPK?' n.E.':dec.wentToET?' n.V.':''}`);
-    } finally { inMatch = false; }
-    newM.decider = {winnerSide:dec.winnerSide, myGoals:dec.myGoals, oppGoals:dec.oppGoals, wentToPK:dec.wentToPK, wentToET:dec.wentToET};
-    winnerClub = dec.winnerSide==='me' ? t.myClub : oppClub;
+    // Bugfix: bei Aggregat-Gleichstand wurde die Entscheidung früher als eigenes, komplett separates
+    // drittes "Entscheidungsspiel" gespielt (eigene Anstoß-Cutscene, eigenes Ergebnis) - das ist NICHT,
+    // wie Verlängerung im echten Fußball funktioniert: sie ist Teil DESSELBEN Rückspiels. Das Rückspiel
+    // lief oben bereits mit tieBreakOnAggregate:true, ist bei Aggregat-Gleichstand also selbst schon
+    // nahtlos in Verlängerung und ggf. Elfmeterschießen gegangen (siehe buildDecisiveMatch/playFullMatch)
+    // - hier wird nur noch dessen bereits feststehendes Ergebnis (md.winnerSide) übernommen.
+    newM.decider = {winnerSide:md.winnerSide, myGoals:md.myGoals, oppGoals:md.oppGoals, wentToPK:md.wentToPK, wentToET:md.wentToET};
+    winnerClub = md.winnerSide==='me' ? t.myClub : oppClub;
   }
   newM.winnerClub = winnerClub; newM.pending = false;
   const won = winnerClub===t.myClub;
@@ -36816,14 +36818,23 @@ function buildDecisiveMatch(myRating, oppRating, myPlayers, oppPlayers, myTactic
   // never decisive on its own, the aggregate is - BOTH legs of a two-legged tie): a 90-minute tie stays
   // a tie, same as real football. Every other caller (online matches, single-match cups, ...) needs a
   // definite winner from this one match, so this only skips extra time/penalties when explicitly asked to.
-  if(myGoals===oppGoals && !opts.allowDraw){
+  // opts.tieBreakOnAggregate (the SECOND leg of a two-legged UCL/UEL tie only): instead of checking this
+  // leg's own 90-minute score, checks whether the AGGREGATE (this leg's goals + opts.aggMyExtra/
+  // aggOppExtra already brought in from the first leg) is level - exactly like real football, extra time
+  // is part of THIS SAME second leg, not a separate third match. A leg can perfectly well end in a 2:1
+  // scoreline of its own and still go to extra time, if that levels the tie on aggregate.
+  const aggMyExtra = opts.aggMyExtra||0, aggOppExtra = opts.aggOppExtra||0;
+  const tiedOnDecidingMetric = () => opts.tieBreakOnAggregate
+    ? (myGoals+aggMyExtra) === (oppGoals+aggOppExtra)
+    : (myGoals===oppGoals && !opts.allowDraw);
+  if(tiedOnDecidingMetric()){
     wentToET = true;
     const myExpET = clamp(myExp*(30/90), 0.05, 2);
     const oppExpET = clamp(oppExp*(30/90), 0.05, 2);
     const myETGoals = simGoals(myExpET), oppETGoals = simGoals(oppExpET);
     eventsET = buildMatchEvents(myETGoals, oppETGoals, myPlayers, oppPlayers, 30, 90, myIncidents.redMinute, oppIncidents.redMinute, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer, myPaceBonus, oppPaceBonus);
     myGoals += myETGoals; oppGoals += oppETGoals;
-    if(myGoals===oppGoals){
+    if(tiedOnDecidingMetric()){
       wentToPK = true;
       shootout = simulateShootout(myRating, oppRating, myPlayers, oppPlayers, myIncidents.sentOffPlayer, oppIncidents.sentOffPlayer);
     }

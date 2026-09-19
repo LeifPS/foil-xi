@@ -1,8 +1,10 @@
 // Regressionstest für: "statt einem Land kann man auch zu 2% Gold bekommen wo man 4x 100+ Karte
 // bekommt zum auswählen" - mit DRAFT_GOLD_CHANCE (2%) gibt es statt der normalen Land-Ziehung einen
 // Gold-Fund: kein Land, direkt 4 Karten mit 100+ OVR zur Auswahl (mit derselben "mindestens 1 passt auf
-// einen offenen Slot"-Garantie). Auch die UI zeigt dafür eine eigene, landlose Gold-Cutscene statt des
-// Länder-Reels.
+// einen offenen Slot"-Garantie).
+// Zweite Feedback-Runde: der Gold-Fund darf NICHT als eigenes, plötzlich aufploppendes Ereignis wirken -
+// er muss ganz regulär als eine der Kacheln IM Länder-Reel selbst mitlaufen (wie jedes andere Land),
+// landet die Walze zufällig darauf, gibt es den Gold-Fund. Kein separates Cutscene-Layout mehr.
 const { withPage } = require('./lib/browser');
 const { ok, eq, noErrors, summary } = require('./lib/assert');
 
@@ -35,17 +37,28 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const forcedRollIsGold = forcedGoldRoll.isGold === true && forcedGoldRoll.nation === null && forcedGoldRoll.cards.length === 4;
     const forcedRollAllHundredPlus = forcedGoldRoll.cards.every(c=>c.ov>=100);
 
-    // ---------- (3) UI: ein erzwungener Gold-Fund zeigt eine eigene Cutscene, kein Länder-Reel ----------
+    // ---------- (3) UI: ein erzwungener Gold-Fund läuft über GENAU dasselbe Länder-Reel, landet nur auf
+    // der Gold-Kachel statt einem Land - kein separates Cutscene-Layout, kein eigener Screen-Aufbau.
     Math.random = () => 0;
     draftBeginRoll();
     Math.random = realMathRandom;
-    const goldSpinShownInsteadOfReel = !!document.querySelector('.draft-gold-spin') && !document.getElementById('draft-reel-strip');
+    const reelStripPresent = !!document.getElementById('draft-reel-strip');
+    const finalTileIsGold = !!document.querySelector('#draft-reel-strip .draft-reel-final.draft-reel-gold');
     // Nach der (kürzeren, ohne echten Reel-Übergang wartenden) Spin-Phase + Aufdeck-Sequenz: alle 4
     // gezeigten Karten sind tatsächlich 100+ (worst case inkl. Legendary-Pause+Slow-Reveal je Karte).
     const deadline = Date.now() + 2200 + 4*2500 + 1500;
     while(draftRollState.rollPhase!=='done' && Date.now()<deadline){ await new Promise(r=>setTimeout(r, 40)); }
     const revealedGoldCardsAllHundredPlus = draftRollState.currentRoll.cards.every(c=>c.ov>=100);
     const noNationShownDuringGoldReveal = !document.querySelector('.draft-roll-flag');
+
+    // ---------- (3b) die Gold-Kachel ist auch unter den ganz normalen, zufällig durchlaufenden
+    // Füll-Kacheln des Reels regelmäßig dabei - nicht nur, wenn sie tatsächlich das Ergebnis ist. Das
+    // beweist, dass sie "ganz regulär mit im Spin" ist, statt aus dem Nichts aufzutauchen.
+    let sawGoldAmongFillerTiles = false;
+    for(let i=0;i<20 && !sawGoldAmongFillerTiles; i++){
+      const html = draftBuildReelHTML('Germany');
+      if(html.includes('draft-reel-gold')) sawGoldAmongFillerTiles = true;
+    }
 
     // ---------- (4) draftUsePlayersOnlyReroll funktioniert auch bei einem Gold-Fund (kein Land zum Behalten) ----------
     draftClearRollTimers(draftRollState);
@@ -63,8 +76,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
     return {
       allGoldRollsValid, forcedRollIsGold, forcedRollAllHundredPlus,
-      goldSpinShownInsteadOfReel, revealedGoldCardsAllHundredPlus, noNationShownDuringGoldReveal,
-      goldPlayersOnlyRerollWorked,
+      reelStripPresent, finalTileIsGold, revealedGoldCardsAllHundredPlus, noNationShownDuringGoldReveal,
+      sawGoldAmongFillerTiles, goldPlayersOnlyRerollWorked,
     };
   }));
 
@@ -73,9 +86,11 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.allGoldRollsValid, true, 'draftDrawGoldFour liefert zuverlässig 4 Karten mit 100+ OVR, davon mindestens 1 passend');
   eq(result.forcedRollIsGold, true, 'ein erzwungener Zufallstreffer liefert einen Gold-Fund (isGold, nation:null, 4 Karten)');
   eq(result.forcedRollAllHundredPlus, true, 'alle 4 Karten eines Gold-Funds haben mindestens 100 OVR');
-  eq(result.goldSpinShownInsteadOfReel, true, 'ein Gold-Fund zeigt eine eigene Cutscene statt des normalen Länder-Reels');
+  eq(result.reelStripPresent, true, 'ein Gold-Fund läuft über dasselbe Länder-Reel wie jedes normale Land, kein separater Screen');
+  eq(result.finalTileIsGold, true, 'die Walze landet bei einem Gold-Fund sichtbar auf der Gold-Kachel selbst (nicht auf einem Land)');
   eq(result.revealedGoldCardsAllHundredPlus, true, 'die am Ende aufgedeckten Gold-Fund-Karten sind tatsächlich alle 100+ OVR');
   eq(result.noNationShownDuringGoldReveal, true, 'beim Gold-Fund wird keine Länderflagge angezeigt (kein Land beteiligt)');
+  eq(result.sawGoldAmongFillerTiles, true, 'die Gold-Kachel läuft regulär unter den zufälligen Füll-Kacheln jeder Walze mit, nicht nur wenn sie tatsächlich gewonnen wird');
   eq(result.goldPlayersOnlyRerollWorked, true, '"Nur Spieler neu" funktioniert auch bei einem Gold-Fund und liefert 4 neue 100+-Karten');
 
   summary('Draft-Modus-Gold-Fund-Test');
