@@ -85,10 +85,45 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
     document.getElementById('modal-root').innerHTML = '';
 
+    // ---------- (4) Fremd-Account-Writes (Admin-Panel, Transfermarkt) laufen jetzt durch denselben
+    // Wächter - diese Pfade gingen komplett an sSet() vorbei und waren dadurch völlig ungeschützt.
+    const foreignWrites = [];
+    let storedForeignProfile = { coins: 90000, careerWins: 120, prestige: 1 };
+    fb = {
+      doc: (db, col, id) => ({ path: col + '/' + id }),
+      getDoc: async (ref) => ({ exists: () => true, data: () => ({ profile: storedForeignProfile }) }),
+      setDoc: async (ref, val) => { foreignWrites.push({ path: ref.path, val }); },
+    };
+
+    // 4a) Legitimer Admin-Write (z.B. Coins geben) geht durch.
+    await writeForeignProfileGuarded('fremdverein', { ...storedForeignProfile, coins: 95000 });
+    const foreignNormalWriteAllowed = foreignWrites.length === 1;
+
+    // 4b) Genau der Schadensfall: das Panel hatte einen leeren/unvollständigen Snapshot, newProfile ist
+    // daher praktisch leer -> muss blockiert werden und werfen (damit die try/catch der Aufrufer greifen).
+    let threw = false;
+    try { await writeForeignProfileGuarded('fremdverein', { coins: 95000 }); }
+    catch (e) { threw = true; }
+    const foreignBlankWriteBlocked = threw && foreignWrites.length === 1;
+
+    // 4c) Kann der aktuelle Stand nicht gelesen werden, wird ebenfalls NICHT geschrieben (im Zweifel
+    // lieber gar nichts tun, als blind über einen unbekannten Stand zu schreiben).
+    fb.getDoc = async () => { throw new Error('network'); };
+    let threwOnReadFail = false;
+    try { await writeForeignProfileGuarded('fremdverein', { ...storedForeignProfile, coins: 1 }); }
+    catch (e) { threwOnReadFail = true; }
+    const foreignReadFailBlocksWrite = threwOnReadFail && foreignWrites.length === 1;
+
+    // 4d) Die Versions-Wiederherstellung darf als EINZIGE bewusst zurückspielen (allowRollback).
+    fb.getDoc = async () => ({ exists: () => true, data: () => ({ profile: storedForeignProfile }) });
+    await writeForeignProfileGuarded('fremdverein', { coins: 10, careerWins: 5, prestige: 0 }, { collection: [] }, { allowRollback: true });
+    const rollbackRestoreStillAllowed = foreignWrites.length === 2;
+
     return {
       normalWriteAllowed, blankWriteBlocked, blockToastShown, greatResetStillAllowed, prestigeDropBlocked,
       takeoverModalShown, writesStoppedAfterTakeover, allKeysBlockedAfterTakeover,
       initBlockedInsteadOfOverwriting, saveIncompleteScreenShown,
+      foreignNormalWriteAllowed, foreignBlankWriteBlocked, foreignReadFailBlocksWrite, rollbackRestoreStillAllowed,
     };
   }));
 
@@ -104,6 +139,10 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.allKeysBlockedAfterTakeover, true, 'die Schreibsperre gilt für alle Keys, nicht nur profile');
   eq(result.initBlockedInsteadOfOverwriting, true, 'existiert das Save-Dokument, enthält aber kein Profil, legt init() KEINEN leeren Account an und schreibt nichts');
   eq(result.saveIncompleteScreenShown, true, 'stattdessen erscheint ein klarer Hinweis-Screen mit Verweis auf die Wiederherstellung');
+  eq(result.foreignNormalWriteAllowed, true, 'ein legitimer Write in einen fremden Account (Admin-Panel) geht unverändert durch');
+  eq(result.foreignBlankWriteBlocked, true, 'ein leeres/unvollständiges Profil kann NICHT mehr über einen fremden Spielstand geschrieben werden (Admin-Panel/Transfermarkt liefen bisher komplett an jedem Schutz vorbei)');
+  eq(result.foreignReadFailBlocksWrite, true, 'lässt sich der aktuelle Stand des Zielaccounts nicht lesen, wird gar nicht erst geschrieben');
+  eq(result.rollbackRestoreStillAllowed, true, 'die Versions-Wiederherstellung darf als einzige bewusst einen älteren Stand zurückspielen (allowRollback)');
 
   summary('Spielstand-Überschreib-Schutz-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

@@ -15525,7 +15525,11 @@ async function buyMarketListing(listing){
             if(!sellerProfile.achievementStats) sellerProfile.achievementStats = {};
             sellerProfile.achievementStats.marketCoinsEarned = (sellerProfile.achievementStats.marketCoinsEarned||0) + listing.price;
             const filteredField = sourceArr.filter(x=>x.uid!==listing.cardUid);
-            await fb.setDoc(fb.doc(fb.db,'saves', listing.sellerUserId), {profile:sellerProfile, [removeField]:filteredField}, {merge:true});
+            // Läuft über denselben Wächter wie alle anderen Fremd-Profil-Writes: sellerProfile stammt
+            // oben aus `sellerData.profile || {coins:0}` - wäre das Profil im gelesenen Snapshot leer
+            // oder unvollständig gewesen, hätte dieser Pfad ein Ein-Feld-Profil über den kompletten
+            // Spielstand des Verkäufers geschrieben.
+            await writeForeignProfileGuarded(listing.sellerUserId, sellerProfile, {[removeField]:filteredField});
             try{ await fb.deleteDoc(fb.doc(fb.db,'market', listing.id)); }catch(_){}
           }
         }
@@ -16613,6 +16617,44 @@ function profileWriteWouldCollapse(value){
   if(cw < _lastKnownProfileFloor.careerWins) return `careerWins ${_lastKnownProfileFloor.careerWins} -> ${cw}`;
   if(pr < _lastKnownProfileFloor.prestige) return `prestige ${_lastKnownProfileFloor.prestige} -> ${pr}`;
   return null;
+}
+// Gemeinsamer Wächter für JEDEN Write eines kompletten profile-Objekts in ein FREMDES saves-Dokument
+// (Admin-Panel, Transfermarkt-Fallback, ...). Diese Pfade laufen komplett an sSet() vorbei und hatten
+// deshalb bisher überhaupt keinen Schutz - dabei bauen sie ihr newProfile typischerweise aus einem
+// vorher gelesenen Snapshot ({...p, feld:wert}), der beim gemeldeten Vorfall ("täglich wird mein Verein
+// gelöscht") genau die Fehlerquelle wäre: war dieses p leer/unvollständig (fehlgeschlagener Read, altes
+// Panel, halb geschriebenes Dokument), schreibt der Aufruf ein nahezu leeres Profil über einen echten
+// Spielstand. Es gelten dieselben zwei Invarianten wie beim eigenen Account (siehe
+// profileWriteWouldCollapse): careerWins und prestige können im echten Spiel nie sinken.
+// Wirft bei Blockade oder Schreibfehler, damit die bestehenden try/catch-Blöcke der Aufrufer ohne
+// weitere Änderung korrekt abbrechen (Fehler-Toast + return) statt Erfolg zu melden.
+// opts.allowRollback: ausdrücklich erlaubter Rückschritt - nur für die Versions-Wiederherstellung im
+// Admin-Panel, deren ganzer Zweck das Zurückspielen eines ÄLTEREN Standes ist.
+async function writeForeignProfileGuarded(targetId, newProfile, extraFields, opts){
+  opts = opts || {};
+  if(!opts.allowRollback){
+    let currentProfile = null;
+    try{
+      const snap = await fb.getDoc(fb.doc(fb.db,'saves',targetId));
+      currentProfile = snap.exists() ? (snap.data().profile || null) : null;
+    }catch(e){
+      // Im Zweifel NICHT schreiben: ein fehlgeschlagener Read ist genau der Zustand, aus dem die
+      // gemeldeten Datenverluste entstanden sind.
+      console.error(`writeForeignProfileGuarded(${targetId}) abgebrochen: aktueller Stand konnte nicht gelesen werden - es wird nichts geschrieben.`, e);
+      throw new Error('profile-guard-read-failed');
+    }
+    if(currentProfile){
+      const curCw = currentProfile.careerWins||0, curPr = currentProfile.prestige||0;
+      const newCw = (newProfile && newProfile.careerWins)||0, newPr = (newProfile && newProfile.prestige)||0;
+      if(newCw < curCw || newPr < curPr){
+        console.error(`writeForeignProfileGuarded(${targetId}) BLOCKIERT: careerWins ${curCw} -> ${newCw}, prestige ${curPr} -> ${newPr}. Diese Werte können nie sinken - der Schreibversuch hätte einen echten Spielstand mit einem leeren/veralteten überschrieben. Nichts geschrieben.`);
+        toast(`Abgebrochen: der Schreibvorgang hätte den Spielstand von ${targetId} zurückgesetzt und wurde blockiert.`);
+        throw new Error('profile-guard-collapse');
+      }
+    }
+  }
+  await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile, ...(extraFields||{})}, {merge:true});
+  return true;
 }
 async function sSet(key, value, shared=false){
   if(!shared){
@@ -21261,7 +21303,7 @@ async function loadAdminUserPanel(targetId){
       const amount = parseInt(val,10);
       if(!Number.isFinite(amount)) return;
       const newProfile = {...p, coins:(p.coins||0)+amount};
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      try{ await writeForeignProfileGuarded(targetId, newProfile); }
       catch(e){ console.warn('admin give coins failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       // This writes straight to the TARGET account's Firestore doc, bypassing atomicCoinChange/the local
       // `profile` object entirely - correct when targeting someone else's account (no live session of
@@ -21279,7 +21321,7 @@ async function loadAdminUserPanel(targetId){
   // Direkt-Firestore-Schreibweise wie "Coins hinzuf\u00fcgen" oben (funktioniert auch f\u00fcr fremde Accounts).
   document.getElementById('admin-reset-ucl-limit').addEventListener('click', async ()=>{
     const newProfile = {...p, uclStartCount:0, uclStartDate:null, uelStartCount:0, uelStartDate:null};
-    try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+    try{ await writeForeignProfileGuarded(targetId, newProfile); }
     catch(e){ console.warn('admin reset ucl limit failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
     if(targetId===clubId){ profile.uclStartCount=0; profile.uclStartDate=null; profile.uelStartCount=0; profile.uelStartDate=null; }
     toast(`UCL/UEL-Tageslimit f\u00fcr ${targetId} zur\u00fcckgesetzt.`);
@@ -21293,7 +21335,7 @@ async function loadAdminUserPanel(targetId){
       // commitMatchResult) und nie von einem Great Reset zur\u00fcckgesetzt - ein manuell verliehener Sieg
       // verh\u00e4lt sich hier bewusst identisch zu einem echten, damit die Karriere-Statistik konsistent bleibt.
       const newProfile = {...p, wins:Math.max(0,(p.wins||0)+amount), careerWins:Math.max(0,(p.careerWins||0)+amount)};
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      try{ await writeForeignProfileGuarded(targetId, newProfile); }
       catch(e){ console.warn('admin give wins failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
       toast(`${amount>=0?'+':''}${amount} Siege f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
@@ -21311,7 +21353,7 @@ async function loadAdminUserPanel(targetId){
       const currentStats = p.achievementStats || {};
       const newStats = {...currentStats, wepWins: Math.max(0,(currentStats.wepWins||0)+amount)};
       const newProfile = {...p, achievementStats: newStats};
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      try{ await writeForeignProfileGuarded(targetId, newProfile); }
       catch(e){ console.warn('admin give wep win failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
       toast(`${amount>=0?'+':''}${amount} Wochenendpokal-Sieg(e) f\u00fcr ${targetId} - Erfolg kann jetzt in "Erfolge" abgeholt werden.`);
       loadAdminUserPanel(targetId);
@@ -21327,7 +21369,7 @@ async function loadAdminUserPanel(targetId){
       const currentWp = (p.weekPass && p.weekPass.weekId===WEEK_PASS_ID) ? p.weekPass : {weekId:WEEK_PASS_ID, xp:0, claimed:[], bonusClaimed:0, chosen:{}};
       const newWp = {...currentWp, xp:Math.max(0,(currentWp.xp||0)+amount)};
       const newProfile = {...p, weekPass:newWp};
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      try{ await writeForeignProfileGuarded(targetId, newProfile); }
       catch(e){ console.warn('admin give week pass xp failed', e); toast('Fehlgeschlagen \u2014 bitte erneut versuchen.'); return; }
       toast(`${amount>=0?'+':''}${amount} Wochen-Pass-XP f\u00fcr ${targetId}.`);
       loadAdminUserPanel(targetId);
@@ -21351,14 +21393,14 @@ async function loadAdminUserPanel(targetId){
     askTextModal('Verwarnungstext', 'z. B. Bitte fair spielen...', async (msg)=>{
       if(!msg) return;
       const newProfile = {...p, pendingWarning:msg};
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      try{ await writeForeignProfileGuarded(targetId, newProfile); }
       catch(e){ console.warn('admin send warning failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`Verwarnung an ${targetId} gesendet.`);
     }, 200);
   });
   document.getElementById('admin-toggle-ban').addEventListener('click', async ()=>{
     const newProfile = {...p, banned: !p.banned};
-    try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+    try{ await writeForeignProfileGuarded(targetId, newProfile); }
     catch(e){ console.warn('admin toggle ban failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
     toast(p.banned ? `${targetId} entsperrt.` : `${targetId} gesperrt.`);
     loadAdminUserPanel(targetId);
@@ -21421,7 +21463,7 @@ async function loadAdminUserPanel(targetId){
   document.getElementById('admin-patch-missed-fields').addEventListener('click', async ()=>{
     const newProfile = {...p, ...missedResetFieldsPatch()};
     try{
-      await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+      await writeForeignProfileGuarded(targetId, newProfile);
     }catch(e){ console.warn('missed-fields patch failed', e); toast('Fehlgeschlagen.'); return; }
     toast(`${targetId}: SBCs und OG-Pack-Freischaltung nachträglich zurückgesetzt (Coins/Karten/Prestige unverändert).`);
     loadAdminUserPanel(targetId);
@@ -21496,9 +21538,9 @@ async function adminRestoreFelixFC(targetId, data){
     const unlockedNametags = p.unlockedNametags && p.unlockedNametags.includes('bronze') ? p.unlockedNametags : [...(p.unlockedNametags||[]), 'bronze'];
     const newProfile = {...p, crest:restoredCrest, nametag:'bronze', unlockedNametags, felixfcRestoreApplied:true};
 
-    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {
-      profile:newProfile, collection:newCollection, managerCollection:newManagerCollection, squad:restoredSquad,
-    }, {merge:true});
+    await writeForeignProfileGuarded(targetId, newProfile, {
+      collection:newCollection, managerCollection:newManagerCollection, squad:restoredSquad,
+    });
   }catch(e){ console.warn('felixfc restore failed', e); toast('Wiederherstellung fehlgeschlagen — bitte erneut versuchen.'); return; }
   toast(`${targetId}: Startelf, Trainer, Wappen, 40x UCL-Sieger-Pack und Bronze-Nametag wiederhergestellt.`);
   loadAdminUserPanel(targetId);
@@ -21512,7 +21554,7 @@ async function adminResetOrei(targetId, p){
   if(!fb) return;
   const newProfile = {...p, oreiStreak:0, oreiFirstWinClaimed:false, oreiSecondWinClaimed:false, ogPackUnlocked:false};
   try{
-    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true});
+    await writeForeignProfileGuarded(targetId, newProfile);
   }catch(e){ console.warn('admin orei reset failed', e); toast('Reset fehlgeschlagen.'); return; }
   toast(`O Rei für ${targetId} komplett zurückgesetzt.`);
   loadAdminUserPanel(targetId);
@@ -21528,9 +21570,11 @@ async function adminResetAccount(targetId, p){
   const newCollection = buildStarterCollection();
   const newSquad = {formation:'433', slots:{}, managerUid:null, tactics:{...DEFAULT_TACTICS}};
   try{
-    await fb.setDoc(fb.doc(fb.db,'saves',targetId), {
-      profile: newProfile, collection: newCollection, managerCollection: [], packCollection: [], squad: newSquad, squadPresets: []
-    }, {merge:true});
+    // Der Admin-Einzelaccount-Reset ist per Design monoton (prestige+1, careerWins bleibt erhalten -
+    // siehe der Hinweistext im Bestätigungsdialog), läuft also ganz normal durch den Wächter.
+    await writeForeignProfileGuarded(targetId, newProfile, {
+      collection: newCollection, managerCollection: [], packCollection: [], squad: newSquad, squadPresets: []
+    });
     await fb.setDoc(fb.doc(fb.db,'legacy', targetId), {
       userId: newProfile.userId||targetId, name: newProfile.displayName||targetId, crest: newProfile.crest,
       prestige: newProfile.prestige||0, careerWins: newProfile.careerWins||0, updatedAt: Date.now()
@@ -21588,10 +21632,14 @@ async function openAdminSaveHistoryModal(targetId){
           const versionSnap = await fb.getDoc(fb.doc(fb.db,'saveHistory',targetId,'versions',versionId));
           if(!versionSnap.exists()){ toast('Version nicht mehr vorhanden.'); closeModal(); return; }
           const v = versionSnap.data();
-          await fb.setDoc(fb.doc(fb.db,'saves',targetId), {
-            profile: v.profile, collection: v.collection, managerCollection: v.managerCollection,
+          // allowRollback: das EINZIGE bewusst rückwärtsgerichtete Schreiben im ganzen Spiel - der
+          // ganze Zweck dieser Funktion ist es, einen ÄLTEREN Stand zurückzuspielen (typischerweise
+          // genau nach einem Datenverlust). Der Collapse-Wächter würde sonst ausgerechnet die
+          // Wiederherstellung blockieren.
+          await writeForeignProfileGuarded(targetId, v.profile, {
+            collection: v.collection, managerCollection: v.managerCollection,
             packCollection: v.packCollection, squad: v.squad, squadPresets: v.squadPresets,
-          }, {merge:true});
+          }, {allowRollback:true});
         }catch(e){ console.warn('restore save version failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
         toast(`${targetId} wurde auf die gewählte Version zurückgesetzt.`);
         closeModal();
@@ -21756,7 +21804,7 @@ function openAdminSetLigaBadgeModal(targetId, p){
     btn.addEventListener('click', async ()=>{
       const newUnlocked = unlocked.includes(id) ? unlocked : [...unlocked, id];
       const newProfile = {...p, nametag:id, unlockedNametags:newUnlocked};
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+      try{ await writeForeignProfileGuarded(targetId, newProfile); }
       catch(e){ console.warn('admin nametag set failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`Nametag "${nt.label}" für ${targetId} gesetzt.`);
       closeModal();
@@ -21766,7 +21814,7 @@ function openAdminSetLigaBadgeModal(targetId, p){
   });
   document.getElementById('admin-badge-clear').addEventListener('click', async ()=>{
     const newProfile = {...p, nametag:null};
-    try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {profile:newProfile}, {merge:true}); }
+    try{ await writeForeignProfileGuarded(targetId, newProfile); }
     catch(e){ console.warn('admin nametag clear failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
     toast(`Nametag für ${targetId} deaktiviert (bleibt freigeschaltet).`);
     closeModal();
