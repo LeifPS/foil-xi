@@ -37,7 +37,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const lastTileIsRealNation = finalTileText === natDE(roll.nation);
     // Ein echter CSS-transform-Übergang wurde tatsächlich gestartet (kein JS-Ticking mehr).
     const transitionStarted = !!strip && strip.style.transition.includes('transform') && strip.style.transform.startsWith('translateX');
-    await new Promise(r => setTimeout(r, 1500 + 4*450 + 300)); // Übergang + Aufdeck-Sequenz fertig laufen lassen
+    await new Promise(r => setTimeout(r, 2200 + 4*450 + 300)); // Übergang + Aufdeck-Sequenz fertig laufen lassen
     const landedOnRealNation = state.currentRoll && state.currentRoll.nation === roll.nation;
 
     // ---------- (4) 100+-Karte: Pause vor dem Aufdecken + langsame eigene Reveal-Animation ----------

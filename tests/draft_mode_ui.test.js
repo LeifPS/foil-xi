@@ -38,7 +38,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // jeden tatsächlich auftretenden Aufdeck-Stand festhalten - beweist die STAGGERED Reihenfolge
     // (0 -> 1 -> 2 -> 3 -> 4, nicht alles auf einmal), ohne von exakten Millisekunden abzuhängen.
     const seenCounts = [0];
-    const deadline = Date.now() + 1500 + 4*450 + 1500;
+    const deadline = Date.now() + 2200 + 4*450 + 1500;
     while(Date.now() < deadline){
       const c = document.querySelectorAll('#draft-roll-pick-list .draft-card-reveal').length;
       if(seenCounts[seenCounts.length-1] !== c) seenCounts.push(c);
@@ -68,7 +68,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     document.getElementById('draft-roll-go-btn').click(); // neuer Roll, direkt wieder mitten in "spinning"
     document.getElementById('draft-restart-btn').click(); // sofortiger Restart, bevor die 1.5s um sind
     const restartedToIdleImmediately = !!document.getElementById('draft-roll-go-btn');
-    await new Promise(r=>setTimeout(r, 1500 + 4*450 + 150)); // die GESAMTE alte Animationsdauer abwarten
+    await new Promise(r=>setTimeout(r, 2200 + 4*450 + 150)); // die GESAMTE alte Animationsdauer abwarten
     // Wäre der alte Timer nicht aufgeräumt worden, würde er jetzt mitten in die frische Aufstellung reinfunken
     // (z.B. ungewollt einen Slot befüllen) - Feld muss nach dem Restart weiterhin komplett leer sein.
     const stillCleanAfterOldTimersWouldHaveFired = document.querySelectorAll('#draft-pitch-wrap .pitch-slot .pcard').length === 0

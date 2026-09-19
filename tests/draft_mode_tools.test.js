@@ -63,11 +63,11 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // ---------- (3a) Kompletter Neu-Wurf (1x pro Lauf) ----------
     state = freshState();
     draftBeginRoll();
-    await new Promise(r=>setTimeout(r, 1500 + 4*450 + 300)); // bis Phase 'done' durchlaufen lassen
+    await new Promise(r=>setTimeout(r, 2200 + 4*450 + 300)); // bis Phase 'done' durchlaufen lassen
     const firstRollCards = state.currentRoll.cards.map(c=>c.id);
     const rerollsFullBefore = state.rerolls.full;
     draftUseFullReroll();
-    await new Promise(r=>setTimeout(r, 1500 + 4*450 + 300));
+    await new Promise(r=>setTimeout(r, 2200 + 4*450 + 300));
     const secondRollCards = state.currentRoll.cards.map(c=>c.id);
     const fullRerollConsumed = state.rerolls.full === rerollsFullBefore - 1;
     const fullRerollGaveDifferentOffer = JSON.stringify(firstRollCards) !== JSON.stringify(secondRollCards);
@@ -106,7 +106,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     cardWraps[filledIdx].click();
     const confirmModalShown = !!document.getElementById('draft-confirm-replace-yes');
     document.getElementById('draft-confirm-replace-yes').click();
-    await new Promise(r=>setTimeout(r, 1500 + 4*450 + 300));
+    await new Promise(r=>setTimeout(r, 2200 + 4*450 + 300));
     const replaceRollActive = !!(state.currentRoll && state.currentRoll.isReplace);
     // ALLE 4 beim Ersetzen-Wurf gezogenen Kandidaten müssen exakt auf DIESE eine Position passen.
     const allFourFitExactSlot = state.currentRoll.cards.every(c => positionEligibility(c, filledSlotLabel)!==null);
