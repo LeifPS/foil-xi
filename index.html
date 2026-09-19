@@ -13583,13 +13583,26 @@ function openChallengeDetail(def){
 // every individual tile's click handler, restored once renderChallengeGrid rebuilds the list (see end
 // of this function)
 let sbcListScrollY = 0;
+// Bugfix (iPad-Resume): getExternalLockedUids() below can hang for several seconds right after the app
+// resumes from background (the first Firestore call after a suspend/resume can take close to its full
+// timeout). Without any visible feedback during that wait, the tab just looks empty/frozen, so a player
+// naturally re-taps "Herausforderungen" - which starts a SECOND, overlapping renderChallengeGrid() call.
+// renderSBCList() rebuilds the whole view (and with it a brand-new #challenge-grid element) on every tab
+// visit, so the FIRST call's `grid` reference silently becomes a detached node once that happens - when
+// its stale await finally resolves, it writes into a node that's no longer on screen at all. This token
+// makes a stale call recognize that a newer one has since started and bail out instead of doing
+// pointless (and confusing, from the player's perspective) invisible work.
+let sbcGridRenderToken = 0;
 async function renderChallengeGrid(){
+  const myToken = ++sbcGridRenderToken;
   const grid = document.getElementById('challenge-grid');
   if(!grid) return;
-  grid.innerHTML = '';
+  grid.innerHTML = '<p class="hint" style="grid-column:1/-1;text-align:center;">Lädt…</p>';
   grid.addEventListener('click', ()=>{ sbcListScrollY = window.scrollY; }, {capture:true});
   const squadLocked = new Set(Object.values(squad.slots));
   const externalLocked = await getExternalLockedUids();
+  if(myToken !== sbcGridRenderToken) return; // a newer render already took over - see comment above
+  grid.innerHTML = '';
   const allCards = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card && !x.card.favorited && !externalLocked.has(x.uid));
   const poolFree = allCards.filter(x=>!squadLocked.has(x.uid));
   const poolWithSquad = allCards;
@@ -23430,9 +23443,17 @@ function renderSquad(view){
 const PICKER_SORT_LABEL = {rating:'Rating', chem:'Chemie', name:'Alphabetisch'};
 let pickerSortMode = 'rating';
 async function openPicker(slot){
+  const tabAtClick = currentTab;
   const used = allSquadUids();
   const externalLocked = await getExternalLockedUids();
   const marketLocked = await getMarketLockedUidsOnly();
+  // Bugfix (iPad-Resume): getExternalLockedUids()/getMarketLockedUidsOnly() can take several seconds
+  // right after the app resumes from background (the very first Firestore call after a suspend/resume
+  // can hang close to its full timeout, see FS_CALL_TIMEOUT_MS). If the player gives up waiting and
+  // switches to a different tab in the meantime, opening this modal now would pop it up over whatever
+  // tab they're looking at now, with no relation to what they actually clicked - openModal()/#modal-root
+  // paint independently of the current tab, so nothing else would stop that. Bail out instead.
+  if(currentTab !== tabAtClick) return;
   const usedNames = allSquadNames('slots:'+slot.id);
   let items = collection.map(c=>({uid:c.uid, card:leveledOwnedCard(c)})).filter(x=>x.card);
   items = items.map(x=>({...x, effOv: previewEffectiveOvAtSlot(x.card, slot, x.uid, profile.showDecimalEffOv)})).filter(x=>x.effOv!==null);
@@ -23573,6 +23594,7 @@ function openCardCompareModal(currentCard, candidateCard, slot){
 const MGR_PICKER_SORT_LABEL = {tier:'Tier', boost:'Boost-Wert', name:'Alphabetisch'};
 let mgrPickerSortMode = 'tier';
 async function openManagerPicker(){
+  const tabAtClick = currentTab;
   const items = managerCollection.map(m=>({uid:m.uid, mgr:MGR_BY_ID.get(m.mgrId)})).filter(x=>x.mgr);
   const sortItems = ()=>{
     if(mgrPickerSortMode==='boost') items.sort((a,b)=> b.mgr.boostValue-a.mgr.boostValue);
@@ -23581,6 +23603,8 @@ async function openManagerPicker(){
   };
   sortItems();
   const externalLocked = await getExternalLockedUids();
+  // Bugfix (iPad-Resume): same stale-tab guard as openPicker above - see its comment for why.
+  if(currentTab !== tabAtClick) return;
   openModal(`
     <h2 style="margin-bottom:4px;">Trainer ausw\u00e4hlen</h2>
     <p style="color:var(--muted);font-size:12.5px;margin-bottom:12px;">Nur ein Trainer kann gleichzeitig zugewiesen sein. Trainer erh\u00e4ltst du \u00fcber das Trainer Pack im Kartenladen. Trainer im Transfermarkt oder in einem Handelsangebot sind gerade nicht verf\u00fcgbar.</p>
