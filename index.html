@@ -2038,7 +2038,7 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
    .draft-card-unfit sitzt daher jetzt ohnehin auf der inneren Karte, nicht mehr auf diesem Wrapper. */
 .draft-card-reveal-rare{animation:draftCardRevealRare .55s cubic-bezier(.2,.9,.3,1.3) both;}
 @keyframes draftCardRevealRare{0%{opacity:0;transform:scale(.5) translateY(20px);}100%{opacity:1;transform:scale(1) translateY(0);}}
-.draft-card-reveal-epic{animation:draftCardRevealEpic .7s cubic-bezier(.2,.9,.3,1.3) both;}
+.draft-card-reveal-epic{animation:draftCardRevealEpic 1.5s cubic-bezier(.2,.9,.3,1.3) both;}
 @keyframes draftCardRevealEpic{0%{opacity:0;transform:scale(.4) rotate(-6deg);box-shadow:0 0 0 rgba(255,215,106,0);}50%{box-shadow:0 0 34px 8px rgba(255,215,106,.75);}100%{opacity:1;transform:scale(1) rotate(0deg);box-shadow:0 0 18px 2px rgba(255,215,106,.45);}}
 /* Karten, die auf keine offene Position mehr passen, werden klar erkennbar ausgegraut (echtes
    Graustufen-Bild, nicht nur reduzierte Deckkraft) - sitzt auf der INNEREN Karte (siehe cardEl-Aufruf),
@@ -2046,7 +2046,6 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 .draft-card-unfit{filter:grayscale(1) brightness(.7) !important;opacity:.6 !important;}
 @keyframes draftCardReveal{from{opacity:0;transform:scale(.6) translateY(14px);}to{opacity:1;transform:scale(1) translateY(0);}}
 .draft-slot-card{transition:.15s;}
-.draft-move-toolbox{background:rgba(61,220,132,.06);border:1px solid rgba(61,220,132,.35);border-radius:12px;padding:12px;margin-bottom:14px;}
 .side-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;height:fit-content;}
 .rating-hero{display:flex;align-items:center;gap:14px;}
 .rating-hero .num{font-family:'Anton';font-size:44px;line-height:1;}
@@ -12751,16 +12750,12 @@ function draftEnsureSlotIds(players){
 function draftSquadsOf(){ return profile.draftSquads || [null,null,null]; }
 let draftRollState = null;
 let draftTournamentState = null;
-// Aktuell zum Verschieben ausgewählter Slot (Klick auf eine bereits platzierte Karte) - modulweit, da
-// nur jeweils EIN Draft-Lauf gleichzeitig aktiv sein kann.
-let draftMoveSelectedSlotId = null;
 function draftClearRollTimers(state){
   if(state.spinTimer){ clearTimeout(state.spinTimer); state.spinTimer = null; }
   (state.revealTimers||[]).forEach(t=>clearTimeout(t));
   state.revealTimers = [];
 }
 function draftStartRoll(){
-  draftMoveSelectedSlotId = null;
   draftRollState = {
     slots: FORMATIONS['433'].slots.map(s=>({id:s.id, label:s.label, card:null})),
     usedNames: new Set(),
@@ -12783,18 +12778,27 @@ function draftRestartRoll(){
   draftStartRoll();
 }
 const DRAFT_SPIN_MS = 1500, DRAFT_REVEAL_STAGGER_MS = 450;
+// Ein 100+-Fund verdient mehr Spannung: kurz vor seinem Aufdecken eine ~1s-Pause (Vorfreude), dann eine
+// deutlich langsamere ~1.5s-Aufdeck-Animation statt des üblichen schnellen Reinploppens.
+const DRAFT_LEGENDARY_PAUSE_MS = 1000, DRAFT_LEGENDARY_REVEAL_MS = 1500;
 // Gemeinsamer Animationsablauf für JEDE Art von Wurf (normaler Slot-Roll, kompletter Neu-Wurf, Nur-
 // Spieler-Neuwurf, Ersetzen-Wurf) - unterscheidet sich nur im übergebenen {nation,cards}-Ergebnis und
 // ob die ~1.5s "welches Land?"-Phase gezeigt wird (bei "nur Spieler" bleibt das Land ja gleich, die
 // Animation macht daher direkt mit dem Aufdecken weiter).
 function draftScheduleReveals(state){
+  const cards = state.currentRoll.cards;
+  let cursor = 0;
   for(let i=0;i<4;i++){
+    const isLegendary = cards[i].ov>=100;
+    if(isLegendary) cursor += DRAFT_LEGENDARY_PAUSE_MS;
+    const fireAt = cursor;
     const t = setTimeout(()=>{
       state.revealedCount = i+1;
       if(state.revealedCount>=4) state.rollPhase = 'done';
       renderDraftPanel();
-    }, i*DRAFT_REVEAL_STAGGER_MS);
+    }, fireAt);
     state.revealTimers.push(t);
+    cursor += isLegendary ? DRAFT_LEGENDARY_REVEAL_MS : DRAFT_REVEAL_STAGGER_MS;
   }
 }
 // Land-Cutscene komplett neu (2. Anlauf): statt einer sich verlangsamenden Flaggen-Anzeige läuft jetzt
@@ -12886,7 +12890,6 @@ function draftBeginReplaceRoll(slotId){
   const fslot = FORMATIONS['433'].slots.find(s=>s.id===slotId);
   state.rerolls.replace--;
   state.replaceTargetSlotId = slotId;
-  draftMoveSelectedSlotId = null;
   const nations = draftAllNations();
   const nation = draftPickWeightedNation(nations);
   const fullEligible = draftCardPool().filter(c=>positionEligibility(c, fslot.label)!==null);
@@ -12908,7 +12911,6 @@ async function draftSaveSquad(idx, players, rating){
   toast(`Aufstellung in Slot ${idx+1} gespeichert (Rating ${rating}).`);
   await maybePublishDraftLeaderboardEntry(squads);
   draftRollState = null;
-  draftMoveSelectedSlotId = null;
   renderDraftPanel();
 }
 // Chemie (dieselbe Engine wie im echten Kader-Editor) live über den bisherigen Teil-Kader - schon
@@ -12927,28 +12929,13 @@ function draftRatingFromSlots(state){
   const chem = computeChemistry(players, null);
   return Math.round(chem.reduce((s,p)=>s+p.chemOv,0)/chem.length);
 }
-// Echtes, INTERAKTIVES Feld (Rollen-in-Arbeit + fertige Aufstellung, jeweils solange noch nicht
-// gespeichert): zeigt Chemie-Sterne wie der echte Kader-Editor UND erlaubt jederzeit, eine bereits
-// platzierte Karte auf eine andere Position zu verschieben (oder mit einer anderen platzierten Karte zu
-// tauschen), solange sie dort laut positionEligibility spielen kann. Klick 1 wählt eine besetzte Karte
-// aus, Klick 2 auf einen anderen Slot verschiebt/tauscht sie dorthin (oder hebt bei erneutem Klick auf
-// denselben Slot die Auswahl wieder auf).
-// Prüft, ob die Karte aus fromSlotId tatsächlich nach targetSlotId verschoben/getauscht werden könnte -
-// dieselbe Regel wird SOWOHL für die Ziel-Hervorhebung (renderDraftEditablePitch, behebt "man sieht
-// nicht, wohin man eine Karte sonst noch verschieben könnte") ALS AUCH für den eigentlichen Klick-
-// Handler benutzt, damit Anzeige und tatsächliches Verhalten niemals auseinanderlaufen.
-function draftIsValidMoveTarget(state, fromSlotId, targetSlotId){
-  if(fromSlotId===targetSlotId) return false;
-  const fromSlot = state.slots.find(s=>s.id===fromSlotId);
-  const targetSlot = state.slots.find(s=>s.id===targetSlotId);
-  const fromFslot = FORMATIONS['433'].slots.find(s=>s.id===fromSlotId);
-  const targetFslot = FORMATIONS['433'].slots.find(s=>s.id===targetSlotId);
-  if(!fromSlot || !fromSlot.card) return false;
-  if(positionEligibility(fromSlot.card, targetFslot.label)===null) return false;
-  if(targetSlot.card && positionEligibility(targetSlot.card, fromFslot.label)===null) return false;
-  return true;
-}
-function renderDraftEditablePitch(el, state){
+// Statisches Feld für den laufenden/fertigen Draft: eine einmal platzierte Karte lässt sich NICHT mehr
+// verschieben oder tauschen (siehe draftPlaceCardWithChoice für die einmalige Entscheidung, WELCHER
+// offene Slot es beim Platzieren wird). Chemie-Sterne werden weiterhin live wie im echten Kader-Editor
+// angezeigt. Solange das "Ersetzen"-Kontingent noch nicht verbraucht ist, lässt sich eine platzierte
+// Karte anklicken, um sie (nach Bestätigung) gegen eine frisch gewürfelte Karte für dieselbe Position
+// auszutauschen - das ist der einzige nach der Platzierung noch verbleibende Änderungsweg.
+function renderDraftPitchLive(el, state){
   if(!el) return;
   const chemDetail = draftChemistryDetail(state);
   el.className = 'pitch';
@@ -12958,20 +12945,12 @@ function renderDraftEditablePitch(el, state){
     const wrap = document.createElement('div');
     wrap.className = 'pitch-slot';
     wrap.style.left = fslot.x+'%'; wrap.style.top = fslot.y+'%';
-    const isSelected = draftMoveSelectedSlotId===fslot.id;
-    const isValidTarget = draftMoveSelectedSlotId!==null && !isSelected && draftIsValidMoveTarget(state, draftMoveSelectedSlotId, fslot.id);
-    // Solange eine Karte zum Verschieben ausgewählt ist, werden ALLE anderen Positionen, die sie laut
-    // ihren gelisteten Positionen ebenfalls spielen könnte, klar gold hervorgehoben - alles andere wird
-    // sichtbar ausgegraut, statt es dem Spieler zu überlassen, jede Position einzeln durchzuprobieren.
-    // Ein höherer z-index auf den hervorgehobenen Zielen reduziert außerdem Fehlklicks auf den dicht
-    // gepackten Positionen (z.B. die 3er-Mittelfeldreihe), die sich an den Rändern leicht überlappen.
-    const dimmed = draftMoveSelectedSlotId!==null && !isSelected && !isValidTarget;
-    if(isValidTarget) wrap.style.zIndex = '5';
     if(stateSlot && stateSlot.card){
       const cardNode = cardEl(stateSlot.card, 'xs', null, fslot.label);
-      if(isSelected){ cardNode.style.outline = '3px solid var(--turf-bright)'; cardNode.style.borderRadius = '10px'; cardNode.style.boxShadow = '0 0 16px rgba(61,220,132,.6)'; }
-      if(isValidTarget){ cardNode.style.outline = '3px solid #ffd76a'; cardNode.style.borderRadius = '10px'; cardNode.style.boxShadow = '0 0 16px rgba(255,215,106,.65)'; }
-      if(dimmed){ cardNode.style.filter = 'grayscale(.75) brightness(.6)'; cardNode.style.opacity = '.65'; }
+      if(state.rerolls.replace>0){
+        wrap.style.cursor = 'pointer';
+        wrap.addEventListener('click', ()=>draftConfirmReplaceCard(state, fslot.id));
+      }
       const chem = chemDetail.bySlot[fslot.id];
       if(chem!==undefined){
         cardNode.style.position = 'relative';
@@ -12985,46 +12964,75 @@ function renderDraftEditablePitch(el, state){
     } else {
       const emptyEl = document.createElement('div');
       emptyEl.className = 'empty-slot-inner';
-      if(isSelected) emptyEl.style.borderColor = 'var(--turf-bright)';
-      if(isValidTarget){ emptyEl.style.borderColor = '#ffd76a'; emptyEl.style.borderStyle = 'solid'; emptyEl.style.boxShadow = '0 0 12px rgba(255,215,106,.5)'; }
-      if(dimmed) emptyEl.style.opacity = '.4';
       emptyEl.textContent = posDE(fslot.label);
       wrap.appendChild(emptyEl);
     }
-    wrap.addEventListener('click', ()=>draftHandlePitchSlotClick(state, fslot.id));
     el.appendChild(wrap);
   });
 }
-function draftHandlePitchSlotClick(state, clickedSlotId){
-  const clickedSlot = state.slots.find(s=>s.id===clickedSlotId);
-  if(draftMoveSelectedSlotId===null){
-    if(clickedSlot && clickedSlot.card){ draftMoveSelectedSlotId = clickedSlotId; renderDraftPanel(); }
+// Kleiner Hinweis unter dem Feld, solange noch ein "Ersetzen"-Kontingent übrig ist (die einzige nach der
+// Platzierung noch mögliche Änderung) - ersetzt den früheren Verschieben/Tauschen-Werkzeugkasten.
+function draftReplaceHintHTML(state){
+  if(state.rerolls.replace<=0) return '';
+  return `<p class="hint" style="margin:0 0 12px;text-align:center;">Tippe auf eine platzierte Karte, um sie (${state.rerolls.replace}x) gegen eine neu gewürfelte Karte auf derselben Position auszutauschen.</p>`;
+}
+function draftConfirmReplaceCard(state, slotId){
+  if(state.rerolls.replace<=0) return;
+  const stateSlot = state.slots.find(s=>s.id===slotId);
+  if(!stateSlot || !stateSlot.card) return;
+  const card = stateSlot.card;
+  openModal(`<h2 style="margin-bottom:10px;">Karte ersetzen?</h2>
+    <p class="hint" style="margin:0 0 16px;"><b style="color:var(--turf-bright);">${card.n}</b> wird gegen eine neu gewürfelte Karte für dieselbe Position ausgetauscht (noch ${state.rerolls.replace}x pro Lauf verfügbar).</p>
+    <div style="display:flex;gap:8px;">
+      <button class="action-btn" id="draft-confirm-replace-yes" style="flex:1;">Ja, ersetzen</button>
+      <button class="action-btn secondary" id="draft-confirm-replace-no" style="flex:1;">Abbrechen</button>
+    </div>`);
+  document.getElementById('draft-confirm-replace-yes').addEventListener('click', ()=>{ closeModal(); draftBeginReplaceRoll(slotId); });
+  document.getElementById('draft-confirm-replace-no').addEventListener('click', closeModal);
+}
+// Kurzes Label zur Unterscheidung mehrerer offener Slots mit demselben Label (z.B. die zwei CB- oder
+// drei CM-Slots), sortiert nach ihrer x-Koordinate auf dem Feld (siehe FORMATIONS['433']).
+function draftSlotDisambigLabel(sortedFslots, idx){
+  const n = sortedFslots.length;
+  if(n<=1) return '';
+  if(n===2) return idx===0 ? ' (links)' : ' (rechts)';
+  if(idx===0) return ' (links)';
+  if(idx===n-1) return ' (rechts)';
+  return ' (Mitte)';
+}
+// Platziert eine gewählte Karte - kann sie auf mehr als einem gerade offenen Slot spielen, entscheidet
+// der Spieler EINMALIG und ENDGÜLTIG, welcher es sein soll (danach lässt sich die Position nicht mehr
+// ändern, siehe renderDraftPitchLive). Passt die Karte auf höchstens einen offenen Slot, wird wie bisher
+// direkt und ohne Rückfrage zugewiesen. `onDone` wird erst aufgerufen, sobald die Karte tatsächlich
+// steht (synchron beim Direktfall, sonst erst nach der Modal-Auswahl).
+function draftPlaceCardWithChoice(state, card, onDone){
+  const openFslots = FORMATIONS['433'].slots.filter(fslot=>{
+    const stateSlot = state.slots.find(s=>s.id===fslot.id);
+    return stateSlot && !stateSlot.card && positionEligibility(card, fslot.label)!==null;
+  });
+  if(openFslots.length<=1){
+    draftAssignCardToSlot(state, card);
+    onDone();
     return;
   }
-  if(draftMoveSelectedSlotId===clickedSlotId){ draftMoveSelectedSlotId = null; renderDraftPanel(); return; }
-  if(!draftIsValidMoveTarget(state, draftMoveSelectedSlotId, clickedSlotId)){
-    const fromCard = state.slots.find(s=>s.id===draftMoveSelectedSlotId).card;
-    const targetFslot = FORMATIONS['433'].slots.find(s=>s.id===clickedSlotId);
-    const reason = (clickedSlot.card && positionEligibility(fromCard, targetFslot.label)!==null)
-      ? `${clickedSlot.card.n} kann nicht auf die freiwerdende Position spielen — Tausch nicht möglich.`
-      : `${fromCard.n} kann nicht auf ${posDE(targetFslot.label)} spielen.`;
-    toast(reason);
-    draftMoveSelectedSlotId = null;
-    renderDraftPanel();
-    return;
-  }
-  const fromSlot = state.slots.find(s=>s.id===draftMoveSelectedSlotId);
-  const fromCard = fromSlot.card;
-  if(clickedSlot.card){
-    const targetCard = clickedSlot.card;
-    clickedSlot.card = fromCard;
-    fromSlot.card = targetCard;
-  } else {
-    clickedSlot.card = fromCard;
-    fromSlot.card = null;
-  }
-  draftMoveSelectedSlotId = null;
-  renderDraftPanel();
+  const byLabel = {};
+  openFslots.forEach(fs=>{ (byLabel[fs.label] = byLabel[fs.label]||[]).push(fs); });
+  Object.values(byLabel).forEach(group=>group.sort((a,b)=>a.x-b.x));
+  const btnsHTML = openFslots.map(fslot=>{
+    const group = byLabel[fslot.label];
+    const suffix = draftSlotDisambigLabel(group, group.indexOf(fslot));
+    return `<button class="action-btn" data-slot="${fslot.id}" style="margin-bottom:8px;">${posDE(fslot.label)}${suffix}</button>`;
+  }).join('');
+  openModal(`<h2 style="margin-bottom:10px;">Auf welche Position?</h2>
+    <p class="hint" style="margin:0 0 12px;"><b style="color:var(--turf-bright);">${card.n}</b> kann mehrere offene Positionen spielen — einmalige, endgültige Wahl.</p>
+    <div style="display:flex;flex-direction:column;">${btnsHTML}</div>`);
+  openFslots.forEach(fslot=>{
+    document.querySelector(`[data-slot="${fslot.id}"]`).addEventListener('click', ()=>{
+      state.slots.find(s=>s.id===fslot.id).card = card;
+      closeModal();
+      onDone();
+    });
+  });
 }
 async function deleteDraftSquad(idx){
   const squads = draftSquadsOf().slice();
@@ -13115,30 +13123,6 @@ function renderDraftPanel(){
     }
   });
 }
-// Kleiner Werkzeugkasten unter dem Spielfeld, solange rollPhase==='idle' - immer sichtbar, sowohl
-// mitten im Rollen (Slots noch offen) als auch auf der fertigen Aufstellung (alle 11 besetzt): entweder
-// gerade eine Karte zum Verschieben ausgew\u00e4hlt (siehe draftMoveSelectedSlotId), oder der Hinweis, dass
-// man jederzeit eine platzierte Karte anklicken kann, um sie zu verschieben/tauschen.
-function draftMoveToolboxHTML(state){
-  if(draftMoveSelectedSlotId===null){
-    return `<p class="hint" style="margin:0 0 12px;text-align:center;">Tippe auf eine bereits platzierte Karte, um sie auf eine andere Position zu verschieben oder zu tauschen.</p>`;
-  }
-  const selSlot = state.slots.find(s=>s.id===draftMoveSelectedSlotId);
-  const canReplace = state.rerolls.replace>0;
-  return `<div class="draft-move-toolbox">
-    <p class="hint" style="margin:0 0 10px;text-align:center;"><b style="color:var(--turf-bright);">${selSlot.card.n}</b> ausgew\u00e4hlt \u2014 tippe auf ein anderes Feld zum Verschieben/Tauschen.</p>
-    <div style="display:flex;gap:8px;">
-      ${canReplace ? `<button class="action-btn secondary" id="draft-replace-selected-btn" style="flex:1;">\u267b Ersetzen (${state.rerolls.replace}x)</button>` : ''}
-      <button class="action-btn secondary" id="draft-deselect-btn" style="flex:1;">Auswahl aufheben</button>
-    </div>
-  </div>`;
-}
-function draftWireMoveToolbox(state){
-  const replaceBtn = document.getElementById('draft-replace-selected-btn');
-  if(replaceBtn) replaceBtn.addEventListener('click', ()=>draftBeginReplaceRoll(draftMoveSelectedSlotId));
-  const deselectBtn = document.getElementById('draft-deselect-btn');
-  if(deselectBtn) deselectBtn.addEventListener('click', ()=>{ draftMoveSelectedSlotId = null; renderDraftPanel(); });
-}
 function renderDraftRollPanel(box){
   const state = draftRollState;
   const filled = state.slots.filter(s=>s.card).length;
@@ -13183,12 +13167,11 @@ function renderDraftRollPanel(box){
   box.innerHTML = `
     ${rating!==null ? `<p class="hint" style="margin:0 0 8px;text-align:center;">Bisheriges Team-Rating (inkl. Chemie): <b style="color:var(--turf-bright);">${rating}</b></p>` : ''}
     <div id="draft-pitch-wrap" style="margin-bottom:14px;"></div>
-    ${state.rollPhase==='idle' ? draftMoveToolboxHTML(state) : ''}
+    ${state.rollPhase==='idle' ? draftReplaceHintHTML(state) : ''}
     ${stageHTML}
     <button class="action-btn secondary" id="draft-restart-btn" style="margin-top:16px;width:100%;">\u21ba Neu starten (komplett von vorne)</button>`;
   if(state.rollPhase==='idle'){
-    renderDraftEditablePitch(document.getElementById('draft-pitch-wrap'), state);
-    draftWireMoveToolbox(state);
+    renderDraftPitchLive(document.getElementById('draft-pitch-wrap'), state);
     document.getElementById('draft-roll-go-btn').addEventListener('click', draftBeginRoll);
   } else {
     renderDraftPitch(document.getElementById('draft-pitch-wrap'), state.slots.map(s=>({id:s.id, card:s.card})));
@@ -13216,19 +13199,26 @@ function renderDraftRollPanel(box){
         if(fits && state.rollPhase==='done'){
           wrap.addEventListener('click', ()=>{
             draftClearRollTimers(state);
+            state.currentRoll = null;
+            state.rollPhase = 'idle';
+            state.revealedCount = 0;
             if(isReplaceFlow){
               const targetSlot = state.slots.find(s=>s.id===state.replaceTargetSlotId);
               state.usedNames.delete(targetSlot.card.n);
               targetSlot.card = card;
               state.replaceTargetSlotId = null;
+              state.usedNames.add(card.n);
+              renderDraftPanel();
             } else {
-              draftAssignCardToSlot(state, card);
+              // Passt die Karte auf mehr als einen gerade offenen Slot, entscheidet der Spieler hier
+              // einmalig und endgültig, welcher es sein soll (siehe draftPlaceCardWithChoice) - danach
+              // lässt sich die Position nicht mehr ändern (kein Verschieben/Tauschen mehr möglich).
+              renderDraftPanel();
+              draftPlaceCardWithChoice(state, card, ()=>{
+                state.usedNames.add(card.n);
+                renderDraftPanel();
+              });
             }
-            state.usedNames.add(card.n);
-            state.currentRoll = null;
-            state.rollPhase = 'idle';
-            state.revealedCount = 0;
-            renderDraftPanel();
           });
         }
       } else {
@@ -13249,12 +13239,11 @@ function renderDraftFinishPanel(box, state){
   box.innerHTML = `
     <p class="hint" style="margin-top:0;text-align:center;">\ud83c\udf89 Aufstellung komplett \u2014 Rating <b style="color:var(--turf-bright);font-size:17px;">${rating}</b> (inkl. Chemie)</p>
     <div id="draft-pitch-final" style="margin-bottom:14px;"></div>
-    ${draftMoveToolboxHTML(state)}
+    ${draftReplaceHintHTML(state)}
     <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase;">Verwerfen oder in einen Slot speichern?</div>
     <div id="draft-save-slots" style="display:flex;flex-direction:column;gap:8px;"></div>
     <button class="action-btn secondary" id="draft-discard-btn" style="margin-top:10px;width:100%;">Verwerfen</button>`;
-  renderDraftEditablePitch(document.getElementById('draft-pitch-final'), state);
-  draftWireMoveToolbox(state);
+  renderDraftPitchLive(document.getElementById('draft-pitch-final'), state);
   const saveBox = document.getElementById('draft-save-slots');
   squads.forEach((sq, idx)=>{
     const btn = document.createElement('button');
@@ -13263,7 +13252,7 @@ function renderDraftFinishPanel(box, state){
     btn.addEventListener('click', ()=>draftSaveSquad(idx, state.slots.map(s=>({...s.card, pos:s.label, slotId:s.id})), rating));
     saveBox.appendChild(btn);
   });
-  document.getElementById('draft-discard-btn').addEventListener('click', ()=>{ draftRollState = null; draftMoveSelectedSlotId = null; renderDraftPanel(); });
+  document.getElementById('draft-discard-btn').addEventListener('click', ()=>{ draftRollState = null; renderDraftPanel(); });
 }
 async function startDraftTournament(idx){
   const squads = draftSquadsOf();

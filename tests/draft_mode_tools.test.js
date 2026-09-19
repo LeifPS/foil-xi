@@ -1,12 +1,16 @@
-// Regressionstest für die zweite Feedback-Runde zum Draft-Modus:
-// (1) Karten lassen sich jederzeit (während des Rollens UND auf der fertigen Aufstellung) auf eine
-//     andere Position verschieben oder mit einer anderen platzierten Karte tauschen, solange die
-//     jeweilige Karte dort laut positionEligibility spielen kann.
+// Regressionstest für die zweite und sechste Feedback-Runde zum Draft-Modus:
+// (1) Kann eine gerade gewählte Karte mehr als einen aktuell offenen Slot spielen, entscheidet der
+//     Spieler EINMALIG und ENDGÜLTIG per Auswahl-Modal, welcher es sein soll (ersetzt das frühere
+//     freie Verschieben/Tauschen NACH der Platzierung, das komplett entfernt wurde - eine einmal
+//     platzierte Karte lässt sich nicht mehr bewegen). Passt sie auf höchstens einen offenen Slot, wird
+//     wie bisher direkt ohne Rückfrage zugewiesen.
 // (2) Chemie und Positionsbonus werden live berechnet und angezeigt (Chemie-Sterne pro Karte, laufendes
 //     Team-Rating inkl. Chemie schon während des Rollens, nicht erst am Ende).
-// (3) Drei neue Werkzeuge, je 1x pro Lauf: kompletter Neu-Wurf für den aktuellen Slot (ohne die ganze
+// (3) Drei Werkzeuge, je 1x pro Lauf: kompletter Neu-Wurf für den aktuellen Slot (ohne die ganze
 //     Aufstellung neu starten zu müssen), nur die 4 Spieler neu würfeln (Land bleibt), und eine bereits
-//     platzierte Karte gegen eine neu gewürfelte auf derselben Position austauschen.
+//     platzierte Karte gegen eine neu gewürfelte auf derselben Position austauschen - Letzteres wird
+//     jetzt durch einen Klick auf die platzierte Karte selbst (mit Bestätigungs-Modal) ausgelöst, nicht
+//     mehr über den entfernten Verschieben-Werkzeugkasten.
 const { withPage } = require('./lib/browser');
 const { ok, eq, noErrors, summary } = require('./lib/assert');
 
@@ -15,50 +19,44 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     profile = { userId:'test', displayName:'Test FC', coins:1000, crest:{shape:'shield',primary:'#fff',secondary:'#000',letter:'T'}, achievementStats:{} };
     clubId = 'test'; fb = null; sSet = async () => true;
 
-    // ---------- Hilfsfunktion: findet zwei besetzte Slots mit UNTERSCHIEDLICHEM Label, deren Karten
-    // sich gegenseitig NICHT tauschen lassen (Kontrollfall) UND baut gezielt einen garantiert gültigen
-    // Tausch/Verschiebe-Fall auf, um nicht vom Zufall abhängig zu sein.
+    const def = CHALLENGE_DEFS.find(d=>d.id==='draft');
+    openChallengeDetail(def);
+
     function freshState(){
       draftStartRoll();
       return draftRollState;
     }
 
-    // ---------- (1a) Verschieben: eine Karte in einen offenen, für sie berechtigten Slot bewegen ----------
+    // ---------- (1a) Eine Karte, die NUR EINEN offenen Slot spielen kann, wird direkt ohne Modal zugewiesen ----------
     let state = freshState();
-    // Zwei künstliche Testkarten mit bekannten, kontrollierten Positionen statt echtem Zufalls-Rollen,
-    // damit der Move-Test nicht von der zufälligen Ziehung abhängt.
-    const cbCard = {id:900555001, n:'Test CB', pos:'CB', ov:80, pac:70,sho:40,pas:60,dri:60,defn:80,phy:78, traits:[], variant:'base'};
-    const lbCard = {id:900555002, n:'Test LB', pos:'LB, CB', ov:78, pac:75,sho:40,pas:65,dri:65,defn:75,phy:72, traits:[], variant:'base'};
-    state.slots.find(s=>s.id==='cb1').card = cbCard;
-    const openBeforeMove = draftOpenSlotLabels(state.slots).includes('LB');
-    draftHandlePitchSlotClick(state, 'cb1'); // auswählen
-    const selectedAfterFirstClick = draftMoveSelectedSlotId === 'cb1';
-    draftHandlePitchSlotClick(state, 'lb'); // auf offenen, für CB nicht zulässigen Slot verschieben (CB kann nicht LB)
-    const moveToIneligibleSlotRejected = state.slots.find(s=>s.id==='cb1').card === cbCard && state.slots.find(s=>s.id==='lb').card === null;
+    const gkCard = {id:900555010, n:'Test GK', pos:'GK', ov:80, pac:40,sho:20,pas:50,dri:40,defn:30,phy:70, traits:[], variant:'base'};
+    let doneCalls = 0;
+    draftPlaceCardWithChoice(state, gkCard, ()=>{ doneCalls++; });
+    const directAssignWorked = state.slots.find(s=>s.id==='gk').card === gkCard;
+    const directAssignCalledOnDoneSynchronously = doneCalls === 1;
+    const noModalForSingleOption = !document.querySelector('#modal-root h2');
 
-    // Jetzt ein Ziel, das die Karte wirklich spielen kann: cb2 (auch CB).
-    draftHandlePitchSlotClick(state, 'cb1');
-    draftHandlePitchSlotClick(state, 'cb2');
-    const movedToEligibleEmptySlot = state.slots.find(s=>s.id==='cb2').card === cbCard && state.slots.find(s=>s.id==='cb1').card === null;
-    const selectionClearedAfterMove = draftMoveSelectedSlotId === null;
-
-    // ---------- (1b) Tauschen: zwei besetzte, gegenseitig berechtigte Slots tauschen die Karten ----------
-    state.slots.find(s=>s.id==='cb1').card = lbCard; // LB-Karte kann auch CB spielen (siehe pos oben)
-    draftHandlePitchSlotClick(state, 'cb2'); // cbCard auswählen (kann nur CB)
-    draftHandlePitchSlotClick(state, 'cb1'); // mit lbCard tauschen - lbCard kann auch CB, cbCard passt auf cb1 (auch CB)
-    const swappedCorrectly = state.slots.find(s=>s.id==='cb1').card === cbCard && state.slots.find(s=>s.id==='cb2').card === lbCard;
-
-    // Klick auf denselben Slot hebt die Auswahl wieder auf, ohne etwas zu verändern.
-    draftHandlePitchSlotClick(state, 'cb1');
-    const beforeCancel = JSON.stringify(state.slots.map(s=>s.card && s.card.id));
-    draftHandlePitchSlotClick(state, 'cb1');
-    const deselectDidNothing = draftMoveSelectedSlotId === null && JSON.stringify(state.slots.map(s=>s.card && s.card.id)) === beforeCancel;
+    // ---------- (1b) Eine Karte, die MEHRERE offene Slots spielen kann, öffnet ein Auswahl-Modal ----------
+    state = freshState();
+    const multiCard = {id:900555011, n:'Multi Pos', pos:'CB, LB', ov:82, pac:74,sho:40,pas:62,dri:62,defn:80,phy:76, traits:[], variant:'base'};
+    let multiDoneCalls = 0;
+    draftPlaceCardWithChoice(state, multiCard, ()=>{ multiDoneCalls++; });
+    const notYetPlacedBeforeChoice = state.slots.every(s=>s.card===null);
+    const modalShowsChoiceButtons = document.querySelectorAll('#modal-root [data-slot]').length >= 2;
+    const btn = document.querySelector('#modal-root [data-slot="lb"]');
+    btn.click();
+    const placedIntoChosenSlot = state.slots.find(s=>s.id==='lb').card === multiCard;
+    const onDoneCalledAfterChoice = multiDoneCalls === 1;
+    const modalClosedAfterChoice = !document.querySelector('#modal-root h2');
 
     // ---------- (2) Chemie live berechnet ----------
-    // lbCard (jetzt auf cb2) und cbCard (auf cb1) haben keinen gemeinsamen Verein/Liga/Nation -> 0 Sterne erwartet,
-    // aber die Berechnung selbst muss für JEDEN besetzten Slot einen Wert liefern (nicht nur am Ende der vollen Elf).
+    state = freshState();
+    const cbCard = {id:900555012, n:'Test CB', pos:'CB', ov:80, pac:70,sho:40,pas:60,dri:60,defn:80,phy:78, traits:[], variant:'base'};
+    const rbCard = {id:900555013, n:'Test RB', pos:'RB', ov:78, pac:75,sho:40,pas:65,dri:65,defn:75,phy:72, traits:[], variant:'base'};
+    state.slots.find(s=>s.id==='cb1').card = cbCard;
+    state.slots.find(s=>s.id==='rb').card = rbCard;
     const chemDetail = draftChemistryDetail(state);
-    const chemComputedForPartialSquad = chemDetail.bySlot['cb1']!==undefined && chemDetail.bySlot['cb2']!==undefined && Object.keys(chemDetail.bySlot).length === 2;
+    const chemComputedForPartialSquad = chemDetail.bySlot['cb1']!==undefined && chemDetail.bySlot['rb']!==undefined && Object.keys(chemDetail.bySlot).length === 2;
     const liveRatingDuringRoll = draftRatingFromSlots(state);
     const liveRatingIsANumber = typeof liveRatingDuringRoll === 'number' && liveRatingDuringRoll > 0;
 
@@ -88,9 +86,6 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const playersOnlyRerollConsumed = state.rerolls.playersOnly === 0;
 
     // Eine der 4 neu gewürfelten Karten tatsächlich picken, um den ersten Slot zu füllen.
-    const pickTarget = document.querySelector('#draft-roll-pick-list');
-    // (Testet direkt über die State-Funktionen statt über echte DOM-Klicks, um unabhängig vom Timing der
-    // Aufdeck-Animation zu bleiben - die reine Logik wurde in draft_mode_ui.test.js bereits per Klick geprüft.)
     const fittingCard = state.currentRoll.cards.find(c => draftCardFitsAnyOpenSlot(c, draftOpenSlotLabels(state.slots)));
     draftClearRollTimers(state);
     draftAssignCardToSlot(state, fittingCard);
@@ -98,12 +93,19 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     state.currentRoll = null; state.rollPhase = 'idle'; state.revealedCount = 0;
     const oneSlotFilledAfterPick = state.slots.filter(s=>s.card).length === 1;
 
-    // ---------- (3c) Spieler ersetzen (1x pro Lauf) - eine bereits platzierte Karte austauschen ----------
+    // ---------- (3c) Spieler ersetzen (1x pro Lauf) - jetzt per Klick auf die platzierte Karte selbst ----------
+    renderDraftPanel();
     const filledSlotId = state.slots.find(s=>s.card).id;
     const filledSlotLabel = FORMATIONS['433'].slots.find(fs=>fs.id===filledSlotId).label;
     const oldCardId = state.slots.find(s=>s.id===filledSlotId).card.id;
     const rerollsReplaceBefore = state.rerolls.replace;
-    draftBeginReplaceRoll(filledSlotId);
+    // Die platzierte Karte anklicken (solange rerolls.replace>0) öffnet ein Bestätigungs-Modal statt
+    // direkt zu ersetzen - erst ein Klick auf "Ja, ersetzen" startet den eigentlichen Wurf.
+    const cardWraps = Array.from(document.querySelectorAll('#draft-pitch-wrap .pitch-slot'));
+    const filledIdx = FORMATIONS['433'].slots.findIndex(fs=>fs.id===filledSlotId);
+    cardWraps[filledIdx].click();
+    const confirmModalShown = !!document.getElementById('draft-confirm-replace-yes');
+    document.getElementById('draft-confirm-replace-yes').click();
     await new Promise(r=>setTimeout(r, 1500 + 4*450 + 300));
     const replaceRollActive = !!(state.currentRoll && state.currentRoll.isReplace);
     // ALLE 4 beim Ersetzen-Wurf gezogenen Kandidaten müssen exakt auf DIESE eine Position passen.
@@ -118,31 +120,34 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     state.currentRoll = null; state.rollPhase = 'idle'; state.replaceTargetSlotId = null;
     const slotActuallyReplaced = state.slots.find(s=>s.id===filledSlotId).card.id === replacementCard.id;
     const replaceConsumed = state.rerolls.replace === rerollsReplaceBefore - 1;
-    // Kein zweiter Ersetzen-Versuch mehr möglich (1x pro Lauf) - rerolls.replace ist jetzt 0.
-    const secondReplaceBlocked = state.rerolls.replace === 0;
+    // Kein zweiter Ersetzen-Versuch mehr möglich (1x pro Lauf) - rerolls.replace ist jetzt 0, die Karte
+    // wird also nicht mehr anklickbar (kein Handler mehr gewiert).
+    renderDraftPanel();
+    const cardNoLongerClickableAfterConsumed = document.querySelectorAll('#draft-pitch-wrap .pitch-slot').item(filledIdx).style.cursor !== 'pointer';
 
     document.getElementById('modal-root') && (document.getElementById('modal-root').innerHTML = '');
 
     return {
-      openBeforeMove, selectedAfterFirstClick, moveToIneligibleSlotRejected, movedToEligibleEmptySlot,
-      selectionClearedAfterMove, swappedCorrectly, deselectDidNothing,
+      directAssignWorked, directAssignCalledOnDoneSynchronously, noModalForSingleOption,
+      notYetPlacedBeforeChoice, modalShowsChoiceButtons, placedIntoChosenSlot, onDoneCalledAfterChoice, modalClosedAfterChoice,
       chemComputedForPartialSquad, liveRatingIsANumber,
       fullRerollConsumed, fullRerollGaveDifferentOffer, secondFullRerollBlocked,
       nationStayedSame, playersActuallyChanged, playersOnlyRerollConsumed, oneSlotFilledAfterPick,
-      replaceRollActive, allFourFitExactSlot, oldCardStillThereUntilPick, slotActuallyReplaced,
-      replaceConsumed, secondReplaceBlocked,
+      confirmModalShown, replaceRollActive, allFourFitExactSlot, oldCardStillThereUntilPick, slotActuallyReplaced,
+      replaceConsumed, cardNoLongerClickableAfterConsumed,
     };
   }));
 
   console.log('Draft-Modus-Werkzeuge-Test');
   noErrors(errors, 'Seite');
-  eq(result.openBeforeMove, true, 'Vorbedingung: LB ist zu Beginn ein offener Slot');
-  eq(result.selectedAfterFirstClick, true, 'ein Klick auf eine besetzte Karte wählt sie zum Verschieben aus');
-  eq(result.moveToIneligibleSlotRejected, true, 'ein Verschieben auf eine Position, die die Karte nicht spielen kann, wird abgelehnt');
-  eq(result.movedToEligibleEmptySlot, true, 'eine Karte lässt sich auf einen anderen offenen Slot verschieben, den sie laut ihren Positionen spielen kann');
-  eq(result.selectionClearedAfterMove, true, 'nach einem erfolgreichen Verschieben ist die Auswahl wieder leer');
-  eq(result.swappedCorrectly, true, 'zwei besetzte, gegenseitig berechtigte Slots tauschen ihre Karten korrekt');
-  eq(result.deselectDidNothing, true, 'erneuter Klick auf den ausgewählten Slot hebt die Auswahl auf, ohne etwas zu verändern');
+  eq(result.directAssignWorked, true, 'eine Karte, die nur einen offenen Slot spielen kann, wird direkt zugewiesen');
+  eq(result.directAssignCalledOnDoneSynchronously, true, 'im Direktfall wird onDone synchron aufgerufen, kein Modal nötig');
+  eq(result.noModalForSingleOption, true, 'bei nur einer Möglichkeit erscheint kein Auswahl-Modal');
+  eq(result.notYetPlacedBeforeChoice, true, 'bei mehreren Möglichkeiten ist die Karte vor der Auswahl noch auf keinem Slot platziert');
+  eq(result.modalShowsChoiceButtons, true, 'bei mehreren Möglichkeiten zeigt ein Modal für jeden gültigen Slot einen Button');
+  eq(result.placedIntoChosenSlot, true, 'die Karte landet nach der Auswahl exakt auf dem gewählten Slot');
+  eq(result.onDoneCalledAfterChoice, true, 'onDone wird erst nach der tatsächlichen Auswahl aufgerufen');
+  eq(result.modalClosedAfterChoice, true, 'das Auswahl-Modal schließt sich nach der Wahl');
   eq(result.chemComputedForPartialSquad, true, 'Chemie wird schon für eine unvollständige Aufstellung live berechnet, nicht erst am Ende');
   eq(result.liveRatingIsANumber, true, 'das laufende Team-Rating (inkl. Chemie) ist schon während des Rollens verfügbar');
   eq(result.fullRerollConsumed, true, 'ein kompletter Neu-Wurf verbraucht das "full"-Kontingent (1x pro Lauf)');
@@ -152,12 +157,13 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.playersActuallyChanged, true, '"Nur Spieler neu" zieht tatsächlich neue Spieler');
   eq(result.playersOnlyRerollConsumed, true, '"Nur Spieler neu" verbraucht ihr eigenes 1x-pro-Lauf-Kontingent');
   eq(result.oneSlotFilledAfterPick, true, 'nach einer Auswahl aus dem neu gewürfelten Angebot ist der erste Slot besetzt');
-  eq(result.replaceRollActive, true, '"Spieler ersetzen" startet einen echten neuen Wurf für die ausgewählte Position');
+  eq(result.confirmModalShown, true, 'ein Klick auf eine platzierte Karte (solange Ersetzen verfügbar ist) zeigt ein Bestätigungs-Modal statt sofort zu ersetzen');
+  eq(result.replaceRollActive, true, '"Spieler ersetzen" startet nach Bestätigung einen echten neuen Wurf für die ausgewählte Position');
   eq(result.allFourFitExactSlot, true, 'beim Ersetzen-Wurf passen alle 4 Kandidaten garantiert exakt auf die zu ersetzende Position');
   eq(result.oldCardStillThereUntilPick, true, 'die alte Karte bleibt im Slot, bis eine der 4 neuen tatsächlich gewählt wird');
   eq(result.slotActuallyReplaced, true, 'nach der Auswahl steht die neue Karte anstelle der alten im Slot');
   eq(result.replaceConsumed, true, '"Spieler ersetzen" verbraucht ihr eigenes 1x-pro-Lauf-Kontingent');
-  eq(result.secondReplaceBlocked, true, 'ein zweites Ersetzen im selben Lauf ist nicht mehr möglich');
+  eq(result.cardNoLongerClickableAfterConsumed, true, 'nach Verbrauch des Ersetzen-Kontingents ist eine platzierte Karte nicht mehr anklickbar (kein Verschieben/Tauschen mehr möglich)');
 
   summary('Draft-Modus-Werkzeuge-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

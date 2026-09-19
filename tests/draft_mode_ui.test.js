@@ -52,8 +52,14 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const atLeastOnePickable = pickableCount >= 1;
 
     // Eine passende Karte anklicken -> Slot wird im echten Spielfeld (Pitch) sichtbar mit einer echten Karte.
+    // Da bei einem völlig leeren Feld eine Karte oft auf MEHR als einen offenen Slot passt (z.B. CB auf
+    // cb1 UND cb2), kann das die einmalige Auswahl-Modal auslösen (sechste Feedback-Runde) - in dem Fall
+    // hier einfach die erste angebotene Position wählen, um den Testfluss fortzusetzen.
     const clickable = Array.from(document.querySelectorAll('#draft-roll-pick-list > div')).find(el=>el.style.cursor==='pointer');
     clickable.click();
+    await new Promise(r=>setTimeout(r, 30));
+    const choiceBtn = document.querySelector('#modal-root [data-slot]');
+    if(choiceBtn) choiceBtn.click();
     await new Promise(r=>setTimeout(r, 30));
     const pitchNowShowsOneRealCard = document.querySelectorAll('#draft-pitch-wrap .pitch-slot .pcard').length === 1;
     const backToIdlePhaseAfterPick = !!document.getElementById('draft-roll-go-btn');

@@ -1,14 +1,12 @@
-// Regressionstest für die vierte Feedback-Runde zum Draft-Modus:
-// (1) beim Verschieben einer Karte werden jetzt ALLE Positionen, die sie laut ihren gelisteten
-//     Positionen ebenfalls spielen könnte, sichtbar hervorgehoben (behebt "man sieht ihre anderen
-//     Positionen nicht") - Anzeige (draftIsValidMoveTarget) und tatsächliches Klick-Verhalten teilen
-//     sich jetzt dieselbe Funktion, können also nicht mehr auseinanderlaufen ("Spieler switchen klappt
-//     nicht").
-// (2) die Land-Rollen-Cutscene läuft jetzt als echtes Walzen-/Slot-Machine-Reel (ein CSS-transform-
-//     Übergang statt wiederholtem JS-Ticking) und landet garantiert auf dem tatsächlich gewürfelten Land.
-// (3) 100+-Odds wurden beträchtlich gesenkt (siehe draft_mode_full_pool.test.js für die genauen Zahlen).
-// (4) zwei neue Erfolge fürs Draft-Modus: "Kaderschmied" (gespeicherte Aufstellungen) und
-//     "Turnierlegende" (gewonnene Turnier-Stufen), inkl. eigener Nametags.
+// Regressionstest für die vierte und sechste Feedback-Runde zum Draft-Modus:
+// (1) die Land-Rollen-Cutscene läuft als echtes Walzen-/Slot-Machine-Reel (ein CSS-transform-Übergang
+//     statt wiederholtem JS-Ticking) und landet garantiert auf dem tatsächlich gewürfelten Land.
+// (2) 100+-Odds wurden beträchtlich gesenkt (siehe draft_mode_full_pool.test.js für die genauen Zahlen).
+// (3) zwei Erfolge fürs Draft-Modus: "Kaderschmied" (gespeicherte Aufstellungen) und "Turnierlegende"
+//     (gewonnene Turnier-Stufen), inkl. eigener Nametags.
+// (4) NEU (sechste Runde): kommt beim Aufdecken der 4 Kandidaten eine 100+-Karte, wird VOR ihrem
+//     Aufdecken ~1s pausiert (Vorfreude) und ihre eigene Aufdeck-Animation läuft danach deutlich
+//     langsamer (~1.5s statt der üblichen ~0.4-0.55s) ab.
 const { withPage } = require('./lib/browser');
 const { ok, eq, noErrors, summary } = require('./lib/assert');
 
@@ -21,46 +19,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     openChallengeDetail(def);
     draftStartRoll();
     const state = draftRollState;
-    // Eine Karte, die CB UND LB spielen kann (zwei potenzielle Ziele), plus eine reine ST-Karte, die
-    // NUR auf einen der beiden ST/LW/RW-Slots passt - deckt sowohl "mehrere mögliche Ziele" als auch
-    // "nur ein einziges anderes Ziel" ab.
-    const multiPosCard = {id:900888001, n:'Multi Pos', pos:'CB, LB', ov:82, pac:74,sho:40,pas:62,dri:62,defn:80,phy:76, traits:[], variant:'base', nat:'Germany'};
-    const stCard = {id:900888002, n:'Striker', pos:'ST', ov:85, pac:80,sho:85,pas:60,dri:75,defn:30,phy:70, traits:[], variant:'base', nat:'Germany'};
-    // BY_ID.set nötig, damit startDraftTournament() diese Testkarten aus der gespeicherten Aufstellung
-    // später wieder auflösen kann (echte Karten sind dort ja bereits registriert, diese Fake-Karten nicht).
-    BY_ID.set(multiPosCard.id, multiPosCard);
-    BY_ID.set(stCard.id, stCard);
-    state.slots.find(s=>s.id==='cb1').card = multiPosCard;
-    state.slots.find(s=>s.id==='st').card = stCard;
-    renderDraftPanel();
 
-    // ---------- (1) Ziel-Hervorhebung beim Verschieben ----------
-    // Multi-Pos-Karte (cb1) auswählen: sie kann laut positionEligibility auf cb1 (aktuell), cb2 UND lb
-    // spielen - cb2 und lb müssen jetzt als gültige Ziele markiert sein, alle anderen offenen Slots nicht.
-    draftHandlePitchSlotClick(state, 'cb1');
-    renderDraftPanel();
-    const validTargetsForMultiPos = FORMATIONS['433'].slots
-      .filter(fs => draftIsValidMoveTarget(state, 'cb1', fs.id))
-      .map(fs => fs.id)
-      .sort();
-    const expectedTargets = ['cb2', 'lb'].sort();
-    const highlightMatchesEligibility = JSON.stringify(validTargetsForMultiPos) === JSON.stringify(expectedTargets);
-    // Die UI markiert genau diese Ziele auch tatsächlich sichtbar (goldener Rahmen auf dem leeren Slot
-    // bzw. der Karte) - keine bloße Funktions-Prüfung ohne sichtbaren Effekt.
-    const cb2El = document.querySelectorAll('#draft-pitch-wrap .pitch-slot')[3]; // gk,lb,cb1,cb2
-    const lbEmptyElHighlighted = false; // lb ist hier besetzt (multiPosCard nicht dort) -> eigentlich leer, prüfen wir separat
-    const cb2Highlighted = cb2El && cb2El.style.zIndex === '5';
-
-    // Ein tatsächlicher Klick auf ein NICHT-eligibles Ziel (st, kann kein CB/LB) lehnt ab UND hebt die Auswahl auf.
-    draftHandlePitchSlotClick(state, 'st');
-    const rejectedInvalidMove = state.slots.find(s=>s.id==='cb1').card === multiPosCard && draftMoveSelectedSlotId === null;
-
-    // Jetzt ein echter Verschieben-Vorgang auf ein gültiges Ziel (lb, aktuell leer).
-    draftHandlePitchSlotClick(state, 'cb1');
-    draftHandlePitchSlotClick(state, 'lb');
-    const movedToLb = state.slots.find(s=>s.id==='lb').card === multiPosCard && state.slots.find(s=>s.id==='cb1').card === null;
-
-    // ---------- (2) Land-Cutscene (Walzen-Reel): landet exakt auf dem echten Ergebnis ----------
+    // ---------- (1) Land-Cutscene (Walzen-Reel): landet exakt auf dem echten Ergebnis ----------
     draftClearRollTimers(state);
     state.currentRoll = null; state.rollPhase = 'idle'; state.revealedCount = 0;
     const roll = draftRollNationAndCards(state.slots, state.usedNames);
@@ -76,21 +36,53 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     await new Promise(r => setTimeout(r, 1500 + 4*450 + 300)); // Übergang + Aufdeck-Sequenz fertig laufen lassen
     const landedOnRealNation = state.currentRoll && state.currentRoll.nation === roll.nation;
 
-    // ---------- (4) Erfolge: Kaderschmied (Aufstellung speichern) + Turnierlegende (Turnier-Stufen) ----------
+    // ---------- (4) 100+-Karte: Pause vor dem Aufdecken + langsame eigene Reveal-Animation ----------
     draftClearRollTimers(state);
-    let rounds = 0;
-    while(state.slots.some(s=>!s.card) && rounds<300){
-      rounds++;
-      if(!state.currentRoll) state.currentRoll = draftRollNationAndCards(state.slots, state.usedNames);
-      const openLabels = draftOpenSlotLabels(state.slots);
-      const fitting = state.currentRoll.cards.find(c=>draftCardFitsAnyOpenSlot(c, openLabels));
-      if(!fitting) break;
-      draftAssignCardToSlot(state, fitting);
-      state.usedNames.add(fitting.n);
-      state.currentRoll = null;
+    const legendaryCard = {id:900777001, n:'Legendary Test', pos:'ST', ov:105, pac:90,sho:95,pas:60,dri:80,defn:20,phy:75, traits:[], variant:'base', nat:'Germany'};
+    const normalCard1 = {id:900777002, n:'Normal Test 1', pos:'ST', ov:75, pac:70,sho:70,pas:60,dri:65,defn:30,phy:70, traits:[], variant:'base', nat:'Germany'};
+    const normalCard2 = {id:900777003, n:'Normal Test 2', pos:'ST', ov:75, pac:70,sho:70,pas:60,dri:65,defn:30,phy:70, traits:[], variant:'base', nat:'Germany'};
+    const normalCard3 = {id:900777004, n:'Normal Test 3', pos:'ST', ov:75, pac:70,sho:70,pas:60,dri:65,defn:30,phy:70, traits:[], variant:'base', nat:'Germany'};
+    // Die Legendary-Karte an Index 1 platzieren, damit sich messen lässt, ob NACH ihr zusätzlich pausiert
+    // wird UND ihre eigene Aufdeck-Verzögerung (Index 1->2) deutlich länger ist als eine normale (0->1).
+    state.currentRoll = { nation:'Germany', cards:[normalCard1, legendaryCard, normalCard2, normalCard3] };
+    state.revealedCount = 0;
+    state.rollPhase = 'revealing';
+    renderDraftPanel();
+    const revealTimestamps = [Date.now()];
+    draftScheduleReveals(state);
+    while(state.revealedCount < 4){
+      await new Promise(r=>setTimeout(r, 20));
+      if(revealTimestamps.length === state.revealedCount) revealTimestamps.push(Date.now());
     }
-    const players = state.slots.map(s=>({...s.card, pos:s.label, slotId:s.id}));
-    const rating = draftRatingFromSlots(state);
+    const t0 = revealTimestamps[0]; // Start des Aufdeckens
+    const gapNormal = revealTimestamps[1] - t0; // normalCard1 (Index 0) erscheint ~sofort
+    const gapIntoLegendary = revealTimestamps[2] - revealTimestamps[1]; // Pause + Erscheinen der Legendary-Karte (Index 1)
+    const gapAfterLegendary = revealTimestamps[3] - revealTimestamps[2]; // wartet auf das Ende von deren langsamer Animation
+    const legendaryGapClearlyLongerThanNormal = gapIntoLegendary > gapNormal + 700; // deutlich länger als der übliche ~450ms-Takt
+    const gapAfterLegendaryReflectsSlowReveal = gapAfterLegendary >= 1400; // die 1.5s-Aufdeck-Animation der Legendary-Karte wird abgewartet
+    const epicProbe = document.createElement('div');
+    epicProbe.className = 'draft-card-reveal-epic';
+    document.body.appendChild(epicProbe);
+    const epicAnimationIsSlow = getComputedStyle(epicProbe).animationDuration.includes('1.5s');
+    epicProbe.remove();
+
+    // ---------- (2)+(3) Erfolge: Kaderschmied (Aufstellung speichern) + Turnierlegende (Turnier-Stufen) ----------
+    draftRestartRoll();
+    const state2 = draftRollState;
+    draftClearRollTimers(state2);
+    let rounds = 0;
+    while(state2.slots.some(s=>!s.card) && rounds<300){
+      rounds++;
+      if(!state2.currentRoll) state2.currentRoll = draftRollNationAndCards(state2.slots, state2.usedNames);
+      const openLabels = draftOpenSlotLabels(state2.slots);
+      const fitting = state2.currentRoll.cards.find(c=>draftCardFitsAnyOpenSlot(c, openLabels));
+      if(!fitting) break;
+      draftAssignCardToSlot(state2, fitting);
+      state2.usedNames.add(fitting.n);
+      state2.currentRoll = null;
+    }
+    const players = state2.slots.map(s=>({...s.card, pos:s.label, slotId:s.id}));
+    const rating = draftRatingFromSlots(state2);
     const statBefore = profile.achievementStats.draftSquadsSaved||0;
     await draftSaveSquad(0, players, rating);
     const draftSquadsSavedIncremented = (profile.achievementStats.draftSquadsSaved||0) === statBefore+1;
@@ -104,7 +96,6 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     atomicCoinChange = realAtomicCoinChange;
     const draftStagesWonIncremented = (profile.achievementStats.draftStagesWon||0) === stagesBefore+4;
 
-    // Beide Achievement-Linien existieren korrekt in ACHIEVEMENTS mit eigenem Tier-V-Nametag.
     const kaderschmiedDef = ACHIEVEMENTS.find(a=>a.id==='draftSquadsSaved');
     const turnierlegendeDef = ACHIEVEMENTS.find(a=>a.id==='draftStagesWon');
     const achievementsWellFormed = !!kaderschmiedDef && kaderschmiedDef.tiers.length===5 && kaderschmiedDef.rewards.length===5
@@ -115,22 +106,21 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     document.getElementById('modal-root') && (document.getElementById('modal-root').innerHTML = '');
 
     return {
-      highlightMatchesEligibility, cb2Highlighted, rejectedInvalidMove, movedToLb,
       reelHasManyTiles, lastTileIsRealNation, transitionStarted, landedOnRealNation,
+      legendaryGapClearlyLongerThanNormal, gapAfterLegendaryReflectsSlowReveal, epicAnimationIsSlow,
       draftSquadsSavedIncremented, draftStagesWonIncremented, achievementsWellFormed,
     };
   }));
 
   console.log('Draft-Modus-Politur-Test');
   noErrors(errors, 'Seite');
-  eq(result.highlightMatchesEligibility, true, 'eine Multi-Positions-Karte zeigt beim Verschieben genau die Slots als gültige Ziele, die sie laut ihren gelisteten Positionen tatsächlich spielen kann');
-  eq(result.cb2Highlighted, true, 'ein gültiges Ziel wird auch sichtbar (höherer z-index/Hervorhebung) markiert, nicht nur intern berechnet');
-  eq(result.rejectedInvalidMove, true, 'ein Klick auf eine nicht-berechtigte Position lehnt das Verschieben ab und hebt die Auswahl korrekt auf');
-  eq(result.movedToLb, true, 'das eigentliche Verschieben auf ein gültiges, leeres Ziel funktioniert zuverlässig');
   eq(result.reelHasManyTiles, true, 'die Cutscene zeigt ein echtes Walzen-Reel mit vielen Länder-Kacheln statt einer einzelnen wechselnden Flagge');
   eq(result.lastTileIsRealNation, true, 'die letzte Kachel der Walze ist immer das tatsächlich gewürfelte Land');
   eq(result.transitionStarted, true, 'die Walze läuft über einen echten CSS-transform-Übergang, nicht mehr über wiederholtes JS-Ticking');
   eq(result.landedOnRealNation, true, 'die Cutscene landet garantiert auf dem tatsächlich gewürfelten Land');
+  eq(result.legendaryGapClearlyLongerThanNormal, true, 'vor dem Aufdecken einer 100+-Karte wird spürbar länger pausiert als zwischen zwei normalen Karten');
+  eq(result.gapAfterLegendaryReflectsSlowReveal, true, 'nach einer 100+-Karte wird bis zum Ende ihrer eigenen, deutlich langsameren Aufdeck-Animation gewartet, bevor die nächste Karte drankommt');
+  eq(result.epicAnimationIsSlow, true, 'die CSS-Animation für 100+-Karten (draft-card-reveal-epic) läuft über die verlangsamte 1.5s-Dauer');
   eq(result.draftSquadsSavedIncremented, true, 'das Speichern einer Draft-Aufstellung zählt für den "Kaderschmied"-Erfolg');
   eq(result.draftStagesWonIncremented, true, 'gewonnene Turnier-Stufen zählen für den "Turnierlegende"-Erfolg');
   eq(result.achievementsWellFormed, true, 'beide neuen Erfolge sind korrekt mit 5 Stufen, 5 Belohnungen und einem eigenen Tier-V-Nametag definiert');
