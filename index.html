@@ -12750,12 +12750,17 @@ function draftEnsureSlotIds(players){
 function draftSquadsOf(){ return profile.draftSquads || [null,null,null]; }
 let draftRollState = null;
 let draftTournamentState = null;
+// Solange ein Draft-Lauf (draftRollState) noch nicht gespeichert/verworfen ist, kann man trotzdem zur
+// Haupt-Draft-Übersicht (gespeicherte Aufstellungen + Turnier) zurückspringen, OHNE ihn zu verlieren -
+// dieser Schalter blendet nur die Ansicht um, der Fortschritt selbst bleibt in draftRollState erhalten.
+let draftHubOverride = false;
 function draftClearRollTimers(state){
   if(state.spinTimer){ clearTimeout(state.spinTimer); state.spinTimer = null; }
   (state.revealTimers||[]).forEach(t=>clearTimeout(t));
   state.revealTimers = [];
 }
 function draftStartRoll(){
+  draftHubOverride = false;
   draftRollState = {
     slots: FORMATIONS['433'].slots.map(s=>({id:s.id, label:s.label, card:null})),
     usedNames: new Set(),
@@ -13088,21 +13093,37 @@ async function openDraftLeaderboardModal(){
     box.appendChild(row);
   });
 }
+// Startet einen komplett neuen Lauf - fragt vorher nach, falls dabei ein noch nicht gespeicherter/
+// verworfener Lauf verloren ginge (z.B. wenn man \u00fcber "Zur\u00fcck zur \u00dcbersicht" hierher zur\u00fcckgesprungen ist).
+function draftStartRollConfirmed(){
+  if(!draftRollState){ draftStartRoll(); return; }
+  openModal(`<h2 style="margin-bottom:10px;">Laufenden Draft verwerfen?</h2>
+    <p class="hint" style="margin:0 0 16px;">Du hast noch einen nicht gespeicherten Draft-Lauf offen. Ein neuer Lauf wirft diesen Fortschritt komplett weg.</p>
+    <div style="display:flex;gap:8px;">
+      <button class="action-btn" id="draft-confirm-newrun-yes" style="flex:1;">Ja, neu anfangen</button>
+      <button class="action-btn secondary" id="draft-confirm-newrun-no" style="flex:1;">Abbrechen</button>
+    </div>`);
+  document.getElementById('draft-confirm-newrun-yes').addEventListener('click', ()=>{ closeModal(); draftStartRoll(); });
+  document.getElementById('draft-confirm-newrun-no').addEventListener('click', closeModal);
+}
 function renderDraftPanel(){
   const box = document.getElementById('draft-content');
   if(!box) return;
   if(draftTournamentState){ renderDraftTournamentPanel(box); return; }
-  if(draftRollState){ renderDraftRollPanel(box); return; }
+  if(draftRollState && !draftHubOverride){ renderDraftRollPanel(box); return; }
   const squads = draftSquadsOf();
+  const filledInProgress = draftRollState ? draftRollState.slots.filter(s=>s.card).length : 0;
   box.innerHTML = `
     <p class="hint" style="margin-top:0;">Draft dir per Zufalls-Ziehungen (Land + 4 Spieler, einer passt immer) eine komplette 4-3-3-Elf zusammen \u2014 die Karten geh\u00f6ren dir nicht. Speichere sie in einen von 3 Slots und tritt damit in einem endlosen K.o.-Turnier gegen immer st\u00e4rkere Gegner an. <b style="color:var(--gold);">Wichtig:</b> die Coins gibt es nur, wenn du rechtzeitig \u201eauscashst\u201c \u2014 verlierst du ein Match, bevor du abgeholt hast, ist die gesamte Belohnung weg.</p>
+    ${draftRollState ? `<button class="action-btn" id="draft-resume-btn" style="width:100%;margin-bottom:10px;">\u25b6 Laufenden Draft fortsetzen (${filledInProgress}/11 Slots gef\u00fcllt)</button>` : ''}
     <div style="display:flex;gap:10px;margin-bottom:16px;">
-      <button class="action-btn" id="draft-roll-start-btn" style="flex:1;">\ud83c\udfaf Neue Aufstellung draften</button>
+      <button class="action-btn${draftRollState ? ' secondary' : ''}" id="draft-roll-start-btn" style="flex:1;">\ud83c\udfaf Neue Aufstellung draften</button>
       <button class="action-btn secondary" id="draft-leaderboard-btn" style="flex:1;">\ud83c\udfc6 Rangliste</button>
     </div>
     <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase;">Deine gespeicherten Draft-Aufstellungen</div>
     <div id="draft-slots-list"></div>`;
-  document.getElementById('draft-roll-start-btn').addEventListener('click', draftStartRoll);
+  if(draftRollState) document.getElementById('draft-resume-btn').addEventListener('click', ()=>{ draftHubOverride = false; renderDraftPanel(); });
+  document.getElementById('draft-roll-start-btn').addEventListener('click', draftStartRollConfirmed);
   document.getElementById('draft-leaderboard-btn').addEventListener('click', openDraftLeaderboardModal);
   const list = document.getElementById('draft-slots-list');
   squads.forEach((sq, idx)=>{
@@ -13176,7 +13197,11 @@ function renderDraftRollPanel(box){
     <div id="draft-pitch-wrap" style="margin-bottom:14px;"></div>
     ${state.rollPhase==='idle' ? draftReplaceHintHTML(state) : ''}
     ${stageHTML}
-    <button class="action-btn secondary" id="draft-restart-btn" style="margin-top:16px;width:100%;">\u21ba Neu starten (komplett von vorne)</button>`;
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="action-btn secondary" id="draft-back-to-hub-btn" style="flex:1;">\u2190 Zur\u00fcck zur \u00dcbersicht</button>
+      <button class="action-btn secondary" id="draft-restart-btn" style="flex:1;">\u21ba Neu starten (komplett von vorne)</button>
+    </div>`;
+  document.getElementById('draft-back-to-hub-btn').addEventListener('click', ()=>{ draftHubOverride = true; renderDraftPanel(); });
   if(state.rollPhase==='idle'){
     renderDraftPitchLive(document.getElementById('draft-pitch-wrap'), state);
     document.getElementById('draft-roll-go-btn').addEventListener('click', draftBeginRoll);
@@ -13249,7 +13274,10 @@ function renderDraftFinishPanel(box, state){
     ${draftReplaceHintHTML(state)}
     <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase;">Verwerfen oder in einen Slot speichern?</div>
     <div id="draft-save-slots" style="display:flex;flex-direction:column;gap:8px;"></div>
-    <button class="action-btn secondary" id="draft-discard-btn" style="margin-top:10px;width:100%;">Verwerfen</button>`;
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="action-btn secondary" id="draft-back-to-hub-btn" style="flex:1;">\u2190 Zur\u00fcck zur \u00dcbersicht</button>
+      <button class="action-btn secondary" id="draft-discard-btn" style="flex:1;">Verwerfen</button>
+    </div>`;
   renderDraftPitchLive(document.getElementById('draft-pitch-final'), state);
   const saveBox = document.getElementById('draft-save-slots');
   squads.forEach((sq, idx)=>{
@@ -13259,6 +13287,7 @@ function renderDraftFinishPanel(box, state){
     btn.addEventListener('click', ()=>draftSaveSquad(idx, state.slots.map(s=>({...s.card, pos:s.label, slotId:s.id})), rating));
     saveBox.appendChild(btn);
   });
+  document.getElementById('draft-back-to-hub-btn').addEventListener('click', ()=>{ draftHubOverride = true; renderDraftPanel(); });
   document.getElementById('draft-discard-btn').addEventListener('click', ()=>{ draftRollState = null; renderDraftPanel(); });
 }
 async function startDraftTournament(idx){
