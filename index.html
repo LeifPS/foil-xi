@@ -21052,6 +21052,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-give-pack" style="width:auto;">Pack \u00f6ffnen & schicken</button>
       <button class="action-btn secondary" id="admin-give-pack-unopened" style="width:auto;">Pack (unge\u00f6ffnet) schicken</button>
       <button class="action-btn secondary" id="admin-make-ut" style="width:auto;">Karte nachtr\u00e4glich UT machen</button>
+      <button class="action-btn secondary" id="admin-give-card-xp" style="width:auto;">Karten-XP geben</button>
       <button class="action-btn secondary" id="admin-set-liga-badge" style="width:auto;">Nametag setzen</button>
       <button class="action-btn secondary" id="admin-send-warning" style="width:auto;">Verwarnen</button>
       <button class="action-btn secondary" id="admin-toggle-ban" style="width:auto;color:${p.banned?'var(--turf-bright)':'var(--danger)'};">${p.banned?'Entsperren':'Sperren'}</button>
@@ -21153,6 +21154,7 @@ async function loadAdminUserPanel(targetId){
   document.getElementById('admin-give-pack').addEventListener('click', ()=>openAdminSendPackModal(targetId, data));
   document.getElementById('admin-give-pack-unopened').addEventListener('click', ()=>openAdminSendUnopenedPackModal(targetId, data));
   document.getElementById('admin-make-ut').addEventListener('click', ()=>openAdminMakeUntradableModal(targetId, data));
+  document.getElementById('admin-give-card-xp').addEventListener('click', ()=>openAdminGiveCardXpModal(targetId, data));
   document.getElementById('admin-set-liga-badge').addEventListener('click', ()=>openAdminSetLigaBadgeModal(targetId, p));
   document.getElementById('admin-send-warning').addEventListener('click', ()=>{
     askTextModal('Verwarnungstext', 'z. B. Bitte fair spielen...', async (msg)=>{
@@ -21478,6 +21480,62 @@ function openAdminMakeUntradableModal(targetId, data){
         toast(`${base.n} ${entry.untradable?'ist jetzt untauschbar':'ist wieder handelbar'} für ${targetId}.`);
         renderList();
       });
+      results.appendChild(wrap);
+    });
+    if(!results.children.length) results.innerHTML = '<p class="hint">Keine Karten gefunden.</p>';
+  };
+  input.addEventListener('input', renderList);
+  renderList();
+}
+// Gibt einer bereits im Besitz eines anderen Accounts befindlichen Karte direkt XP (oder zieht welche
+// ab) - dasselbe Such-/Auswahl-Muster wie openAdminMakeUntradableModal, nur dass ein Klick hier
+// askTextModal für eine vorzeichenbehaftete XP-Menge öffnet statt sofort umzuschalten. Das Level wird
+// danach ganz normal aus der neuen Gesamt-XP abgeleitet (cardLevelForXp) - es gibt bewusst keinen
+// separaten "Level direkt setzen"-Weg, damit eine Karte niemals ein Level zeigt, das nicht zu ihrer
+// gespeicherten XP passt (exakt dieselbe Regel wie bei echtem XP-Gewinn aus Matches, siehe awardCardXP).
+function openAdminGiveCardXpModal(targetId, data){
+  const targetCollection = (data.collection || []).slice();
+  const missingCount = targetCollection.filter(entry=>!BY_ID.get(entry.cardId)).length;
+  openModal(`
+    <h2 style="margin-bottom:4px;">Karten-XP für ${targetId} geben</h2>
+    <p class="hint" style="margin:0 0 6px;">Karte anklicken, dann die XP-Menge eingeben (negativ zum Abziehen) — das Level wird automatisch aus der neuen Gesamt-XP berechnet, genau wie bei echtem Karten-XP aus Matches.</p>
+    <p class="hint" style="margin:0 0 12px;">${targetCollection.length} Karten insgesamt${missingCount ? ` (${missingCount} davon mit unbekannter cardId, werden nicht angezeigt)` : ''}.</p>
+    <input id="admin-cardxp-search" placeholder="Spielername..." style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--chalk);padding:10px 14px;border-radius:9px;margin:0 0 12px;">
+    <div class="picker-list" id="admin-cardxp-results" style="max-height:400px;overflow-y:auto;"></div>`);
+  const input = document.getElementById('admin-cardxp-search');
+  const results = document.getElementById('admin-cardxp-results');
+  const renderList = ()=>{
+    const q = input.value.trim().toLowerCase();
+    results.innerHTML = '';
+    targetCollection.forEach((entry, idx)=>{
+      const base = BY_ID.get(entry.cardId);
+      if(!base) return;
+      if(q.length>=2 && !base.n.toLowerCase().includes(q)) return;
+      const card = applyCardLevel(base, entry.xp, entry.uid, entry.untradable);
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'cursor:pointer;position:relative;';
+      wrap.appendChild(cardEl(card, 'mini'));
+      const tag = document.createElement('div');
+      tag.className = 'mono';
+      tag.style.cssText = 'text-align:center;font-size:10.5px;margin-top:2px;color:var(--muted);';
+      tag.textContent = `${(entry.xp||0).toLocaleString('de-DE')} XP · ${CARD_LEVEL_LABEL[cardLevelForXp(entry.xp||0)]}`;
+      wrap.addEventListener('click', ()=>{
+        askTextModal(`XP für ${base.n} hinzufügen (negativ zum Abziehen)`, '0', async (val)=>{
+          if(val===null){ openAdminGiveCardXpModal(targetId, {...data, collection:targetCollection}); return; }
+          const amount = parseInt(val,10);
+          if(!Number.isFinite(amount)){ openAdminGiveCardXpModal(targetId, {...data, collection:targetCollection}); return; }
+          const before = cardLevelForXp(entry.xp||0);
+          const prevXp = entry.xp||0;
+          entry.xp = Math.max(0, prevXp+amount);
+          targetCollection[idx] = entry;
+          try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection:targetCollection}, {merge:true}); }
+          catch(e){ console.warn('admin give card xp failed', e); entry.xp = prevXp; targetCollection[idx] = entry; toast('Fehlgeschlagen — bitte erneut versuchen.'); openAdminGiveCardXpModal(targetId, {...data, collection:targetCollection}); return; }
+          const after = cardLevelForXp(entry.xp);
+          toast(`${amount>=0?'+':''}${amount} XP für ${base.n} bei ${targetId}${after!==before?` — jetzt Level ${after} (${CARD_LEVEL_LABEL[after]})`:''}.`);
+          openAdminGiveCardXpModal(targetId, {...data, collection:targetCollection});
+        }, 8);
+      });
+      wrap.appendChild(tag);
       results.appendChild(wrap);
     });
     if(!results.children.length) results.innerHTML = '<p class="hint">Keine Karten gefunden.</p>';

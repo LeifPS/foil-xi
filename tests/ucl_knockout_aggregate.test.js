@@ -119,10 +119,16 @@ async function runKnockoutScenario({ leg1, mockLegResult, extraRounds }) {
   const { result: r5, errors: e5 } = await withPage(page => page.evaluate(() => {
     const myPlayers = adminFullCardPool().slice(0, 11), oppPlayers = adminFullCardPool().slice(11, 22);
     const realSimGoals = simGoals;
+    const realPlanCardsAndPenalties = planCardsAndPenalties;
     function withFixedGoals(queue, fn) {
       let q = queue.slice();
       simGoals = () => (q.length ? q.shift() : 0);
-      try { return fn(); } finally { simGoals = realSimGoals; }
+      // planCardsAndPenalties rolls an independent ~8%-per-team penalty chance that adds an EXTRA goal
+      // on top of whatever simGoals returns - left real, that would occasionally flip the exact
+      // aggregate arithmetic these scenarios depend on (a flaky test, not a real bug). Neutralized here
+      // so the 90-minute score is controlled ENTIRELY by the mocked simGoals queue above.
+      planCardsAndPenalties = () => ({ cards: [], redMinute: null, sentOffPlayer: null, penalty: null });
+      try { return fn(); } finally { simGoals = realSimGoals; planCardsAndPenalties = realPlanCardsAndPenalties; }
     }
     // A) Leg selbst 1:1 (also für sich genommen unentschieden), KEIN Aggregat-Vorsprung mitgebracht ->
     // Aggregat ist ebenfalls 1:1 -> MUSS in Verlängerung gehen (danach per Mock weiterhin 0:0 -> Elfmeterschießen).
