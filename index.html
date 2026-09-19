@@ -12846,7 +12846,10 @@ function draftStartReelAnimation(){
   });
 }
 function draftRunRevealSequence(state, rollResult, opts={}){
-  state.currentRoll = rollResult;
+  // Die 4 Kandidaten werden immer vom schlechtesten zum besten Rating aufgedeckt (Spannungsaufbau) -
+  // einmal hier sortiert, gilt das automatisch für Anzeige UND die Timing-Logik in draftScheduleReveals,
+  // da beide dieselbe state.currentRoll.cards-Reihenfolge verwenden.
+  state.currentRoll = {...rollResult, cards: [...rollResult.cards].sort((a,b)=>a.ov-b.ov)};
   state.revealedCount = 0;
   if(opts.skipSpin){
     state.rollPhase = 'revealing';
