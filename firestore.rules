@@ -65,6 +65,13 @@ service cloud.firestore {
       }
     }
     match /duels/{duelId} { allow read, write: if true; }
+    // Skill-Duell-Herausforderungen (challengeSkillDuel/loadIncomingSkillDuels) - hatte bisher GAR
+    // KEINE Regel, war also für jeden komplett gesperrt ("Missing or insufficient permissions"),
+    // dieselbe offene Regel wie duels.
+    match /skillDuels/{duelId} { allow read, write: if true; }
+    // Laufende Skill-Duell-Matches (Kartenwahl, Live-Positionssync-Referenz) - hatte ebenfalls GAR
+    // KEINE Regel.
+    match /skillMatches/{matchId} { allow read, write: if true; }
     match /sales/{saleId} { allow read, write: if true; }
     match /networth/{clubId} { allow read, write: if true; }
     match /legacy/{clubId} { allow read, write: if true; }
