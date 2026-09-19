@@ -79,5 +79,9 @@ service cloud.firestore {
     // Draft-Modus-Rangliste (maybePublishDraftLeaderboardEntry/openDraftLeaderboardModal) - ein Dokument
     // pro Nutzer (Doc-ID = profile.userId), dieselbe offene Regel wie networth/legacy/tournaments.
     match /draftLeaderboard/{userId} { allow read, write: if true; }
+    // Forensisches Vorfalls-Protokoll (recordSaveIncident) - bewusst eine EIGENE Collection, nicht Teil
+    // von saves/{clubId}: ein Vorfall, der das Save-Dokument überschreibt, würde sein eigenes Protokoll
+    // sonst gleich mitlöschen. Dieselbe offene Regel wie die übrigen App-Collections.
+    match /saveIncidents/{incidentId} { allow read, write: if true; }
   }
 }

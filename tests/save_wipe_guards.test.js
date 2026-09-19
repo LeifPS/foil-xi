@@ -24,11 +24,15 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const writes = [];
     const toasts = [];
     toast = (m) => toasts.push(m);
+    // recordSaveIncident() (siehe save_incidents.test.js für dessen eigenen dedizierten Test) feuert bei
+    // jeder Blockade zusätzlich einen fire-and-forget setDoc auf saveIncidents/... über denselben Mock -
+    // die Zähl-Assertions unten beziehen sich ausschließlich auf echte saves/-Schreibvorgänge.
+    const isSavesWrite = (ref) => ref.path.startsWith('saves/');
 
     // ---------- (2) profile-Collapse-Wächter ----------
     fb = {
       doc: (db, col, id) => ({ path: col + '/' + id }),
-      setDoc: async (ref, val) => { writes.push({ path: ref.path, val }); },
+      setDoc: async (ref, val) => { if (isSavesWrite(ref)) writes.push({ path: ref.path, val }); },
     };
     _lastKnownCollectionLen = null;
     _lastKnownProfileFloor = null;
@@ -92,7 +96,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     fb = {
       doc: (db, col, id) => ({ path: col + '/' + id }),
       getDoc: async (ref) => ({ exists: () => true, data: () => ({ profile: storedForeignProfile }) }),
-      setDoc: async (ref, val) => { foreignWrites.push({ path: ref.path, val }); },
+      setDoc: async (ref, val) => { if (isSavesWrite(ref)) foreignWrites.push({ path: ref.path, val }); },
     };
 
     // 4a) Legitimer Admin-Write (z.B. Coins geben) geht durch.

@@ -10816,6 +10816,12 @@ async function applyGreatReset(resetId){
   squad = {formation:'433', slots:{}, managerUid:null, tactics:{...DEFAULT_TACTICS}};
   squadPresets = [];
   Object.assign(profile, greatResetProfilePatch(profile, resetId));
+  // Ein Great Reset schrumpft die Sammlung absichtlich auf die Starter-Collection - ohne diese Zeile
+  // würde genau der Wächter, der echten Datenverlust verhindern soll (siehe sSet's Collapse-Check),
+  // diesen legitimen Reset selbst als verdächtigen Zusammenbruch blockieren und den Spieler mit einer
+  // halb zurückgesetzten Sammlung zurücklassen.
+  _lastKnownCollectionLen = null;
+  recordSaveIncident('great-reset-applied', {resetId, priorPrestige:profile.prestige-1, careerWins:profile.careerWins||0});
   await sSet('collection', collection);
   await sSet('managerCollection', managerCollection);
   await sSet('packCollection', packCollection);
@@ -16329,6 +16335,7 @@ function startSessionHeartbeat(){
 function handleSessionTakenOver(){
   if(sessionLostToOtherDevice) return;
   sessionLostToOtherDevice = true;
+  recordSaveIncident('session-taken-over', {});
   if(sessionHeartbeatTimer){ clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
   try{
     document.getElementById('modal-root').innerHTML = `
@@ -16424,6 +16431,7 @@ function showSaveIncompleteScreen(){
 // ohnehin automatisch neu, sobald die Verbindung zurück ist; das Retry hier ist nur für den ungeduldigen
 // Spieler, der nicht abwarten will.
 function showOfflineBootScreen(){
+  recordSaveIncident('offline-boot-blocked', {});
   hideBootLoader();
   document.getElementById('modal-root').innerHTML = `
     <div class="modal-overlay" style="cursor:default;">
@@ -16618,6 +16626,85 @@ function profileWriteWouldCollapse(value){
   if(pr < _lastKnownProfileFloor.prestige) return `prestige ${_lastKnownProfileFloor.prestige} -> ${pr}`;
   return null;
 }
+// ===== Vorfalls-Protokoll: WARUM hielt das Spiel einen Account für leer/neu? =====
+// Bei jedem bisher gemeldeten Datenverlust ("mindestens einmal täglich wird mein Verein gelöscht") war
+// hinterher nicht mehr rekonstruierbar, welcher Code-Pfad das ausgelöst hat - es gab schlicht keine
+// Spur. Ab jetzt schreibt jede Stelle, die einen Account als leer/neu behandelt ODER einen verdächtigen
+// Schreibvorgang blockiert, einen Eintrag mit vollem Kontext.
+// Bewusst eine EIGENE Collection (nicht im saves-Dokument): ein Vorfall, der das Save-Dokument
+// überschreibt, würde sein eigenes Protokoll sonst gleich mitlöschen. Fire-and-forget und komplett in
+// try/catch - das Protokoll darf niemals den eigentlichen Ablauf blockieren oder scheitern lassen.
+const SAVE_INCIDENT_KINDS = {
+  'account-created': 'Neuer, leerer Account angelegt',
+  'blocked-doc-exists-without-profile': 'BLOCKIERT: Save-Dokument existiert, hat aber kein Profil',
+  'boot-read-failed': 'Laden fehlgeschlagen (Lesefehler beim Start)',
+  'offline-boot-blocked': 'BLOCKIERT: keine Verbindung beim Start',
+  'blocked-profile-collapse': 'BLOCKIERT: Profil-Write hätte Fortschritt zurückgesetzt',
+  'blocked-collection-collapse': 'BLOCKIERT: Sammlung wäre zusammengeschrumpft',
+  'blocked-foreign-profile-collapse': 'BLOCKIERT: fremder Schreibzugriff hätte Profil zurückgesetzt',
+  'session-taken-over': 'Sitzung von anderem Gerät übernommen (Schreiben gestoppt)',
+  'great-reset-applied': 'Great Reset auf diesen Account angewendet',
+  'admin-account-reset': 'Account per Admin-Panel zurückgesetzt',
+  'version-restored': 'Spielstand aus Versionshistorie wiederhergestellt',
+};
+const SAVE_INCIDENT_QUEUE_KEY = 'foil11-queued-save-incidents';
+function recordSaveIncident(kind, detail, forClubId){
+  try{
+    const id = forClubId || clubId;
+    if(!fb || !id){
+      // Ausgerechnet der Fall "keine Verbindung beim Start" (offline-boot-blocked) ist der einzige, bei
+      // dem gar nicht direkt nach Firestore protokolliert werden kann - genau der Moment, den es am
+      // dringendsten festzuhalten gilt. Statt den Vorfall stillschweigend zu verlieren, lokal
+      // zwischenspeichern und beim nächsten erfolgreichen Verbindungsaufbau nachreichen (siehe
+      // flushQueuedSaveIncidents(), aufgerufen sobald init() wieder mit fb!==null läuft).
+      try{
+        const q = JSON.parse(localStorage.getItem(SAVE_INCIDENT_QUEUE_KEY)||'[]');
+        q.push({kind, clubId:id||null, detail:detail||{}, at:Date.now(), ua:(navigator.userAgent||'').slice(0,300)});
+        while(q.length>20) q.shift(); // Deckel: eine Endlosschleife von Offline-Vorfällen soll localStorage nicht sprengen
+        localStorage.setItem(SAVE_INCIDENT_QUEUE_KEY, JSON.stringify(q));
+      }catch(e){}
+      return;
+    }
+    const payload = {
+      kind, clubId:id, at: Date.now(), detail: detail||{},
+      // Genau der Kontext, der bei den bisherigen Vorfällen gefehlt hat, um sie überhaupt einordnen zu
+      // können: welches Gerät, war die Seite gerade im Hintergrund (iPad-Resume!), war überhaupt
+      // Netz/Anmeldung da, wie lange lief die Seite schon.
+      ua: (navigator.userAgent||'').slice(0,300),
+      online: !!navigator.onLine,
+      visibility: document.visibilityState,
+      msSincePageLoad: Math.round(performance.now()),
+      authed: !!(fb.auth && fb.auth.currentUser),
+      fbConnected: !!fb,
+      url: String(location.href).slice(0,300),
+      stack: String((new Error()).stack||'').slice(0,1500),
+    };
+    const docId = `${id}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+    // absichtlich NICHT awaited (fire-and-forget) - ein hängender Protokoll-Write darf einen Boot oder
+    // eine Blockade-Entscheidung nie verzögern.
+    fb.setDoc(fb.doc(fb.db,'saveIncidents', docId), payload).catch(e=>console.warn('save incident write failed', e));
+    console.warn(`[Vorfall] ${kind}`, payload);
+  }catch(e){ console.warn('save incident record failed', e); }
+}
+// Reicht Vorfälle nach, die recordSaveIncident() mangels Verbindung (fb===null, siehe offline-boot-blocked)
+// nur lokal zwischenspeichern konnte. Wird von init() aufgerufen, sobald fb wieder verbunden ist - genau
+// dann ist so ein zwischengespeicherter Vorfall überhaupt erst nachweisbar.
+function flushQueuedSaveIncidents(){
+  try{
+    if(!fb) return;
+    const raw = localStorage.getItem(SAVE_INCIDENT_QUEUE_KEY);
+    if(!raw) return;
+    const q = JSON.parse(raw);
+    if(!Array.isArray(q) || !q.length) return;
+    localStorage.removeItem(SAVE_INCIDENT_QUEUE_KEY);
+    q.forEach(item=>{
+      const id = item.clubId || clubId || 'unbekannt';
+      const docId = `${id}_${item.at||Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+      const payload = {...item, clubId:id, flushedLate:true, flushedAt:Date.now()};
+      fb.setDoc(fb.doc(fb.db,'saveIncidents', docId), payload).catch(e=>console.warn('queued save incident flush failed', e));
+    });
+  }catch(e){ console.warn('flushQueuedSaveIncidents failed', e); }
+}
 // Gemeinsamer Wächter für JEDEN Write eines kompletten profile-Objekts in ein FREMDES saves-Dokument
 // (Admin-Panel, Transfermarkt-Fallback, ...). Diese Pfade laufen komplett an sSet() vorbei und hatten
 // deshalb bisher überhaupt keinen Schutz - dabei bauen sie ihr newProfile typischerweise aus einem
@@ -16649,6 +16736,13 @@ async function writeForeignProfileGuarded(targetId, newProfile, extraFields, opt
       if(newCw < curCw || newPr < curPr){
         console.error(`writeForeignProfileGuarded(${targetId}) BLOCKIERT: careerWins ${curCw} -> ${newCw}, prestige ${curPr} -> ${newPr}. Diese Werte können nie sinken - der Schreibversuch hätte einen echten Spielstand mit einem leeren/veralteten überschrieben. Nichts geschrieben.`);
         toast(`Abgebrochen: der Schreibvorgang hätte den Spielstand von ${targetId} zurückgesetzt und wurde blockiert.`);
+        // unter dem BETROFFENEN Verein protokolliert (nicht unter dem des Schreibenden) - dort sucht
+        // man hinterher danach
+        recordSaveIncident('blocked-foreign-profile-collapse', {
+          writtenBy: clubId||null,
+          current: {careerWins:curCw, prestige:curPr},
+          incoming: {careerWins:newCw, prestige:newPr, coins:(newProfile&&newProfile.coins)||0},
+        }, targetId);
         throw new Error('profile-guard-collapse');
       }
     }
@@ -16675,6 +16769,7 @@ async function sSet(key, value, shared=false){
     if(key==='collection' && Array.isArray(value) && _lastKnownCollectionLen!==null && _lastKnownCollectionLen>=COLLECTION_COLLAPSE_MIN_PRIOR && value.length<=COLLECTION_COLLAPSE_FLOOR){
       console.error(`sSet('collection', ...) blocked: refusing to collapse the collection from ${_lastKnownCollectionLen} to ${value.length} cards in one write - this looks like the exact pattern that caused real data loss, not a normal trade/sale. Nothing was written; the real collection on the server is untouched.`);
       toast('Speichern übersprungen: verdächtig große Änderung an deiner Kartensammlung wurde blockiert. Bitte lade die Seite neu.');
+      recordSaveIncident('blocked-collection-collapse', {from:_lastKnownCollectionLen, to:value.length});
       return null;
     }
     if(key==='profile'){
@@ -16682,6 +16777,11 @@ async function sSet(key, value, shared=false){
       if(collapse){
         console.error(`sSet('profile', ...) blocked: ${collapse}. Diese Werte können im normalen Spiel nie sinken - der Schreibversuch hätte einen bestehenden Spielstand mit einem leeren/fremden überschrieben. Nichts geschrieben; der echte Spielstand auf dem Server ist unangetastet.`);
         toast('Speichern übersprungen: ein Schreibversuch hätte deinen Spielstand zurückgesetzt und wurde blockiert. Bitte lade die Seite neu.');
+        recordSaveIncident('blocked-profile-collapse', {
+          reason: collapse,
+          floor: _lastKnownProfileFloor,
+          incoming: {coins:(value&&value.coins)||0, wins:(value&&value.wins)||0, careerWins:(value&&value.careerWins)||0, prestige:(value&&value.prestige)||0},
+        });
         return null;
       }
     }
@@ -17298,6 +17398,7 @@ async function init(){
   // squad/squadPresets all live in the same Firestore doc, and none of them depends on another's value
   // below, so there's nothing to lose by fetching them together up front.
   let _boot;
+  flushQueuedSaveIncidents(); // Vorfälle nachreichen, die mangels Verbindung nur lokal zwischengespeichert wurden
   setBootProgress(50); // about to start the one real network round-trip that actually dominates boot time
   try{
     _boot = await sGetMany(['profile','collection','managerCollection','packCollection','squad','squadPresets']);
@@ -17306,6 +17407,7 @@ async function init(){
     // A connected-but-failed boot read must never be treated as "new account" (see sGetMany) - block
     // here instead of falling through to the account-creation code below, which would otherwise write
     // a blank profile over a real one on nothing worse than a flaky reconnect.
+    recordSaveIncident('boot-read-failed', {error: String((e&&e.message)||e).slice(0,300)});
     showBootLoadFailedScreen();
     return;
   }
@@ -17321,11 +17423,13 @@ async function init(){
   // über die Versionshistorie im Admin-Panel), niemals überschrieben.
   if(!profile && _boot.__saveDocExisted){
     console.error(`init(): saves/${clubId} existiert, enthält aber kein profile-Feld - Account-Neuanlage wird NICHT durchgeführt (das würde den bestehenden Spielstand überschreiben). Nichts geschrieben.`);
+    recordSaveIncident('blocked-doc-exists-without-profile', {});
     showSaveIncompleteScreen();
     return;
   }
   if(!profile){
     profile = {coins:0, userId:clubId, displayName:clubId, wins:0, draws:0, losses:0, completedSBCs:{}, dailyStreak:0, lastClaimDate:null, friends:[], matchHistory:[], scorerStats:{}, rivalries:{}, soundOn:true, hasPassword:false, crest:{shape:'shield', primary:'#3ddc84', secondary:'#0a0d12', letter:(clubId||'?')[0].toUpperCase()}, iconSwapTokens:0, iconSwapRedeemed:[], dailyRewardTracker:{date:'', count:0}, prestige:0, lastResetId:null, careerWins:0, graphicsPreset:defaultGraphicsPresetForThisDevice(), showDecimalEffOv:false, pendingLigaPacks:[]};
+    recordSaveIncident('account-created', {});
     await sSet('profile', profile);
   } else {
     if(!profile.userId){ profile.userId = clubId; profile.displayName = profile.displayName || clubId; }
@@ -21296,6 +21400,7 @@ async function loadAdminUserPanel(targetId){
       <button class="action-btn secondary" id="admin-reset-ucl-limit" style="width:auto;border-color:#8fa6ff;color:#8fa6ff;">UCL/UEL-Tageslimit zur\u00fccksetzen</button>
       <button class="action-btn secondary" id="admin-patch-missed-fields" style="width:auto;">Nur nachtr\u00e4glich hinzugef\u00fcgte Reset-Felder nachholen</button>
       <button class="action-btn secondary" id="admin-save-history" style="width:auto;border-color:#4a9eff;color:#4a9eff;">Versionshistorie / Wiederherstellen</button>
+      <button class="action-btn secondary" id="admin-save-incidents" style="width:auto;border-color:#ffb04a;color:#ffb04a;">Vorfälle / Diagnose</button>
       ${targetId==='felixfc' ? `<button class="action-btn secondary" id="admin-restore-felixfc" style="width:auto;border-color:#3dc482;color:#3dc482;" ${p.felixfcRestoreApplied?'disabled':''}>${p.felixfcRestoreApplied?'Wiederherstellung bereits durchgef\u00fchrt':'Einmalige Wiederherstellung (Startelf + 40x UCL-Pack + Bronze)'}</button>` : ''}
     </div>`;
   document.getElementById('admin-give-coins').addEventListener('click', ()=>{
@@ -21383,6 +21488,7 @@ async function loadAdminUserPanel(targetId){
     loadAdminUserPanel(targetId);
   });
   document.getElementById('admin-save-history').addEventListener('click', ()=>openAdminSaveHistoryModal(targetId));
+  document.getElementById('admin-save-incidents').addEventListener('click', ()=>openAdminSaveIncidentsModal(targetId));
   document.getElementById('admin-give-card').addEventListener('click', ()=>openAdminSendCardModal(targetId, data));
   document.getElementById('admin-give-pack').addEventListener('click', ()=>openAdminSendPackModal(targetId, data));
   document.getElementById('admin-give-pack-unopened').addEventListener('click', ()=>openAdminSendUnopenedPackModal(targetId, data));
@@ -21581,6 +21687,7 @@ async function adminResetAccount(targetId, p){
     });
   }catch(e){ console.warn('admin account reset failed', e); toast('Reset fehlgeschlagen.'); return; }
   invalidateReadCache('legacy-board');
+  recordSaveIncident('admin-account-reset', {adminClubId:clubId||null, newPrestige:newProfile.prestige||0}, targetId);
   toast(`${targetId} wurde zurückgesetzt — ★ Prestige ${newProfile.prestige}.`);
   loadAdminUserPanel(targetId);
 }
@@ -21640,6 +21747,7 @@ async function openAdminSaveHistoryModal(targetId){
             collection: v.collection, managerCollection: v.managerCollection,
             packCollection: v.packCollection, squad: v.squad, squadPresets: v.squadPresets,
           }, {allowRollback:true});
+          recordSaveIncident('version-restored', {adminClubId:clubId||null, versionId, savedAt:v.savedAt||null}, targetId);
         }catch(e){ console.warn('restore save version failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
         toast(`${targetId} wurde auf die gewählte Version zurückgesetzt.`);
         closeModal();
@@ -21647,6 +21755,45 @@ async function openAdminSaveHistoryModal(targetId){
       });
     });
   });
+}
+// Zeigt WARUM das Spiel diesen Account je als leer/neu behandelt oder einen verdächtigen Schreibvorgang
+// blockiert hat - siehe recordSaveIncident(). Genau die Frage, die bei jedem bisher gemeldeten
+// Datenverlust unbeantwortbar war, weil es dafür schlicht keine Spur gab.
+async function openAdminSaveIncidentsModal(targetId){
+  openModal(`<h2 style="margin-bottom:4px;">Vorfälle: ${targetId}</h2><p class="hint" style="margin-top:0;">Lädt…</p>`);
+  let docs;
+  try{
+    // Bewusst OHNE orderBy in der Query (nur die Gleichheits-Filterung auf clubId): eine Kombination aus
+    // where()+orderBy() auf verschiedenen Feldern würde einen erst manuell in der Firebase-Console
+    // anzulegenden Composite-Index verlangen - hier wird stattdessen client-seitig sortiert, damit
+    // dieses Tool ohne jeden zusätzlichen Konfigurationsschritt sofort funktioniert.
+    const snap = await fb.getDocs(fb.query(fb.collection(fb.db,'saveIncidents'), fb.where('clubId','==',targetId)));
+    docs = snap.docs.slice().sort((a,b)=>(b.data().at||0)-(a.data().at||0)).slice(0,30);
+  }catch(e){
+    console.warn('load save incidents failed', e);
+    openModal(`<h2 style="margin-bottom:4px;">Vorfälle: ${targetId}</h2><p class="hint" style="margin-top:0;">Fehler beim Laden.</p>`);
+    return;
+  }
+  if(!docs.length){
+    openModal(`<h2 style="margin-bottom:4px;">Vorfälle: ${targetId}</h2><p class="hint" style="margin-top:0;">Keine Vorfälle protokolliert - für diesen Account wurde noch nie ein Account als leer/neu behandelt oder ein verdächtiger Schreibvorgang blockiert.</p>`);
+    return;
+  }
+  const rows = docs.map(d=>{
+    const v = d.data();
+    const label = SAVE_INCIDENT_KINDS[v.kind] || v.kind;
+    const isBlock = v.kind.startsWith('blocked-');
+    const detailParts = Object.entries(v.detail||{}).map(([k,val])=>`${k}: ${typeof val==='object'?JSON.stringify(val):val}`);
+    return `<div class="picker-list-item" style="display:block;padding:10px 12px;">
+      <div style="font-weight:600;${isBlock?'color:#ff8f5f;':''}">${label}</div>
+      <div class="hint" style="margin:2px 0 0;">${new Date(v.at).toLocaleString('de-DE')} · ${v.flushedLate?'(verzögert nachgereicht, ohne Verbindung aufgetreten) · ':''}${v.online===false?'offline':'online'} · ${v.visibility||'?'} · ${v.authed?'angemeldet':'nicht angemeldet'}</div>
+      ${detailParts.length ? `<div class="hint" style="margin:4px 0 0;font-family:monospace;font-size:11px;">${detailParts.join(' · ')}</div>` : ''}
+      <div class="hint" style="margin:4px 0 0;font-size:11px;opacity:.7;word-break:break-all;">${(v.ua||'').slice(0,140)}</div>
+    </div>`;
+  }).join('');
+  openModal(`
+    <h2 style="margin-bottom:4px;">Vorfälle: ${targetId}</h2>
+    <p class="hint" style="margin-top:0;margin-bottom:10px;">Letzte ${docs.length} protokollierte Vorfälle, neueste zuerst. Orange = ein Schreibvorgang wurde blockiert (Datenverlust verhindert).</p>
+    <div class="picker-list" style="max-height:440px;overflow-y:auto;">${rows}</div>`);
 }
 function openAdminSendCardModal(targetId, data){
   openModal(`
