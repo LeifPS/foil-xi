@@ -81,7 +81,11 @@ service cloud.firestore {
     match /draftLeaderboard/{userId} { allow read, write: if true; }
     // Forensisches Vorfalls-Protokoll (recordSaveIncident) - bewusst eine EIGENE Collection, nicht Teil
     // von saves/{clubId}: ein Vorfall, der das Save-Dokument überschreibt, würde sein eigenes Protokoll
-    // sonst gleich mitlöschen. Dieselbe offene Regel wie die übrigen App-Collections.
-    match /saveIncidents/{incidentId} { allow read, write: if true; }
+    // sonst gleich mitlöschen. Anders als die meisten übrigen offenen Collections aber NICHT komplett
+    // ohne Auth beschreibbar (gleiche Regel wie saves/saveHistory): jeder echte Aufruf von
+    // recordSaveIncident() passiert nach dem Einloggen, ein anonymer Schreibzugriff hätte hier also
+    // keinen legitimen Nutzen - dafür aber, da das Admin-Panel diese Einträge direkt anzeigt, ein
+    // unnötig großes Einfallstor für unterschobene Vorfälle.
+    match /saveIncidents/{incidentId} { allow read, write: if request.auth != null; }
   }
 }

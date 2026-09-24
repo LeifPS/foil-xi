@@ -48,8 +48,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       doc: (db, col, id) => ({ path: col + '/' + id }),
       setDoc: async (ref, val) => { writes.push({ path: ref.path, val }); return Promise.resolve(); },
     };
-    flushQueuedSaveIncidents();
-    await new Promise(r => setTimeout(r, 10));
+    await flushQueuedSaveIncidents();
     const flushedIncidentWritten = writes.length === writesBeforeOffline + 1;
     const flushedIncidentMarked = writes[writes.length - 1].val.flushedLate === true;
     const queueClearedAfterFlush = localStorage.getItem('foil11-queued-save-incidents') === null;
@@ -57,9 +56,24 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // Ein Flush ohne irgendetwas in der Warteschlange (der Normalfall bei jedem Boot) tut einfach gar
     // nichts - kein leerer/kaputter Write.
     const writesBeforeEmptyFlush = writes.length;
-    flushQueuedSaveIncidents();
-    await new Promise(r => setTimeout(r, 10));
+    await flushQueuedSaveIncidents();
     const emptyFlushIsNoop = writes.length === writesBeforeEmptyFlush;
+
+    // ---------- (3b) Schlägt der Nachreich-Write selbst wieder fehl (z.B. dieselbe Verbindungsflackerei
+    // erneut), darf der Vorfall NICHT einfach verloren gehen - er muss in der Warteschlange bleiben,
+    // statt sie vor einem bestätigten Erfolg schon zu leeren. ----------
+    // Warteschlange direkt mit einem Eintrag befüllen (entspricht dem Zustand nach einem erneut
+    // fehlgeschlagenen offline-boot-blocked-Vorfall):
+    localStorage.setItem('foil11-queued-save-incidents', JSON.stringify([{ kind: 'offline-boot-blocked', clubId: 'testclub', detail: {}, at: Date.now() }]));
+    fb = {
+      doc: (db, col, id) => ({ path: col + '/' + id }),
+      setDoc: async () => { throw new Error('immer noch keine Verbindung'); },
+    };
+    const writesBeforeFailedFlush = writes.length;
+    await flushQueuedSaveIncidents();
+    const noWriteOnFailedFlush = writes.length === writesBeforeFailedFlush;
+    const incidentStaysQueuedAfterFailedFlush = JSON.parse(localStorage.getItem('foil11-queued-save-incidents') || '[]').length === 1;
+    localStorage.removeItem('foil11-queued-save-incidents');
 
     // ---------- (4) Admin-Panel-Ansicht: Vorfälle werden nach Zeit absteigend sortiert angezeigt ----------
     const storedIncidents = [
@@ -83,14 +97,63 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     await openAdminSaveIncidentsModal('sauberverein');
     const emptyStateShown = document.querySelector('#modal-root').innerHTML.includes('Keine Vorfälle protokolliert');
 
+    // ---------- (5) saveIncidents ist per Firestore-Regel für jeden eingeloggten Nutzer beschreibbar
+    // (siehe firestore.rules) - ein böswillig präpariertes Dokument darf das Admin-Panel weder mit
+    // eingeschleustem HTML/JS kompromittieren noch mit einem kaputten `kind`-Feld zum Absturz bringen. ----------
+    const maliciousIncidents = [
+      { id: 'evil', data: () => ({ kind: '<img src=x onerror="window.__xssFired=true">', clubId: 'opferverein', at: 5000, detail: { payload: '<script>window.__xssFired=true</script>' }, ua: '<b>fake-ua</b>', online: true, visibility: 'visible', authed: true }) },
+      { id: 'malformed', data: () => ({ kind: null, clubId: 'opferverein', at: 4000, detail: {}, ua: '', online: true, visibility: 'visible', authed: true }) },
+    ];
+    window.__xssFired = false;
+    fb.getDocs = async () => ({ empty: false, docs: maliciousIncidents });
+    await openAdminSaveIncidentsModal('opferverein');
+    const noCrashOnMalformedKind = document.querySelector('#modal-root').innerHTML.includes('unbekannt');
+    const noScriptExecuted = window.__xssFired === false;
+    const noRawTagInMarkup = !document.querySelector('#modal-root').innerHTML.includes('<img src=x') && !document.querySelector('#modal-root').innerHTML.includes('<script>');
+    const escapedTagVisibleAsText = document.querySelector('#modal-root').innerHTML.includes('&lt;img src=x');
+
     document.getElementById('modal-root').innerHTML = '';
+
+    // ---------- (6) applyGreatReset() darf 'great-reset-applied' erst NACH dem bestätigten profile-Write
+    // protokollieren, nicht schon davor - sSet() wirft bei einem Fehlschlag nicht, sondern gibt nur null
+    // zurück, ein vorher geschriebener Vorfall würde also einen tatsächlich nie gespeicherten Reset als
+    // erfolgreich ausweisen. ----------
+    toast = () => {}; closeModal = () => {}; renderNav = () => {}; renderView = () => {}; updateCoinDisplay = () => {};
+    updateMyLegacyEntry = async () => {};
+    const incidentsRecorded = [];
+    const originalRecordSaveIncident = recordSaveIncident;
+    recordSaveIncident = (kind, detail) => incidentsRecorded.push({ kind, detail });
+
+    // 6a) Alle Writes gelingen -> der Vorfall wird mit profileWriteOk:true protokolliert.
+    profile = { coins: 0, careerWins: 5, prestige: 0 };
+    const sSetCallsOk = [];
+    sSet = async (key, value) => { sSetCallsOk.push(key); return true; };
+    await applyGreatReset('reset-ok');
+    const incidentLoggedOnSuccess = incidentsRecorded.length === 1 && incidentsRecorded[0].kind === 'great-reset-applied';
+    const profileWrittenBeforeIncidentLogged = sSetCallsOk.includes('profile');
+    const incidentMarkedOkOnSuccess = incidentsRecorded[0].detail.profileWriteOk === true;
+
+    // 6b) Der profile-Write schlägt fehl (sSet gibt null zurück, wie beim echten Collapse-Wächter) -> der
+    // Vorfall wird TROTZDEM protokolliert (damit der Fehlschlag selbst sichtbar bleibt), aber klar als
+    // nicht erfolgreich markiert, statt fälschlich einen abgeschlossenen Reset zu behaupten.
+    profile = { coins: 0, careerWins: 5, prestige: 0 };
+    sSet = async (key) => key === 'profile' ? null : true;
+    await applyGreatReset('reset-fail');
+    const incidentStillLoggedOnFailure = incidentsRecorded.length === 2;
+    const incidentMarkedNotOkOnFailure = incidentsRecorded[1].detail.profileWriteOk === false;
+
+    recordSaveIncident = originalRecordSaveIncident;
 
     return {
       wroteToSaveIncidents, clubIdRecorded, kindRecorded, detailRecorded, contextRecorded,
       foreignIncidentUnderVictimClub,
       noWriteAttemptedWithoutFb, queuedCorrectly,
       flushedIncidentWritten, flushedIncidentMarked, queueClearedAfterFlush, emptyFlushIsNoop,
+      noWriteOnFailedFlush, incidentStaysQueuedAfterFailedFlush,
       showsBothIncidents, sortedNewestFirst, emptyStateShown,
+      noCrashOnMalformedKind, noScriptExecuted, noRawTagInMarkup, escapedTagVisibleAsText,
+      incidentLoggedOnSuccess, profileWrittenBeforeIncidentLogged, incidentMarkedOkOnSuccess,
+      incidentStillLoggedOnFailure, incidentMarkedNotOkOnFailure,
     };
   }));
 
@@ -108,9 +171,20 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.flushedIncidentMarked, true, 'ein nachgereichter Vorfall ist als solcher erkennbar (flushedLate)');
   eq(result.queueClearedAfterFlush, true, 'die lokale Warteschlange wird nach dem Nachreichen geleert');
   eq(result.emptyFlushIsNoop, true, 'ein Flush ohne wartende Vorfälle tut nichts (kein leerer Write)');
+  eq(result.noWriteOnFailedFlush, true, 'schlägt der Nachreich-Write erneut fehl, wird kein (halb-fehlgeschlagener) Eintrag geschrieben');
+  eq(result.incidentStaysQueuedAfterFailedFlush, true, 'ein erneut fehlgeschlagener Nachreich-Versuch verliert den Vorfall NICHT - er bleibt in der Warteschlange für den nächsten Versuch');
   ok(result.showsBothIncidents, 'das Admin-Panel zeigt alle protokollierten Vorfälle eines Accounts mit Klartext-Bezeichnung');
   eq(result.sortedNewestFirst, true, 'die Vorfälle werden neueste zuerst angezeigt, unabhängig von der Reihenfolge aus der Query');
   eq(result.emptyStateShown, true, 'ohne jeden Vorfall erscheint ein klarer, beruhigender Hinweis statt einer leeren Liste');
+  eq(result.noCrashOnMalformedKind, true, 'ein Vorfall mit kaputtem/fehlendem kind-Feld lässt das Admin-Panel NICHT abstürzen, sondern zeigt "(unbekannt)"');
+  eq(result.noScriptExecuted, true, 'eingeschleustes HTML/JS in einem Vorfalls-Dokument (saveIncidents ist offen beschreibbar) wird NICHT ausgeführt');
+  eq(result.noRawTagInMarkup, true, 'kein roher <img>/<script>-Tag aus einem Vorfalls-Dokument landet ungeschützt im DOM');
+  eq(result.escapedTagVisibleAsText, true, 'stattdessen erscheint der eingeschleuste Tag escaped als sichtbarer Text, genau wie z.B. Gegnernamen in Handelsmodalen');
+  eq(result.incidentLoggedOnSuccess, true, 'ein erfolgreicher Great Reset protokolliert genau einen great-reset-applied-Vorfall');
+  ok(result.profileWrittenBeforeIncidentLogged, 'der profile-Write ist zum Zeitpunkt der Protokollierung bereits tatsächlich passiert');
+  eq(result.incidentMarkedOkOnSuccess, true, 'ein erfolgreicher Reset wird im Vorfall auch als erfolgreich markiert (profileWriteOk:true)');
+  eq(result.incidentStillLoggedOnFailure, true, 'schlägt der profile-Write fehl, wird der Vorfall trotzdem protokolliert (der Fehlschlag selbst muss sichtbar bleiben)');
+  eq(result.incidentMarkedNotOkOnFailure, true, 'ein fehlgeschlagener Reset wird klar als NICHT erfolgreich markiert, statt fälschlich Erfolg zu behaupten');
 
   summary('Vorfalls-Protokoll-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

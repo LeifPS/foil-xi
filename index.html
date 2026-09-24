@@ -10822,13 +10822,17 @@ async function applyGreatReset(resetId){
   // diesen legitimen Reset selbst als verdächtigen Zusammenbruch blockieren und den Spieler mit einer
   // halb zurückgesetzten Sammlung zurücklassen.
   _lastKnownCollectionLen = null;
-  recordSaveIncident('great-reset-applied', {resetId, priorPrestige:profile.prestige-1, careerWins:profile.careerWins||0});
   await sSet('collection', collection);
   await sSet('managerCollection', managerCollection);
   await sSet('packCollection', packCollection);
   await sSet('squad', squad);
-  await sSet('squadPresets', squadPresets);
-  await sSet('profile', profile);
+  const profileWriteResult = await sSet('profile', profile);
+  // Erst NACH dem eigentlichen (bestätigten) profile-Write protokollieren - vorher hätte ein
+  // fehlgeschlagener/blockierter sSet('profile', ...) (sSet wirft nicht, sondern gibt bei einem
+  // Fehlschlag nur null zurück) einen "erfolgreich zurückgesetzt"-Eintrag hinterlassen, obwohl gar
+  // nichts gespeichert wurde - genau die Art von irreführendem Protokoll, die dieses Feature verhindern
+  // soll.
+  recordSaveIncident('great-reset-applied', {resetId, priorPrestige:profile.prestige-1, careerWins:profile.careerWins||0, profileWriteOk: profileWriteResult!==null});
   await updateMyLegacyEntry();
   closeModal();
   toast(`★ Prestige ${profile.prestige} erreicht — neu gestartet!`);
@@ -16681,7 +16685,9 @@ function recordSaveIncident(kind, detail, forClubId){
       visibility: document.visibilityState,
       msSincePageLoad: Math.round(performance.now()),
       authed: !!(fb.auth && fb.auth.currentUser),
-      fbConnected: !!fb,
+      // (kein fbConnected-Feld hier: an dieser Stelle im Code ist fb durch den obigen `if(!fb...)`-Zweig
+      // bereits garantiert wahr, ein solches Feld wäre also in jedem gespeicherten Vorfall immer true
+      // und damit reine Attrappe statt eines echten Verbindungssignals.)
       url: String(location.href).slice(0,300),
       stack: String((new Error()).stack||'').slice(0,1500),
     };
@@ -16695,20 +16701,27 @@ function recordSaveIncident(kind, detail, forClubId){
 // Reicht Vorfälle nach, die recordSaveIncident() mangels Verbindung (fb===null, siehe offline-boot-blocked)
 // nur lokal zwischenspeichern konnte. Wird von init() aufgerufen, sobald fb wieder verbunden ist - genau
 // dann ist so ein zwischengespeicherter Vorfall überhaupt erst nachweisbar.
-function flushQueuedSaveIncidents(){
+async function flushQueuedSaveIncidents(){
   try{
     if(!fb) return;
     const raw = localStorage.getItem(SAVE_INCIDENT_QUEUE_KEY);
     if(!raw) return;
     const q = JSON.parse(raw);
     if(!Array.isArray(q) || !q.length) return;
-    localStorage.removeItem(SAVE_INCIDENT_QUEUE_KEY);
-    q.forEach(item=>{
+    // Erst NACH einem tatsächlich erfolgreichen Write aus der Warteschlange entfernen - vorher (wie
+    // ursprünglich) hätte ein erneut fehlschlagender Write (z.B. dieselbe Verbindungsflackerei, die den
+    // Vorfall überhaupt erst in die Warteschlange gebracht hat) den Eintrag endgültig verloren, obwohl
+    // die Warteschlange laut ihrem eigenen Zweck ("damit er nicht verloren geht") genau das verhindern soll.
+    const results = await Promise.allSettled(q.map(item=>{
       const id = item.clubId || clubId || 'unbekannt';
       const docId = `${id}_${item.at||Date.now()}_${Math.random().toString(36).slice(2,7)}`;
       const payload = {...item, clubId:id, flushedLate:true, flushedAt:Date.now()};
-      fb.setDoc(fb.doc(fb.db,'saveIncidents', docId), payload).catch(e=>console.warn('queued save incident flush failed', e));
-    });
+      return fb.setDoc(fb.doc(fb.db,'saveIncidents', docId), payload);
+    }));
+    const stillQueued = q.filter((item,i)=>results[i].status==='rejected');
+    if(stillQueued.length) console.warn(`flushQueuedSaveIncidents: ${stillQueued.length}/${q.length} Vorfälle erneut fehlgeschlagen, bleiben in der Warteschlange`);
+    localStorage.setItem(SAVE_INCIDENT_QUEUE_KEY, JSON.stringify(stillQueued));
+    if(!stillQueued.length) localStorage.removeItem(SAVE_INCIDENT_QUEUE_KEY);
   }catch(e){ console.warn('flushQueuedSaveIncidents failed', e); }
 }
 // Gemeinsamer Wächter für JEDEN Write eines kompletten profile-Objekts in ein FREMDES saves-Dokument
@@ -21818,14 +21831,21 @@ async function openAdminSaveIncidentsModal(targetId){
   }
   const rows = docs.map(d=>{
     const v = d.data();
-    const label = SAVE_INCIDENT_KINDS[v.kind] || v.kind;
-    const isBlock = v.kind.startsWith('blocked-');
-    const detailParts = Object.entries(v.detail||{}).map(([k,val])=>`${k}: ${typeof val==='object'?JSON.stringify(val):val}`);
+    // saveIncidents ist per Firestore-Regel für JEDEN offen beschreibbar (fire-and-forget-Protokoll,
+    // siehe recordSaveIncident) - ein Feld hier ist also NIE vertrauenswürdig. kind kommt roh von
+    // aussen (String(v.kind) statt v.kind.startsWith, das bei fehlendem/nicht-String kind sonst mit
+    // einem TypeError das ganze Modal für diesen Account dauerhaft auf "Lädt…" hängen ließe), und jeder
+    // in innerHTML landende Wert läuft durch escapeHtml() - dieselbe Absicherung, die z.B. Gegnernamen
+    // in Handelsmodalen schon bekommen.
+    const kindStr = String(v.kind||'');
+    const label = escapeHtml(SAVE_INCIDENT_KINDS[kindStr] || kindStr || '(unbekannt)');
+    const isBlock = kindStr.startsWith('blocked-');
+    const detailParts = Object.entries(v.detail||{}).map(([k,val])=>`${escapeHtml(k)}: ${escapeHtml(typeof val==='object'?JSON.stringify(val):val)}`);
     return `<div class="picker-list-item" style="display:block;padding:10px 12px;">
       <div style="font-weight:600;${isBlock?'color:#ff8f5f;':''}">${label}</div>
-      <div class="hint" style="margin:2px 0 0;">${new Date(v.at).toLocaleString('de-DE')} · ${v.flushedLate?'(verzögert nachgereicht, ohne Verbindung aufgetreten) · ':''}${v.online===false?'offline':'online'} · ${v.visibility||'?'} · ${v.authed?'angemeldet':'nicht angemeldet'}</div>
+      <div class="hint" style="margin:2px 0 0;">${escapeHtml(new Date(v.at).toLocaleString('de-DE'))} · ${v.flushedLate?'(verzögert nachgereicht, ohne Verbindung aufgetreten) · ':''}${v.online===false?'offline':'online'} · ${escapeHtml(v.visibility||'?')} · ${v.authed?'angemeldet':'nicht angemeldet'}</div>
       ${detailParts.length ? `<div class="hint" style="margin:4px 0 0;font-family:monospace;font-size:11px;">${detailParts.join(' · ')}</div>` : ''}
-      <div class="hint" style="margin:4px 0 0;font-size:11px;opacity:.7;word-break:break-all;">${(v.ua||'').slice(0,140)}</div>
+      <div class="hint" style="margin:4px 0 0;font-size:11px;opacity:.7;word-break:break-all;">${escapeHtml((v.ua||'').slice(0,140))}</div>
     </div>`;
   }).join('');
   openModal(`
