@@ -106,6 +106,7 @@ der bleibt stabil, solange der jeweilige Abschnitts-Kommentar nicht umformuliert
      came from cache, so it forces one real network fetch by navigating to a cache-busted URL (a
      different query string bypasses most static hosts' default URL-keyed caching). Silently does
      nothing if the host doesn't send either header, or the request fails (offline) - never blocks boot. -->
+<script src="https://canopybase.pages.dev/sdk/canopy-sdk.js"></script>
 <script>
 // Named (not a bare IIFE) so tests can call it directly with fetch/the reload step stubbed, instead of
 // relying on the timing of a real network navigation. The actual navigation is one line
@@ -10168,7 +10169,7 @@ async function initFirebase(){
       arrayUnion:fsMod.arrayUnion, arrayRemove:fsMod.arrayRemove, writeBatch:fsMod.writeBatch, onSnapshot:fsMod.onSnapshot,
       collectionGroup:fsMod.collectionGroup,
       auth, createUserWithEmailAndPassword:authMod.createUserWithEmailAndPassword,
-      signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signOut:authMod.signOut,
+      signInWithEmailAndPassword:authMod.signInWithEmailAndPassword, signInWithCustomToken:authMod.signInWithCustomToken, signOut:authMod.signOut,
       setPersistence:authMod.setPersistence, browserLocalPersistence:authMod.browserLocalPersistence,
       browserSessionPersistence:authMod.browserSessionPersistence, onAuthStateChanged:authMod.onAuthStateChanged};
     // Realtime Database is optional - only wired up once a real databaseURL is configured (see the
@@ -17143,7 +17144,35 @@ async function finishSignIn(id){
   startSessionHeartbeat();
   document.getElementById('modal-root').innerHTML = '';
   await init();
+  canopyLinkClub(id);
   return true;
+}
+// ===== Canopy (canopybase.pages.dev) =====
+// Läuft Foil im Canopy-Player, meldet es sich dort an (Spielzeit) und verbindet den Verein nach dem
+// ersten normalen Login mit der Canopy ID des Spielers. Ab dann startet Foil im Player ohne Passwort.
+// Direkt auf foil-xi.pages.dev ändert sich nichts.
+function canopyInHub(){ return !!(window.Canopy && window.Canopy.inHub); }
+let canopyAutoLoggedIn = false;
+if(canopyInHub()){ try{ window.Canopy.ready('foil-eleven'); }catch(e){} }
+async function canopyAutoLogin(){
+  try{
+    const r = await Promise.race([window.Canopy.call('foilToken', {}), new Promise(res=>setTimeout(()=>res(null), 12000))]);
+    if(!r || !r.linked || !r.token) return null;
+    await applyGatePersistence(true);
+    const cred = await fb.signInWithCustomToken(fb.auth, r.token);
+    // resumeAuthedSession erkennt den Verein an der E-Mail. Fehlt sie wider Erwarten, lieber normal einloggen.
+    if(!(cred.user.email||'').endsWith(CLUB_AUTH_DOMAIN)){ try{ await fb.signOut(fb.auth); }catch(e){} return null; }
+    canopyAutoLoggedIn = true;
+    return cred.user;
+  }catch(e){ console.warn('Canopy-Anmeldung nicht möglich, normales Login', e); return null; }
+}
+async function canopyLinkClub(id){
+  if(!canopyInHub() || canopyAutoLoggedIn || !fb || !fb.auth || !fb.auth.currentUser) return;
+  try{
+    const idToken = await fb.auth.currentUser.getIdToken();
+    await window.Canopy.call('foilLink', { idToken });
+    toast('"' + id + '" ist jetzt mit deiner Canopy ID verbunden. Ab jetzt startest du hier ohne Passwort.');
+  }catch(e){ console.warn('Canopy-Verbindung fehlgeschlagen', e); }
 }
 // Called once at boot when Firebase already had a persisted, still-valid signed-in session on disk
 // (see restoredAuthUser in initFirebase) - skips the club-name AND password screens entirely and
@@ -17337,6 +17366,13 @@ async function boot(){
   // initFirebase), resume it straight away - overrides any ?club= in the URL, since a kept-signed-in
   // browser should never be dropped back to a stale bookmarked club or the empty entry gate.
   if(fb && restoredAuthUser){ await resumeAuthedSession(restoredAuthUser); return; }
+  // Canopy-Player (canopybase.pages.dev): Ist dieser Verein mit der Canopy ID des Spielers verbunden,
+  // stellt Canopy einen Einmal-Login aus - kein Vereinspasswort nötig. Klappt das nicht (nicht
+  // verbunden, offline), geht es ganz normal mit dem Eingabe-Gate weiter.
+  if(fb && canopyInHub()){
+    const u = await canopyAutoLogin();
+    if(u){ await resumeAuthedSession(u); return; }
+  }
   let fromUrl = null;
   try{ fromUrl = new URLSearchParams(location.search).get('club'); }catch(e){}
   if(fromUrl){
