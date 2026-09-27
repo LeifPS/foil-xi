@@ -2,6 +2,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ===== Canopy-Vorbereitung =====
+    // Dieses Firebase-Projekt wird künftig auch Canopy-ID-Konten (andere Spiele) beherbergen. Damit
+    // die NICHT an Foil-Daten kommen, verlangen alle bisher "eingeloggt"-geschützten Foil-Collections
+    // jetzt ein echtes Foil-Vereinskonto ({clubId}@foileleven-club.auth). Für bestehende Spieler
+    // ändert sich nichts: Es gab bisher ohnehin nur Vereinskonten.
+    function isClub() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('.*@foileleven-club[.]auth$');
+    }
+
     // ===== Vereins-Identität =====
     // Passwort/E-Mail-Login läuft über ein synthetisches Firebase-Auth-Konto
     // ({clubId}@foileleven-club.auth) - clubRegistry ist die einzige öffentlich lesbare Stelle, die
@@ -10,18 +21,18 @@ service cloud.firestore {
     // schreiben.
     match /clubRegistry/{clubId} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow write: if isClub()
         && request.auth.token.email == clubId + '@foileleven-club.auth';
     }
     match /saves/{clubId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isClub();
     }
     // Automatischer Versionsverlauf von saves/{clubId} (siehe recordSaveSnapshot) - gleiche
     // Zugriffsregel wie saves selbst, damit z.B. der Admin-Wiederherstellungsdialog eines Accounts
     // die Historie eines ANDEREN Accounts lesen/schreiben kann, genau wie beim Markt/Handel/Admin-Panel
     // bereits üblich.
     match /saveHistory/{clubId}/versions/{versionId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isClub();
     }
 
     // ===== Admin-geschützte Aktionen =====
@@ -32,22 +43,22 @@ service cloud.firestore {
     match /config/{docId} {
       allow read: if true;
       allow write: if docId != 'resetEvent'
-        || (request.auth != null && request.auth.token.email in ['leifps@foileleven-club.auth', 'test@foileleven-club.auth']);
+        || (isClub() && request.auth.token.email in ['leifps@foileleven-club.auth', 'test@foileleven-club.auth']);
     }
 
     // ===== Auth erforderlich (aber kein Admin) =====
-    match /cardMints/{id} { allow read, write: if request.auth != null; }
-    match /mgrMints/{id} { allow read, write: if request.auth != null; }
-    match /rapOverrides/{id} { allow read, write: if request.auth != null; }
-    match /leagueMeta/{doc} { allow read, write: if request.auth != null; }
-    match /leagueMembership/{doc} { allow read, write: if request.auth != null; }
-    match /leagueJoinRequests/{doc} { allow read, write: if request.auth != null; }
-    match /leagueWeeks/{doc} { allow read, write: if request.auth != null; }
-    match /leagueHistory/{doc} { allow read, write: if request.auth != null; }
+    match /cardMints/{id} { allow read, write: if isClub(); }
+    match /mgrMints/{id} { allow read, write: if isClub(); }
+    match /rapOverrides/{id} { allow read, write: if isClub(); }
+    match /leagueMeta/{doc} { allow read, write: if isClub(); }
+    match /leagueMembership/{doc} { allow read, write: if isClub(); }
+    match /leagueJoinRequests/{doc} { allow read, write: if isClub(); }
+    match /leagueWeeks/{doc} { allow read, write: if isClub(); }
+    match /leagueHistory/{doc} { allow read, write: if isClub(); }
     match /packOddsCache/{packId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isClub();
       match /sourceShards/{shardId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isClub();
       }
     }
 
