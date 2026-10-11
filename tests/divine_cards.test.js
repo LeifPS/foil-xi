@@ -90,6 +90,23 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const shopBtn = document.querySelector('#pack-tier-divine .buy-btn');
     const shopShowsOwned = !!shopBtn && shopBtn.disabled && /Bereits gekauft/.test(shopBtn.textContent);
     profile.divinePackBought = false; profile.pendingPackPick = null; collection = []; profile.unlockedNametags = [];
+    // Limit gilt für JEDEN Öffnungsweg (Admin-Picker, Inventar), nicht nur für den Shop-Kauf
+    profile.divinePackBought = false; profile.pendingPackPick = null; collection = []; profile.unlockedNametags = [];
+    const toastsSeen = []; const origToast = toast; toast = (m)=>toastsSeen.push(m);
+    showPackOpening(pack, pack.draw());                    // 1. Öffnen über Admin-Picker: erlaubt, verbraucht das Limit
+    await new Promise(r=>setTimeout(r,300));
+    const firstOtherPathAllowed = collection.length===3 && profile.divinePackBought===true;
+    document.getElementById('modal-root').innerHTML='';
+    collection = [];
+    showPackOpening(pack, pack.draw());                    // 2. Öffnen: abgelehnt
+    await new Promise(r=>setTimeout(r,300));
+    const secondOtherPathBlocked = collection.length===0 && toastsSeen.some(m=>/nur 1x pro Verein/.test(m)) && !document.getElementById('pack-visual');
+    packCollection = [{uid:'pk1', packId:'divine'}];       // Inventar-Pack bleibt erhalten, wenn gesperrt
+    getExternalLockedUids = async ()=>new Set();
+    await openOwnedPack('pk1');
+    const inventoryPackKept = packCollection.length===1 && collection.length===0;
+    toast = origToast; packCollection = [];
+    profile.divinePackBought = false; profile.pendingPackPick = null; collection = [];
     // Öffnen: große Pack-Ansicht mit Effekten, Auswahl 1 von 3, Rest wird entfernt, Titel kommt
     collection = []; profile.unlockedNametags = [];
     const drawn = pack.draw();
@@ -133,7 +150,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     collection = [{uid:'u1', cardId:cards[0].id}];
     const grantedWithCard = grantDivineNametagIfOwned()===true && profile.unlockedNametags.includes('divine');
     const idempotent = grantDivineNametagIfOwned()===false && profile.unlockedNametags.filter(x=>x==='divine').length===1;
-    return { noIdCollision, oldCardsIntact, revoked, keptWithRealCard, boughtOnlyOnce, pendingSaved, resumed, resumeKeptOne, thirdBlocked, shopShowsOwned, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    return { firstOtherPathAllowed, secondOtherPathBlocked, inventoryPackKept, noIdCollision, oldCardsIntact, revoked, keptWithRealCard, boughtOnlyOnce, pendingSaved, resumed, resumeKeptOne, thirdBlocked, shopShowsOwned, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              packOk, drawsOk, allNineReachable, noSbc, sourceMentionsPack, storeDivineLast, storeFx, navHasDivine, visualHasFx, threeGrantedUpFront, pickScreen, pickGridCount, exactlyOneKept, titleAfterPick, sawDivineReveal, inOtherPack, hasIcons: !!iconsEl };
   }));
 
@@ -159,6 +176,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.iconsDirectlyUnderName, true, 'Nation/Liga/Verein stehen direkt unter dem Namen, beide ganz unten');
   eq(result.hasFx, true, 'Divine-Effekt-Layer (Aura + 3 Lichtpartikel) vorhanden');
   eq(result.longClass, true, 'alle Namen sind gleich groß (keine Längen-Klassen)');
+  eq(result.firstOtherPathAllowed, true, 'das erste Öffnen über einen anderen Weg (z.B. Admin-Picker) ist erlaubt und verbraucht das Limit');
+  eq(result.secondOtherPathBlocked, true, 'jedes weitere Öffnen über so einen Weg wird abgelehnt, es werden keine Karten vergeben');
+  eq(result.inventoryPackKept, true, 'ein gesperrtes Inventar-Pack wird nicht verbraucht, es bleibt im Inventar');
   eq(result.noIdCollision, true, 'keine Divine-ID kollidiert mit einer Karte in irgendeinem anderen Pool');
   eq(result.oldCardsIntact, true, 'die bisher überschriebenen Karten (Dimarco, Caicedo, Barella, Alvarez) sind wieder sie selbst');
   eq(result.revoked, true, 'ein fälschlich vergebener Divine-Titel wird zurückgenommen (und abgelegt)');

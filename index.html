@@ -19603,7 +19603,7 @@ async function buyPack(pack){
   await atomicCoinChange(-pack.cost);
   if(bumpWeekPassQuest('openPack', 1, pack.id)) await sSet('profile', profile);
   const drawn = pack.draw();
-  showPackOpening(pack, drawn);
+  showPackOpening(pack, drawn, {purchase:true});
   renderStore(document.getElementById('view'));
 }
 async function addCardsToCollection(cards, opts={}){
@@ -19642,6 +19642,15 @@ async function addCardsToCollection(cards, opts={}){
 const DIVINE_PACK_FX_HTML = `<div class="pack-divine-fx"><div class="pdx-nebula"></div><div class="pdx-rays"></div><div class="pdx-stars"></div><div class="pdx-aura"></div>
   <i class="pdx-shoot s1"></i><i class="pdx-shoot s2"></i>${Array.from({length:7},(_,i)=>`<i class="pdx-mote m${i+1}"></i>`).join('')}</div>`;
 function showPackOpening(pack, drawn, opts={}){
+  // Einmal-Packs (Divine): das Limit gilt für JEDEN Weg, ein Pack zu öffnen - nicht nur für den Kauf im Shop
+  // (buyPack setzt den Merker selbst und übergibt opts.purchase). Sonst ließe sich das Pack über den
+  // Admin-Picker oder aus dem Inventar beliebig oft öffnen. Der erste Öffnungsweg, der nicht der Kauf ist,
+  // verbraucht das eine erlaubte Öffnen (Merker wird gesetzt), jeder weitere wird abgelehnt - ohne dass
+  // Karten vergeben werden.
+  if(pack.onceFlag){
+    if(profile[pack.onceFlag] && !opts.purchase){ toast(`${pack.name}: nur 1x pro Verein \u00f6ffnbar \u2014 du hast es bereits ge\u00f6ffnet.`); return; }
+    if(!profile[pack.onceFlag]){ profile[pack.onceFlag] = true; }
+  }
   // grant immediately, before any animation/modal exists - closing the pack-opening modal early
   // (or anything else interrupting the reveal) must never cost the player the pack they paid for
   const addedPromise = addCardsToCollection(drawn, opts);
@@ -22695,6 +22704,7 @@ async function openOwnedPack(uid){
   if(!pack) return;
   const locked = await getExternalLockedUids();
   if(locked.has(uid)){ toast('Dieses Pack ist gerade gelistet oder in einem Handelsangebot \u2014 zuerst zur\u00fccknehmen.'); return; }
+  if(pack.onceFlag && profile[pack.onceFlag]){ toast(`${pack.name}: nur 1x pro Verein \u00f6ffnbar \u2014 du hast es bereits ge\u00f6ffnet. Das Pack bleibt in deinem Inventar.`); return; }
   packCollection = packCollection.filter(p=>p.uid!==uid);
   await sSet('packCollection', packCollection);
   showPackOpening(pack, pack.draw());
