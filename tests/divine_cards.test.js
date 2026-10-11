@@ -27,6 +27,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const iconsDirectlyUnderName = order[0]==='divine-name' && order[1]==='nat-club-icons' && order.length===2;
     const hasFx = !!node.querySelector('.divine-fx .divine-aura') && node.querySelectorAll('.divine-mote').length===3;
 
+    const hasShooting = node.querySelectorAll('.divine-shoot').length===2;
     // Alle Namen gleich groß: keine Längen-Klassen mehr
     const longClass = !cards.some(c=>/dn-/.test(cardEl(c,'').querySelector('.divine-name').className));
 
@@ -67,13 +68,14 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     collection = [{uid:'u1', cardId:cards[0].id}];
     const grantedWithCard = grantDivineNametagIfOwned()===true && profile.unlockedNametags.includes('divine');
     const idempotent = grantDivineNametagIfOwned()===false && profile.unlockedNametags.filter(x=>x==='divine').length===1;
-    return { ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    return { hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              sbcPerCard, sbcOnce, tileHasDivineTier, sourceMentionsSbc, passes, fails, inAnyPack, hasIcons: !!iconsEl };
   }));
 
   console.log('Divine-Karten-Test');
   noErrors(errors, 'Seite');
   eq(result.divineFullChem, true, 'Divine-Karten haben immer volle Chemie (3 Sterne, +3 Rating), auch ohne Verbindungen - gewöhnliche Karten nicht');
+  eq(result.hasShooting, true, 'zwei Sternschnuppen-Elemente sind auf der Karte');
   eq(result.ntOk, true, 'Titel Divine existiert mit Symbol ✵');
   eq(result.ntHtml, true, 'der Titel rendert Symbol + Name mit der Klasse nt-divine');
   eq(result.ntFont, true, 'der Name im Titel nutzt die Signatur-Schrift Jalliya');

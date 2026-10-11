@@ -853,7 +853,15 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .divine-mote.m3{left:80%;animation-duration:6.5s;animation-delay:4.2s;}
 @keyframes divineRise{0%{transform:translateY(0) scale(.6);opacity:0;}15%{opacity:.9;}100%{transform:translateY(-240px) scale(1.1);opacity:0;}}
 .pcard.xs .divine-frame{inset:3px;}
-@media (prefers-reduced-motion:reduce){.pcard.theme-divine{animation:none;}.pcard .divine-mote,.pcard .divine-nebula,.pcard .divine-stars,.pcard .divine-aura,.pcard.theme-divine .divine-name{animation:none;}}
+/* Sternschnuppen: zwei, versetzt, selten - diagonaler Lichtstrich mit hellem Kopf und rosa Glow */
+.pcard .divine-shoot{position:absolute;left:-25%;width:54px;height:1.6px;border-radius:2px;opacity:0;
+  background:linear-gradient(90deg, transparent, rgba(255,200,235,.8) 60%, #fff);
+  box-shadow:0 0 7px 1px rgba(255,190,235,.75);transform:rotate(24deg);animation:divineShoot 6.5s ease-in infinite;}
+.pcard .divine-shoot.sh1{top:7%;animation-delay:1.2s;}
+.pcard .divine-shoot.sh2{top:30%;animation-delay:4.6s;animation-duration:7.5s;width:42px;}
+@keyframes divineShoot{0%,84%{opacity:0;transform:translate(0,0) rotate(24deg);}86%{opacity:1;}100%{opacity:0;transform:translate(300px,135px) rotate(24deg);}}
+.pcard.mini .divine-shoot,.pcard.xs .divine-shoot{width:34px;}
+@media (prefers-reduced-motion:reduce){.pcard.theme-divine{animation:none;}.pcard .divine-mote,.pcard .divine-nebula,.pcard .divine-stars,.pcard .divine-aura,.pcard .divine-shoot,.pcard.theme-divine .divine-name{animation:none;}}
 /* Icon Swap: Remastered (theme 'iconswap2') - deep navy face shared by every rarity, but each of the
    4 rarity tiers (iconswap2-tier-common/rare/epic/legendary, set alongside theme-iconswap2 in cardEl)
    gets its OWN distinct visual gimmick rather than one shared "shimmer" scaled up/down - common is
@@ -18220,6 +18228,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
       <div class="divine-aura"></div>
       <div class="divine-floor"></div>
       <div class="divine-frame"></div>
+      <i class="divine-shoot sh1"></i><i class="divine-shoot sh2"></i>
       ${Array.from({length:3},(_,i)=>`<i class="divine-mote m${i+1}"></i>`).join('')}
     </div>` : '';
   // Icon Swap: Remastered (variant/theme 'iconswap2') - each rarity tier gets its own distinct FX
