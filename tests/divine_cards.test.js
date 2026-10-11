@@ -34,6 +34,20 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // alle Größen rendern ohne Fehler
     ['mini','xs'].forEach(sz=>cardEl(cards[2], sz));
 
+    // KEINE ID-Kollision mit irgendeinem anderen Kartenpool (Regression: die ersten Divine-IDs überschrieben
+    // 9 bestehende Karten, Besitzer sahen plötzlich Divine-Karten, die sie nie bekommen hatten)
+    const poolNames = ['ALL_BASE','ALL_SPECIAL','EXCLUSIVE_SPECIALS','GOAT_SPECIALS','WM_SPECIALS','PRIME_CARDS','KRONJUWELEN_SPECIALS','BLACK_HOLE_SPECIALS','SIGNATURE_SEASON_CARDS','OGICON_CARDS','POETEN_CARDS','LEGENDS_SPECIALS','TOTY_SPECIALS','UCLW_SPECIALS','DERBY_SPECIALS','UNDERDOG_SPECIALS','WM_SPECIALS'];
+    const divineIds = new Set(cards.map(c=>c.id));
+    let collisions = 0, poolsChecked = 0;
+    poolNames.forEach(nm=>{ let arr; try{ arr = eval(nm); }catch(e){ return; } if(!Array.isArray(arr)) return; poolsChecked++; arr.forEach(c=>{ if(c && divineIds.has(c.id) && c.theme!=='divine') collisions++; }); });
+    const noIdCollision = collisions===0 && poolsChecked>=8;
+    const oldCardsIntact = ['Dimarco','Caicedo','Barella','Alvarez'].every(nm=>{ const c = ALL_SPECIAL.concat(ALL_BASE).find(x=>x.n.includes(nm)); return c && BY_ID.get(c.id)===c && c.theme!=='divine'; });
+    // Aufräumen: fälschlich vergebener Titel wird zurückgenommen, echter bleibt
+    profile.unlockedNametags = ['divine','gold']; profile.nametag='divine'; profile.divinePackBought=false; collection=[{uid:'a', cardId:ALL_SPECIAL.find(x=>x.n.includes('Caicedo')).id}];
+    const revoked = revokeUndeservedDivineNametag()===true && !profile.unlockedNametags.includes('divine') && profile.unlockedNametags.includes('gold') && profile.nametag===null;
+    profile.unlockedNametags = ['divine']; collection=[{uid:'b', cardId:cards[0].id}];
+    const keptWithRealCard = revokeUndeservedDivineNametag()===false && profile.unlockedNametags.includes('divine');
+    profile.unlockedNametags = []; collection = [];
     // Divine Pack: letzte Seltenheit, 100k, 3 Karten, 1 wählbar
     const pack = PACKS.find(x=>x.id==='divine');
     const packOk = !!pack && pack.tier==='divine' && pack.cost===100000 && pack.count===3 && pack.pickCount===1 && PACKS[PACKS.length-1]===pack && !pack.hidden;
@@ -119,7 +133,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     collection = [{uid:'u1', cardId:cards[0].id}];
     const grantedWithCard = grantDivineNametagIfOwned()===true && profile.unlockedNametags.includes('divine');
     const idempotent = grantDivineNametagIfOwned()===false && profile.unlockedNametags.filter(x=>x==='divine').length===1;
-    return { boughtOnlyOnce, pendingSaved, resumed, resumeKeptOne, thirdBlocked, shopShowsOwned, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    return { noIdCollision, oldCardsIntact, revoked, keptWithRealCard, boughtOnlyOnce, pendingSaved, resumed, resumeKeptOne, thirdBlocked, shopShowsOwned, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              packOk, drawsOk, allNineReachable, noSbc, sourceMentionsPack, storeDivineLast, storeFx, navHasDivine, visualHasFx, threeGrantedUpFront, pickScreen, pickGridCount, exactlyOneKept, titleAfterPick, sawDivineReveal, inOtherPack, hasIcons: !!iconsEl };
   }));
 
@@ -145,6 +159,10 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.iconsDirectlyUnderName, true, 'Nation/Liga/Verein stehen direkt unter dem Namen, beide ganz unten');
   eq(result.hasFx, true, 'Divine-Effekt-Layer (Aura + 3 Lichtpartikel) vorhanden');
   eq(result.longClass, true, 'alle Namen sind gleich groß (keine Längen-Klassen)');
+  eq(result.noIdCollision, true, 'keine Divine-ID kollidiert mit einer Karte in irgendeinem anderen Pool');
+  eq(result.oldCardsIntact, true, 'die bisher überschriebenen Karten (Dimarco, Caicedo, Barella, Alvarez) sind wieder sie selbst');
+  eq(result.revoked, true, 'ein fälschlich vergebener Divine-Titel wird zurückgenommen (und abgelegt)');
+  eq(result.keptWithRealCard, true, 'wer wirklich eine Divine-Karte besitzt, behält den Titel');
   eq(result.boughtOnlyOnce, true, 'zwei Käufe direkt hintereinander ergeben nur EINEN Kauf (100.000 Coins, 3 Karten)');
   eq(result.pendingSaved, true, 'die offene Auswahl wird im Profil gemerkt');
   eq(result.resumed, true, 'nach einem Neustart wird die offene Auswahl wieder aufgemacht');
