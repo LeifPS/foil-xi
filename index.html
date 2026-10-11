@@ -22323,6 +22323,17 @@ function openAdminSetLigaBadgeModal(targetId, p){
     loadAdminUserPanel(targetId);
   });
 }
+// Einmal-Packs (pack.onceFlag, z.B. Divine) gelten auch für Admin-Geschenke: liest den AKTUELLEN Stand des
+// Zielaccounts (nicht den evtl. veralteten Panel-Snapshot) und liefert einen Ablehnungsgrund oder null.
+async function adminOncePackBlockReason(pack, targetId, alsoUnopened){
+  if(!pack.onceFlag) return null;
+  let d = null;
+  try{ const snap = await fb.getDoc(fb.doc(fb.db,'saves',targetId)); d = snap.exists() ? snap.data() : null; }
+  catch(e){ return 'Zielaccount konnte nicht gelesen werden \u2014 zur Sicherheit abgebrochen.'; }
+  if(d && d.profile && d.profile[pack.onceFlag]) return `${targetId} hat das ${pack.name} bereits (nur 1x pro Verein).`;
+  if(alsoUnopened && d && (d.packCollection||[]).some(x=>x.packId===pack.id)) return `${targetId} hat bereits ein ungeöffnetes ${pack.name} im Inventar (nur 1x pro Verein).`;
+  return null;
+}
 function openAdminSendPackModal(targetId, data){
   openModal(`
     <h2 style="margin-bottom:12px;">Pack f\u00fcr ${targetId} \u00f6ffnen</h2>
@@ -22335,10 +22346,16 @@ function openAdminSendPackModal(targetId, data){
     btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
     btn.textContent = pack.name;
     btn.addEventListener('click', async ()=>{
-      const drawn = pack.draw();
+      const blocked = await adminOncePackBlockReason(pack, targetId, true);
+      if(blocked){ toast(blocked); return; }
+      let drawn = pack.draw();
+      // Einmal-Pick-Pack (Divine): der Zielaccount bekommt wie beim normalen Öffnen nur pickCount Karten und
+      // das Limit-Flag wird mitgesetzt, sonst ließe sich das Pack über dieses Admin-Werkzeug beliebig wiederholen.
+      if(pack.onceFlag && pack.pickCount) drawn = drawn.slice(0, pack.pickCount);
+      const extra = pack.onceFlag ? {profile:{[pack.onceFlag]:true}} : {};
       // fb.arrayUnion, not a read-modify-write off the admin panel's (possibly minutes-stale) data
       // snapshot - see openAdminSendCardModal's comment for why that silently loses concurrent changes.
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion(...drawn.map(card=>({uid:genId(), cardId:card.id})))}, {merge:true}) }
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion(...drawn.map(card=>({uid:genId(), cardId:card.id}))), ...extra}, {merge:true}) }
       catch(e){ console.warn('admin send pack failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`${pack.name} f\u00fcr ${targetId} ge\u00f6ffnet: ${drawn.map(c=>c.n).join(', ')}`);
       closeModal();
@@ -22360,6 +22377,8 @@ function openAdminSendUnopenedPackModal(targetId, data){
     btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
     btn.textContent = pack.name;
     btn.addEventListener('click', async ()=>{
+      const blocked = await adminOncePackBlockReason(pack, targetId, true);
+      if(blocked){ toast(blocked); return; }
       // fb.arrayUnion, not a read-modify-write off the admin panel's (possibly minutes-stale) data
       // snapshot - see openAdminSendCardModal's comment for why that silently loses concurrent changes.
       try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {packCollection: fb.arrayUnion({uid:genId(), packId:pack.id})}, {merge:true}) }

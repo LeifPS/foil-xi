@@ -107,6 +107,34 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const inventoryPackKept = packCollection.length===1 && collection.length===0;
     toast = origToast; packCollection = [];
     profile.divinePackBought = false; profile.pendingPackPick = null; collection = [];
+    // Admin-Geschenke: gleiches Limit (Direkt-Öffnen UND ungeöffnetes Pack), Zielstand wird frisch gelesen
+    const targetDocs = { 'saves/opfer': { profile: {} , collection: [], packCollection: [] } };
+    const writesAdmin = [];
+    const origFb = fb;
+    fb = { doc:(db,c,id)=>({path:c+'/'+id}), getDoc: async (ref)=>({exists:()=>!!targetDocs[ref.path], data:()=>targetDocs[ref.path]}),
+           setDoc: async (ref,val)=>{ writesAdmin.push({path:ref.path,val}); }, arrayUnion:(...a)=>({union:a}) };
+    const clickPack = async (opener, label)=>{ opener('opfer', {}); await new Promise(r=>setTimeout(r,20));
+      const btn = Array.from(document.querySelectorAll('#modal-root .picker-list button')).find(b=>b.textContent===label); btn.click(); await new Promise(r=>setTimeout(r,80)); };
+    const toastsAdmin = []; const origToast2 = toast; toast = (m)=>toastsAdmin.push(m);
+    await clickPack(openAdminSendPackModal, 'Divine Pack');           // 1. Direkt-Öffnen für Zielspieler: erlaubt
+    const adminDirectGaveOne = writesAdmin.length===1 && writesAdmin[0].val.collection.union.length===1 && writesAdmin[0].val.profile.divinePackBought===true;
+    targetDocs['saves/opfer'].profile.divinePackBought = true;        // Ziel hat das Limit jetzt verbraucht
+    await clickPack(openAdminSendPackModal, 'Divine Pack');           // 2. Direkt-Öffnen: abgelehnt
+    await clickPack(openAdminSendUnopenedPackModal, 'Divine Pack');   // ungeöffnet schicken: ebenfalls abgelehnt
+    const adminSecondBlocked = writesAdmin.length===1 && toastsAdmin.filter(m=>/bereits/.test(m)).length===2;
+    targetDocs['saves/opfer'].profile.divinePackBought = false;
+    targetDocs['saves/opfer'].packCollection = [{uid:'x', packId:'divine'}];
+    const before = writesAdmin.length;
+    await clickPack(openAdminSendUnopenedPackModal, 'Divine Pack');   // schon ein ungeöffnetes im Inventar: abgelehnt
+    const adminNoHoarding = writesAdmin.length===before;
+    targetDocs['saves/opfer'].packCollection = [];
+    await clickPack(openAdminSendUnopenedPackModal, 'Divine Pack');   // frisches Ziel: ungeöffnet schicken erlaubt
+    const adminUnopenedAllowedOnce = writesAdmin.length===before+1;
+    // andere Packs bleiben unbegrenzt verschenkbar
+    const before2 = writesAdmin.length;
+    await clickPack(openAdminSendUnopenedPackModal, PACKS[0].name);
+    const otherPacksUnaffected = writesAdmin.length===before2+1;
+    fb = origFb; toast = origToast2; document.getElementById('modal-root').innerHTML='';
     // Öffnen: große Pack-Ansicht mit Effekten, Auswahl 1 von 3, Rest wird entfernt, Titel kommt
     collection = []; profile.unlockedNametags = [];
     const drawn = pack.draw();
@@ -150,7 +178,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     collection = [{uid:'u1', cardId:cards[0].id}];
     const grantedWithCard = grantDivineNametagIfOwned()===true && profile.unlockedNametags.includes('divine');
     const idempotent = grantDivineNametagIfOwned()===false && profile.unlockedNametags.filter(x=>x==='divine').length===1;
-    return { firstOtherPathAllowed, secondOtherPathBlocked, inventoryPackKept, noIdCollision, oldCardsIntact, revoked, keptWithRealCard, boughtOnlyOnce, pendingSaved, resumed, resumeKeptOne, thirdBlocked, shopShowsOwned, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    return { adminDirectGaveOne, adminSecondBlocked, adminNoHoarding, adminUnopenedAllowedOnce, otherPacksUnaffected, firstOtherPathAllowed, secondOtherPathBlocked, inventoryPackKept, noIdCollision, oldCardsIntact, revoked, keptWithRealCard, boughtOnlyOnce, pendingSaved, resumed, resumeKeptOne, thirdBlocked, shopShowsOwned, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              packOk, drawsOk, allNineReachable, noSbc, sourceMentionsPack, storeDivineLast, storeFx, navHasDivine, visualHasFx, threeGrantedUpFront, pickScreen, pickGridCount, exactlyOneKept, titleAfterPick, sawDivineReveal, inOtherPack, hasIcons: !!iconsEl };
   }));
 
@@ -176,6 +204,11 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.iconsDirectlyUnderName, true, 'Nation/Liga/Verein stehen direkt unter dem Namen, beide ganz unten');
   eq(result.hasFx, true, 'Divine-Effekt-Layer (Aura + 3 Lichtpartikel) vorhanden');
   eq(result.longClass, true, 'alle Namen sind gleich groß (keine Längen-Klassen)');
+  eq(result.adminDirectGaveOne, true, 'Admin-Direkt-Öffnen gibt dem Zielspieler genau 1 Karte (Auswahl-Regel) und setzt das Limit-Flag');
+  eq(result.adminSecondBlocked, true, 'ein zweites Admin-Geschenk (direkt ODER ungeöffnet) wird abgelehnt, nichts wird geschrieben');
+  eq(result.adminNoHoarding, true, 'hat der Zielspieler schon ein ungeöffnetes Divine Pack im Inventar, wird kein weiteres geschickt');
+  eq(result.adminUnopenedAllowedOnce, true, 'einem frischen Zielspieler lässt sich genau ein ungeöffnetes Divine Pack schicken');
+  eq(result.otherPacksUnaffected, true, 'alle anderen Packs bleiben für Admins unbegrenzt verschenkbar');
   eq(result.firstOtherPathAllowed, true, 'das erste Öffnen über einen anderen Weg (z.B. Admin-Picker) ist erlaubt und verbraucht das Limit');
   eq(result.secondOtherPathBlocked, true, 'jedes weitere Öffnen über so einen Weg wird abgelehnt, es werden keine Karten vergeben');
   eq(result.inventoryPackKept, true, 'ein gesperrtes Inventar-Pack wird nicht verbraucht, es bleibt im Inventar');
