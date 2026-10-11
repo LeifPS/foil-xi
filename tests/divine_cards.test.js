@@ -51,6 +51,31 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const storeDivineLast = !!lastSec && lastSec.id==='pack-tier-divine' && lastSec.querySelectorAll('.pack-card.divine').length===1;
     const storeFx = !!lastSec.querySelector('.pack-card.divine .pack-divine-fx .pdx-rays') && lastSec.querySelectorAll('.pdx-mote').length===7 && lastSec.querySelectorAll('.pdx-shoot').length===2;
     const navHasDivine = !!document.querySelector('.pack-tier-nav-btn.divine');
+    // Nur 1x kaufbar: Doppelklick (zwei Käufe direkt hintereinander) kauft nur einmal, danach gesperrt
+    atomicCoinChange = async (n)=>{ profile.coins += n; };
+    profile.coins = 500000; profile.divinePackBought = false;
+    collection = []; profile.unlockedNametags = [];
+    const p1 = buyPack(pack), p2 = buyPack(pack);
+    await Promise.all([p1,p2]);
+    await new Promise(r=>setTimeout(r,200));
+    const boughtOnlyOnce = profile.coins===400000 && profile.divinePackBought===true && collection.length===3;
+    const pendingSaved = !!profile.pendingPackPick && profile.pendingPackPick.uids.length===3;
+    document.getElementById('modal-root').innerHTML='';
+    // Reload simulieren: offene Auswahl wird beim Start wieder aufgemacht, Auswahl räumt auf + löscht Pending
+    const resumed = resumePendingPackPick()===true && !!document.getElementById('pick-grid');
+    document.querySelectorAll('#pick-grid > div')[0].click();
+    document.getElementById('pick-confirm').click();
+    await new Promise(r=>setTimeout(r,300));
+    const resumeKeptOne = collection.length===1 && profile.pendingPackPick===null;
+    document.getElementById('modal-root').innerHTML='';
+    // Dritter Kaufversuch bleibt gesperrt (keine Coins abgezogen), Shop zeigt "Bereits gekauft"
+    const coinsBefore = profile.coins;
+    await buyPack(pack);
+    const thirdBlocked = profile.coins===coinsBefore && collection.length===1;
+    renderStore(document.getElementById('view'));
+    const shopBtn = document.querySelector('#pack-tier-divine .buy-btn');
+    const shopShowsOwned = !!shopBtn && shopBtn.disabled && /Bereits gekauft/.test(shopBtn.textContent);
+    profile.divinePackBought = false; profile.pendingPackPick = null; collection = []; profile.unlockedNametags = [];
     // Öffnen: große Pack-Ansicht mit Effekten, Auswahl 1 von 3, Rest wird entfernt, Titel kommt
     collection = []; profile.unlockedNametags = [];
     const drawn = pack.draw();
@@ -94,7 +119,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     collection = [{uid:'u1', cardId:cards[0].id}];
     const grantedWithCard = grantDivineNametagIfOwned()===true && profile.unlockedNametags.includes('divine');
     const idempotent = grantDivineNametagIfOwned()===false && profile.unlockedNametags.filter(x=>x==='divine').length===1;
-    return { hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    return { boughtOnlyOnce, pendingSaved, resumed, resumeKeptOne, thirdBlocked, shopShowsOwned, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              packOk, drawsOk, allNineReachable, noSbc, sourceMentionsPack, storeDivineLast, storeFx, navHasDivine, visualHasFx, threeGrantedUpFront, pickScreen, pickGridCount, exactlyOneKept, titleAfterPick, sawDivineReveal, inOtherPack, hasIcons: !!iconsEl };
   }));
 
@@ -120,6 +145,12 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.iconsDirectlyUnderName, true, 'Nation/Liga/Verein stehen direkt unter dem Namen, beide ganz unten');
   eq(result.hasFx, true, 'Divine-Effekt-Layer (Aura + 3 Lichtpartikel) vorhanden');
   eq(result.longClass, true, 'alle Namen sind gleich groß (keine Längen-Klassen)');
+  eq(result.boughtOnlyOnce, true, 'zwei Käufe direkt hintereinander ergeben nur EINEN Kauf (100.000 Coins, 3 Karten)');
+  eq(result.pendingSaved, true, 'die offene Auswahl wird im Profil gemerkt');
+  eq(result.resumed, true, 'nach einem Neustart wird die offene Auswahl wieder aufgemacht');
+  eq(result.resumeKeptOne, true, 'die fortgesetzte Auswahl behält genau 1 Karte und löscht den Merker');
+  eq(result.thirdBlocked, true, 'jeder weitere Kauf ist gesperrt (keine Coins abgezogen)');
+  eq(result.shopShowsOwned, true, 'der Shop zeigt "Bereits gekauft" statt Öffnen');
   eq(result.packOk, true, 'Divine Pack: Tier divine, 100.000 Coins, 3 Karten, 1 wählbar, letztes Pack im Shop');
   eq(result.drawsOk, true, 'jede Ziehung sind 3 verschiedene Divine-Karten');
   eq(result.allNineReachable, true, 'alle 9 Divine-Karten sind ziehbar');

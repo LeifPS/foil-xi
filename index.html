@@ -11816,8 +11816,8 @@ const PACKS = [
     }},
   // DIVINE: eigene Seltenheit nach Ultimate, ganz unten im Kartenladen. 3 verschiedene zufällige Divine-Karten
   // (alle 121 OVR, untradable), davon darf man genau eine behalten (pickCount, siehe showPickScreen).
-  {id:'divine',name:'Divine Pack',cost:100000,tier:'divine',count:3,pickCount:1,
-    desc:'Die höchste Seltenheit im Spiel: 3 zufällige Divine-Legenden (121 OVR, volle Chemie, nicht handelbar) \u2014 du behältst eine davon.',
+  {id:'divine',name:'Divine Pack',cost:100000,tier:'divine',count:3,pickCount:1,onceFlag:'divinePackBought',
+    desc:'Die höchste Seltenheit im Spiel: 3 zufällige Divine-Legenden (121 OVR, volle Chemie, nicht handelbar) \u2014 du behältst eine davon. Nur 1x pro Verein kaufbar.',
     draw(){
       const pool = DIVINE_CARDS.slice();
       for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
@@ -17783,6 +17783,7 @@ async function init(){
   // auch wer eine Divine-Karte anderweitig bekommen hat (z.B. Admin) erhält den Titel
   if(grantDivineNametagIfOwned()) await sSet('profile', profile);
   currentTab = restoredLastTab();
+  setTimeout(()=>{ try{ resumePendingPackPick(); }catch(e){ console.warn('resumePendingPackPick failed', e); } }, 600);
   renderNav();
   renderView(currentTab);
   updateCoinDisplay();
@@ -19467,10 +19468,12 @@ function renderStore(view){
           ${pack.cost>0 && pack.count>0 ? `<div class="hint" style="margin:0;font-size:10.5px;">~${formatCoins(Math.round(pack.cost/pack.count))} pro Karte</div>` : ''}
           <div class="buyrow">
             <div class="price-pill">${coinIcon(14)}${formatCoins(pack.cost)}</div>
-            <button class="buy-btn" ${profile.coins<pack.cost?`disabled title="Fehlen noch ${formatCoins(pack.cost-profile.coins)} Coins"`:''}>\u00d6ffnen</button>
+            ${pack.onceFlag && profile[pack.onceFlag]
+              ? `<button class="buy-btn" disabled title="Nur 1x pro Verein kaufbar">Bereits gekauft</button>`
+              : `<button class="buy-btn" ${profile.coins<pack.cost?`disabled title="Fehlen noch ${formatCoins(pack.cost-profile.coins)} Coins"`:''}>\u00d6ffnen</button>`}
           </div>
         </div>`;
-      card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
+      if(!(pack.onceFlag && profile[pack.onceFlag])) card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
       card.querySelector('.odds-link').addEventListener('click', ()=>showPackOdds(pack));
       grid.appendChild(card);
     });
@@ -19541,7 +19544,11 @@ async function redeemCode(){
 }
 
 async function buyPack(pack){
+  // Einmal-Packs (pack.onceFlag, z.B. Divine): pro Verein genau 1x kaufbar. Flag wird SYNCHRON vor dem
+  // ersten await gesetzt, damit ein Doppelklick/zwei schnelle Klicks keinen zweiten Kauf durchrutschen lassen.
+  if(pack.onceFlag && profile[pack.onceFlag]){ toast('Dieses Pack ist nur 1x pro Verein kaufbar \u2014 du hast es bereits.'); renderStore(document.getElementById('view')); return; }
   if(profile.coins < pack.cost){ toast("Nicht genug Coins."); return; }
+  if(pack.onceFlag) profile[pack.onceFlag] = true;
   await atomicCoinChange(-pack.cost);
   if(bumpWeekPassQuest('openPack', 1, pack.id)) await sSet('profile', profile);
   const drawn = pack.draw();
@@ -19587,6 +19594,12 @@ function showPackOpening(pack, drawn, opts={}){
   // grant immediately, before any animation/modal exists - closing the pack-opening modal early
   // (or anything else interrupting the reveal) must never cost the player the pack they paid for
   const addedPromise = addCardsToCollection(drawn, opts);
+  // Einmal-Pick-Packs (Divine): die noch nicht ausgewählten Karten im Profil merken - bricht die Seite vor der
+  // Auswahl ab (Reload/Absturz), wird die Auswahl beim nächsten Start fortgesetzt (siehe resumePendingPackPick),
+  // statt dass man alle 3 behält oder die Karten verliert.
+  if(pack.onceFlag && pack.pickCount){
+    addedPromise.then(added=>{ profile.pendingPackPick = {packId:pack.id, uids:added.map(a=>a.uid), pickCount:pack.pickCount}; sSet('profile', profile); });
+  }
   // Kartensammler no longer counts here - it's a live unique-card count off the collection itself
   // (see achievementStatValue), which addCardsToCollection above already just updated.
   applyAchievementDeltas({packsOpened:1});
@@ -19760,6 +19773,16 @@ function revealQueue(cards, i, pack, addedPromise){
     leaveTimer = setTimeout(advance, 850);
   }
 }
+// Beim Start: war eine "Wähle X"-Auswahl (Divine Pack) noch offen, wird sie wieder aufgemacht.
+function resumePendingPackPick(){
+  const pend = profile && profile.pendingPackPick;
+  if(!pend || !Array.isArray(pend.uids)) return false;
+  const added = pend.uids.map(uid=>{ const e = collection.find(x=>x.uid===uid); const card = e && BY_ID.get(e.cardId); return card ? {uid, card} : null; }).filter(Boolean);
+  if(added.length<=pend.pickCount){ profile.pendingPackPick = null; sSet('profile', profile); return false; } // schon ausgewählt/aufgeräumt
+  openModal(`<h2 style="text-align:center;margin-bottom:2px;">Divine Pack</h2><p style="text-align:center;color:var(--muted);font-size:12.5px;">Deine Auswahl war noch offen \u2014 w\u00e4hle jetzt.</p>`);
+  showPickScreen(added.map(a=>a.card), pend.pickCount, Promise.resolve(added));
+  return true;
+}
 function showPickScreen(cards, pickCount, addedPromise){
   const container = document.createElement('div');
   container.innerHTML = `
@@ -19795,6 +19818,7 @@ function showPickScreen(cards, pickCount, addedPromise){
     });
     if(touchedPlayers) await sSet('collection', collection);
     if(touchedManagers) await sSet('managerCollection', managerCollection);
+    if(profile.pendingPackPick){ profile.pendingPackPick = null; await sSet('profile', profile); }
     // Divine Pack: erst nach der Auswahl (nicht schon beim Ziehen aller 3) prüfen, ob der Titel fällig ist
     if(grantDivineNametagIfOwned()){ await sSet('profile', profile); toast('Neuer Titel freigeschaltet: \u2735 Divine'); }
   }
