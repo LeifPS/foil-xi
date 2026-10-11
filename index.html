@@ -807,11 +807,14 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.mini.theme-divine .ov{font-size:19px;}
 .pcard.xs.theme-divine .ov{font-size:15px;}
 .pcard.theme-divine .card-body{justify-content:flex-end;padding-bottom:9px;}
-.pcard.theme-divine .divine-name{font-family:'Jalliya','Brush Script MT',cursive;font-size:40px;line-height:1;text-align:center;-webkit-text-stroke:.5px rgba(255,236,176,.7);
+.pcard.theme-divine .divine-name{font-family:'Jalliya','Brush Script MT',cursive;font-size:40px;line-height:1;text-align:center;
+  -webkit-text-stroke:.4px rgba(255,255,255,.3);
   white-space:nowrap;overflow:visible;padding:0 2px;margin-bottom:15px;
-  background:linear-gradient(100deg,#ffe9a8 25%,#fff 50%,#ffd0ec 75%);background-size:260% 100%;
+  /* sichtbar animierter Farbverlauf: Gold -> Weiß -> Rosé -> Cyan -> Violett -> Gold (nahtlos, Wiederholung), läuft endlos durch den Namen */
+  background:linear-gradient(100deg,#ffd45a 0%,#fff6d6 12%,#ff8fcf 28%,#7fe0ff 44%,#b79bff 58%,#ffd45a 72%,#fff6d6 86%,#ffd45a 100%);background-size:250% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 0 6px rgba(255,230,160,.55));animation:nameVariantShimmer 4s linear infinite;}
+  filter:drop-shadow(0 0 6px rgba(255,230,160,.55));animation:divineNameFlow 3.6s linear infinite;}
+@keyframes divineNameFlow{0%{background-position:0% 0;}100%{background-position:-250% 0;}}
 .pcard.mini.theme-divine .divine-name{font-size:29px;margin-bottom:9px;}
 .pcard.xs .divine-frame::before,.pcard.xs .divine-frame::after{width:8px;height:8px;}
 .pcard.xs.theme-divine .divine-name{font-size:20px;margin-bottom:5px;}
@@ -879,7 +882,7 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .divine-mote.m5{left:76%;animation-duration:5.5s;animation-delay:1.2s;}
 .pcard .divine-mote.m6{left:90%;animation-duration:6.8s;animation-delay:3.1s;}
 @keyframes divineRise{0%{transform:translateY(0) scale(.6);opacity:0;}15%{opacity:.95;}100%{transform:translateY(-250px) scale(1.1);opacity:0;}}
-@media (prefers-reduced-motion:reduce){.pcard.theme-divine{animation:none;}.pcard .divine-mote,.pcard .divine-halo,.pcard .divine-nebula,.pcard .divine-stars,.pcard .divine-aurora,.pcard .divine-shoot{animation:none;}}
+@media (prefers-reduced-motion:reduce){.pcard.theme-divine{animation:none;}.pcard .divine-mote,.pcard .divine-halo,.pcard .divine-nebula,.pcard .divine-stars,.pcard .divine-aurora,.pcard .divine-shoot,.pcard.theme-divine .divine-name{animation:none;}}
 /* Icon Swap: Remastered (theme 'iconswap2') - deep navy face shared by every rarity, but each of the
    4 rarity tiers (iconswap2-tier-common/rare/epic/legendary, set alongside theme-iconswap2 in cardEl)
    gets its OWN distinct visual gimmick rather than one shared "shimmer" scaled up/down - common is
