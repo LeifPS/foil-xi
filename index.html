@@ -135,7 +135,7 @@ foil11CheckStaleCache();
 </script>
 <title>FOIL ELEVEN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Momo+Signature&display=swap" rel="stylesheet">
 <style>
 :root{
   --void:#080a0f;
@@ -800,6 +800,11 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
   50%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 40px 2px rgba(190,170,255,.6);}
 }
 .pcard.theme-divine::before{animation:autoShine 2.2s ease-in-out infinite;}
+.pcard.theme-divine .ov{font-family:'Momo Signature','Jalliya','Anton',cursive;font-size:32px;font-weight:400;
+  background:linear-gradient(100deg,#ffe9a8 25%,#fff 50%,#ffd0ec 75%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 5px rgba(255,230,160,.6));}
+.pcard.mini.theme-divine .ov{font-size:23px;}
+.pcard.xs.theme-divine .ov{font-size:19px;}
 .pcard.theme-divine .card-body{justify-content:flex-end;padding-bottom:9px;}
 .pcard.theme-divine .divine-name{font-family:'Jalliya','Brush Script MT',cursive;font-size:48px;line-height:1;text-align:center;-webkit-text-stroke:.5px rgba(255,236,176,.7);
   white-space:nowrap;overflow:visible;padding:0 2px;margin-bottom:15px;
@@ -9631,24 +9636,25 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
-// ===== DIVINE: die allerhöchste Kartenklasse - stärker als alles andere im Spiel (Signature Season
-// 108, Kronjuwelen-Diamant 113). Nie in einem Pack: jede Divine-Karte ist die einmalige Belohnung einer
+// ===== DIVINE: die allerhöchste Kartenklasse - 9 Greats, alle 121 OVR, stärker als alles andere im Spiel
+// (Signature Season 108, Kronjuwelen-Diamant 113). Nie in einem Pack: jede Divine-Karte ist die einmalige Belohnung einer
 // eigenen, extrem schweren Kader-Herausforderung (siehe SBC_DEFS 'divine_*', directCardId). Untradable.
 // Layout ohne Stats: Name in Signatur-Schrift ganz unten (siehe cardEl / .pcard.theme-divine).
+const DIVINE_OV = 121;
 const DIVINE_ROSTER = [
-  {baseId:158023, ov:120, signatureName:'Lionel Messi'},
-  {baseId:20801,  ov:118, signatureName:'Cristiano Ronaldo'},
-  {baseId:9800302, ov:116, signatureName:'Zinedine Zidane'},
+  {id:9990001,slug:'puskas',n:'F. Puskás',signatureName:'Ferenc Puskás',pos:'ST, LW',nat:'Hungary',lg:'Legenden',club:'Real Madrid',pac:94,sho:99,pas:93,dri:95,defn:50,phy:86,foot:'Left',group:'FWD',img:'https://cdn3.futbin.com/content/fifa26/img/players/p100664693.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=006960078dfaf23951a867151802b14f'},
+  {id:9990002,slug:'zidane',n:'Zidane',signatureName:'Zinedine Zidane',pos:'CAM, CM',nat:'France',lg:'Legenden',club:'Real Madrid',pac:90,sho:93,pas:97,dri:98,defn:88,phy:88,foot:'Right',group:'MID',img:'https://cdn3.futbin.com/content/fifa26/img/players/p84140722.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=78ecfd584d07fa9ad25afff196a46b42'},
+  {id:9990003,slug:'henry',n:'T. Henry',signatureName:'Thierry Henry',pos:'ST, LW',nat:'France',lg:'Legenden',club:'Arsenal',pac:97,sho:96,pas:90,dri:95,defn:61,phy:87,foot:'Right',group:'FWD',img:'https://cdn3.futbin.com/content/fifa26/img/players/p134219353.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=846eee4ce1cc44a7b04e3354827f0af8'},
+  {id:9990004,slug:'ronaldo',n:'Ronaldo',signatureName:'Ronaldo Nazário',pos:'ST',nat:'Brazil',lg:'Legenden',club:'Real Madrid',pac:97,sho:96,pas:85,dri:97,defn:47,phy:87,foot:'Right',group:'FWD',img:'https://cdn3.futbin.com/content/fifa26/img/players/p100700872.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=6824c1c2d4d4fd796af4b5ff1cfaa7a1'},
+  {id:9990005,slug:'ronaldinho',n:'Ronaldinho',signatureName:'Ronaldinho',pos:'LW, LM, CAM',nat:'Brazil',lg:'Legenden',club:'FC Barcelona',pac:97,sho:95,pas:97,dri:98,defn:48,phy:88,foot:'Right',group:'MID',img:'https://cdn3.futbin.com/content/fifa26/img/players/p117468642.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=dc138c91c4be0ad2c179b8a963554e66'},
+  {id:9990006,slug:'beckenbauer',n:'F. Beckenbauer',signatureName:'Franz Beckenbauer',pos:'CB, CDM, CM',nat:'Germany',lg:'Legenden',club:'FC Bayern München',pac:92,sho:85,pas:93,dri:93,defn:97,phy:97,foot:'Right',group:'DEF',img:'https://cdn3.futbin.com/content/fifa26/img/players/p100831769.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=08386294f38d06bd3b1a7c5cb5e0368f'},
+  {id:9990007,slug:'cruyff',n:'J. Cruyff',signatureName:'Johan Cruyff',pos:'CAM, ST',nat:'Netherlands',lg:'Legenden',club:'FC Barcelona',pac:95,sho:95,pas:94,dri:98,defn:46,phy:83,foot:'Right',group:'MID',img:'https://cdn3.futbin.com/content/fifa26/img/players/p84076125.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=53f1473193e7d285613c5d42a4359d2d'},
+  {id:9990008,slug:'maldini',n:'P. Maldini',signatureName:'Paolo Maldini',pos:'CB, LB',nat:'Italy',lg:'Legenden',club:'AC Milan',pac:92,sho:63,pas:85,dri:85,defn:99,phy:92,foot:'Right',group:'DEF',img:'https://cdn3.futbin.com/content/fifa26/img/players/p134456167.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=ef1ea3c8a3200878b7fe1512cdf1e483'},
+  {id:9990009,slug:'charlton',n:'B. Charlton',signatureName:'Bobby Charlton',pos:'CAM, ST',nat:'England',lg:'Legenden',club:'Manchester United',pac:95,sho:97,pas:94,dri:97,defn:55,phy:84,foot:'Right',group:'MID',img:'https://cdn3.futbin.com/content/fifa26/img/players/p84116105.png?fm=png&ixlib=java-2.1.0&verzion=2&w=485&s=bb009c5c4ba7ee568126952fc8863b02'}
 ];
-const DIVINE_CARDS = DIVINE_ROSTER.map((r,i)=>{
-  const base = findBaseCard(r.baseId);
-  if(!base) return null;
-  const card = boostBaseToOv(base, r.ov, 9990001+i, 'divine', 'Divine', 'divine');
-  if(KRONJUWELEN_IMG_OVERRIDE[r.baseId]) card.img = KRONJUWELEN_IMG_OVERRIDE[r.baseId];
-  card.signatureName = r.signatureName;
-  card.untradable = true;
-  return card;
-}).filter(Boolean);
+const DIVINE_CARDS = DIVINE_ROSTER.map(r=>({
+  ...r, ov:DIVINE_OV, pot:DIVINE_OV, gk:false, traits:[], variant:'divine', variantLabel:'Divine', theme:'divine', untradable:true,
+}));
 DIVINE_CARDS.forEach(p=>BY_ID.set(p.id,p));
 // ===== TOTY (Team of the Year, Männer + Frauen gemischt): 24 der aktuell besten realen Spieler,
 // Rating über die gesamte Bandbreite 105-112 verstreut (nach individueller Stärke, nicht in wenigen
@@ -12575,24 +12581,15 @@ const SBC_DEFS = [
   // 11 4-3-3-Slots, in der JEDE Karte in ihrem Slot bonus===2 ("++", siehe positionEligibility) bekommt.
   // --- DIVINE-Herausforderungen: je eine einmalige, extrem schwere Kader-Aufgabe pro Divine-Karte (siehe
   // DIVINE_CARDS). Härter als goat_quest (97+/96+) - das ist der Preis für die beste Kartenklasse.
-  {id:'divine_messi', name:'Divine: Der Göttliche Zehner', directCardId: DIVINE_CARDS[0]?.id, size:11, tier:'Divine', maxCompletions:1,
-    desc:'11 Spieler, Durchschnittsrating 98+, niemand unter 96 OVR, mindestens 8 Sonderkarten und 3 Stürmer. Einmalige Belohnung: Lionel Messi als Divine-Karte (120 OVR), sonst nirgends erhältlich.',
-    reqs:[ req('Durchschnittsrating 98+', c=>avgOv(c)>=98, c=>`${avgOv(c)} / 98`),
-           req('Kein Spieler unter 96 OVR', c=>c.every(x=>x.ov>=96), c=>`${c.filter(x=>x.ov<96).length} unter 96`),
-           req('8+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=8, c=>`${c.filter(x=>x.variant!=='base').length} / 8 Sonderkarten`),
-           req('3+ Stürmer', c=>c.filter(x=>cardInPosGroup(x,'FWD')).length>=3, c=>`${c.filter(x=>cardInPosGroup(x,'FWD')).length} / 3`) ]},
-  {id:'divine_ronaldo', name:'Divine: Der Unsterbliche', directCardId: DIVINE_CARDS[1]?.id, size:11, tier:'Divine', maxCompletions:1,
-    desc:'11 Spieler, Durchschnittsrating 97+, niemand unter 95 OVR, mindestens 7 Sonderkarten und 4 Mittelfeldspieler. Einmalige Belohnung: Cristiano Ronaldo als Divine-Karte (118 OVR), sonst nirgends erhältlich.',
-    reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
-           req('Kein Spieler unter 95 OVR', c=>c.every(x=>x.ov>=95), c=>`${c.filter(x=>x.ov<95).length} unter 95`),
-           req('7+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=7, c=>`${c.filter(x=>x.variant!=='base').length} / 7 Sonderkarten`),
-           req('4+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroup(x,'MID')).length>=4, c=>`${c.filter(x=>cardInPosGroup(x,'MID')).length} / 4`) ]},
-  {id:'divine_zidane', name:'Divine: Der Maestro', directCardId: DIVINE_CARDS[2]?.id, size:11, tier:'Divine', maxCompletions:1,
-    desc:'11 Spieler, Durchschnittsrating 97+, niemand unter 94 OVR, mindestens 6 Sonderkarten und 5 Verteidiger. Einmalige Belohnung: Zinedine Zidane als Divine-Karte (116 OVR), sonst nirgends erhältlich.',
-    reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
-           req('Kein Spieler unter 94 OVR', c=>c.every(x=>x.ov>=94), c=>`${c.filter(x=>x.ov<94).length} unter 94`),
-           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`),
-           req('5+ Verteidiger', c=>c.filter(x=>cardInPosGroup(x,'DEF')).length>=5, c=>`${c.filter(x=>cardInPosGroup(x,'DEF')).length} / 5`) ]},
+  ...DIVINE_CARDS.map(c=>{
+    const G = {FWD:{label:'Stürmer', n:3}, MID:{label:'Mittelfeldspieler', n:4}, DEF:{label:'Verteidiger', n:5}}[c.group];
+    return {id:'divine_'+c.slug, name:'Divine: '+c.signatureName, directCardId:c.id, size:11, tier:'Divine', maxCompletions:1,
+      desc:`11 Spieler, Durchschnittsrating 98+, niemand unter 96 OVR, mindestens 8 Sonderkarten und ${G.n} ${G.label}. Einmalige Belohnung: ${c.signatureName} als Divine-Karte (${DIVINE_OV} OVR), sonst nirgends erhältlich.`,
+      reqs:[ req('Durchschnittsrating 98+', x=>avgOv(x)>=98, x=>`${avgOv(x)} / 98`),
+             req('Kein Spieler unter 96 OVR', x=>x.every(y=>y.ov>=96), x=>`${x.filter(y=>y.ov<96).length} unter 96`),
+             req('8+ Sonderkarten', x=>x.filter(y=>y.variant!=='base').length>=8, x=>`${x.filter(y=>y.variant!=='base').length} / 8 Sonderkarten`),
+             req(`${G.n}+ ${G.label}`, x=>x.filter(y=>cardInPosGroup(y,c.group)).length>=G.n, x=>`${x.filter(y=>cardInPosGroup(y,c.group)).length} / ${G.n}`) ]};
+  }),
   {id:'toty_sbc', name:'Team of the Year', reward:'toty', size:11, tier:'Einzigartig', maxCompletions:1,
     desc:'Stelle ein komplettes 4-3-3 aus 11 Karten mit 100+ OVR, jede auf ihrer eigenen "++"-Position (Hauptposition). Belohnung: 1 zufällige TOTY-Karte (105-112 OVR, untradable). Nur einmal machbar.',
     reqs:[ req('Alle 11 Karten 100+ OVR', c=>c.every(x=>x.ov>=100), c=>`${c.filter(x=>x.ov>=100).length} / 11 mit 100+`),
@@ -18441,7 +18438,8 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const playstylePlusHTML = displayedPlaystyles.length ? `<div class="playstyle-plus-row">${displayedPlaystyles.map(t=>`<img class="playstyle-plus-icon${PLAYSTYLE_INFO[t].elite?' is-elite':''}" src="${PLAYSTYLE_INFO[t].icon}" alt="" title="${t}" loading="lazy">`).join('')}</div>` : '';
   // Divine: keine Stats und kein normaler Name - ganz unten der Name in Signatur-Schrift, direkt darunter
   // Nation/Liga/Verein wie sonst unter dem Namen.
-  const divineDisplayName = card.signatureName || card.n;
+  // Jalliya enthält keine Akzentbuchstaben (á/ó/ü würden in einer fremden Schrift aufblitzen) - nur für die Anzeige entfernt.
+  const divineDisplayName = (card.signatureName || card.n).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const divineLenClass = divineDisplayName.length>16 ? ' dn-xlong' : divineDisplayName.length>11 ? ' dn-long' : '';
   const bodyInner = isDivineTier
     ? `<div class="divine-name${divineLenClass}">${divineDisplayName}</div>

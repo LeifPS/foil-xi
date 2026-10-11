@@ -9,6 +9,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     profile = { userId:'t', displayName:'T', coins:0, completedSBCs:{}, achievementStats:{} }; clubId='t';
     const cards = DIVINE_CARDS;
     const best = Math.max(...ALL_SPECIAL.concat(SIGNATURE_SEASON_CARDS, KRONJUWELEN_SPECIALS, GOAT_SPECIALS).map(c=>c.ov));
+    const nine = cards.length===9 && cards.every(c=>c.ov===121);
     const allStronger = cards.every(c=>c.ov > best);
     const registered = cards.every(c=>BY_ID.get(c.id)===c);
     const untradable = cards.every(c=>c.untradable===true);
@@ -27,7 +28,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const hasFx = !!node.querySelector('.divine-fx .divine-halo') && node.querySelectorAll('.divine-mote').length===6;
 
     // Lange Namen bekommen automatisch eine kleinere Schriftgröße-Klasse
-    const longNode = cardEl({...cards[1], signatureName:'Cristiano Ronaldo dos Santos'}, '');
+    const longNode = cardEl({...cards[1], signatureName:'Zinedine Yazid Zidane Senior'}, '');
     const longClass = longNode.querySelector('.divine-name').className.includes('dn-xlong');
 
     // alle Größen rendern ohne Fehler
@@ -35,7 +36,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
     // SBCs
     const sbcs = SBC_DEFS.filter(s=>s.tier==='Divine');
-    const sbcPerCard = sbcs.length===3 && cards.every(c=>sbcs.some(s=>s.directCardId===c.id));
+    const sbcPerCard = sbcs.length===9 && cards.every(c=>sbcs.some(s=>s.directCardId===c.id));
     const sbcOnce = sbcs.every(s=>s.maxCompletions===1);
     const tile = buildSbcTile(sbcs[0], [], []);
     const tileHasDivineTier = tile.classList.contains('tier-divine');
@@ -52,17 +53,18 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // nicht in Packs / Draft-Pool
     const inAnyPack = PACKS.some(p=>{ try{ return (p.draw?Array.from({length:50},()=>p.draw()).flat():[]).some(c=>c && c.theme==='divine'); }catch(e){ return false; } });
 
-    return { allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    return { nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              sbcPerCard, sbcOnce, tileHasDivineTier, sourceMentionsSbc, passes, fails, inAnyPack, hasIcons: !!iconsEl };
   }));
 
   console.log('Divine-Karten-Test');
   noErrors(errors, 'Seite');
+  eq(result.nine, true, 'Divine hat genau 9 Karten, alle mit 121 OVR');
   eq(result.allStronger, true, 'jede Divine-Karte ist stärker als jede bisherige Karte');
   eq(result.registered, true, 'alle Divine-Karten sind in BY_ID registiert');
   eq(result.untradable, true, 'Divine-Karten sind nicht handelbar');
   eq(result.isDivineClass, true, 'Karte bekommt die Klasse theme-divine');
-  eq(result.nameText, 'Lionel Messi', 'der Name erscheint in voller Signatur-Schreibweise');
+  eq(result.nameText, 'Ferenc Puskas', 'der Name erscheint (Akzente entfernt, da die Schrift keine kennt) in voller Signatur-Schreibweise');
   eq(result.noStats, true, 'keine Stat-Balken auf der Karte');
   eq(result.noNormalName, true, 'kein normales Namensfeld mehr');
   eq(result.hasIcons, true, 'Nation/Liga/Verein sind vorhanden');
@@ -73,7 +75,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.sbcOnce, true, 'jede Divine-Herausforderung ist nur einmal machbar');
   eq(result.tileHasDivineTier, true, 'SBC-Kachel nutzt das Divine-Tier-Design');
   ok(result.sourceMentionsSbc, 'Erhalt-Hinweis der Karte nennt die Herausforderung');
-  eq(result.passes, true, 'ein 98er-Sonderkarten-Kader erfüllt die Messi-Herausforderung');
+  eq(result.passes, true, 'ein 98er-Sonderkarten-Kader erfüllt die Puskás-Herausforderung');
   eq(result.fails, true, 'ein schwächerer Kader erfüllt sie nicht');
   eq(result.inAnyPack, false, 'Divine-Karten tauchen in keinem Pack auf');
   summary('Divine-Karten-Test');
