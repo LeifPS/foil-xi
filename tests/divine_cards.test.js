@@ -55,13 +55,31 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // Volle Chemie: auch ganz allein und ohne jede Verbindung zu den Mitspielern -> 3 Sterne (+3 Rating)
     const lone = computeChemistry([{...cards[0], club:'X1', lg:'Y1', nat:'Z1'}, {n:'o', ov:80, club:'X2', lg:'Y2', nat:'Z2', variant:'base'}], null);
     const divineFullChem = lone[0].chem===3 && lone[0].chemOv===cards[0].ov+3 && lone[1].chem===0;
-    return { divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    // Titel "Divine": nur mit Divine-Karte, Symbol ✵, Name in eigener Klasse (Jalliya)
+    const nt = NAMETAGS.divine;
+    const ntOk = !!nt && nt.symbol==='\u2735' && nt.cls==='nt-divine';
+    const html = nametagHTML('Max', 'divine');
+    const ntHtml = html.includes('nt-divine') && html.includes('\u2735') && html.includes('Max');
+    const fontFam = (()=>{ const d=document.createElement('div'); d.innerHTML=html; document.body.appendChild(d); const f=getComputedStyle(d.querySelector('.nt-divine')).fontFamily; d.remove(); return f; })();
+    const ntFont = /Jalliya/.test(fontFam);
+    collection = []; profile.unlockedNametags = [];
+    const noCardNoTitle = grantDivineNametagIfOwned()===false && !profile.unlockedNametags.includes('divine');
+    collection = [{uid:'u1', cardId:cards[0].id}];
+    const grantedWithCard = grantDivineNametagIfOwned()===true && profile.unlockedNametags.includes('divine');
+    const idempotent = grantDivineNametagIfOwned()===false && profile.unlockedNametags.filter(x=>x==='divine').length===1;
+    return { ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              sbcPerCard, sbcOnce, tileHasDivineTier, sourceMentionsSbc, passes, fails, inAnyPack, hasIcons: !!iconsEl };
   }));
 
   console.log('Divine-Karten-Test');
   noErrors(errors, 'Seite');
   eq(result.divineFullChem, true, 'Divine-Karten haben immer volle Chemie (3 Sterne, +3 Rating), auch ohne Verbindungen - gewöhnliche Karten nicht');
+  eq(result.ntOk, true, 'Titel Divine existiert mit Symbol ✵');
+  eq(result.ntHtml, true, 'der Titel rendert Symbol + Name mit der Klasse nt-divine');
+  eq(result.ntFont, true, 'der Name im Titel nutzt die Signatur-Schrift Jalliya');
+  eq(result.noCardNoTitle, true, 'ohne Divine-Karte gibt es den Titel nicht');
+  eq(result.grantedWithCard, true, 'mit einer Divine-Karte wird der Titel freigeschaltet');
+  eq(result.idempotent, true, 'der Titel wird nicht doppelt vergeben');
   eq(result.nine, true, 'Divine hat genau 9 Karten, alle mit 121 OVR');
   eq(result.allStronger, true, 'jede Divine-Karte ist stärker als jede bisherige Karte');
   eq(result.registered, true, 'alle Divine-Karten sind in BY_ID registiert');

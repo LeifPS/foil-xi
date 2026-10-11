@@ -2647,6 +2647,10 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
    blue/light-blue-with-a-hint-of-rainbow theme. One per shop rarity tier, each step visibly richer:
    Schimmer (Häufig) is just a slow single-hue pulse, Spektrum (Selten) a calmer few-color sweep,
    Iridescent (Episch) the full sweep+glow, Prisma (Legendär) adds the glitter pulse on top of that. */
+.nt-divine{--glow:#ff9ad8;font-family:'Jalliya','Brush Script MT',cursive;font-size:1.3em;font-weight:400;letter-spacing:.02em;
+  background:linear-gradient(90deg,#ffd45a,#fff6d6,#ff8fcf,#7fe0ff,#b79bff,#ffd45a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:nametagShift 4s linear infinite, nametagGlow 2.6s ease-in-out infinite;}
+.nt-divine .nametag-symbol,.nt-divine .nametag-sep{font-family:'Inter',sans-serif;font-size:.77em;}
 .nt-schimmer{--glow:#4a9eff;background:linear-gradient(90deg,#4a9eff,#8bd0ff,#4a9eff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 5.5s linear infinite;}
 .nt-spektrum{--glow:#6fc7ff;background:linear-gradient(90deg,#4a9eff,#9dffe8,#8bd0ff,#c9a2ff,#4a9eff);background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4.6s linear infinite;}
 /* Iridescent/Prisma get the full treatment beyond the shared gradient-shift: a compact halo of thin
@@ -14400,6 +14404,7 @@ async function submitSBC(){
     if(card){
       collection.push({uid:genId(), cardId:card.id, obtainedAt:Date.now(), obtainedFrom:profile.displayName||profile.userId}); bumpCardMintCount(card.id, 1, !!card.untradable);
       await sSet('collection', collection);
+      if(card.theme==='divine' && grantDivineNametagIfOwned()){ await sSet('profile', profile); toast('Neuer Titel freigeschaltet: \u2735 Divine'); }
       toast(`\ud83c\udfc6 ${card.n} freigeschaltet \u2014 einzigartig, sonst nirgends erh\u00e4ltlich!`);
       showCutscene(card, ()=>{});
     }
@@ -17706,6 +17711,8 @@ async function init(){
   }
   squadPresets = _boot.squadPresets;
   if(!squadPresets) squadPresets = [];
+  // auch wer eine Divine-Karte anderweitig bekommen hat (z.B. Admin) erhält den Titel
+  if(grantDivineNametagIfOwned()) await sSet('profile', profile);
   currentTab = restoredLastTab();
   renderNav();
   renderView(currentTab);
@@ -30416,7 +30423,19 @@ const NAMETAGS = {
   // Akzentfarbe wie die Herausforderungs-Kachel des Modus) statt einer der bereits vergebenen Paletten.
   kaderschmied: {label:'Kaderschmied', symbol:'⚒', cls:'nt-kaderschmied', accent:'#4da8ff'},
   turnierlegende: {label:'Turnierlegende', symbol:'★', cls:'nt-turnierlegende', accent:'#ffd76a'},
+  // Divine: wird freigeschaltet, sobald man eine Divine-Karte besitzt (siehe grantDivineNametagIfOwned).
+  // Symbol ✵, der Name selbst in der Signatur-Schrift der Divine-Karten (siehe .nt-divine).
+  divine: {label:'Divine', symbol:'✵', cls:'nt-divine', accent:'#ffc6f0'},
 };
+// Titel "Divine" gibt es für jeden, der mindestens eine Divine-Karte besitzt (Challenge-Belohnung oder vom
+// Admin geschickt). Idempotent; gibt true zurück, wenn gerade neu freigeschaltet wurde.
+function grantDivineNametagIfOwned(){
+  ensureAchievementState();
+  if(profile.unlockedNametags.includes('divine')) return false;
+  if(!collection.some(c=>{ const card = BY_ID.get(c.cardId); return card && card.theme==='divine'; })) return false;
+  profile.unlockedNametags.push('divine');
+  return true;
+}
 // Kartensammler is special: it's not an incrementing counter at all, but a LIVE count of distinct
 // card types currently in the collection - captures every source (packs, Handel, Belohnungen, Admin-
 // Zuweisungen, ...) automatically instead of only whatever narrow hook happened to bump a counter, and
