@@ -23211,7 +23211,7 @@ function cardIndexChemistryHTML(card){
     return `<div class="card-info-section">
       <div class="card-info-section-title">\ud83d\udd17 Chemie</div>
       <div class="cardidx-chem-stars">\u2605\u2605\u2605\u2605\u2605</div>
-      <p class="hint" style="margin:6px 0 0;">Legenden- und OG-Icons-Karten spielen sich \u00fcberall zu Hause: immer maximale Chemie, egal wer sonst noch in der Aufstellung steht.</p>
+      <p class="hint" style="margin:6px 0 0;">Legenden-, Divine- und OG-Icons-Karten spielen sich \u00fcberall zu Hause: immer maximale Chemie, egal wer sonst noch in der Aufstellung steht.</p>
     </div>`;
   }
   return `<div class="card-info-section">
@@ -23712,7 +23712,7 @@ function showPlayerChemistryModal(card, chem, breakdown){
     openModal(`
       <h2 style="margin-bottom:2px;">${card.n}</h2>
       <p style="margin:0 0 14px;font-size:22px;letter-spacing:3px;color:var(--gold);">${starsVisual}</p>
-      <p class="hint" style="margin:0 0 10px;">OG Icons und alle Karten aus dem Deutsche Legenden Pack spielen sich \u00fcberall zu Hause \u2014 sie haben immer die maximale Chemie (3 Sterne, +3 Rating), unabh\u00e4ngig davon, wer sonst noch in der Aufstellung steht.</p>
+      <p class="hint" style="margin:0 0 10px;">OG Icons, Divine-Karten und alle Karten aus dem Deutsche Legenden Pack spielen sich \u00fcberall zu Hause \u2014 sie haben immer die maximale Chemie (3 Sterne, +3 Rating), unabh\u00e4ngig davon, wer sonst noch in der Aufstellung steht.</p>
       <button class="modal-close" id="chem-player-close" style="margin-top:14px;">Schlie\u00dfen</button>
     `);
     document.getElementById('chem-player-close').addEventListener('click', closeModal);
@@ -36220,7 +36220,8 @@ function computeChemistry(players, managerNat, precise=false){
     // rest of the squad. They still contribute their own club/nation normally to OTHER players'
     // links above.
     const LEGENDS_ALWAYS_MAX = new Set(['legende_ikone','legende_wm','legende_national']);
-    const alwaysMaxChem = p.variant==='ogicon' || LEGENDS_ALWAYS_MAX.has(p.variant);
+    // Divine (9 Greats, siehe DIVINE_CARDS) sind ebenfalls Legenden: immer volle Chemie.
+    const alwaysMaxChem = p.variant==='ogicon' || p.variant==='divine' || LEGENDS_ALWAYS_MAX.has(p.variant);
     const stars = alwaysMaxChem ? 3 : (score>=14 ? 3 : score>=7 ? 2 : score>=3 ? 1 : 0);
     const ovAdjust = stars===3 ? 3 : stars===2 ? 2 : stars===1 ? 1 : 0;
     const chemOvRaw = Math.max(1, p.ov+ovAdjust);

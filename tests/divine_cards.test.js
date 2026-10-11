@@ -52,12 +52,16 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // nicht in Packs / Draft-Pool
     const inAnyPack = PACKS.some(p=>{ try{ return (p.draw?Array.from({length:50},()=>p.draw()).flat():[]).some(c=>c && c.theme==='divine'); }catch(e){ return false; } });
 
-    return { nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    // Volle Chemie: auch ganz allein und ohne jede Verbindung zu den Mitspielern -> 3 Sterne (+3 Rating)
+    const lone = computeChemistry([{...cards[0], club:'X1', lg:'Y1', nat:'Z1'}, {n:'o', ov:80, club:'X2', lg:'Y2', nat:'Z2', variant:'base'}], null);
+    const divineFullChem = lone[0].chem===3 && lone[0].chemOv===cards[0].ov+3 && lone[1].chem===0;
+    return { divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              sbcPerCard, sbcOnce, tileHasDivineTier, sourceMentionsSbc, passes, fails, inAnyPack, hasIcons: !!iconsEl };
   }));
 
   console.log('Divine-Karten-Test');
   noErrors(errors, 'Seite');
+  eq(result.divineFullChem, true, 'Divine-Karten haben immer volle Chemie (3 Sterne, +3 Rating), auch ohne Verbindungen - gewöhnliche Karten nicht');
   eq(result.nine, true, 'Divine hat genau 9 Karten, alle mit 121 OVR');
   eq(result.allStronger, true, 'jede Divine-Karte ist stärker als jede bisherige Karte');
   eq(result.registered, true, 'alle Divine-Karten sind in BY_ID registiert');
