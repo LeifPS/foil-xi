@@ -27,9 +27,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const iconsDirectlyUnderName = order[0]==='divine-name' && order[1]==='nat-club-icons' && order.length===2;
     const hasFx = !!node.querySelector('.divine-fx .divine-halo') && node.querySelectorAll('.divine-mote').length===6;
 
-    // Lange Namen bekommen automatisch eine kleinere Schriftgröße-Klasse
-    const longNode = cardEl({...cards[1], signatureName:'Zinedine Yazid Zidane Senior'}, '');
-    const longClass = longNode.querySelector('.divine-name').className.includes('dn-xlong');
+    // Alle Namen gleich groß: keine Längen-Klassen mehr
+    const longClass = !cards.some(c=>/dn-/.test(cardEl(c,'').querySelector('.divine-name').className));
 
     // alle Größen rendern ohne Fehler
     ['mini','xs'].forEach(sz=>cardEl(cards[2], sz));
@@ -70,7 +69,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.hasIcons, true, 'Nation/Liga/Verein sind vorhanden');
   eq(result.iconsDirectlyUnderName, true, 'Nation/Liga/Verein stehen direkt unter dem Namen, beide ganz unten');
   eq(result.hasFx, true, 'Divine-Effekt-Layer (Halo + 6 Lichtpartikel) vorhanden');
-  eq(result.longClass, true, 'sehr lange Namen werden automatisch verkleinert');
+  eq(result.longClass, true, 'alle Namen sind gleich groß (keine Längen-Klassen)');
   eq(result.sbcPerCard, true, 'für jede Divine-Karte gibt es genau eine eigene Herausforderung');
   eq(result.sbcOnce, true, 'jede Divine-Herausforderung ist nur einmal machbar');
   eq(result.tileHasDivineTier, true, 'SBC-Kachel nutzt das Divine-Tier-Design');
