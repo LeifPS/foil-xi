@@ -29243,6 +29243,8 @@ async function ligaBackgroundCatchUp(){
   try{
     if(!profile || !clubId || sessionLostToOtherDevice) return;
     for(let i=0;i<6;i++){ if(!(await resolveWeeklyRolloverIfNeeded())) break; }
+    // danach der Wochenendpokal (braucht die Liga-Tabellen der Woche) - ebenfalls ohne Tab-Besuch
+    for(let i=0;i<7;i++){ if(!(await resolveWochenendpokalIfNeeded())) break; }
   }catch(e){ console.warn('liga background catch-up failed', e); }
 }
 async function resolveWeeklyRolloverIfNeeded(){
@@ -29844,6 +29846,16 @@ function wepPlayMatch(teamA, teamB){
 function wepTargetWeekStart(isSunday){
   return isSunday ? mostRecentMondayBerlin() : mostRecentMondayBerlin() - 7*24*60*60*1000;
 }
+async function wepEnsureLigaHistory(weekStart){
+  try{
+    const hist = await fb.getDoc(fb.doc(fb.db,'leagueHistory', weekStart+''));
+    if(hist && hist.exists()) return;
+    const day = berlinNow().getDay();
+    const ligaTarget = (day===6||day===0) ? mostRecentMondayBerlin() : mostRecentMondayBerlin() - 7*24*60*60*1000;
+    if(ligaTarget!==weekStart) return; // die Liga würde heute eine andere Woche abrechnen - nichts erzwingen
+    for(let i=0;i<6;i++){ if(!(await resolveWeeklyRolloverIfNeeded())) break; }
+  }catch(e){ console.warn('wep: Liga-Abrechnung nachholen fehlgeschlagen', e); }
+}
 async function resolveWochenendpokalIfNeeded(){
   await fbReady;
   if(!fb) return null;
@@ -29862,6 +29874,11 @@ async function resolveWochenendpokalIfNeeded(){
   const weekStart = wepTargetWeekStart(isSunday);
   if(weekStart<LIGA_SEASON_EPOCH) return null;
   const hourOk = h => !isSunday || now.getHours()>=h;
+  // Der Wochenendpokal baut sein 8er-Feld aus leagueHistory/{weekStart} - und das schreibt erst die Liga-
+  // Abrechnung (ligaPromoFinalize). Lief die nie (z.B. weil am Samstag niemand online war), fand der Pokal
+  // keine Tabellen, startete nicht und blieb für alle "kaputt". Fehlt das Dokument, wird die Liga-Abrechnung
+  // für GENAU diese Woche jetzt zuerst nachgeholt (nur wenn die Liga heute dieselbe Woche ansteuert).
+  await wepEnsureLigaHistory(weekStart);
   const swiss1Ref = fb.doc(fb.db,'leagueMeta','wepSwiss1_'+weekStart);
   const swiss2Ref = fb.doc(fb.db,'leagueMeta','wepSwiss2_'+weekStart);
   const swiss3Ref = fb.doc(fb.db,'leagueMeta','wepSwiss3_'+weekStart);
