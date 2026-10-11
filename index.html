@@ -789,9 +789,9 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 @property --divine-a{syntax:'<angle>';inherits:false;initial-value:0deg;}
 .pcard.theme-divine{--acc:#f6e3b0;border:2px solid transparent;
   background:
-    radial-gradient(circle at 50% 26%, rgba(255,246,214,.16), transparent 52%),
-    radial-gradient(circle at 20% 90%, rgba(150,120,255,.14), transparent 45%),
-    linear-gradient(170deg,#141632 0%,#0a0b1c 55%,#050612 100%) padding-box,
+    radial-gradient(ellipse 90% 55% at 50% 100%, rgba(255,196,96,.38), rgba(255,140,80,.12) 45%, transparent 72%) padding-box,
+    radial-gradient(circle at 50% 28%, rgba(255,246,214,.22), transparent 50%) padding-box,
+    linear-gradient(176deg,#1a1245 0%,#241552 22%,#3a1a5e 44%,#14123a 70%,#07071a 100%) padding-box,
     conic-gradient(from var(--divine-a), #fff3c4, #ffd36e, #ff9fd0, #9fd6ff, #fff3c4) border-box;
   animation: divineSpin 7s linear infinite, divineGlow 3.2s ease-in-out infinite;}
 @keyframes divineSpin{to{--divine-a:360deg;}}
@@ -802,19 +802,74 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard.theme-divine::before{animation:autoShine 2.2s ease-in-out infinite;}
 .pcard.theme-divine .card-body{justify-content:flex-end;padding-bottom:9px;}
 .pcard.theme-divine .divine-name{font-family:'Jalliya','Brush Script MT',cursive;font-size:48px;line-height:1;text-align:center;-webkit-text-stroke:.5px rgba(255,236,176,.7);
-  white-space:nowrap;overflow:visible;padding:0 2px;margin-bottom:2px;
+  white-space:nowrap;overflow:visible;padding:0 2px;margin-bottom:15px;
   background:linear-gradient(100deg,#ffe9a8 25%,#fff 50%,#ffd0ec 75%);background-size:260% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(0 0 6px rgba(255,230,160,.55));animation:nameVariantShimmer 4s linear infinite;}
 .pcard.theme-divine .divine-name.dn-long{font-size:38px;}
 .pcard.theme-divine .divine-name.dn-xlong{font-size:30px;}
-.pcard.mini.theme-divine .divine-name{font-size:36px;}
+.pcard.mini.theme-divine .divine-name{font-size:36px;margin-bottom:9px;}
+.pcard.mini .divine-ring.r1{width:104px;height:104px;}.pcard.mini .divine-ring.r2{width:84px;height:84px;}.pcard.mini .divine-ring.r3{width:122px;height:122px;}
+.pcard.xs .divine-ring.r1{width:60px;height:60px;}.pcard.xs .divine-ring.r2{width:48px;height:48px;}.pcard.xs .divine-ring.r3{width:72px;height:72px;}
+.pcard.xs .divine-frame::before,.pcard.xs .divine-frame::after{width:8px;height:8px;}
 .pcard.mini.theme-divine .divine-name.dn-long{font-size:28px;}
 .pcard.mini.theme-divine .divine-name.dn-xlong{font-size:22px;}
-.pcard.xs.theme-divine .divine-name{font-size:25px;}
+.pcard.xs.theme-divine .divine-name{font-size:25px;margin-bottom:5px;}
 .pcard.xs.theme-divine .divine-name.dn-long{font-size:19px;}
 .pcard.xs.theme-divine .divine-name.dn-xlong{font-size:15px;}
 .pcard .divine-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+/* Nebel: drei große, weiche Farbwolken (Violett/Rosé/Cyan), die langsam gegeneinander driften */
+.pcard .divine-nebula{position:absolute;inset:-20%;
+  background:
+    radial-gradient(circle at 22% 30%, rgba(150,90,255,.55), transparent 38%),
+    radial-gradient(circle at 78% 24%, rgba(255,120,190,.42), transparent 36%),
+    radial-gradient(circle at 60% 70%, rgba(70,170,255,.38), transparent 40%),
+    radial-gradient(circle at 25% 78%, rgba(255,190,100,.3), transparent 34%);
+  mix-blend-mode:screen;animation:divineNebula 18s ease-in-out infinite alternate;}
+@keyframes divineNebula{0%{transform:translate(-4%,2%) rotate(0deg) scale(1);}100%{transform:translate(5%,-3%) rotate(14deg) scale(1.12);}}
+/* Sternenfeld: zwei Lagen feiner Punkte, die versetzt funkeln */
+.pcard .divine-stars{position:absolute;inset:0;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 34% 8%, #fff 50%, transparent 52%),
+    radial-gradient(1.4px 1.4px at 58% 14%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 82% 9%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 91% 30%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 6% 44%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 70% 40%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 22% 58%, #fff 50%, transparent 52%),
+    radial-gradient(1.3px 1.3px at 48% 52%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 88% 62%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 15% 82%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 64% 78%, #fff 50%, transparent 52%);
+  animation:divineTwinkle 3.4s ease-in-out infinite;}
+.pcard .divine-stars.s2{background-image:
+    radial-gradient(1px 1px at 24% 12%, #ffe9b0 50%, transparent 52%), radial-gradient(1.3px 1.3px at 46% 22%, #ffe9b0 50%, transparent 52%),
+    radial-gradient(1px 1px at 72% 20%, #ffe9b0 50%, transparent 52%), radial-gradient(1.2px 1.2px at 94% 48%, #ffe9b0 50%, transparent 52%),
+    radial-gradient(1px 1px at 10% 66%, #ffe9b0 50%, transparent 52%), radial-gradient(1px 1px at 38% 70%, #ffe9b0 50%, transparent 52%),
+    radial-gradient(1.3px 1.3px at 80% 74%, #ffe9b0 50%, transparent 52%), radial-gradient(1px 1px at 54% 90%, #ffe9b0 50%, transparent 52%);
+  animation-delay:1.7s;animation-duration:4.6s;}
+@keyframes divineTwinkle{0%,100%{opacity:.25;}50%{opacity:1;}}
+/* Ornament-Ringe hinter dem Foto: gestrichelter und durchgezogener Ring drehen gegenläufig */
+.pcard .divine-ring{position:absolute;left:50%;top:27%;border-radius:50%;transform:translate(-50%,-50%);}
+.pcard .divine-ring.r1{width:150px;height:150px;border:1px solid rgba(255,230,160,.55);box-shadow:0 0 14px rgba(255,220,140,.35), inset 0 0 18px rgba(255,220,140,.18);}
+.pcard .divine-ring.r2{width:122px;height:122px;border:2px dashed rgba(255,215,130,.6);animation:divineRingSpin 26s linear infinite;}
+.pcard .divine-ring.r3{width:176px;height:176px;border:1px dotted rgba(200,180,255,.55);animation:divineRingSpin 40s linear infinite reverse;}
+@keyframes divineRingSpin{to{transform:translate(-50%,-50%) rotate(360deg);}}
+/* Aurora-Band: weiches, schwingendes Lichtband quer über die Karte */
+.pcard .divine-aurora{position:absolute;left:-30%;right:-30%;top:34%;height:46px;
+  background:linear-gradient(90deg, transparent, rgba(120,255,220,.32), rgba(190,150,255,.4), rgba(255,170,220,.32), transparent);
+  filter:blur(9px);transform:rotate(-8deg);animation:divineAurora 9s ease-in-out infinite alternate;mix-blend-mode:screen;}
+@keyframes divineAurora{0%{transform:rotate(-8deg) translateY(0) scaleX(1);opacity:.5;}100%{transform:rotate(-3deg) translateY(26px) scaleX(1.15);opacity:.95;}}
+/* Goldener Horizont unten (hinter Name/Icons) mit schmaler heller Linie */
+.pcard .divine-floor{position:absolute;left:0;right:0;bottom:0;height:42%;
+  background:linear-gradient(to top, rgba(255,200,110,.45), rgba(255,160,90,.14) 55%, transparent);}
+.pcard .divine-floor::before{content:"";position:absolute;left:8%;right:8%;top:2%;height:1px;
+  background:linear-gradient(90deg, transparent, rgba(255,236,170,.9), transparent);box-shadow:0 0 8px 1px rgba(255,220,140,.7);}
+/* Feiner innerer Goldrahmen mit Eck-Akzenten */
+.pcard .divine-frame{position:absolute;inset:5px;border-radius:calc(var(--radius) - 4px);
+  border:1px solid rgba(255,230,160,.5);box-shadow:inset 0 0 12px rgba(255,220,140,.15);}
+.pcard .divine-frame::before,.pcard .divine-frame::after{content:"";position:absolute;width:14px;height:14px;border:2px solid #ffe9a8;}
+.pcard .divine-frame::before{top:-2px;left:-2px;border-right:none;border-bottom:none;border-top-left-radius:8px;}
+.pcard .divine-frame::after{bottom:-2px;right:-2px;border-left:none;border-top:none;border-bottom-right-radius:8px;}
+/* Sternschnuppe: selten, diagonal */
+.pcard .divine-shoot{position:absolute;top:8%;left:-20%;width:46px;height:1.5px;
+  background:linear-gradient(90deg, transparent, #fff);box-shadow:0 0 6px 1px rgba(255,255,255,.8);transform:rotate(24deg);opacity:0;animation:divineShoot 7s ease-in infinite 2s;}
+@keyframes divineShoot{0%,86%{opacity:0;transform:translate(0,0) rotate(24deg);}88%{opacity:1;}100%{opacity:0;transform:translate(280px,120px) rotate(24deg);}}
 .pcard .divine-halo{position:absolute;top:26%;left:50%;width:220%;height:220%;margin:-110% 0 0 -110%;
   background:conic-gradient(from 0deg,
     transparent 0deg 10deg, rgba(255,240,190,.2) 11deg 13deg, transparent 14deg 50deg,
@@ -832,7 +887,7 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .divine-mote.m5{left:76%;animation-duration:5.5s;animation-delay:1.2s;}
 .pcard .divine-mote.m6{left:90%;animation-duration:6.8s;animation-delay:3.1s;}
 @keyframes divineRise{0%{transform:translateY(0) scale(.6);opacity:0;}15%{opacity:.95;}100%{transform:translateY(-250px) scale(1.1);opacity:0;}}
-@media (prefers-reduced-motion:reduce){.pcard.theme-divine{animation:none;}.pcard .divine-mote,.pcard .divine-halo{animation:none;}}
+@media (prefers-reduced-motion:reduce){.pcard.theme-divine{animation:none;}.pcard .divine-mote,.pcard .divine-halo,.pcard .divine-nebula,.pcard .divine-stars,.pcard .divine-ring,.pcard .divine-aurora,.pcard .divine-shoot{animation:none;}}
 /* Icon Swap: Remastered (theme 'iconswap2') - deep navy face shared by every rarity, but each of the
    4 rarity tiers (iconswap2-tier-common/rare/epic/legendary, set alongside theme-iconswap2 in cardEl)
    gets its OWN distinct visual gimmick rather than one shared "shimmer" scaled up/down - common is
@@ -18195,7 +18250,14 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   // DIVINE (siehe .pcard.theme-divine): kreisender Heiligenschein-Strahl + aufsteigende Lichtpartikel.
   const isDivineTier = card.theme==='divine';
   const divineFxHTML = isDivineTier ? `<div class="divine-fx">
+      <div class="divine-nebula"></div>
+      <div class="divine-stars"></div><div class="divine-stars s2"></div>
       <div class="divine-halo"></div>
+      <div class="divine-ring r3"></div><div class="divine-ring r1"></div><div class="divine-ring r2"></div>
+      <div class="divine-aurora"></div>
+      <div class="divine-floor"></div>
+      <i class="divine-shoot"></i>
+      <div class="divine-frame"></div>
       ${Array.from({length:6},(_,i)=>`<i class="divine-mote m${i+1}"></i>`).join('')}
     </div>` : '';
   // Icon Swap: Remastered (variant/theme 'iconswap2') - each rarity tier gets its own distinct FX
