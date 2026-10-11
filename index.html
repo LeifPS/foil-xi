@@ -779,6 +779,60 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .goat-crack.g3{top:70%;left:14%;width:50%;transform:rotate(8deg);animation-duration:3.8s;animation-delay:.6s;}
 .pcard .goat-crack.g4{top:60%;left:52%;width:34%;transform:rotate(-20deg);animation-duration:2.9s;animation-delay:1.8s;}
 @keyframes goatCrackFlicker{0%,100%{opacity:0;}45%{opacity:0;}52%{opacity:.9;}58%{opacity:.2;}70%{opacity:.7;}80%{opacity:0;}}
+/* DIVINE: die allerhöchste Kartenklasse (über GOAT/Signature/Kronjuwelen). Eigenes Layout statt Stats:
+   unten sitzt nur noch der Name in Signatur-Schrift (Jalliya), direkt darunter - wie bei jeder Karte
+   unter dem Namen - Nation/Liga/Verein. Optik: tiefes Nachtblau-Schwarz mit perlmuttartig
+   schimmerndem Gold-Weiß-Rosé-Rand (bewegter conic-Verlauf), langsam kreisender Heiligenschein-Strahl
+   hinter dem Foto und aufsteigende Lichtpartikel - bewusst "himmlisch/hell" statt GOATs "glühendes
+   Metall" oder der Edelstein-Facetten der Kronjuwelen. */
+@font-face{font-family:'Jalliya';src:url('fonts/Jalliya.otf') format('opentype');font-display:swap;}
+@property --divine-a{syntax:'<angle>';inherits:false;initial-value:0deg;}
+.pcard.theme-divine{--acc:#f6e3b0;border:2px solid transparent;
+  background:
+    radial-gradient(circle at 50% 26%, rgba(255,246,214,.16), transparent 52%),
+    radial-gradient(circle at 20% 90%, rgba(150,120,255,.14), transparent 45%),
+    linear-gradient(170deg,#141632 0%,#0a0b1c 55%,#050612 100%) padding-box,
+    conic-gradient(from var(--divine-a), #fff3c4, #ffd36e, #ff9fd0, #9fd6ff, #fff3c4) border-box;
+  animation: divineSpin 7s linear infinite, divineGlow 3.2s ease-in-out infinite;}
+@keyframes divineSpin{to{--divine-a:360deg;}}
+@keyframes divineGlow{
+  0%,100%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 20px -2px rgba(255,236,170,.55);}
+  50%{box-shadow:0 18px 40px rgba(0,0,0,.75), 0 0 40px 2px rgba(190,170,255,.6);}
+}
+.pcard.theme-divine::before{animation:autoShine 2.2s ease-in-out infinite;}
+.pcard.theme-divine .card-body{justify-content:flex-end;padding-bottom:9px;}
+.pcard.theme-divine .divine-name{font-family:'Jalliya','Brush Script MT',cursive;font-size:48px;line-height:1;text-align:center;-webkit-text-stroke:.5px rgba(255,236,176,.7);
+  white-space:nowrap;overflow:visible;padding:0 2px;margin-bottom:2px;
+  background:linear-gradient(100deg,#ffe9a8 25%,#fff 50%,#ffd0ec 75%);background-size:260% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 6px rgba(255,230,160,.55));animation:nameVariantShimmer 4s linear infinite;}
+.pcard.theme-divine .divine-name.dn-long{font-size:38px;}
+.pcard.theme-divine .divine-name.dn-xlong{font-size:30px;}
+.pcard.mini.theme-divine .divine-name{font-size:36px;}
+.pcard.mini.theme-divine .divine-name.dn-long{font-size:28px;}
+.pcard.mini.theme-divine .divine-name.dn-xlong{font-size:22px;}
+.pcard.xs.theme-divine .divine-name{font-size:25px;}
+.pcard.xs.theme-divine .divine-name.dn-long{font-size:19px;}
+.pcard.xs.theme-divine .divine-name.dn-xlong{font-size:15px;}
+.pcard .divine-fx{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard .divine-halo{position:absolute;top:26%;left:50%;width:220%;height:220%;margin:-110% 0 0 -110%;
+  background:conic-gradient(from 0deg,
+    transparent 0deg 10deg, rgba(255,240,190,.2) 11deg 13deg, transparent 14deg 50deg,
+    rgba(190,170,255,.16) 51deg 53deg, transparent 54deg 95deg, rgba(255,200,230,.18) 96deg 98deg, transparent 99deg 140deg,
+    rgba(255,240,190,.2) 141deg 143deg, transparent 144deg 185deg, rgba(160,214,255,.16) 186deg 188deg, transparent 189deg 230deg,
+    rgba(255,240,190,.18) 231deg 233deg, transparent 234deg 275deg, rgba(255,200,230,.16) 276deg 278deg, transparent 279deg 320deg,
+    rgba(255,240,190,.2) 321deg 323deg, transparent 324deg 360deg);
+  animation:goatHaloSpin 30s linear infinite;opacity:.9;}
+.pcard .divine-mote{position:absolute;bottom:-6px;width:3px;height:3px;border-radius:50%;background:#fff6d2;
+  box-shadow:0 0 6px 1px rgba(255,236,170,.9);opacity:0;animation:divineRise linear infinite;}
+.pcard .divine-mote.m1{left:12%;animation-duration:5.2s;animation-delay:.2s;}
+.pcard .divine-mote.m2{left:28%;animation-duration:6.4s;animation-delay:1.7s;}
+.pcard .divine-mote.m3{left:44%;animation-duration:4.8s;animation-delay:.9s;}
+.pcard .divine-mote.m4{left:60%;animation-duration:6s;animation-delay:2.6s;}
+.pcard .divine-mote.m5{left:76%;animation-duration:5.5s;animation-delay:1.2s;}
+.pcard .divine-mote.m6{left:90%;animation-duration:6.8s;animation-delay:3.1s;}
+@keyframes divineRise{0%{transform:translateY(0) scale(.6);opacity:0;}15%{opacity:.95;}100%{transform:translateY(-250px) scale(1.1);opacity:0;}}
+@media (prefers-reduced-motion:reduce){.pcard.theme-divine{animation:none;}.pcard .divine-mote,.pcard .divine-halo{animation:none;}}
 /* Icon Swap: Remastered (theme 'iconswap2') - deep navy face shared by every rarity, but each of the
    4 rarity tiers (iconswap2-tier-common/rare/epic/legendary, set alongside theme-iconswap2 in cardEl)
    gets its OWN distinct visual gimmick rather than one shared "shimmer" scaled up/down - common is
@@ -2751,6 +2805,7 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .sbc-card.tier-quest{border-left-color:#ff5f5f;background:radial-gradient(circle at 0% 0%, rgba(255,95,95,.08), var(--panel) 65%);}
 .sbc-card.tier-exclusive{border-left-color:#d9eef2;background:radial-gradient(circle at 0% 0%, rgba(217,238,242,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #d9eef2;}
 .sbc-card.tier-wmquest{border-left-color:#ffcc00;background:radial-gradient(circle at 0% 0%, rgba(170,21,27,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #aa151b;}
+.sbc-card.tier-divine{border-left-color:#f6e3b0;background:radial-gradient(circle at 0% 0%, rgba(246,227,176,.14), var(--panel) 65%);box-shadow:0 0 22px -8px #f6e3b0, 0 0 0 1px rgba(190,170,255,.25) inset;}
 .sbc-card.tier-promoquest{border-left-color:#7ad9ff;background:radial-gradient(circle at 0% 0%, rgba(122,217,255,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #7ad9ff;}
 .sbc-card.tier-marceloquest{border-left-color:#ffdf00;background:radial-gradient(circle at 0% 0%, rgba(0,156,59,.14), var(--panel) 65%);box-shadow:0 0 18px -9px #009c3b;}
 .sbc-card.tier-viniciusquest{border-left-color:#00c8ff;background:radial-gradient(circle at 0% 0%, rgba(255,255,255,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #00c8ff;}
@@ -9529,6 +9584,25 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
   return card;
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
+// ===== DIVINE: die allerhöchste Kartenklasse - stärker als alles andere im Spiel (Signature Season
+// 108, Kronjuwelen-Diamant 113). Nie in einem Pack: jede Divine-Karte ist die einmalige Belohnung einer
+// eigenen, extrem schweren Kader-Herausforderung (siehe SBC_DEFS 'divine_*', directCardId). Untradable.
+// Layout ohne Stats: Name in Signatur-Schrift ganz unten (siehe cardEl / .pcard.theme-divine).
+const DIVINE_ROSTER = [
+  {baseId:158023, ov:120, signatureName:'Lionel Messi'},
+  {baseId:20801,  ov:118, signatureName:'Cristiano Ronaldo'},
+  {baseId:9800302, ov:116, signatureName:'Zinedine Zidane'},
+];
+const DIVINE_CARDS = DIVINE_ROSTER.map((r,i)=>{
+  const base = findBaseCard(r.baseId);
+  if(!base) return null;
+  const card = boostBaseToOv(base, r.ov, 9990001+i, 'divine', 'Divine', 'divine');
+  if(KRONJUWELEN_IMG_OVERRIDE[r.baseId]) card.img = KRONJUWELEN_IMG_OVERRIDE[r.baseId];
+  card.signatureName = r.signatureName;
+  card.untradable = true;
+  return card;
+}).filter(Boolean);
+DIVINE_CARDS.forEach(p=>BY_ID.set(p.id,p));
 // ===== TOTY (Team of the Year, Männer + Frauen gemischt): 24 der aktuell besten realen Spieler,
 // Rating über die gesamte Bandbreite 105-112 verstreut (nach individueller Stärke, nicht in wenigen
 // groben Stufen geklumpt wie im ursprünglichen Entwurf). KEIN Kartenladen-Pack (mehr) - nur als
@@ -10268,7 +10342,7 @@ function rarityInfo(ov){
 const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8fb4d1',
   tots:'#f5d76e',flash:'#ff7a59',sd:'#ff5fa8',icon:'#c78bf5',cent:'#ffd76a',
   phenom:'#6ee7d8',setpiece:'#ffcf5c',derby:'#ff8f6b',iron:'#7d94ad',wonder:'#8ee6a3',
-  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',goat:'#ffb020',wpmvp:'#ffd76a',mysteryrare:'#a33dff',sbcx:'#d9eef2',
+  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',goat:'#ffb020',divine:'#f6e3b0',wpmvp:'#ffd76a',mysteryrare:'#a33dff',sbcx:'#d9eef2',
   kontra_gk:'#a78bfa',kontra_def:'#5c9db8',kontra_mid:'#d6a94a',kontra_fwd:'#e14b4b',goat:'#ff2e63',
   wcchamp:'#ffd23f',goldenball:'#ffcc00',ggwm:'#4fd1c5',youngplayer:'#7ee787',
   semifinalist:'#ff9d5c',quarterfinalist:'#9fb4c7',
@@ -12452,6 +12526,26 @@ const SBC_DEFS = [
   // rechnerisch denselben einzigen Slot teilen müssten. canFillFormationWithBonus() löst das echte
   // bipartite Zuordnungsproblem (Kuhn-Algorithmus): existiert eine 1:1-Zuordnung der 11 Karten auf die
   // 11 4-3-3-Slots, in der JEDE Karte in ihrem Slot bonus===2 ("++", siehe positionEligibility) bekommt.
+  // --- DIVINE-Herausforderungen: je eine einmalige, extrem schwere Kader-Aufgabe pro Divine-Karte (siehe
+  // DIVINE_CARDS). Härter als goat_quest (97+/96+) - das ist der Preis für die beste Kartenklasse.
+  {id:'divine_messi', name:'Divine: Der Göttliche Zehner', directCardId: DIVINE_CARDS[0]?.id, size:11, tier:'Divine', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 98+, niemand unter 96 OVR, mindestens 8 Sonderkarten und 3 Stürmer. Einmalige Belohnung: Lionel Messi als Divine-Karte (120 OVR), sonst nirgends erhältlich.',
+    reqs:[ req('Durchschnittsrating 98+', c=>avgOv(c)>=98, c=>`${avgOv(c)} / 98`),
+           req('Kein Spieler unter 96 OVR', c=>c.every(x=>x.ov>=96), c=>`${c.filter(x=>x.ov<96).length} unter 96`),
+           req('8+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=8, c=>`${c.filter(x=>x.variant!=='base').length} / 8 Sonderkarten`),
+           req('3+ Stürmer', c=>c.filter(x=>cardInPosGroup(x,'FWD')).length>=3, c=>`${c.filter(x=>cardInPosGroup(x,'FWD')).length} / 3`) ]},
+  {id:'divine_ronaldo', name:'Divine: Der Unsterbliche', directCardId: DIVINE_CARDS[1]?.id, size:11, tier:'Divine', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 97+, niemand unter 95 OVR, mindestens 7 Sonderkarten und 4 Mittelfeldspieler. Einmalige Belohnung: Cristiano Ronaldo als Divine-Karte (118 OVR), sonst nirgends erhältlich.',
+    reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
+           req('Kein Spieler unter 95 OVR', c=>c.every(x=>x.ov>=95), c=>`${c.filter(x=>x.ov<95).length} unter 95`),
+           req('7+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=7, c=>`${c.filter(x=>x.variant!=='base').length} / 7 Sonderkarten`),
+           req('4+ Mittelfeldspieler', c=>c.filter(x=>cardInPosGroup(x,'MID')).length>=4, c=>`${c.filter(x=>cardInPosGroup(x,'MID')).length} / 4`) ]},
+  {id:'divine_zidane', name:'Divine: Der Maestro', directCardId: DIVINE_CARDS[2]?.id, size:11, tier:'Divine', maxCompletions:1,
+    desc:'11 Spieler, Durchschnittsrating 97+, niemand unter 94 OVR, mindestens 6 Sonderkarten und 5 Verteidiger. Einmalige Belohnung: Zinedine Zidane als Divine-Karte (116 OVR), sonst nirgends erhältlich.',
+    reqs:[ req('Durchschnittsrating 97+', c=>avgOv(c)>=97, c=>`${avgOv(c)} / 97`),
+           req('Kein Spieler unter 94 OVR', c=>c.every(x=>x.ov>=94), c=>`${c.filter(x=>x.ov<94).length} unter 94`),
+           req('6+ Sonderkarten', c=>c.filter(x=>x.variant!=='base').length>=6, c=>`${c.filter(x=>x.variant!=='base').length} / 6 Sonderkarten`),
+           req('5+ Verteidiger', c=>c.filter(x=>cardInPosGroup(x,'DEF')).length>=5, c=>`${c.filter(x=>cardInPosGroup(x,'DEF')).length} / 5`) ]},
   {id:'toty_sbc', name:'Team of the Year', reward:'toty', size:11, tier:'Einzigartig', maxCompletions:1,
     desc:'Stelle ein komplettes 4-3-3 aus 11 Karten mit 100+ OVR, jede auf ihrer eigenen "++"-Position (Hauptposition). Belohnung: 1 zufällige TOTY-Karte (105-112 OVR, untradable). Nur einmal machbar.',
     reqs:[ req('Alle 11 Karten 100+ OVR', c=>c.every(x=>x.ov>=100), c=>`${c.filter(x=>x.ov>=100).length} / 11 mit 100+`),
@@ -13526,7 +13620,7 @@ async function draftTournamentLoseWithoutPayout(){
   draftTournamentState = null;
   renderDraftPanel();
 }
-const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest', 'Vinicius-Quest':'viniciusquest'};
+const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'Divine':'divine', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest', 'Vinicius-Quest':'viniciusquest'};
 // every SBC not already folded into a WM/PROMO quest event - each now gets its own tile in the unified
 // Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
 // opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
@@ -17920,6 +18014,7 @@ function askTextModal(title, placeholder, callback, maxLen=30){
 
 // ===== card rendering =====
 const VARIANT_ICON = {
+  divine:'<path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" fill="currentColor"/><circle cx="12" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1" opacity=".6"/>',
   wpmvp:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/>',
   mysteryrare:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 9a3 3 0 115.2 2c-.9.7-1.7 1.2-1.7 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/>',
   sbcx:'<path d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" fill="currentColor"/><path d="M5 5H3v2a4 4 0 004 4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M19 5h2v2a4 4 0 01-4 4" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="13" width="4" height="3" fill="currentColor"/><rect x="7" y="18" width="10" height="2" fill="currentColor"/><circle cx="12" cy="8.2" r="2.1" fill="#0a0d12"/>',
@@ -18096,6 +18191,12 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const goatFxHTML = isGoatTier ? `<div class="goat-fx">
       <div class="goat-halo"></div>
       ${Array.from({length:4},(_,i)=>`<i class="goat-crack g${i+1}"></i>`).join('')}
+    </div>` : '';
+  // DIVINE (siehe .pcard.theme-divine): kreisender Heiligenschein-Strahl + aufsteigende Lichtpartikel.
+  const isDivineTier = card.theme==='divine';
+  const divineFxHTML = isDivineTier ? `<div class="divine-fx">
+      <div class="divine-halo"></div>
+      ${Array.from({length:6},(_,i)=>`<i class="divine-mote m${i+1}"></i>`).join('')}
     </div>` : '';
   // Icon Swap: Remastered (variant/theme 'iconswap2') - each rarity tier gets its own distinct FX
   // markup (see the .iconswap2-tier-* CSS above cardEl for what each one actually looks like): common
@@ -18285,7 +18386,14 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const cardPlaystyles = card.isManager ? [] : resolveCardTraits(card).filter(t=>PLAYSTYLE_INFO[t]);
   const displayedPlaystyles = [...cardPlaystyles].sort((a,b)=>(PLAYSTYLE_INFO[b].elite?1:0)-(PLAYSTYLE_INFO[a].elite?1:0)).slice(0,3);
   const playstylePlusHTML = displayedPlaystyles.length ? `<div class="playstyle-plus-row">${displayedPlaystyles.map(t=>`<img class="playstyle-plus-icon${PLAYSTYLE_INFO[t].elite?' is-elite':''}" src="${PLAYSTYLE_INFO[t].icon}" alt="" title="${t}" loading="lazy">`).join('')}</div>` : '';
-  const bodyInner = card.isManager
+  // Divine: keine Stats und kein normaler Name - ganz unten der Name in Signatur-Schrift, direkt darunter
+  // Nation/Liga/Verein wie sonst unter dem Namen.
+  const divineDisplayName = card.signatureName || card.n;
+  const divineLenClass = divineDisplayName.length>16 ? ' dn-xlong' : divineDisplayName.length>11 ? ' dn-long' : '';
+  const bodyInner = isDivineTier
+    ? `<div class="divine-name${divineLenClass}">${divineDisplayName}</div>
+       ${natClubIcons}`
+    : card.isManager
     ? `<div class="name${nameClass}">${card.n}</div>
        ${natClubIcons}
        <div class="mgr-boost">Team-Rating ${card.boostType==='percent'?`${boostText}`:`${boostText} Punkte`}</div>`
@@ -18304,6 +18412,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${wm26kFxHTML}
     ${breakoutFxHTML}
     ${goatFxHTML}
+    ${divineFxHTML}
     ${iconswap2FxHTML}
     ${ogiconFxHTML}
     ${iconpromoFxHTML}
