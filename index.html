@@ -779,6 +779,70 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .pcard .goat-crack.g3{top:70%;left:14%;width:50%;transform:rotate(8deg);animation-duration:3.8s;animation-delay:.6s;}
 .pcard .goat-crack.g4{top:60%;left:52%;width:34%;transform:rotate(-20deg);animation-duration:2.9s;animation-delay:1.8s;}
 @keyframes goatCrackFlicker{0%,100%{opacity:0;}45%{opacity:0;}52%{opacity:.9;}58%{opacity:.2;}70%{opacity:.7;}80%{opacity:0;}}
+/* ===== DIVINE PACK: neue Seltenheit nach Ultimate, ganz unten im Kartenladen. Viele Effekte, alles im Glow-Farbschema
+   (Violett/Rosé/Gold): kreisender Farbrand, atmender Glow, driftender Nebel, langsam drehende Lichtstrahlen,
+   Sternenfeld, aufsteigende Partikel, Sternschnuppen. Dieselben Ebenen (.pack-divine-fx) in Shop-Kachel, großer
+   Pack-Ansicht und im Divine-Reveal (.cs-divine). */
+.pack-tier-heading.divine{background:linear-gradient(90deg, rgba(190,150,255,.2), rgba(255,150,210,.12) 40%, transparent 80%);border-left-color:#d6a8ff;
+  text-shadow:0 0 12px rgba(255,170,220,.55);}
+.pack-tier-heading.divine::before{background:#ffc6f0;box-shadow:0 0 10px #ff9ad8, 0 0 20px #b79bff;}
+.pack-tier-nav-btn.divine{border-color:rgba(214,168,255,.55);box-shadow:0 0 12px -2px rgba(214,168,255,.45);}
+.pack-tier-nav-btn.divine:hover{border-color:#ffc6f0;}
+.pack-card.divine{border:2px solid transparent;
+  background:linear-gradient(165deg,#1b1250,#0d0b26 65%) padding-box, conic-gradient(from var(--divine-a), #fff3c4, #ffd36e, #ff9fd0, #b79bff, #fff3c4) border-box;
+  animation:divineSpin 8s linear infinite, divinePackGlow 4s ease-in-out infinite;}
+.pack-card.divine:hover{transform:translateY(-5px);}
+@keyframes divinePackGlow{
+  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.5), 0 0 24px -2px rgba(255,200,150,.5), 0 0 46px -6px rgba(255,140,200,.3);}
+  50%{box-shadow:0 10px 26px rgba(0,0,0,.5), 0 0 32px 0 rgba(183,155,255,.6), 0 0 60px -4px rgba(255,150,210,.4);}
+}
+.pack-card.divine .pack-tier-ribbon{border-color:#ffc6f0;color:#ffe9f8;background:rgba(40,20,80,.75);text-shadow:0 0 8px #ff9ad8;}
+.pack-card.divine .pack-glyph{background:linear-gradient(176deg,#1d1450 0%,#2a1860 40%,#0e0c2c 100%);}
+.pack-card.divine .pack-glyph > div:not(.pack-divine-fx){position:relative;z-index:3;
+  background:linear-gradient(100deg,#ffd45a,#fff6d6,#ff8fcf,#7fe0ff,#b79bff,#ffd45a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 8px rgba(255,170,220,.7));animation:nametagShift 4s linear infinite;}
+.pack-card.divine .pack-glyph .pv-lbl{-webkit-text-fill-color:transparent;}
+.pack-card.divine .buy-btn{background:linear-gradient(100deg,#b79bff,#ff8fcf,#ffd45a);color:#1a0f3a;box-shadow:0 0 14px rgba(255,150,210,.5);font-weight:800;}
+.pack-visual.divine{border:2px solid transparent;
+  background:linear-gradient(160deg,#1d1450,#0b0a24 65%) padding-box, conic-gradient(from var(--divine-a), #fff3c4, #ffd36e, #ff9fd0, #b79bff, #fff3c4) border-box;
+  box-shadow:0 0 70px -6px rgba(255,150,210,.7), 0 0 120px -20px rgba(183,155,255,.7);
+  animation:packFloat 3s ease-in-out infinite, divineSpin 8s linear infinite;}
+.pack-visual.divine .pv-count,.pack-visual.divine .pv-label,.pack-visual.divine .pv-tap{position:relative;z-index:3;text-shadow:0 0 12px rgba(255,170,220,.8);}
+.pack-visual.divine .pv-count{background:linear-gradient(100deg,#ffd45a,#fff6d6,#ff8fcf,#7fe0ff,#b79bff,#ffd45a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nametagShift 4s linear infinite;text-shadow:none;filter:drop-shadow(0 0 10px rgba(255,170,220,.7));}
+.pack-visual.divine .pv-tap{color:#ffe0f4;}
+.pack-divine-fx{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;border-radius:inherit;}
+.pdx-nebula{position:absolute;inset:-20%;
+  background:radial-gradient(circle at 22% 30%, rgba(150,100,255,.5), transparent 40%), radial-gradient(circle at 80% 26%, rgba(255,130,200,.42), transparent 38%),
+             radial-gradient(circle at 55% 78%, rgba(255,190,120,.3), transparent 42%);
+  mix-blend-mode:screen;animation:divineNebula 14s ease-in-out infinite alternate;}
+.pdx-rays{position:absolute;left:50%;top:42%;width:230%;height:230%;margin:-115% 0 0 -115%;
+  background:conic-gradient(from 0deg, transparent 0deg 8deg, rgba(255,240,190,.22) 9deg 11deg, transparent 12deg 44deg, rgba(190,170,255,.18) 45deg 47deg, transparent 48deg 90deg,
+    rgba(255,200,230,.2) 91deg 93deg, transparent 94deg 134deg, rgba(255,240,190,.22) 135deg 137deg, transparent 138deg 180deg, rgba(160,214,255,.16) 181deg 183deg, transparent 184deg 226deg,
+    rgba(255,240,190,.2) 227deg 229deg, transparent 230deg 270deg, rgba(255,200,230,.18) 271deg 273deg, transparent 274deg 316deg, rgba(255,240,190,.22) 317deg 319deg, transparent 320deg 360deg);
+  animation:goatHaloSpin 24s linear infinite;opacity:.85;}
+.pdx-stars{position:absolute;inset:0;
+  background-image:radial-gradient(1px 1px at 12% 14%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 34% 8%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 66% 12%, #fff 50%, transparent 52%),
+    radial-gradient(1.2px 1.2px at 88% 24%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 6% 46%, #fff 50%, transparent 52%), radial-gradient(1.3px 1.3px at 92% 56%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 24% 70%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 74% 78%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 48% 90%, #fff 50%, transparent 52%);
+  animation:divineTwinkle 3.2s ease-in-out infinite;}
+.pdx-aura{position:absolute;left:50%;top:40%;width:150%;height:60%;transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(closest-side, rgba(255,235,200,.42), rgba(255,160,215,.26) 40%, rgba(150,110,255,.14) 66%, transparent 100%);animation:divineAura 4s ease-in-out infinite;}
+.pdx-mote{position:absolute;bottom:-6px;width:3px;height:3px;border-radius:50%;background:#fff1d0;box-shadow:0 0 7px 2px rgba(255,200,230,.85);opacity:0;animation:pdxRise linear infinite;}
+.pdx-mote.m1{left:10%;animation-duration:5s;animation-delay:.2s;}.pdx-mote.m2{left:24%;animation-duration:6.2s;animation-delay:1.6s;}.pdx-mote.m3{left:38%;animation-duration:5.4s;animation-delay:.9s;}
+.pdx-mote.m4{left:52%;animation-duration:6.6s;animation-delay:2.8s;}.pdx-mote.m5{left:66%;animation-duration:5.2s;animation-delay:1.2s;}.pdx-mote.m6{left:80%;animation-duration:6s;animation-delay:3.4s;}
+.pdx-mote.m7{left:92%;animation-duration:5.8s;animation-delay:2.1s;}
+@keyframes pdxRise{0%{transform:translateY(0) scale(.6);opacity:0;}15%{opacity:.95;}100%{transform:translateY(-330px) scale(1.15);opacity:0;}}
+.pdx-shoot{position:absolute;left:-25%;width:58px;height:1.8px;border-radius:2px;opacity:0;background:linear-gradient(90deg, transparent, rgba(255,200,235,.85) 60%, #fff);
+  box-shadow:0 0 8px 1px rgba(255,190,235,.8);transform:rotate(24deg);animation:divineShoot 5.5s ease-in infinite;}
+.pdx-shoot.s1{top:10%;animation-delay:1s;}.pdx-shoot.s2{top:38%;animation-delay:3.6s;animation-duration:6.5s;}
+/* Divine-Reveal (showCutscene mit cs-divine): dieselben Ebenen wie im Pack plus expandierende Lichtringe */
+.cutscene-overlay.cs-divine{background:radial-gradient(circle at 50% 45%, rgba(60,30,120,.92), rgba(8,6,28,.97) 70%);}
+.cutscene-overlay.cs-divine .pack-divine-fx{border-radius:0;}
+.cs-divine-ring{position:absolute;left:50%;top:46%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:2px solid rgba(255,220,240,.8);
+  box-shadow:0 0 24px rgba(255,150,210,.7), inset 0 0 24px rgba(183,155,255,.5);opacity:0;animation:csDivineRing 3.2s ease-out infinite;pointer-events:none;}
+.cs-divine-ring.r2{animation-delay:1.05s;}.cs-divine-ring.r3{animation-delay:2.1s;}
+@keyframes csDivineRing{0%{transform:scale(.3);opacity:.9;}100%{transform:scale(7);opacity:0;}}
+@media (prefers-reduced-motion:reduce){.pack-card.divine,.pack-visual.divine{animation:none;}.pack-divine-fx *,.cs-divine-ring{animation:none !important;}}
 /* DIVINE: die allerhöchste Kartenklasse (über GOAT/Signature/Kronjuwelen). Eigenes Layout statt Stats:
    unten sitzt nur noch der Name in Signatur-Schrift (Jalliya), direkt darunter - wie bei jeder Karte
    unter dem Namen - Nation/Liga/Verein. Look: "Glow" - ruhiger Nachthimmel in Violett/Rosé/Gold, ein
@@ -2838,7 +2902,6 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .sbc-card.tier-quest{border-left-color:#ff5f5f;background:radial-gradient(circle at 0% 0%, rgba(255,95,95,.08), var(--panel) 65%);}
 .sbc-card.tier-exclusive{border-left-color:#d9eef2;background:radial-gradient(circle at 0% 0%, rgba(217,238,242,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #d9eef2;}
 .sbc-card.tier-wmquest{border-left-color:#ffcc00;background:radial-gradient(circle at 0% 0%, rgba(170,21,27,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #aa151b;}
-.sbc-card.tier-divine{border-left-color:#f6e3b0;background:radial-gradient(circle at 0% 0%, rgba(246,227,176,.14), var(--panel) 65%);box-shadow:0 0 22px -8px #f6e3b0, 0 0 0 1px rgba(190,170,255,.25) inset;}
 .sbc-card.tier-promoquest{border-left-color:#7ad9ff;background:radial-gradient(circle at 0% 0%, rgba(122,217,255,.1), var(--panel) 65%);box-shadow:0 0 18px -9px #7ad9ff;}
 .sbc-card.tier-marceloquest{border-left-color:#ffdf00;background:radial-gradient(circle at 0% 0%, rgba(0,156,59,.14), var(--panel) 65%);box-shadow:0 0 18px -9px #009c3b;}
 .sbc-card.tier-viniciusquest{border-left-color:#00c8ff;background:radial-gradient(circle at 0% 0%, rgba(255,255,255,.12), var(--panel) 65%);box-shadow:0 0 18px -9px #00c8ff;}
@@ -9618,8 +9681,8 @@ const KRONJUWELEN_SPECIALS = KRONJUWELEN_ROSTER.map((r,i)=>{
 }).filter(Boolean);
 KRONJUWELEN_SPECIALS.forEach(p=>BY_ID.set(p.id,p));
 // ===== DIVINE: die allerhöchste Kartenklasse - 9 Greats, alle 121 OVR, stärker als alles andere im Spiel
-// (Signature Season 108, Kronjuwelen-Diamant 113). Nie in einem Pack: jede Divine-Karte ist die einmalige Belohnung einer
-// eigenen, extrem schweren Kader-Herausforderung (siehe SBC_DEFS 'divine_*', directCardId). Untradable.
+// (Signature Season 108, Kronjuwelen-Diamant 113). Nur über das Divine Pack erhältlich (Kartenladen, ganz
+// unten, 100.000 Coins: 3 zufällige Divine-Karten, 1 davon wählbar, siehe PACKS 'divine'). Untradable.
 // Layout ohne Stats: Name in Signatur-Schrift ganz unten (siehe cardEl / .pcard.theme-divine).
 const DIVINE_OV = 121;
 const DIVINE_ROSTER = [
@@ -11751,6 +11814,15 @@ const PACKS = [
         return pick(common);
       });
     }},
+  // DIVINE: eigene Seltenheit nach Ultimate, ganz unten im Kartenladen. 3 verschiedene zufällige Divine-Karten
+  // (alle 121 OVR, untradable), davon darf man genau eine behalten (pickCount, siehe showPickScreen).
+  {id:'divine',name:'Divine Pack',cost:100000,tier:'divine',count:3,pickCount:1,
+    desc:'Die höchste Seltenheit im Spiel: 3 zufällige Divine-Legenden (121 OVR, volle Chemie, nicht handelbar) \u2014 du behältst eine davon.',
+    draw(){
+      const pool = DIVINE_CARDS.slice();
+      for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+      return pool.slice(0,3);
+    }},
 ];
 
 function sbcReqScore(sbc, cards){
@@ -12560,17 +12632,6 @@ const SBC_DEFS = [
   // rechnerisch denselben einzigen Slot teilen müssten. canFillFormationWithBonus() löst das echte
   // bipartite Zuordnungsproblem (Kuhn-Algorithmus): existiert eine 1:1-Zuordnung der 11 Karten auf die
   // 11 4-3-3-Slots, in der JEDE Karte in ihrem Slot bonus===2 ("++", siehe positionEligibility) bekommt.
-  // --- DIVINE-Herausforderungen: je eine einmalige, extrem schwere Kader-Aufgabe pro Divine-Karte (siehe
-  // DIVINE_CARDS). Härter als goat_quest (97+/96+) - das ist der Preis für die beste Kartenklasse.
-  ...DIVINE_CARDS.map(c=>{
-    const G = {FWD:{label:'Stürmer', n:3}, MID:{label:'Mittelfeldspieler', n:4}, DEF:{label:'Verteidiger', n:5}}[c.group];
-    return {id:'divine_'+c.slug, name:'Divine: '+c.signatureName, directCardId:c.id, size:11, tier:'Divine', maxCompletions:1,
-      desc:`11 Spieler, Durchschnittsrating 98+, niemand unter 96 OVR, mindestens 8 Sonderkarten und ${G.n} ${G.label}. Einmalige Belohnung: ${c.signatureName} als Divine-Karte (${DIVINE_OV} OVR), sonst nirgends erhältlich.`,
-      reqs:[ req('Durchschnittsrating 98+', x=>avgOv(x)>=98, x=>`${avgOv(x)} / 98`),
-             req('Kein Spieler unter 96 OVR', x=>x.every(y=>y.ov>=96), x=>`${x.filter(y=>y.ov<96).length} unter 96`),
-             req('8+ Sonderkarten', x=>x.filter(y=>y.variant!=='base').length>=8, x=>`${x.filter(y=>y.variant!=='base').length} / 8 Sonderkarten`),
-             req(`${G.n}+ ${G.label}`, x=>x.filter(y=>cardInPosGroup(y,c.group)).length>=G.n, x=>`${x.filter(y=>cardInPosGroup(y,c.group)).length} / ${G.n}`) ]};
-  }),
   {id:'toty_sbc', name:'Team of the Year', reward:'toty', size:11, tier:'Einzigartig', maxCompletions:1,
     desc:'Stelle ein komplettes 4-3-3 aus 11 Karten mit 100+ OVR, jede auf ihrer eigenen "++"-Position (Hauptposition). Belohnung: 1 zufällige TOTY-Karte (105-112 OVR, untradable). Nur einmal machbar.',
     reqs:[ req('Alle 11 Karten 100+ OVR', c=>c.every(x=>x.ov>=100), c=>`${c.filter(x=>x.ov>=100).length} / 11 mit 100+`),
@@ -13645,7 +13706,7 @@ async function draftTournamentLoseWithoutPayout(){
   draftTournamentState = null;
   renderDraftPanel();
 }
-const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'Divine':'divine', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest', 'Vinicius-Quest':'viniciusquest'};
+const SBC_TIER_SLUG = {'Einsteiger':'entry', 'Mittel':'mid', 'Fortgeschritten':'advanced', 'QUEST':'quest', 'Einzigartig':'exclusive', 'WM-Quest':'wmquest', 'Promo-Quest':'promoquest', 'Marcelo-Quest':'marceloquest', 'Vinicius-Quest':'viniciusquest'};
 // every SBC not already folded into a WM/PROMO quest event - each now gets its own tile in the unified
 // Herausforderungen grid (see renderChallengeGrid) instead of living in a separate flat "SBCs" list, so
 // opening one always follows the same tile -> detail -> build flow as every other challenge in the game.
@@ -19367,8 +19428,8 @@ function renderStore(view){
   const claimBtn = document.getElementById('daily-claim');
   if(claimBtn && !claimBtn.disabled) claimBtn.addEventListener('click', (e)=>{ e.target.disabled=true; claimDailyReward(); });
   const sectionsEl = document.getElementById('pack-sections');
-  const TIER_LABEL = {'':'Standard', premium:'Premium', ultimate:'Ultimate'};
-  const TIER_ORDER = ['', 'premium', 'ultimate'];
+  const TIER_LABEL = {'':'Standard', premium:'Premium', ultimate:'Ultimate', divine:'Divine'};
+  const TIER_ORDER = ['', 'premium', 'ultimate', 'divine'];
   const wmExpired = Date.now() >= WM_WINNERS_DEADLINE;
   const ratings27Expired = Date.now() >= RATINGS27_DEADLINE;
   const visiblePacks = PACKS.filter(pack=>(!pack.hidden || (pack.id==='legendpack' && profile.ogPackUnlocked)) && !(pack.id==='wmwinners' && wmExpired) && !(pack.id==='ratings27' && ratings27Expired));
@@ -19394,6 +19455,7 @@ function renderStore(view){
       card.innerHTML = `
         <div class="pack-tier-ribbon">${TIER_LABEL[pack.tier]}</div>
         <div class="pack-glyph${pack.img?' has-img':''}">
+          ${pack.tier==='divine' ? DIVINE_PACK_FX_HTML : ''}
           ${pack.img ? `<img src="${pack.img}" alt="" loading="lazy"><div class="pv-count-badge">${pack.count} Karten</div>` : `<div>${pack.count}</div><div class="pv-lbl">Karten</div>`}
         </div>
         <div class="pack-card-body">
@@ -19517,6 +19579,10 @@ async function addCardsToCollection(cards, opts={}){
   return added;
 }
 
+// Effekt-Ebenen für Divine-Pack (Kachel im Shop + große Pack-Ansicht beim Öffnen): Nebel, drehende Lichtstrahlen,
+// Sternenfeld, aufsteigende Lichtpartikel, zwei Sternschnuppen - alles CSS (siehe .pack-divine-fx).
+const DIVINE_PACK_FX_HTML = `<div class="pack-divine-fx"><div class="pdx-nebula"></div><div class="pdx-rays"></div><div class="pdx-stars"></div><div class="pdx-aura"></div>
+  <i class="pdx-shoot s1"></i><i class="pdx-shoot s2"></i>${Array.from({length:7},(_,i)=>`<i class="pdx-mote m${i+1}"></i>`).join('')}</div>`;
 function showPackOpening(pack, drawn, opts={}){
   // grant immediately, before any animation/modal exists - closing the pack-opening modal early
   // (or anything else interrupting the reveal) must never cost the player the pack they paid for
@@ -19542,6 +19608,7 @@ function showPackOpening(pack, drawn, opts={}){
     <div class="pack-visual-wrap" id="pack-visual-wrap">
       <div class="pack-visual ${pack.tier}${pack.img?' has-img':''}" id="pack-visual">
         ${pack.img ? `<img src="${pack.img}" alt="">` : ''}
+        ${pack.tier==='divine' ? DIVINE_PACK_FX_HTML : ''}
         <div class="pv-shine"></div>
         <div class="pv-count">${drawn.length}</div><div class="pv-label">Spieler</div><div class="pv-tap">${clickMode ? 'TIPPEN ZUM \u00d6FFNEN' : 'WISCHEN ZUM AUFSCHLITZEN'}</div>
       </div>
@@ -19664,7 +19731,7 @@ function revealQueue(cards, i, pack, addedPromise){
   }
   const c = cards[i];
   if(isSpecialPull(c)){
-    const revealFn = c.ov>=85 ? showFUTRevealSequence : showCutscene;
+    const revealFn = (c.theme==='divine' || c.ov<85) ? showCutscene : showFUTRevealSequence;
     revealFn(c, ()=>{
       addToTray(c);
       updatePackProgress(i+1, cards.length);
@@ -19728,6 +19795,8 @@ function showPickScreen(cards, pickCount, addedPromise){
     });
     if(touchedPlayers) await sSet('collection', collection);
     if(touchedManagers) await sSet('managerCollection', managerCollection);
+    // Divine Pack: erst nach der Auswahl (nicht schon beim Ziehen aller 3) prüfen, ob der Titel fällig ist
+    if(grantDivineNametagIfOwned()){ await sSet('profile', profile); toast('Neuer Titel freigeschaltet: \u2735 Divine'); }
   }
   let resolved = false;
   // if the player closes this screen without confirming a pick, don't punish them with nothing -
@@ -20897,13 +20966,15 @@ function showCutscene(card, onDone){
   const mythic = isMythicReveal(card);
   const root = document.getElementById('modal-root');
   const overlay = document.createElement('div');
-  overlay.className = 'cutscene-overlay' + (mythic?' cs-mythic':'');
+  const isDivineCard = card.theme==='divine';
+  overlay.className = 'cutscene-overlay' + (mythic?' cs-mythic':'') + (isDivineCard?' cs-divine':'');
   overlay.style.setProperty('--cs-acc', acc);
   // No banner at all anymore - it used to print the OVR (and, before that, a rarity/variant label too)
   // right behind the card the instant the overlay was created, well before stageMythicCardReveal's own
   // dramatic count-up on the card itself even started for a 100+ pull. The card face is the only place
   // the OVR shows now, exactly when the card itself reveals it - nothing spoils it from behind anymore.
   overlay.innerHTML = `
+    ${isDivineCard ? DIVINE_PACK_FX_HTML + '<div class="cs-divine-ring r1"></div><div class="cs-divine-ring r2"></div><div class="cs-divine-ring r3"></div>' : ''}
     <div class="cs-burst"></div>
     <div class="cs-card-wrap"></div>
     <div class="cs-hint">Zum Fortfahren irgendwo tippen</div>`;
@@ -22882,6 +22953,7 @@ function drawCardIndexGrid(){
 // per-card-id lists, so a newly added card of the same kind is automatically covered too.
 function cardSpecialSource(card){
   if(card.isManager) return null;
+  if(card.theme==='divine') return 'Nur im Divine Pack (Kartenladen, ganz unten) - drei zufällige Divine-Karten, eine davon darfst du behalten.';
   if(card.variant==='admin') return 'Nur pers\u00f6nlich von einem Admin vergeben (Debug-/Easter-Egg-Karte) \u2014 kein regul\u00e4rer Erhalt im Spiel m\u00f6glich.';
   const sbc = SBC_DEFS.find(s=>s.directCardId===card.id);
   if(sbc) return `Einmalige Belohnung f\u00fcr den Abschluss der Kader-Herausforderung \u201e${sbc.name}\u201c (Herausforderungen-Tab).`;

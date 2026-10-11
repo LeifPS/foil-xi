@@ -1,5 +1,5 @@
-// Regressionstest für die neue Kartenklasse DIVINE: stärkste Karten des Spiels, nie in Packs, nur über je
-// eine extrem schwere Einmal-SBC (directCardId) erhältlich. Eigenes Kartenlayout: KEINE Stats, KEIN
+// Regressionstest für die neue Kartenklasse DIVINE: stärkste Karten des Spiels, nur über das Divine Pack
+// (100k, 3 Karten, 1 wählbar) erhältlich. Eigenes Kartenlayout: KEINE Stats, KEIN
 // normaler Name - ganz unten der Name in Signatur-Schrift (Jalliya), direkt darunter Nation/Liga/Verein.
 const { withPage } = require('./lib/browser');
 const { ok, eq, noErrors, summary } = require('./lib/assert');
@@ -34,24 +34,50 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // alle Größen rendern ohne Fehler
     ['mini','xs'].forEach(sz=>cardEl(cards[2], sz));
 
-    // SBCs
-    const sbcs = SBC_DEFS.filter(s=>s.tier==='Divine');
-    const sbcPerCard = sbcs.length===9 && cards.every(c=>sbcs.some(s=>s.directCardId===c.id));
-    const sbcOnce = sbcs.every(s=>s.maxCompletions===1);
-    const tile = buildSbcTile(sbcs[0], [], []);
-    const tileHasDivineTier = tile.classList.contains('tier-divine');
-    const sourceText = cardSpecialSource(cards[0]) || '';
-    const sourceMentionsSbc = sourceText.includes(sbcs[0].name);
+    // Divine Pack: letzte Seltenheit, 100k, 3 Karten, 1 wählbar
+    const pack = PACKS.find(x=>x.id==='divine');
+    const packOk = !!pack && pack.tier==='divine' && pack.cost===100000 && pack.count===3 && pack.pickCount===1 && PACKS[PACKS.length-1]===pack && !pack.hidden;
+    const draws = Array.from({length:60},()=>pack.draw());
+    const drawsOk = draws.every(d=>d.length===3 && new Set(d.map(c=>c.id)).size===3 && d.every(c=>c.theme==='divine'));
+    const allNineReachable = new Set(draws.flat().map(c=>c.id)).size===9;
+    // keine Challenge mehr für Divine-Karten
+    const noSbc = !SBC_DEFS.some(s=>cards.some(c=>s.directCardId===c.id) || /^divine_/.test(s.id));
+    const sourceMentionsPack = (cardSpecialSource(cards[0])||'').includes('Divine Pack');
+    // Shop: eigener Abschnitt ganz unten mit Effekt-Layern
+    coins=0; profile.coins = 500000; profile.packOpenMode='click';
+    const view = document.getElementById('view'); renderStore(view);
+    const sections = Array.from(document.querySelectorAll('.pack-tier-section'));
+    const lastSec = sections[sections.length-1];
+    const storeDivineLast = !!lastSec && lastSec.id==='pack-tier-divine' && lastSec.querySelectorAll('.pack-card.divine').length===1;
+    const storeFx = !!lastSec.querySelector('.pack-card.divine .pack-divine-fx .pdx-rays') && lastSec.querySelectorAll('.pdx-mote').length===7 && lastSec.querySelectorAll('.pdx-shoot').length===2;
+    const navHasDivine = !!document.querySelector('.pack-tier-nav-btn.divine');
+    // Öffnen: große Pack-Ansicht mit Effekten, Auswahl 1 von 3, Rest wird entfernt, Titel kommt
+    collection = []; profile.unlockedNametags = [];
+    const drawn = pack.draw();
+    showPackOpening(pack, drawn);
+    const visualHasFx = !!document.querySelector('#pack-visual.divine .pack-divine-fx');
+    document.getElementById('pack-visual').click();
+    await new Promise(r=>setTimeout(r,700));
+    const threeGrantedUpFront = collection.length===3;
+    // Reveal-Overlay jedes Divine-Karte: Divine-Variante
+    let guard=0;
+    while(!document.getElementById('pick-grid') && guard++<20){
+      const ov = document.querySelector('.cutscene-overlay');
+      if(ov){ if(ov.classList.contains('cs-divine')) window.__sawDivineReveal = true; ov.click(); ov.click(); ov.click(); }
+      await new Promise(r=>setTimeout(r,400));
+    }
+    const pickScreen = !!document.getElementById('pick-grid');
+    const pickGridCount = document.querySelectorAll('#pick-grid > div').length===3;
+    document.querySelectorAll('#pick-grid > div')[1].click();
+    document.getElementById('pick-confirm').click();
+    await new Promise(r=>setTimeout(r,300));
+    const exactlyOneKept = collection.length===1 && collection[0].cardId===drawn[1].id;
+    const titleAfterPick = profile.unlockedNametags.includes('divine');
+    const sawDivineReveal = !!window.__sawDivineReveal;
+    document.getElementById('modal-root').innerHTML='';
 
-    // Anforderungen: ein 98er-Kader aus Sonderkarten mit 3 Stürmern erfüllt Messi-SBC, ein 96er-Kader nicht
-    const mk = (ov,i,pos)=>({id:i,ov,pos,variant:'goat',n:'x'+i});
-    const good = [...Array(3).fill(0).map((_,i)=>mk(99,i,'ST')), ...Array(8).fill(0).map((_,i)=>mk(98,10+i,'CM'))];
-    const bad = good.map(c=>({...c,ov:94}));
-    const passes = sbcs[0].reqs.every(r=>r.check(good));
-    const fails = !sbcs[0].reqs.every(r=>r.check(bad));
-
-    // nicht in Packs / Draft-Pool
-    const inAnyPack = PACKS.some(p=>{ try{ return (p.draw?Array.from({length:50},()=>p.draw()).flat():[]).some(c=>c && c.theme==='divine'); }catch(e){ return false; } });
+    // in keinem ANDEREN Pack
+    const inOtherPack = PACKS.filter(x=>x.id!=='divine').some(p=>{ try{ return (p.draw?Array.from({length:50},()=>p.draw()).flat():[]).some(c=>c && c.theme==='divine'); }catch(e){ return false; } });
 
     // Volle Chemie: auch ganz allein und ohne jede Verbindung zu den Mitspielern -> 3 Sterne (+3 Rating)
     const lone = computeChemistry([{...cards[0], club:'X1', lg:'Y1', nat:'Z1'}, {n:'o', ov:80, club:'X2', lg:'Y2', nat:'Z2', variant:'base'}], null);
@@ -69,7 +95,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const grantedWithCard = grantDivineNametagIfOwned()===true && profile.unlockedNametags.includes('divine');
     const idempotent = grantDivineNametagIfOwned()===false && profile.unlockedNametags.filter(x=>x==='divine').length===1;
     return { hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
-             sbcPerCard, sbcOnce, tileHasDivineTier, sourceMentionsSbc, passes, fails, inAnyPack, hasIcons: !!iconsEl };
+             packOk, drawsOk, allNineReachable, noSbc, sourceMentionsPack, storeDivineLast, storeFx, navHasDivine, visualHasFx, threeGrantedUpFront, pickScreen, pickGridCount, exactlyOneKept, titleAfterPick, sawDivineReveal, inOtherPack, hasIcons: !!iconsEl };
   }));
 
   console.log('Divine-Karten-Test');
@@ -94,12 +120,21 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.iconsDirectlyUnderName, true, 'Nation/Liga/Verein stehen direkt unter dem Namen, beide ganz unten');
   eq(result.hasFx, true, 'Divine-Effekt-Layer (Aura + 3 Lichtpartikel) vorhanden');
   eq(result.longClass, true, 'alle Namen sind gleich groß (keine Längen-Klassen)');
-  eq(result.sbcPerCard, true, 'für jede Divine-Karte gibt es genau eine eigene Herausforderung');
-  eq(result.sbcOnce, true, 'jede Divine-Herausforderung ist nur einmal machbar');
-  eq(result.tileHasDivineTier, true, 'SBC-Kachel nutzt das Divine-Tier-Design');
-  ok(result.sourceMentionsSbc, 'Erhalt-Hinweis der Karte nennt die Herausforderung');
-  eq(result.passes, true, 'ein 98er-Sonderkarten-Kader erfüllt die Puskás-Herausforderung');
-  eq(result.fails, true, 'ein schwächerer Kader erfüllt sie nicht');
-  eq(result.inAnyPack, false, 'Divine-Karten tauchen in keinem Pack auf');
+  eq(result.packOk, true, 'Divine Pack: Tier divine, 100.000 Coins, 3 Karten, 1 wählbar, letztes Pack im Shop');
+  eq(result.drawsOk, true, 'jede Ziehung sind 3 verschiedene Divine-Karten');
+  eq(result.allNineReachable, true, 'alle 9 Divine-Karten sind ziehbar');
+  eq(result.noSbc, true, 'es gibt keine Divine-Challenges mehr');
+  ok(result.sourceMentionsPack, 'Erhalt-Hinweis der Karte nennt das Divine Pack');
+  eq(result.storeDivineLast, true, 'im Kartenladen steht Divine als eigener Abschnitt ganz unten');
+  eq(result.storeFx, true, 'die Shop-Kachel hat die Effekt-Ebenen (Strahlen, 7 Partikel, 2 Sternschnuppen)');
+  eq(result.navHasDivine, true, 'die Schnellnavigation hat einen Divine-Button');
+  eq(result.visualHasFx, true, 'die große Pack-Ansicht beim Öffnen hat die Divine-Effekte');
+  eq(result.threeGrantedUpFront, true, 'alle 3 Karten sind sofort gesichert (Verlustschutz bei Abbruch)');
+  eq(result.sawDivineReveal, true, 'jede Divine-Karte bekommt das Divine-Reveal (cs-divine)');
+  eq(result.pickScreen, true, 'danach erscheint der Auswahl-Bildschirm');
+  eq(result.pickGridCount, true, 'es stehen genau 3 Karten zur Wahl');
+  eq(result.exactlyOneKept, true, 'nach der Bestätigung bleibt genau die gewählte Karte übrig');
+  eq(result.titleAfterPick, true, 'der Titel Divine wird nach der Auswahl freigeschaltet');
+  eq(result.inOtherPack, false, 'Divine-Karten tauchen in keinem anderen Pack auf');
   summary('Divine-Karten-Test');
 })().catch(e => { console.error('FATAL', e); process.exit(1); });
