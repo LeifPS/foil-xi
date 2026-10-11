@@ -11824,8 +11824,8 @@ const PACKS = [
     }},
   // DIVINE: eigene Seltenheit nach Ultimate, ganz unten im Kartenladen. 3 verschiedene zufällige Divine-Karten
   // (alle 121 OVR, untradable), davon darf man genau eine behalten (pickCount, siehe showPickScreen).
-  {id:'divine',name:'Divine Pack',cost:100000,tier:'divine',count:3,pickCount:1,onceFlag:'divinePackBought',
-    desc:'Die höchste Seltenheit im Spiel: 3 zufällige Divine-Legenden (121 OVR, volle Chemie, nicht handelbar) \u2014 du behältst eine davon. Nur 1x pro Verein kaufbar.',
+  {id:'divine',name:'Divine Pack',cost:100000,tier:'divine',count:3,pickCount:1,persistPick:true,
+    desc:'Die höchste Seltenheit im Spiel: 3 zufällige Divine-Legenden (121 OVR, volle Chemie, nicht handelbar) \u2014 du behältst eine davon. Beliebig oft kaufbar, aber im Kader darf immer nur 1 Divine-Karte stehen.',
     draw(){
       const pool = DIVINE_CARDS.slice();
       for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
@@ -17826,7 +17826,7 @@ async function init(){
   // auch wer eine Divine-Karte anderweitig bekommen hat (z.B. Admin) erhält den Titel
   // Aufräumen nach der ID-Kollision (siehe DIVINE_CARDS): wer den Titel "Divine" nur bekam, weil eine alte
   // Karte mit kollidierender ID plötzlich als Divine galt, verliert ihn wieder - ohne echte Divine-Karte und
-  // ohne gekauftes Divine Pack steht ihm der Titel nicht zu.
+  // steht ihm der Titel nicht zu.
   if(revokeUndeservedDivineNametag()) await sSet('profile', profile);
   if(grantDivineNametagIfOwned()) await sSet('profile', profile);
   currentTab = restoredLastTab();
@@ -19519,12 +19519,10 @@ function renderStore(view){
           ${pack.cost>0 && pack.count>0 ? `<div class="hint" style="margin:0;font-size:10.5px;">~${formatCoins(Math.round(pack.cost/pack.count))} pro Karte</div>` : ''}
           <div class="buyrow">
             <div class="price-pill">${coinIcon(14)}${formatCoins(pack.cost)}</div>
-            ${pack.onceFlag && profile[pack.onceFlag]
-              ? `<button class="buy-btn" disabled title="Nur 1x pro Verein kaufbar">Bereits gekauft</button>`
-              : `<button class="buy-btn" ${profile.coins<pack.cost?`disabled title="Fehlen noch ${formatCoins(pack.cost-profile.coins)} Coins"`:''}>\u00d6ffnen</button>`}
+            <button class="buy-btn" ${profile.coins<pack.cost?`disabled title="Fehlen noch ${formatCoins(pack.cost-profile.coins)} Coins"`:''}>\u00d6ffnen</button>
           </div>
         </div>`;
-      if(!(pack.onceFlag && profile[pack.onceFlag])) card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
+      card.querySelector('.buy-btn').addEventListener('click', (e)=>{ e.target.disabled=true; buyPack(pack); });
       card.querySelector('.odds-link').addEventListener('click', ()=>showPackOdds(pack));
       grid.appendChild(card);
     });
@@ -19595,15 +19593,11 @@ async function redeemCode(){
 }
 
 async function buyPack(pack){
-  // Einmal-Packs (pack.onceFlag, z.B. Divine): pro Verein genau 1x kaufbar. Flag wird SYNCHRON vor dem
-  // ersten await gesetzt, damit ein Doppelklick/zwei schnelle Klicks keinen zweiten Kauf durchrutschen lassen.
-  if(pack.onceFlag && profile[pack.onceFlag]){ toast('Dieses Pack ist nur 1x pro Verein kaufbar \u2014 du hast es bereits.'); renderStore(document.getElementById('view')); return; }
   if(profile.coins < pack.cost){ toast("Nicht genug Coins."); return; }
-  if(pack.onceFlag) profile[pack.onceFlag] = true;
   await atomicCoinChange(-pack.cost);
   if(bumpWeekPassQuest('openPack', 1, pack.id)) await sSet('profile', profile);
   const drawn = pack.draw();
-  showPackOpening(pack, drawn, {purchase:true});
+  showPackOpening(pack, drawn);
   renderStore(document.getElementById('view'));
 }
 async function addCardsToCollection(cards, opts={}){
@@ -19642,22 +19636,13 @@ async function addCardsToCollection(cards, opts={}){
 const DIVINE_PACK_FX_HTML = `<div class="pack-divine-fx"><div class="pdx-nebula"></div><div class="pdx-rays"></div><div class="pdx-stars"></div><div class="pdx-aura"></div>
   <i class="pdx-shoot s1"></i><i class="pdx-shoot s2"></i>${Array.from({length:7},(_,i)=>`<i class="pdx-mote m${i+1}"></i>`).join('')}</div>`;
 function showPackOpening(pack, drawn, opts={}){
-  // Einmal-Packs (Divine): das Limit gilt für JEDEN Weg, ein Pack zu öffnen - nicht nur für den Kauf im Shop
-  // (buyPack setzt den Merker selbst und übergibt opts.purchase). Sonst ließe sich das Pack über den
-  // Admin-Picker oder aus dem Inventar beliebig oft öffnen. Der erste Öffnungsweg, der nicht der Kauf ist,
-  // verbraucht das eine erlaubte Öffnen (Merker wird gesetzt), jeder weitere wird abgelehnt - ohne dass
-  // Karten vergeben werden.
-  if(pack.onceFlag){
-    if(profile[pack.onceFlag] && !opts.purchase){ toast(`${pack.name}: nur 1x pro Verein \u00f6ffnbar \u2014 du hast es bereits ge\u00f6ffnet.`); return; }
-    if(!profile[pack.onceFlag]){ profile[pack.onceFlag] = true; }
-  }
   // grant immediately, before any animation/modal exists - closing the pack-opening modal early
   // (or anything else interrupting the reveal) must never cost the player the pack they paid for
   const addedPromise = addCardsToCollection(drawn, opts);
-  // Einmal-Pick-Packs (Divine): die noch nicht ausgewählten Karten im Profil merken - bricht die Seite vor der
+  // Pick-Packs mit persistPick (Divine): die noch nicht ausgewählten Karten im Profil merken - bricht die Seite vor der
   // Auswahl ab (Reload/Absturz), wird die Auswahl beim nächsten Start fortgesetzt (siehe resumePendingPackPick),
   // statt dass man alle 3 behält oder die Karten verliert.
-  if(pack.onceFlag && pack.pickCount){
+  if(pack.persistPick && pack.pickCount){
     addedPromise.then(added=>{ profile.pendingPackPick = {packId:pack.id, uids:added.map(a=>a.uid), pickCount:pack.pickCount}; sSet('profile', profile); });
   }
   // Kartensammler no longer counts here - it's a live unique-card count off the collection itself
@@ -22323,17 +22308,6 @@ function openAdminSetLigaBadgeModal(targetId, p){
     loadAdminUserPanel(targetId);
   });
 }
-// Einmal-Packs (pack.onceFlag, z.B. Divine) gelten auch für Admin-Geschenke: liest den AKTUELLEN Stand des
-// Zielaccounts (nicht den evtl. veralteten Panel-Snapshot) und liefert einen Ablehnungsgrund oder null.
-async function adminOncePackBlockReason(pack, targetId, alsoUnopened){
-  if(!pack.onceFlag) return null;
-  let d = null;
-  try{ const snap = await fb.getDoc(fb.doc(fb.db,'saves',targetId)); d = snap.exists() ? snap.data() : null; }
-  catch(e){ return 'Zielaccount konnte nicht gelesen werden \u2014 zur Sicherheit abgebrochen.'; }
-  if(d && d.profile && d.profile[pack.onceFlag]) return `${targetId} hat das ${pack.name} bereits (nur 1x pro Verein).`;
-  if(alsoUnopened && d && (d.packCollection||[]).some(x=>x.packId===pack.id)) return `${targetId} hat bereits ein ungeöffnetes ${pack.name} im Inventar (nur 1x pro Verein).`;
-  return null;
-}
 function openAdminSendPackModal(targetId, data){
   openModal(`
     <h2 style="margin-bottom:12px;">Pack f\u00fcr ${targetId} \u00f6ffnen</h2>
@@ -22346,16 +22320,12 @@ function openAdminSendPackModal(targetId, data){
     btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
     btn.textContent = pack.name;
     btn.addEventListener('click', async ()=>{
-      const blocked = await adminOncePackBlockReason(pack, targetId, true);
-      if(blocked){ toast(blocked); return; }
       let drawn = pack.draw();
-      // Einmal-Pick-Pack (Divine): der Zielaccount bekommt wie beim normalen Öffnen nur pickCount Karten und
-      // das Limit-Flag wird mitgesetzt, sonst ließe sich das Pack über dieses Admin-Werkzeug beliebig wiederholen.
-      if(pack.onceFlag && pack.pickCount) drawn = drawn.slice(0, pack.pickCount);
-      const extra = pack.onceFlag ? {profile:{[pack.onceFlag]:true}} : {};
+      // Pick-Pack mit persistPick (Divine): der Zielaccount bekommt wie beim normalen Öffnen nur pickCount Karten.
+      if(pack.persistPick && pack.pickCount) drawn = drawn.slice(0, pack.pickCount);
       // fb.arrayUnion, not a read-modify-write off the admin panel's (possibly minutes-stale) data
       // snapshot - see openAdminSendCardModal's comment for why that silently loses concurrent changes.
-      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion(...drawn.map(card=>({uid:genId(), cardId:card.id}))), ...extra}, {merge:true}) }
+      try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {collection: fb.arrayUnion(...drawn.map(card=>({uid:genId(), cardId:card.id})))}, {merge:true}) }
       catch(e){ console.warn('admin send pack failed', e); toast('Fehlgeschlagen — bitte erneut versuchen.'); return; }
       toast(`${pack.name} f\u00fcr ${targetId} ge\u00f6ffnet: ${drawn.map(c=>c.n).join(', ')}`);
       closeModal();
@@ -22377,8 +22347,6 @@ function openAdminSendUnopenedPackModal(targetId, data){
     btn.style.cssText = 'width:100%;margin-bottom:6px;text-align:left;';
     btn.textContent = pack.name;
     btn.addEventListener('click', async ()=>{
-      const blocked = await adminOncePackBlockReason(pack, targetId, true);
-      if(blocked){ toast(blocked); return; }
       // fb.arrayUnion, not a read-modify-write off the admin panel's (possibly minutes-stale) data
       // snapshot - see openAdminSendCardModal's comment for why that silently loses concurrent changes.
       try{ await fb.setDoc(fb.doc(fb.db,'saves',targetId), {packCollection: fb.arrayUnion({uid:genId(), packId:pack.id})}, {merge:true}) }
@@ -22723,7 +22691,6 @@ async function openOwnedPack(uid){
   if(!pack) return;
   const locked = await getExternalLockedUids();
   if(locked.has(uid)){ toast('Dieses Pack ist gerade gelistet oder in einem Handelsangebot \u2014 zuerst zur\u00fccknehmen.'); return; }
-  if(pack.onceFlag && profile[pack.onceFlag]){ toast(`${pack.name}: nur 1x pro Verein \u00f6ffnbar \u2014 du hast es bereits ge\u00f6ffnet. Das Pack bleibt in deinem Inventar.`); return; }
   packCollection = packCollection.filter(p=>p.uid!==uid);
   await sSet('packCollection', packCollection);
   showPackOpening(pack, pack.draw());
@@ -23591,6 +23558,23 @@ function showCardIndexDetailModal(item){
 // enforce the "no more off-position placements" rule for everyone: it silently strips now-illegal
 // slots (and resets an unrecognized/no-longer-existing formation back to 4-3-3) before any match can
 // be played.
+// Divine-Regel: im Kader darf immer nur EINE Divine-Karte stehen (Pack beliebig oft kaufbar, einsetzbar nur
+// 1x). Entfernt aus einer Slot-Zuordnung {slotId:uid} jede weitere Divine-Karte (die erste in
+// Formations-Reihenfolge bleibt) - genutzt beim Start-Check und beim Laden eines gespeicherten Kaders.
+// Gibt die Anzahl entfernter Karten zurück.
+function stripExtraDivineFromSlots(slotsObj, formKey){
+  const form = FORMATIONS[formKey];
+  const order = form ? form.slots.map(s=>s.id) : Object.keys(slotsObj);
+  let seen = false, removed = 0;
+  order.concat(Object.keys(slotsObj).filter(k=>!order.includes(k))).forEach(slotId=>{
+    const uid = slotsObj[slotId];
+    if(!uid) return;
+    const c = ownedCard(uid);
+    if(!c || c.theme!=='divine') return;
+    if(seen){ delete slotsObj[slotId]; removed++; } else seen = true;
+  });
+  return removed;
+}
 function migrateSquadPositions(){
   let changed = false;
   if(!FORMATIONS[squad.formation]){ squad.formation='433'; changed=true; }
@@ -23602,6 +23586,7 @@ function migrateSquadPositions(){
     const card = ownedCard(squad.slots[slotId]);
     if(!card || !positionEligibility(card, slot.label)){ delete squad.slots[slotId]; changed=true; }
   });
+  if(stripExtraDivineFromSlots(squad.slots, squad.formation)>0) changed = true;
   return changed;
 }
 function getAssignedManager(){
@@ -24222,6 +24207,7 @@ async function openPicker(slot){
     if(c && c.variant==='prime') primeUidsInSquad.add(uid);
   });
   const primeAlreadyUsed = primeUidsInSquad.size>0;
+  const divineAlreadyUsed = Object.entries(squad.slots).some(([sId,uid])=>{ if(sId===slot.id || !uid) return false; const c = ownedCard(uid); return !!c && c.theme==='divine'; });
   const sortItems = ()=>{
     if(pickerSortMode==='chem') items.sort((a,b)=> b.chem-a.chem || b.effOv-a.effOv);
     else if(pickerSortMode==='name') items.sort((a,b)=> a.card.n.localeCompare(b.card.n,'de'));
@@ -24264,7 +24250,8 @@ async function openPicker(slot){
     const tradeLocked = uid!==currentUid && externalLocked.has(uid) && !onMarket;
     const nameDupe = uid!==currentUid && usedNames.has(card.n);
     const primeBlocked = uid!==currentUid && card.variant==='prime' && primeAlreadyUsed;
-    const blocked = tradeLocked || nameDupe || primeBlocked;
+    const divineBlocked = uid!==currentUid && card.theme==='divine' && divineAlreadyUsed;
+    const blocked = tradeLocked || nameDupe || primeBlocked || divineBlocked;
     const wrap = document.createElement('div');
     wrap.style.cursor = blocked ? 'not-allowed' : 'pointer';
     wrap.style.position='relative';
@@ -24282,6 +24269,9 @@ async function openPicker(slot){
     } else if(primeBlocked){
       const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='MAX. 1 PRIME';
       wrap.appendChild(badge);
+    } else if(divineBlocked){
+      const badge=document.createElement('div'); badge.className='sbc-inuse-badge'; badge.textContent='MAX. 1 DIVINE';
+      wrap.appendChild(badge);
     }
     // Direct current-vs-candidate comparison, only meaningful when a slot is already occupied by a
     // DIFFERENT card - opens a compact side-by-side modal instead of forcing a mental diff of two
@@ -24297,6 +24287,7 @@ async function openPicker(slot){
       if(tradeLocked){ toast('Diese Karte ist gerade in einem Handelsangebot. Ziehe sie dort zur\u00fcck, um sie hier einzusetzen.'); return; }
       if(nameDupe){ toast(`${card.n} steht bereits an anderer Stelle in deiner Aufstellung \u2014 derselbe Spieler kann nicht doppelt aufgestellt werden.`); return; }
       if(primeBlocked){ toast('Du hast bereits eine PRIME-Karte im Kader \u2014 maximal 1 PRIME-Karte gleichzeitig erlaubt.'); return; }
+      if(divineBlocked){ toast('Du hast bereits eine Divine-Karte im Kader \u2014 es darf immer nur 1 Divine-Karte gleichzeitig stehen.'); return; }
       if(onMarket){
         const ok = await withdrawMarketListingByCardUid(uid);
         if(!ok){ toast('Angebot konnte nicht zur\u00fcckgezogen werden \u2014 bitte erneut versuchen.'); return; }
@@ -24434,9 +24425,11 @@ async function loadSquadPreset(id){
     validSlots[slotId] = uid;
   });
   squad.slots = validSlots;
+  const divineDropped = stripExtraDivineFromSlots(squad.slots, squad.formation);
+  dropped += divineDropped;
   squad.managerUid = (preset.managerUid && managerCollection.some(m=>m.uid===preset.managerUid)) ? preset.managerUid : null;
   await sSet('squad', squad);
-  toast(dropped ? `Kader "${preset.name}" geladen \u2014 ${dropped} Spieler nicht mehr verf\u00fcgbar oder doppelt, Positionen leer gelassen.` : `Kader "${preset.name}" geladen.`);
+  toast(dropped ? `Kader "${preset.name}" geladen \u2014 ${dropped} Spieler nicht mehr verf\u00fcgbar oder doppelt${divineDropped?' (nur 1 Divine-Karte erlaubt)':''}, Positionen leer gelassen.` : `Kader "${preset.name}" geladen.`);
   renderSquad(document.getElementById('view'));
 }
 // QoL: update an already-saved preset in place with whatever the squad currently looks like, instead
@@ -30653,7 +30646,6 @@ const NAMETAGS = {
 function revokeUndeservedDivineNametag(){
   ensureAchievementState();
   if(!profile.unlockedNametags.includes('divine')) return false;
-  if(profile.divinePackBought) return false;
   if(collection.some(c=>{ const card = BY_ID.get(c.cardId); return card && card.theme==='divine'; })) return false;
   profile.unlockedNametags = profile.unlockedNametags.filter(x=>x!=='divine');
   if(profile.nametag==='divine') profile.nametag = null;

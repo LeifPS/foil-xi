@@ -65,49 +65,28 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const storeDivineLast = !!lastSec && lastSec.id==='pack-tier-divine' && lastSec.querySelectorAll('.pack-card.divine').length===1;
     const storeFx = !!lastSec.querySelector('.pack-card.divine .pack-divine-fx .pdx-rays') && lastSec.querySelectorAll('.pdx-mote').length===7 && lastSec.querySelectorAll('.pdx-shoot').length===2;
     const navHasDivine = !!document.querySelector('.pack-tier-nav-btn.divine');
-    // Nur 1x kaufbar: Doppelklick (zwei Käufe direkt hintereinander) kauft nur einmal, danach gesperrt
+    // Beliebig oft kaufbar: zwei Käufe nacheinander funktionieren beide (je 100.000 Coins, je 3 Karten), kein Limit-Flag
     atomicCoinChange = async (n)=>{ profile.coins += n; };
-    profile.coins = 500000; profile.divinePackBought = false;
-    collection = []; profile.unlockedNametags = [];
-    const p1 = buyPack(pack), p2 = buyPack(pack);
-    await Promise.all([p1,p2]);
-    await new Promise(r=>setTimeout(r,200));
-    const boughtOnlyOnce = profile.coins===400000 && profile.divinePackBought===true && collection.length===3;
+    profile.coins = 500000; collection = []; profile.unlockedNametags = []; profile.pendingPackPick = null;
+    const noLimitProps = !('onceFlag' in pack);
+    await buyPack(pack); await new Promise(r=>setTimeout(r,150)); document.getElementById('modal-root').innerHTML='';
+    profile.pendingPackPick = null;
+    await buyPack(pack); await new Promise(r=>setTimeout(r,150)); document.getElementById('modal-root').innerHTML='';
+    const boughtTwice = profile.coins===300000 && collection.length===6;
     const pendingSaved = !!profile.pendingPackPick && profile.pendingPackPick.uids.length===3;
-    document.getElementById('modal-root').innerHTML='';
-    // Reload simulieren: offene Auswahl wird beim Start wieder aufgemacht, Auswahl räumt auf + löscht Pending
+    // Neustart-Fortsetzung: offene Auswahl wird wieder aufgemacht und räumt auf (behält genau 1 der 3)
     const resumed = resumePendingPackPick()===true && !!document.getElementById('pick-grid');
     document.querySelectorAll('#pick-grid > div')[0].click();
     document.getElementById('pick-confirm').click();
     await new Promise(r=>setTimeout(r,300));
-    const resumeKeptOne = collection.length===1 && profile.pendingPackPick===null;
+    const resumeKeptOne = collection.length===4 && profile.pendingPackPick===null;
     document.getElementById('modal-root').innerHTML='';
-    // Dritter Kaufversuch bleibt gesperrt (keine Coins abgezogen), Shop zeigt "Bereits gekauft"
-    const coinsBefore = profile.coins;
-    await buyPack(pack);
-    const thirdBlocked = profile.coins===coinsBefore && collection.length===1;
+    // Shop zeigt das Pack immer als kaufbar (nie "Bereits gekauft")
     renderStore(document.getElementById('view'));
     const shopBtn = document.querySelector('#pack-tier-divine .buy-btn');
-    const shopShowsOwned = !!shopBtn && shopBtn.disabled && /Bereits gekauft/.test(shopBtn.textContent);
-    profile.divinePackBought = false; profile.pendingPackPick = null; collection = []; profile.unlockedNametags = [];
-    // Limit gilt für JEDEN Öffnungsweg (Admin-Picker, Inventar), nicht nur für den Shop-Kauf
-    profile.divinePackBought = false; profile.pendingPackPick = null; collection = []; profile.unlockedNametags = [];
-    const toastsSeen = []; const origToast = toast; toast = (m)=>toastsSeen.push(m);
-    showPackOpening(pack, pack.draw());                    // 1. Öffnen über Admin-Picker: erlaubt, verbraucht das Limit
-    await new Promise(r=>setTimeout(r,300));
-    const firstOtherPathAllowed = collection.length===3 && profile.divinePackBought===true;
-    document.getElementById('modal-root').innerHTML='';
-    collection = [];
-    showPackOpening(pack, pack.draw());                    // 2. Öffnen: abgelehnt
-    await new Promise(r=>setTimeout(r,300));
-    const secondOtherPathBlocked = collection.length===0 && toastsSeen.some(m=>/nur 1x pro Verein/.test(m)) && !document.getElementById('pack-visual');
-    packCollection = [{uid:'pk1', packId:'divine'}];       // Inventar-Pack bleibt erhalten, wenn gesperrt
-    getExternalLockedUids = async ()=>new Set();
-    await openOwnedPack('pk1');
-    const inventoryPackKept = packCollection.length===1 && collection.length===0;
-    toast = origToast; packCollection = [];
-    profile.divinePackBought = false; profile.pendingPackPick = null; collection = [];
-    // Admin-Geschenke: gleiches Limit (Direkt-Öffnen UND ungeöffnetes Pack), Zielstand wird frisch gelesen
+    const shopAlwaysBuyable = !!shopBtn && !/Bereits gekauft/.test(shopBtn.textContent);
+    profile.coins = 500000; collection = []; profile.pendingPackPick = null; profile.unlockedNametags = [];
+    // Admin-Geschenk gibt wie beim normalen Öffnen nur 1 Karte (pickCount) und ist wiederholbar
     const targetDocs = { 'saves/opfer': { profile: {} , collection: [], packCollection: [] } };
     const writesAdmin = [];
     const origFb = fb;
@@ -115,26 +94,30 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
            setDoc: async (ref,val)=>{ writesAdmin.push({path:ref.path,val}); }, arrayUnion:(...a)=>({union:a}) };
     const clickPack = async (opener, label)=>{ opener('opfer', {}); await new Promise(r=>setTimeout(r,20));
       const btn = Array.from(document.querySelectorAll('#modal-root .picker-list button')).find(b=>b.textContent===label); btn.click(); await new Promise(r=>setTimeout(r,80)); };
-    const toastsAdmin = []; const origToast2 = toast; toast = (m)=>toastsAdmin.push(m);
-    await clickPack(openAdminSendPackModal, 'Divine Pack');           // 1. Direkt-Öffnen für Zielspieler: erlaubt
-    const adminDirectGaveOne = writesAdmin.length===1 && writesAdmin[0].val.collection.union.length===1 && writesAdmin[0].val.profile.divinePackBought===true;
-    targetDocs['saves/opfer'].profile.divinePackBought = true;        // Ziel hat das Limit jetzt verbraucht
-    await clickPack(openAdminSendPackModal, 'Divine Pack');           // 2. Direkt-Öffnen: abgelehnt
-    await clickPack(openAdminSendUnopenedPackModal, 'Divine Pack');   // ungeöffnet schicken: ebenfalls abgelehnt
-    const adminSecondBlocked = writesAdmin.length===1 && toastsAdmin.filter(m=>/bereits/.test(m)).length===2;
-    targetDocs['saves/opfer'].profile.divinePackBought = false;
-    targetDocs['saves/opfer'].packCollection = [{uid:'x', packId:'divine'}];
-    const before = writesAdmin.length;
-    await clickPack(openAdminSendUnopenedPackModal, 'Divine Pack');   // schon ein ungeöffnetes im Inventar: abgelehnt
-    const adminNoHoarding = writesAdmin.length===before;
-    targetDocs['saves/opfer'].packCollection = [];
-    await clickPack(openAdminSendUnopenedPackModal, 'Divine Pack');   // frisches Ziel: ungeöffnet schicken erlaubt
-    const adminUnopenedAllowedOnce = writesAdmin.length===before+1;
-    // andere Packs bleiben unbegrenzt verschenkbar
-    const before2 = writesAdmin.length;
-    await clickPack(openAdminSendUnopenedPackModal, PACKS[0].name);
-    const otherPacksUnaffected = writesAdmin.length===before2+1;
-    fb = origFb; toast = origToast2; document.getElementById('modal-root').innerHTML='';
+    await clickPack(openAdminSendPackModal, 'Divine Pack'); await clickPack(openAdminSendPackModal, 'Divine Pack');
+    const adminGivesOneEachTime = writesAdmin.length===2 && writesAdmin.every(w=>w.val.collection.union.length===1);
+    fb = origFb; document.getElementById('modal-root').innerHTML='';
+    // ---------- Aufstellungs-Regel: im Kader immer nur 1 Divine-Karte ----------
+    const d0 = cards[0], d1 = cards[1], d2 = cards[2];
+    collection = [{uid:'d0',cardId:d0.id},{uid:'d1',cardId:d1.id},{uid:'d2',cardId:d2.id}];
+    squad = {formation:'433', slots:{st:'d0', lw:'d1', rw:'d2'}, managerUid:null, tactics:{}};
+    // Start-Check räumt auf: nur die erste Divine-Karte (in Formations-Reihenfolge) bleibt
+    const removed = stripExtraDivineFromSlots(squad.slots, '433');
+    const keptOnlyFirst = removed===2 && Object.keys(squad.slots).length===1;
+    // Picker: zweite Divine-Karte ist gesperrt ("MAX. 1 DIVINE"), die bereits eingesetzte bleibt wählbar
+    squad = {formation:'433', slots:{st:'d0'}, managerUid:null, tactics:{}};
+    const oldToast = toast; const toastsPick = []; toast = (m)=>toastsPick.push(m);
+    const form = FORMATIONS['433']; const lwSlot = form.slots.find(s=>s.id==='lw');
+    openPicker(lwSlot);
+    await new Promise(r=>setTimeout(r,200));
+    const badges = Array.from(document.querySelectorAll('#modal-root .sbc-inuse-badge')).map(b=>b.textContent);
+    const pickerBadgeShown = badges.filter(x=>x==='MAX. 1 DIVINE').length>=1;
+    toast = oldToast; document.getElementById('modal-root').innerHTML='';
+    // Preset laden mit mehreren Divine-Karten: nur eine bleibt
+    squadPresets = [{id:'pr1', name:'Test', formation:'433', slots:{st:'d0', lw:'d1', rw:'d2'}, managerUid:null}];
+    await loadSquadPreset('pr1');
+    const presetKeepsOne = Object.keys(squad.slots).length===1;
+    collection = []; squad = {formation:'433', slots:{}, managerUid:null, tactics:{}}; squadPresets = [];
     // Öffnen: große Pack-Ansicht mit Effekten, Auswahl 1 von 3, Rest wird entfernt, Titel kommt
     collection = []; profile.unlockedNametags = [];
     const drawn = pack.draw();
@@ -178,7 +161,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     collection = [{uid:'u1', cardId:cards[0].id}];
     const grantedWithCard = grantDivineNametagIfOwned()===true && profile.unlockedNametags.includes('divine');
     const idempotent = grantDivineNametagIfOwned()===false && profile.unlockedNametags.filter(x=>x==='divine').length===1;
-    return { adminDirectGaveOne, adminSecondBlocked, adminNoHoarding, adminUnopenedAllowedOnce, otherPacksUnaffected, firstOtherPathAllowed, secondOtherPathBlocked, inventoryPackKept, noIdCollision, oldCardsIntact, revoked, keptWithRealCard, boughtOnlyOnce, pendingSaved, resumed, resumeKeptOne, thirdBlocked, shopShowsOwned, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
+    return { noLimitProps, boughtTwice, shopAlwaysBuyable, adminGivesOneEachTime, keptOnlyFirst, pickerBadgeShown, presetKeepsOne, noIdCollision, oldCardsIntact, revoked, keptWithRealCard, pendingSaved, resumed, resumeKeptOne, hasShooting, ntOk, ntHtml, ntFont, noCardNoTitle, grantedWithCard, idempotent, divineFullChem, nine, allStronger, registered, untradable, isDivineClass, nameText, noStats, noNormalName, iconsDirectlyUnderName, hasFx, longClass,
              packOk, drawsOk, allNineReachable, noSbc, sourceMentionsPack, storeDivineLast, storeFx, navHasDivine, visualHasFx, threeGrantedUpFront, pickScreen, pickGridCount, exactlyOneKept, titleAfterPick, sawDivineReveal, inOtherPack, hasIcons: !!iconsEl };
   }));
 
@@ -204,24 +187,20 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.iconsDirectlyUnderName, true, 'Nation/Liga/Verein stehen direkt unter dem Namen, beide ganz unten');
   eq(result.hasFx, true, 'Divine-Effekt-Layer (Aura + 3 Lichtpartikel) vorhanden');
   eq(result.longClass, true, 'alle Namen sind gleich groß (keine Längen-Klassen)');
-  eq(result.adminDirectGaveOne, true, 'Admin-Direkt-Öffnen gibt dem Zielspieler genau 1 Karte (Auswahl-Regel) und setzt das Limit-Flag');
-  eq(result.adminSecondBlocked, true, 'ein zweites Admin-Geschenk (direkt ODER ungeöffnet) wird abgelehnt, nichts wird geschrieben');
-  eq(result.adminNoHoarding, true, 'hat der Zielspieler schon ein ungeöffnetes Divine Pack im Inventar, wird kein weiteres geschickt');
-  eq(result.adminUnopenedAllowedOnce, true, 'einem frischen Zielspieler lässt sich genau ein ungeöffnetes Divine Pack schicken');
-  eq(result.otherPacksUnaffected, true, 'alle anderen Packs bleiben für Admins unbegrenzt verschenkbar');
-  eq(result.firstOtherPathAllowed, true, 'das erste Öffnen über einen anderen Weg (z.B. Admin-Picker) ist erlaubt und verbraucht das Limit');
-  eq(result.secondOtherPathBlocked, true, 'jedes weitere Öffnen über so einen Weg wird abgelehnt, es werden keine Karten vergeben');
-  eq(result.inventoryPackKept, true, 'ein gesperrtes Inventar-Pack wird nicht verbraucht, es bleibt im Inventar');
   eq(result.noIdCollision, true, 'keine Divine-ID kollidiert mit einer Karte in irgendeinem anderen Pool');
   eq(result.oldCardsIntact, true, 'die bisher überschriebenen Karten (Dimarco, Caicedo, Barella, Alvarez) sind wieder sie selbst');
   eq(result.revoked, true, 'ein fälschlich vergebener Divine-Titel wird zurückgenommen (und abgelegt)');
   eq(result.keptWithRealCard, true, 'wer wirklich eine Divine-Karte besitzt, behält den Titel');
-  eq(result.boughtOnlyOnce, true, 'zwei Käufe direkt hintereinander ergeben nur EINEN Kauf (100.000 Coins, 3 Karten)');
+  eq(result.noLimitProps, true, 'das Divine Pack hat kein Einmal-Limit mehr');
+  eq(result.boughtTwice, true, 'das Divine Pack lässt sich beliebig oft kaufen (2 Käufe: 200.000 Coins, 6 Karten gezogen)');
+  eq(result.shopAlwaysBuyable, true, 'der Shop zeigt das Pack immer als kaufbar');
+  eq(result.adminGivesOneEachTime, true, 'Admin-Geschenk gibt je 1 Karte und ist wiederholbar');
+  eq(result.keptOnlyFirst, true, 'Start-Check: stehen mehrere Divine-Karten im Kader, bleibt nur die erste');
+  eq(result.pickerBadgeShown, true, 'im Aufstellungs-Picker ist jede weitere Divine-Karte als "MAX. 1 DIVINE" gesperrt');
+  eq(result.presetKeepsOne, true, 'ein geladener Kader mit mehreren Divine-Karten behält nur eine');
   eq(result.pendingSaved, true, 'die offene Auswahl wird im Profil gemerkt');
   eq(result.resumed, true, 'nach einem Neustart wird die offene Auswahl wieder aufgemacht');
   eq(result.resumeKeptOne, true, 'die fortgesetzte Auswahl behält genau 1 Karte und löscht den Merker');
-  eq(result.thirdBlocked, true, 'jeder weitere Kauf ist gesperrt (keine Coins abgezogen)');
-  eq(result.shopShowsOwned, true, 'der Shop zeigt "Bereits gekauft" statt Öffnen');
   eq(result.packOk, true, 'Divine Pack: Tier divine, 100.000 Coins, 3 Karten, 1 wählbar, letztes Pack im Shop');
   eq(result.drawsOk, true, 'jede Ziehung sind 3 verschiedene Divine-Karten');
   eq(result.allNineReachable, true, 'alle 9 Divine-Karten sind ziehbar');
