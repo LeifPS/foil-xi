@@ -17820,6 +17820,10 @@ async function init(){
   if(grantDivineNametagIfOwned()) await sSet('profile', profile);
   currentTab = restoredLastTab();
   setTimeout(()=>{ try{ resumePendingPackPick(); }catch(e){ console.warn('resumePendingPackPick failed', e); } }, 600);
+  // Liga-Abrechnung (Auf-/Abstieg + Belohnungen) hat keinen Server/Cron und lief bisher NUR, wenn jemand den
+  // Ligen-Tab öffnete - war niemand dort, blieb sie liegen. Jetzt stößt jeder, der das Spiel startet, das
+  // Nachholen im Hintergrund an (idempotent: Claim/Flag pro Woche, sonst nur ein paar Dokument-Lesezugriffe).
+  setTimeout(()=>{ ligaBackgroundCatchUp(); }, 4000);
   renderNav();
   renderView(currentTab);
   updateCoinDisplay();
@@ -29219,6 +29223,17 @@ async function ligaWeekendRecapActive(){
 // moment for everyone, instead of whenever the first visitor of the day happened to open the tab.
 // Runs Samstag (not Sonntag) per the tab's own description: "Montag-Freitag Ligaphase, Samstag
 // Relegation, Sonntag Ruhetag" - Sonntag only ever RECAPS what already happened Samstag.
+// Hintergrund-Nachholen der Liga-Abrechnung beim Spielstart (siehe init) - dieselbe Schleife wie im Ligen-Tab:
+// ein Aufruf bringt die Aufstiegsrunde nur um eine Stufe voran. Fehler dürfen nie den Spielstart stören.
+let _ligaBackgroundCatchUpRan = false;
+async function ligaBackgroundCatchUp(){
+  if(_ligaBackgroundCatchUpRan) return;
+  _ligaBackgroundCatchUpRan = true;
+  try{
+    if(!profile || !clubId || sessionLostToOtherDevice) return;
+    for(let i=0;i<6;i++){ if(!(await resolveWeeklyRolloverIfNeeded())) break; }
+  }catch(e){ console.warn('liga background catch-up failed', e); }
+}
 async function resolveWeeklyRolloverIfNeeded(){
   await fbReady;
   if(!fb) return null;
@@ -29232,7 +29247,15 @@ async function resolveWeeklyRolloverIfNeeded(){
   // ANDERE (neue) Kalenderwoche adressierte, komplett unsichtbar (kein Fehler, kein Hinweis) - die
   // betroffene Liga lief einfach mit der alten Mitgliederliste weiter, ohne dass Auf-/Abstieg je
   // stattfand.
-  const weekStart = isSaturday ? mostRecentMondayBerlin() : mostRecentMondayBerlin() - 7*24*60*60*1000;
+  // Bugfix "Liga-Belohnungen wurden nicht ausgezahlt, Nachholen klappt nicht": der SONNTAG gehört noch zur
+  // Kalenderwoche, deren Samstags-Abrechnung hätte laufen müssen (Woche = Montag..Sonntag, siehe
+  // mostRecentMondayBerlin). Der Nachhol-Fix oben zielte aber an JEDEM Nicht-Samstag - also auch am Sonntag -
+  // auf die Vorwoche und überging damit genau die Woche, die gestern abgerechnet werden sollte: war am
+  // Samstag niemand online, lief am Sonntag nichts nach, und ab Montag zeigte "Vorwoche" erst recht auf die
+  // falsche Woche. Nur Montag-Freitag ist die abzurechnende Woche wirklich die VORWOCHE (der Wochenendpokal,
+  // siehe wepTargetWeekStart, macht es mit seinem Sonntag schon immer richtig).
+  const isWeekend = now.getDay()===6 || now.getDay()===0;
+  const weekStart = isWeekend ? mostRecentMondayBerlin() : mostRecentMondayBerlin() - 7*24*60*60*1000;
   if(weekStart<LIGA_SEASON_EPOCH) return null; // season hasn't even started its first week yet
   // Everything below this point is the ORIGINAL, unmodified instant-rollover pass - still used as-is
   // for any week that started before LIGA_RULES_V2_WEEK_START, so a week already in progress when the
