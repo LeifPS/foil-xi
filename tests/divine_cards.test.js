@@ -25,7 +25,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const body = node.querySelector('.card-body');
     const order = Array.from(body.children).map(e=>e.className.split(' ')[0]);
     const iconsDirectlyUnderName = order[0]==='divine-name' && order[1]==='nat-club-icons' && order.length===2;
-    const hasFx = !!node.querySelector('.divine-fx .divine-halo') && node.querySelectorAll('.divine-mote').length===6;
+    const hasFx = !!node.querySelector('.divine-fx .divine-aura') && node.querySelectorAll('.divine-mote').length===3;
 
     // Alle Namen gleich groß: keine Längen-Klassen mehr
     const longClass = !cards.some(c=>/dn-/.test(cardEl(c,'').querySelector('.divine-name').className));
@@ -68,7 +68,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   eq(result.noNormalName, true, 'kein normales Namensfeld mehr');
   eq(result.hasIcons, true, 'Nation/Liga/Verein sind vorhanden');
   eq(result.iconsDirectlyUnderName, true, 'Nation/Liga/Verein stehen direkt unter dem Namen, beide ganz unten');
-  eq(result.hasFx, true, 'Divine-Effekt-Layer (Halo + 6 Lichtpartikel) vorhanden');
+  eq(result.hasFx, true, 'Divine-Effekt-Layer (Aura + 3 Lichtpartikel) vorhanden');
   eq(result.longClass, true, 'alle Namen sind gleich groß (keine Längen-Klassen)');
   eq(result.sbcPerCard, true, 'für jede Divine-Karte gibt es genau eine eigene Herausforderung');
   eq(result.sbcOnce, true, 'jede Divine-Herausforderung ist nur einmal machbar');
