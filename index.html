@@ -747,6 +747,8 @@ body.is-offline #offline-overlay{display:flex;}
 .ach-bar{background:rgba(242,240,228,.1);border-radius:6px;overflow:hidden;margin-bottom:10px;}
 .ach-tier-row{display:flex;align-items:center;gap:12px;padding:9px 12px;margin-bottom:6px;}
 .ach-tier-row .ach-tier-action .action-btn{min-height:34px;padding:6px 14px;font-size:13px;}
+.ei-t{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+.ei{position:relative;}
 /*@@NEU@@*/
 /* ---- (wird pro Ansicht neu gebaut) Markt, Live-Handel ---- */
 /* ---- pack grid ---- */
@@ -19595,7 +19597,8 @@ function emojiIconHTML(ch){
   if(!spec) return null;
   const [name, tone] = spec.split(':');
   if(typeof ICONS === 'undefined' || !ICONS[name]) return null;
-  return `<span class="ei${tone?' '+tone:''}" aria-hidden="true">${ico(name)}</span>`;
+  // Das Original-Zeichen bleibt unsichtbar im Text (Kopieren, Screenreader, textContent-Abfragen bleiben stimmig).
+  return `<span class="ei${tone?' '+tone:''}">${ico(name)}<span class="ei-t">${ch}</span></span>`;
 }
 function convertEmojiIn(root){
   if(!root || root.nodeType !== 1 && root.nodeType !== 3) return;

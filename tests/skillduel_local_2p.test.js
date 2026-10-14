@@ -31,25 +31,25 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
     navigator.getGamepads = () => [null, gpB, null, gpA];
     openLocalTwoPlayerSetup();
-    await new Promise(r=>setTimeout(r, 30));
+    await new Promise(r=>setTimeout(r, 90));
     const modalShown = !!document.getElementById('sk-local-p1-status');
 
     // Pad B drückt zuerst -> Spieler 1.
     gpB.buttons[0].pressed = true;
-    await new Promise(r=>setTimeout(r, 40));
+    await new Promise(r=>setTimeout(r, 140));
     gpB.buttons[0].pressed = false;
-    await new Promise(r=>setTimeout(r, 20));
+    await new Promise(r=>setTimeout(r, 70));
     const p1AssignedText = document.getElementById('sk-local-p1-status').textContent;
 
     // Pad A drückt danach -> Spieler 2.
     gpA.buttons[2].pressed = true;
-    await new Promise(r=>setTimeout(r, 40));
+    await new Promise(r=>setTimeout(r, 140));
     gpA.buttons[2].pressed = false;
-    await new Promise(r=>setTimeout(r, 40));
+    await new Promise(r=>setTimeout(r, 140));
 
     const pickerTitleP1 = document.querySelector('h2')?.textContent;
     document.querySelector('.sk-pick-tile').click();
-    await new Promise(r=>setTimeout(r, 40));
+    await new Promise(r=>setTimeout(r, 140));
     const pickerTitleP2 = document.querySelector('h2')?.textContent;
     document.querySelector('.sk-pick-tile').click();
     await new Promise(r=>setTimeout(r, 80));

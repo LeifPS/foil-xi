@@ -47,6 +47,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // Jetzt löst der ERSTE (veraltete) Aufruf auf - er darf das aktuell angezeigte Grid NICHT nochmal
     // leeren/neu befüllen (das wäre sichtbares Flackern) und NICHT in den längst losgelösten alten
     // Knoten schreiben, als wäre das noch relevant.
+    await new Promise(r => setTimeout(r, 80)); // der zentrale Emoji->Icon-Ersatz läuft einen Frame nach dem Rendern - erst danach ist der Inhalt stabil
     const attachedContentBeforeStaleResolve = document.getElementById('challenge-grid').innerHTML;
     resolvers[0](new Set());
     await new Promise(r => setTimeout(r, 10));
