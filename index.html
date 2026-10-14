@@ -621,6 +621,62 @@ body.is-offline #offline-overlay{display:flex;}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
 .toolbar input,.toolbar select{background:var(--void);border:1.5px solid var(--line);color:var(--chalk);padding:10px 12px;border-radius:var(--r1);font-size:14px;}
 .toolbar input{flex:1;min-width:160px;}
+
+/* ===== Kader-Editor ===== */
+.howto{margin-top:10px;max-width:70ch;}
+.howto summary{cursor:pointer;color:var(--teal);font-size:13px;font-weight:700;list-style:none;display:inline-flex;align-items:center;gap:6px;}
+.howto summary::-webkit-details-marker{display:none;}
+.howto summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s;}
+.howto[open] summary::before{transform:rotate(45deg);}
+.howto p{margin-top:8px !important;font-size:13px !important;}
+.squad-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start;}
+@media(max-width:980px){.squad-layout{grid-template-columns:minmax(0,1fr);}}
+.pitch{position:relative;border:1.5px solid var(--line-strong);border-radius:var(--r2);aspect-ratio:4/5.4;overflow:hidden;
+  background:repeating-linear-gradient(180deg,#14492f 0 11.11%,#114330 11.11% 22.22%);}
+.pitch::before{content:"";position:absolute;inset:3.5%;border:2px solid rgba(242,240,228,.38);pointer-events:none;
+  background:
+    linear-gradient(rgba(242,240,228,.38),rgba(242,240,228,.38)) 0 50%/100% 2px no-repeat,
+    radial-gradient(ellipse closest-side at 50% 50%,transparent calc(100% - 2px),rgba(242,240,228,.38) calc(100% - 2px),rgba(242,240,228,.38) 100%,transparent) 50% 50%/30% 22.2% no-repeat,
+    linear-gradient(rgba(242,240,228,.38),rgba(242,240,228,.38)) 25% 0/2px 15% no-repeat,
+    linear-gradient(rgba(242,240,228,.38),rgba(242,240,228,.38)) 75% 0/2px 15% no-repeat,
+    linear-gradient(rgba(242,240,228,.38),rgba(242,240,228,.38)) 50% 15%/50% 2px no-repeat,
+    linear-gradient(rgba(242,240,228,.38),rgba(242,240,228,.38)) 25% 100%/2px 15% no-repeat,
+    linear-gradient(rgba(242,240,228,.38),rgba(242,240,228,.38)) 75% 100%/2px 15% no-repeat,
+    linear-gradient(rgba(242,240,228,.38),rgba(242,240,228,.38)) 50% 85%/50% 2px no-repeat;}
+.pitch::after{content:none;}
+.pitch-slot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:transform .15s;z-index:1;}
+.pitch-slot:hover{transform:translate(-50%,-50%) translateY(-3px);z-index:2;}
+.empty-slot-inner{width:86px;height:152px;border:2px dashed rgba(242,240,228,.5);border-radius:var(--r2);display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:4px;font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:14px;color:var(--chalk);background:rgba(6,32,26,.35);transition:border-color .15s,background .15s;}
+.empty-slot-plus{font-size:28px;line-height:1;opacity:.7;}
+.pitch-slot:hover .empty-slot-inner{border-color:var(--go);background:rgba(6,32,26,.6);}
+.pitch-slot:hover .empty-slot-plus{opacity:1;color:var(--go);}
+@media(max-width:560px){.empty-slot-inner{width:62px;height:110px;font-size:11px;}.empty-slot-plus{font-size:22px;}}
+
+.squad-layout .side-panel{gap:18px;}
+.panel-title{margin:0 0 8px;font-family:var(--fb);font-stretch:100%;font-size:13px;font-weight:800;color:var(--chalk);display:flex;align-items:center;gap:8px;}
+.panel-title::after{content:"";flex:1;height:1.5px;background:var(--line);}
+.panel-group{display:block;}
+.panel-actions{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1.5px solid var(--line);}
+.panel-actions .action-btn{width:100%;}
+.action-btn.secondary.danger{border-color:rgba(255,91,73,.6);color:var(--danger);}
+.action-btn.secondary.danger:hover:not(:disabled){background:rgba(255,91,73,.12);}
+.rating-hero{display:flex;align-items:center;gap:14px;background:var(--void);border:1.5px solid var(--line);border-radius:var(--r2);padding:12px 16px;}
+.rating-hero .num{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:56px;line-height:.95;color:var(--gold);}
+.rating-hero .lbl{font-size:13px;color:var(--muted);font-weight:700;text-transform:none;letter-spacing:0;}
+.atk-def-tile{border:1.5px solid var(--line);border-radius:var(--r2);}
+.atk-def-tile .num{font-size:26px;}
+.atk-def-tile .lbl{font-size:12px;text-transform:none;letter-spacing:0;font-weight:700;}
+.chem-label{font-size:13px;text-transform:none;letter-spacing:0;font-weight:800;color:var(--chalk);}
+.chem-bar{height:7px;}
+.formation-select .chip{cursor:pointer;transition:border-color .15s,color .15s;}
+.formation-select .chip:hover{border-color:var(--line-strong);color:var(--chalk);}
+.formation-select .chip.active{background:rgba(255,210,63,.12);}
+.tactics-section{margin-top:26px;background:var(--panel);border:1.5px solid var(--line);border-radius:var(--r2);padding:18px;}
+.tactics-section .hint b{color:var(--go);}
+.tactics-section .formation-select{margin-bottom:16px;}
+.tactics-section .formation-select:last-child{margin-bottom:0;}
+.atk-def-tile{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:10px 12px;}
 /*@@NEU@@*/
 /* ---- (wird pro Ansicht neu gebaut) Markt, Live-Handel ---- */
 /* ---- pack grid ---- */
@@ -2532,18 +2588,17 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 
 
 /* ---- squad builder ---- */
-.squad-layout{display:grid;grid-template-columns:1fr 300px;gap:20px;}
-@media(max-width:820px){.squad-layout{grid-template-columns:1fr;}}
-.pitch{position:relative;background:radial-gradient(ellipse at 50% 20%, #163a24, #0c1f14 70%);border:1px solid var(--line);border-radius:16px;aspect-ratio:4/5.4;overflow:hidden;}
-.pitch::before{content:"";position:absolute;inset:8%;border:1px solid rgba(255,255,255,.12);border-radius:6px;}
-.pitch::after{content:"";position:absolute;left:50%;top:8%;bottom:8%;width:1px;background:rgba(255,255,255,.12);}
-.pitch-slot{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:.15s;z-index:1;}
-.pitch-slot:hover{transform:translate(-50%,-50%) translateY(-3px);z-index:2;}
-.empty-slot-inner{width:86px;height:152px;border:2px dashed var(--line);border-radius:10px;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:2px;font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:12.5px;color:var(--muted);background:rgba(255,255,255,.02);}
-.empty-slot-plus{font-size:22px;line-height:1;opacity:.55;}
-.pitch-slot:hover .empty-slot-inner{border-color:var(--turf-bright);color:var(--chalk);}
-.pitch-slot:hover .empty-slot-plus{opacity:1;color:var(--turf-bright);}
+
+
+
+
+
+
+
+
+
+
+
 /* ---- Draft-Modus: Land-Rollen-Bühne + Karten-Aufdeck-Animation ---- */
 .draft-roll-stage{text-align:center;padding:22px 14px;border-radius:14px;
   background:radial-gradient(ellipse at 50% -10%, rgba(61,220,132,.14), transparent 60%), linear-gradient(160deg,#141a16,#0a0d0b);
@@ -2603,30 +2658,29 @@ body.gfx-no-badgeanim .nt-auserwaehlt::after{ animation:none !important; opacity
 @keyframes draftCardReveal{from{opacity:0;transform:scale(.6) translateY(14px);}to{opacity:1;transform:scale(1) translateY(0);}}
 .draft-slot-card{transition:.15s;}
 
-.rating-hero{display:flex;align-items:center;gap:14px;}
-.rating-hero .num{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:44px;line-height:1;}
-.rating-hero .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+
+
+
 /* Team-Rating (above) is a flat average of all 11 Overalls - what the match engine actually uses is
    two SEPARATE numbers with heavy position-weighting (attack favors FWD/MID, defense favors DEF/GK)
    plus a star-player/pace/passing adjustment - so two squads with an identical Team-Rating can still
    have quite different Angriff/Abwehr. This row shows those two real numbers directly instead of
    leaving them invisible, computed via the same computeTeamProfile() the engine itself calls. */
 .atk-def-row{display:flex;gap:10px;margin:2px 0 4px;}
-.atk-def-tile{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--line);border-radius:12px;padding:9px 12px;}
+
 .atk-def-tile.atk{background:linear-gradient(135deg, rgba(226,86,79,.18), rgba(226,86,79,.02) 70%);}
 .atk-def-tile.def{background:linear-gradient(135deg, rgba(77,168,255,.18), rgba(77,168,255,.02) 70%);}
 .atk-def-body{display:flex;flex-direction:column;align-items:center;min-width:0;}
-.atk-def-tile .num{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:20px;line-height:1;font-variant-numeric:tabular-nums;}
+
 .atk-def-tile.atk .num{color:#ff7b72;}
 .atk-def-tile.def .num{color:#6fb4ff;}
-.atk-def-tile .lbl{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:1px;}
+
 .chem-meter{display:flex;flex-direction:column;gap:7px;}
-.chem-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;justify-content:space-between;align-items:center;}
+
 .chem-label b{color:var(--chalk);font-family:var(--fb);font-variant-numeric:tabular-nums;text-transform:none;letter-spacing:0;}
 .chem-info-btn{cursor:pointer;width:17px;height:17px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--muted);font-family:var(--fb);font-variant-numeric:tabular-nums;}
 .chem-info-btn:active{background:var(--line);}
-.chem-bar{height:5px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;}
+
 .chem-bar i{display:block;height:100%;border-radius:5px;transition:width .3s;}
 .chem-dist{display:flex;flex-wrap:wrap;gap:6px;}
 .chem-dist-chip{font-size:10.5px;font-family:var(--fb);font-variant-numeric:tabular-nums;padding:3px 8px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);letter-spacing:.02em;}
@@ -3197,7 +3251,7 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .wp-xp-chips{display:flex;justify-content:center;gap:8px;margin-top:12px;flex-wrap:wrap;}
 .wp-xp-chip{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:20px;padding:4px 11px;font-size:10.5px;color:var(--muted);}
 .wp-xp-chip b{color:var(--chalk);}
-.chem-bar{height:5px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;}
+
 .chem-bar i{display:block;height:100%;border-radius:5px;transition:width .3s;}
 .wp-bar-shine{position:relative;overflow:hidden;height:9px;border-radius:6px;background:rgba(255,255,255,.07);box-shadow:inset 0 1px 3px rgba(0,0,0,.4);}
 .wp-bar-shine > i{display:block;height:100%;border-radius:6px;transition:width .4s ease;position:relative;overflow:hidden;}
@@ -24439,7 +24493,7 @@ function renderSquad(view){
   const teamProfile = filled ? computeTeamProfile(getMySquadPlayers(), rating) : null;
   const fmtAtkDef = v => v.toFixed(2);
   view.innerHTML = `
-    <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position tats\u00e4chlich spielen k\u00f6nnen, werden angeboten \u2014 Karten mit mehreren Positionen bekommen auf ihrer 1. bzw. 2. gelisteten Position einen Rating-Bonus (++/+). F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></div>
+    <div class="view-head"><h2>Kader-Editor</h2><p>Tippe auf eine Position, um einen Spieler zuzuweisen.</p><details class="howto"><summary>So funktioniert die Aufstellung</summary><p>Tippe auf eine Position auf dem Spielfeld, um einen Spieler aus deinem Verein zuzuweisen. Nur Spieler, die diese Position tats\u00e4chlich spielen k\u00f6nnen, werden angeboten \u2014 Karten mit mehreren Positionen bekommen auf ihrer 1. bzw. 2. gelisteten Position einen Rating-Bonus (++/+). F\u00fclle alle 11 Positionen, um deinen Kader f\u00fcr Online-Spiele zu ver\u00f6ffentlichen.</p></details></div>
     <div class="squad-layout">
       <div class="pitch" id="pitch"></div>
       <div class="side-panel">
@@ -24449,38 +24503,40 @@ function renderSquad(view){
           <div class="atk-def-tile def"><div class="atk-def-body"><div class="num">${teamProfile ? fmtAtkDef(teamProfile.preciseDefense) : '--'}</div><div class="lbl">Defensive</div></div></div>
         </div>
         <div class="chem-meter" id="chem-meter"></div>
-        <div><div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Formation</div>
+        <div class="panel-group"><h4 class="panel-title">Formation</h4>
         <div class="formation-select" id="form-select">
           ${Object.entries(FORMATIONS).map(([k,f])=>`<div class="chip ${k===squad.formation?'active':''}" data-f="${k}" title="${k===squad.formation?'':`${formationCompatibilityCount(k)}/${f.slots.length} deiner aktuellen Spieler passen direkt auf eine Position in dieser Formation`}">${f.label}${k===squad.formation||filled===0?'':`<span style="display:block;font-size:9px;color:var(--muted);margin-top:2px;">${formationCompatibilityCount(k)}/${f.slots.length} passen</span>`}</div>`).join('')}
         </div></div>
         <button class="action-btn secondary" id="fill-next-slot" style="margin-bottom:10px;">Nächste freie Position füllen</button>
-        <div>
-          <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Trainer</div>
+        <div class="panel-group">
+          <h4 class="panel-title">Trainer</h4>
           <div id="mgr-slot" style="cursor:pointer;"></div>
         </div>
-        <div>
-          <div class="lbl" style="margin-bottom:8px;color:var(--muted);font-size:11px;text-transform:uppercase;">Gespeicherte Kader</div>
+        <div class="panel-group">
+          <h4 class="panel-title">Gespeicherte Kader</h4>
           <div class="formation-select" id="preset-list" style="margin-bottom:8px;">
             ${squadPresets.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(p=>`<div class="chip preset-chip" data-id="${p.id}">${p.name} <span style="color:var(--muted);">(${(FORMATIONS[p.formation]||{}).label||p.formation})</span><span class="preset-dup" data-id="${p.id}" title="Als Kopie speichern">\u29c9</span><span class="preset-update" data-id="${p.id}" title="Mit aktuellem Kader \u00fcberschreiben">\u27f3</span><span class="preset-del" data-id="${p.id}">\u00d7</span></div>`).join('') || '<p class="hint" style="margin:0;">Noch keine gespeichert.</p>'}
           </div>
           <button class="action-btn secondary" id="save-preset" style="margin-bottom:10px;">Als neuen Kader speichern</button>
         </div>
+        <div class="panel-actions">
         <button class="action-btn secondary" id="save-squad">Kader speichern</button>
-        <button class="action-btn secondary" id="clear-squad" style="background:none;border:1px solid var(--danger);color:var(--danger);">Kader leeren</button>
+        <button class="action-btn secondary danger" id="clear-squad">Kader leeren</button>
         <button class="action-btn" id="publish-squad" ${filled<11?'disabled':''}>F\u00fcr Online-Spiele ver\u00f6ffentlichen</button>
+        </div>
         <p class="hint">Beim Ver\u00f6ffentlichen werden Formation, Rating und Spielernamen mit anderen Spielern geteilt, damit sie gegen deinen Verein antreten k\u00f6nnen. Es werden keine pers\u00f6nlichen Daten geteilt.</p>
       </div>
     </div>
-    <div class="tactics-section" style="margin-top:22px;">
-      <div class="lbl" style="margin-bottom:4px;color:var(--muted);font-size:11px;text-transform:uppercase;">Taktik (vor dem Spiel festgelegt)</div>
-      <p class="hint" style="margin-top:0;margin-bottom:10px;">Aktuell: <b style="color:var(--turf-bright);">${(TACTIC_MENTALITY[squad.tactics&&squad.tactics.mentality]||TACTIC_MENTALITY.balanced).label}</b> \u00b7 <b style="color:var(--turf-bright);">${(TACTIC_PRESSING[squad.tactics&&squad.tactics.pressing]||TACTIC_PRESSING.normal).label}</b></p>
+    <div class="tactics-section">
+      <h4 class="panel-title">Taktik (vor dem Spiel festgelegt)</h4>
+      <p class="hint" style="margin-top:0;margin-bottom:10px;">Aktuell: <b>${(TACTIC_MENTALITY[squad.tactics&&squad.tactics.mentality]||TACTIC_MENTALITY.balanced).label}</b> \u00b7 <b>${(TACTIC_PRESSING[squad.tactics&&squad.tactics.pressing]||TACTIC_PRESSING.normal).label}</b></p>
       <p class="hint" style="margin-top:0;margin-bottom:8px;">Mentalit\u00e4t: verschiebt Angriff/Abwehr sp\u00fcrbar.</p>
       <div class="formation-select" id="tactics-mentality" style="margin-bottom:14px;">
-        ${Object.entries(TACTIC_MENTALITY).map(([key,t])=>`<div class="chip tactic-chip" data-group="mentality" data-key="${key}" style="${(squad.tactics&&squad.tactics.mentality||'balanced')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
+        ${Object.entries(TACTIC_MENTALITY).map(([key,t])=>`<div class="chip tactic-chip${(squad.tactics&&squad.tactics.mentality||'balanced')===key?' active':''}" data-group="mentality" data-key="${key}" title="${t.desc}">${t.label}</div>`).join('')}
       </div>
       <p class="hint" style="margin-top:0;margin-bottom:8px;">Pressing: mehr Balleroberungen gegen deutlich mehr Kartenrisiko.</p>
       <div class="formation-select" id="tactics-pressing">
-        ${Object.entries(TACTIC_PRESSING).map(([key,t])=>`<div class="chip tactic-chip" data-group="pressing" data-key="${key}" style="${(squad.tactics&&squad.tactics.pressing||'normal')===key?'border-color:var(--turf-bright);color:var(--turf-bright);':''}" title="${t.desc}">${t.label}</div>`).join('')}
+        ${Object.entries(TACTIC_PRESSING).map(([key,t])=>`<div class="chip tactic-chip${(squad.tactics&&squad.tactics.pressing||'normal')===key?' active':''}" data-group="pressing" data-key="${key}" title="${t.desc}">${t.label}</div>`).join('')}
       </div>
     </div>`;
   document.querySelectorAll('.preset-chip').forEach(chip=>{
