@@ -708,6 +708,23 @@ body.is-offline #offline-overlay{display:flex;}
 .sbc-grid{display:grid;}
 .sbc-card{position:relative;background:var(--panel);display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s;}
 .sbc-build-btn{width:100%;}
+
+/* Unter-Navigation innerhalb einer Ansicht: Segmente wie ein Tabellenkopf */
+.subnav{display:flex;gap:0;margin-bottom:18px;border:1.5px solid var(--line);border-radius:var(--r1);overflow:hidden;width:fit-content;max-width:100%;background:var(--void);overflow-x:auto;}
+.subnav-btn{flex:1 1 auto;padding:10px 18px;background:none;border:none;border-right:1.5px solid var(--line);color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s;}
+.subnav-btn:last-child{border-right:none;}
+.subnav-btn:hover{color:var(--chalk);background:rgba(242,240,228,.05);}
+.subnav-btn.active{background:var(--go);color:var(--go-ink);}
+@media(max-width:560px){.subnav{width:100%;}.subnav-btn{padding:10px 12px;font-size:13px;}}
+
+/* Icons, die aus alten Emoji-Texten ersetzt wurden */
+.ei{display:inline-flex;align-items:center;vertical-align:-.16em;line-height:1;}
+.ei .ico{width:1.1em;height:1.1em;}
+.ei.m1{color:#f6c859;}
+.ei.m2{color:#c9d3cf;}
+.ei.m3{color:#d58b52;}
+.ei.yc .ico{color:#ffd23f;fill:#ffd23f;}
+.ei.rc .ico{color:#ff5b49;fill:#ff5b49;}
 /*@@NEU@@*/
 /* ---- (wird pro Ansicht neu gebaut) Markt, Live-Handel ---- */
 /* ---- pack grid ---- */
@@ -3905,6 +3922,7 @@ const ICONS = {
   plus:    '<path d="M12 5v14M5 12h14"/>',
   back:    '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   forward: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  search:  '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
   up:      '<path d="M12 19V5M6 11l6-6 6 6"/>',
   down:    '<path d="M12 5v14M6 13l6 6 6-6"/>',
   swapH:   '<path d="M4 9h15l-4-4M20 15H5l4 4"/>',
@@ -15060,10 +15078,10 @@ function renderTrade(view){
   loadSalesHistory();
   view.innerHTML = `
     <div class="view-head"><h2>Handel</h2><p>Verkaufe Karten \u00f6ffentlich \u00fcber den Transfermarkt, oder mache einem bestimmten Verein ein direktes Angebot \u2014 auch Karte-gegen-Karte oder Trainer-gegen-Trainer.</p></div>
-    <div id="trade-subnav" style="display:flex;gap:2px;padding:0;background:none;border:none;margin-bottom:18px;">
-      <button class="nav-btn ${tradeSubTab==='market'?'active':''}" id="subtab-market" style="padding:9px 14px;">Transfermarkt</button>
-      <button class="nav-btn ${tradeSubTab==='direct'?'active':''}" id="subtab-direct" style="padding:9px 14px;">Direkt-Angebote</button>
-      <button class="nav-btn ${tradeSubTab==='quicksell'?'active':''}" id="subtab-quicksell" style="padding:9px 14px;">Schnellverkauf</button>
+    <div id="trade-subnav" class="subnav">
+      <button class="subnav-btn ${tradeSubTab==='market'?'active':''}" id="subtab-market">Transfermarkt</button>
+      <button class="subnav-btn ${tradeSubTab==='direct'?'active':''}" id="subtab-direct">Direkt-Angebote</button>
+      <button class="subnav-btn ${tradeSubTab==='quicksell'?'active':''}" id="subtab-quicksell">Schnellverkauf</button>
     </div>
     <div id="trade-content"></div>
   `;
@@ -15105,9 +15123,9 @@ async function renderQuickSellSection(el){
       <p class="hint" style="margin:0;">⚠ Schnellverkauf zahlt sofort Coins aus und entfernt die Karte(n) dauerhaft aus deiner Sammlung - anders als der Transfermarkt gibt es <b>kein</b> Zurücknehmen. Der Preis liegt bewusst unter dem echten Marktwert (${Math.round(QUICK_SELL_RAP_PCT*100)}% eines manipulationssicheren Basiswerts) - für mehr Coins lohnt sich oft der Transfermarkt.</p>
       <p class="hint" style="margin:8px 0 0;">Tageslimit: <b style="color:${remainingToday>0?'var(--gold)':'var(--danger)'};">${formatCoins(remainingToday)}</b> von ${formatCoins(QUICK_SELL_DAILY_CAP)} Coins Schnellverkauf-Erlös heute noch möglich.${remainingToday<=0?' Setzt sich um Mitternacht zurück.':''}</p>
     </div>
-    <div style="display:flex;gap:2px;margin-bottom:16px;">
-      <button class="nav-btn ${quickSellMode==='manual'?'active':''}" id="qs-tab-manual" style="padding:8px 14px;flex:1;">Manuell auswählen</button>
-      <button class="nav-btn ${quickSellMode==='filter'?'active':''}" id="qs-tab-filter" style="padding:8px 14px;flex:1;">Nach Eigenschaften</button>
+    <div class="subnav">
+      <button class="subnav-btn ${quickSellMode==='manual'?'active':''}" id="qs-tab-manual">Manuell auswählen</button>
+      <button class="subnav-btn ${quickSellMode==='filter'?'active':''}" id="qs-tab-filter">Nach Eigenschaften</button>
     </div>
     <div id="qs-body"></div>`;
   document.getElementById('qs-tab-manual').addEventListener('click', ()=>{ quickSellMode='manual'; renderQuickSellSection(el); });
@@ -15649,9 +15667,9 @@ async function openSellModal(){
   openModal(`
     <h2 style="margin-bottom:4px;">Karte(n) verkaufen</h2>
     <p class="hint" style="margin-top:0;margin-bottom:12px;">W\u00e4hle Karten manuell aus, oder liste alle Karten mit bestimmten Eigenschaften auf einmal (z.\u00a0B. Rating 90-92, LW).</p>
-    <div style="display:flex;gap:2px;margin-bottom:16px;">
-      <button class="nav-btn ${sellModalMode==='manual'?'active':''}" id="sell-tab-manual" style="padding:8px 14px;flex:1;">Manuell ausw\u00e4hlen</button>
-      <button class="nav-btn ${sellModalMode==='filter'?'active':''}" id="sell-tab-filter" style="padding:8px 14px;flex:1;">Nach Eigenschaften</button>
+    <div class="subnav">
+      <button class="subnav-btn ${sellModalMode==='manual'?'active':''}" id="sell-tab-manual">Manuell ausw\u00e4hlen</button>
+      <button class="subnav-btn ${sellModalMode==='filter'?'active':''}" id="sell-tab-filter">Nach Eigenschaften</button>
     </div>
     <div id="sell-modal-body"></div>
   `);
@@ -15965,9 +15983,9 @@ function renderSellFilter(allEligible, usedInSquad){
         ${posOptions}
       </select>
     </div>
-    <div style="display:flex;gap:2px;margin-bottom:10px;">
-      <button class="nav-btn active" id="price-mode-flat" style="padding:7px 12px;flex:1;">Fester Preis</button>
-      <button class="nav-btn" id="price-mode-formula" style="padding:7px 12px;flex:1;">Formel</button>
+    <div class="subnav">
+      <button class="subnav-btn active" id="price-mode-flat">Fester Preis</button>
+      <button class="subnav-btn" id="price-mode-formula">Formel</button>
     </div>
     <div class="toolbar" style="margin-bottom:6px;" id="price-flat-row">
       <input id="filter-price" type="text" inputmode="decimal" placeholder="Preis pro Karte in Coins (z. B. 1.2m)">
@@ -19532,6 +19550,90 @@ function renderView(tab){
   if(tab==='admin') return isAdmin() ? renderAdminPanel(view) : renderPlay(view);
   if(tab==='iconswap2') return renderIconSwap2Hub(view);
 }
+
+// ===== Emoji -> Icon-Satz =====
+// Die Oberfläche nutzt durchgehend das eigene Icon-Set (ico()). Alte Emoji in Texten, die noch an vielen Stellen
+// im Code stehen (Toasts, Dialoge, Tabellen), werden hier zentral ersetzt, damit überall derselbe Strich-Stil
+// erscheint. Karten (.pcard), Eingabefelder und <option>-Texte bleiben unberührt.
+const EMOJI_ICON_MAP = {
+  '\u{1F3C6}':'trophy','⏳':'hourglass','⌛':'hourglass','\u{1F512}':'lock','⚽':'ball','\u{1F381}':'gift','\u{1F3AF}':'target',
+  '\u{1F3C5}':'medal','\u{1F396}':'medal','✨':'sparkle','\u{1F500}':'shuffle','✅':'check','✓':'check','✔':'check',
+  '\u{1F3B2}':'dice','\u{1F4B0}':'coin','\u{1FA99}':'coin','⚡':'bolt','\u{1F4E6}':'box','\u{1F4CB}':'list','⚠':'alert',
+  '←':'back','\u{1F9E4}':'glove','\u{1F525}':'flame','\u{1F3C1}':'flag','\u{1F4CA}':'chart','\u{1F91D}':'handshake','\u{1F451}':'crown',
+  '\u{1F48E}':'diamond','\u{1F614}':'sad','\u{1F480}':'skull','\u{1F501}':'refresh','↻':'refresh','↺':'refresh','↔':'swapH','⇄':'swapH',
+  '\u{1F4C8}':'chart','\u{1F4C7}':'index','\u{1F5C2}':'folder','\u{1F4AC}':'chat','\u{1F6E0}':'wrench','⚙':'admin','\u{1F441}':'eye','\u{1F440}':'eye',
+  '\u{1F4B1}':'swapH','\u{1F3B4}':'card','\u{1F0CF}':'card','\u{1F94A}':'bolt','❌':'close','✕':'close','✗':'close','✕':'close',
+  '\u{1F947}':'medal:m1','\u{1F948}':'medal:m2','\u{1F949}':'medal:m3','\u{1F7E8}':'card:yc','\u{1F7E5}':'card:rc','⭐':'starFill','\u{1F3AB}':'gift',
+  '➕':'plus','✚':'plus','\u{1F514}':'alert','\u{1F50D}':'search','⏭':'forward'
+};
+const EMOJI_STRIP_IN_HEADINGS = true;
+const EMOJI_RE = new RegExp('(' + Object.keys(EMOJI_ICON_MAP).map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|') + ')\\uFE0F?', 'gu');
+function emojiIconHTML(ch){
+  const spec = EMOJI_ICON_MAP[ch];
+  if(!spec) return null;
+  const [name, tone] = spec.split(':');
+  if(typeof ICONS === 'undefined' || !ICONS[name]) return null;
+  return `<span class="ei${tone?' '+tone:''}" aria-hidden="true">${ico(name)}</span>`;
+}
+function convertEmojiIn(root){
+  if(!root || root.nodeType !== 1 && root.nodeType !== 3) return;
+  const walk = (node)=>{
+    if(node.nodeType === 3){ handleText(node); return; }
+    if(node.nodeType !== 1) return;
+    const tag = node.tagName;
+    if(tag==='SCRIPT'||tag==='STYLE'||tag==='TEXTAREA'||tag==='INPUT'||tag==='OPTION'||tag==='SELECT'||tag==='svg'||tag==='SVG') return;
+    if(node.classList && (node.classList.contains('pcard') || node.classList.contains('ei') || node.hasAttribute('data-noemoji'))) return;
+    for(let c = node.firstChild; c; ){ const next = c.nextSibling; walk(c); c = next; }
+  };
+  const handleText = (t)=>{
+    let v = t.nodeValue;
+    if(!v || v.length > 4000) return;
+    // Überschriften der Ansichten tragen keine Emoji mehr: sie stehen für sich
+    if(t.parentNode && t.parentNode.closest && t.parentNode.closest('.view-head h2') && /\p{Extended_Pictographic}/u.test(v)){
+      t.nodeValue = v.replace(/\p{Extended_Pictographic}\uFE0F?\s*/gu, '');
+      return;
+    }
+    EMOJI_RE.lastIndex = 0;
+    if(!EMOJI_RE.test(v)) return;
+    const par = t.parentNode;
+    if(!par) return;
+    const inHeading = EMOJI_STRIP_IN_HEADINGS && par.closest && par.closest('.view-head h2');
+    EMOJI_RE.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0, m;
+    while((m = EMOJI_RE.exec(v))){
+      if(m.index > last) frag.appendChild(document.createTextNode(v.slice(last, m.index)));
+      if(!inHeading){
+        const html = emojiIconHTML(m[1]);
+        if(html){ const tpl = document.createElement('template'); tpl.innerHTML = html; frag.appendChild(tpl.content.firstChild); }
+        else frag.appendChild(document.createTextNode(m[0]));
+      }
+      last = m.index + m[0].length;
+    }
+    if(last < v.length) frag.appendChild(document.createTextNode(inHeading ? v.slice(last).replace(/^\s+/, '') : v.slice(last)));
+    par.replaceChild(frag, t);
+  };
+  walk(root);
+}
+(function setupEmojiIcons(){
+  if(typeof MutationObserver === 'undefined') return;
+  const pending = new Set();
+  let queued = false;
+  const flush = ()=>{
+    queued = false;
+    const nodes = [...pending]; pending.clear();
+    nodes.forEach(n=>{ if(n.isConnected) convertEmojiIn(n); });
+  };
+  const obs = new MutationObserver(muts=>{
+    for(const m of muts){
+      if(m.type === 'characterData') pending.add(m.target);
+      else m.addedNodes.forEach(n=>pending.add(n));
+    }
+    if(!queued){ queued = true; requestAnimationFrame(flush); }
+  });
+  const start = ()=>{ obs.observe(document.body, {childList:true, subtree:true, characterData:true}); convertEmojiIn(document.body); };
+  if(document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();
 
 // ===== STORE =====
 // ===== DAILY LOGIN REWARDS (7-day cycle) =====
@@ -31684,10 +31786,10 @@ function renderLigenPanel(view){
   ligaFixturesShowAll = false;
   view.innerHTML = `<div class="view-head"><h2>🏆 Ligen</h2><p>Montag-Freitag Ligaphase, Samstag Relegation, Sonntag Wochenendpokal. Auf- und Abstieg jede Woche.</p></div>
     <div id="liga-pending-packs"></div>
-    <div id="ligen-subnav" style="display:flex;gap:2px;padding:0;background:none;border:none;margin-bottom:14px;">
-      <button class="nav-btn ${ligenSubTab==='mine'?'active':''}" id="ligen-subtab-mine" style="padding:9px 14px;">Meine Liga</button>
-      <button class="nav-btn ${ligenSubTab==='all'?'active':''}" id="ligen-subtab-all" style="padding:9px 14px;">Alle Ligen</button>
-      <button class="nav-btn ${ligenSubTab==='wep'?'active':''}" id="ligen-subtab-wep" style="padding:9px 14px;">🏆 Wochenendpokal</button>
+    <div id="ligen-subnav" class="subnav">
+      <button class="subnav-btn ${ligenSubTab==='mine'?'active':''}" id="ligen-subtab-mine">Meine Liga</button>
+      <button class="subnav-btn ${ligenSubTab==='all'?'active':''}" id="ligen-subtab-all">Alle Ligen</button>
+      <button class="subnav-btn ${ligenSubTab==='wep'?'active':''}" id="ligen-subtab-wep">Wochenendpokal</button>
     </div>
     <div id="liga-content"><p class="hint">Lädt…</p></div>`;
   document.getElementById('ligen-subtab-mine').addEventListener('click', ()=>{ ligenSubTab='mine'; renderLigenPanel(view); });
