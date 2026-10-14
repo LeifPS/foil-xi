@@ -82,7 +82,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     Math.random = () => 0; // garantierter Gold-Fund
     draftBeginRoll();
     Math.random = realMathRandom;
-    await new Promise(r => setTimeout(r, 30)); // requestAnimationFrame + Layout kurz abwarten
+    await new Promise(r => setTimeout(r, 200)); // requestAnimationFrame + Layout (inkl. Schrift-Neuberechnung) abwarten
     const goldStrip = document.getElementById('draft-reel-strip');
     const goldFinalTile = goldStrip.querySelector('.draft-reel-final');
     const goldTargetX = parseFloat(goldStrip.style.transform.replace(/[^\d.-]/g, ''));

@@ -37,9 +37,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // Während des Speicherns selbst zeigt der Knopf sichtbar an, dass gerade etwas passiert (Sanduhr),
     // statt so auszusehen, als hätte der Klick gar nichts bewirkt.
     let iconDuringSave = null;
-    fb.setDoc = async (ref, val) => { iconDuringSave = btn.textContent; writes.push({ path: ref.path, val }); };
+    fb.setDoc = async (ref, val) => { iconDuringSave = btn.innerHTML; writes.push({ path: ref.path, val }); };
     await performManualSave(btn);
-    const showedBusyIconWhileSaving = iconDuringSave === '⏳';
+    const showedBusyIconWhileSaving = typeof iconDuringSave === 'string' && iconDuringSave.includes('<svg') && iconDuringSave.includes('Sichere');
 
     // Ein Doppelklick, während der erste Save noch läuft, löst KEINEN zweiten, überlappenden Save aus.
     let resolveSlowSave;
