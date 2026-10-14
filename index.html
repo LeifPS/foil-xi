@@ -677,6 +677,15 @@ body.is-offline #offline-overlay{display:flex;}
 .tactics-section .formation-select{margin-bottom:16px;}
 .tactics-section .formation-select:last-child{margin-bottom:0;}
 .atk-def-tile{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:10px 12px;}
+
+/* ===== Index ===== */
+.cardidx-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;}
+.cardidx-stat-tile{background:var(--panel);border:1.5px solid var(--line);border-radius:var(--r2);padding:14px 16px;display:flex;flex-direction:column;gap:6px;}
+.cardidx-stat-tile .l{order:-1;display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:var(--muted);text-transform:none;letter-spacing:0;margin:0;}
+.cardidx-stat-tile .l .ico{width:16px;height:16px;}
+.cardidx-stat-tile .v{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:34px;line-height:1;color:var(--chalk);font-variant-numeric:tabular-nums;}
+.cardidx-stat-tile .v small{font-family:var(--fb);font-stretch:100%;font-size:14px;font-weight:700;color:var(--muted);}
+.cardidx-discovery-bar{height:7px;margin-top:2px;}
 /*@@NEU@@*/
 /* ---- (wird pro Ansicht neu gebaut) Markt, Live-Handel ---- */
 /* ---- pack grid ---- */
@@ -3425,10 +3434,10 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .wm26-progress-dots i.done{background:var(--turf-bright);border-color:var(--turf-bright);}
 .wm26-progress-dots i.now{background:var(--gold);border-color:var(--gold);box-shadow:0 0 6px var(--gold);}
 /* ---- Karten-Index: owned-only card lookup with rich per-card metadata ---- */
-.cardidx-summary{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
-.cardidx-stat-tile{flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
-.cardidx-stat-tile .v{font-size:19px;font-weight:800;color:var(--chalk);}
-.cardidx-stat-tile .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:2px;}
+
+
+
+
 .cardidx-card-wrap{position:relative;}
 .cardidx-copies-badge{position:absolute;top:4px;right:4px;background:rgba(6,8,12,.82);color:var(--gold);font-size:10.5px;font-weight:700;border-radius:20px;padding:2px 8px;z-index:2;border:1px solid rgba(255,215,0,.35);}
 .cardidx-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}
@@ -23355,24 +23364,24 @@ function renderCardIndex(view){
   collection.forEach(c=>{ if(seenRap.has(c.cardId)) return; seenRap.add(c.cardId); const base = BY_ID.get(c.cardId); if(base) ownedRap += computeRAP(base); });
   view.innerHTML = `
     <div class="view-head">
-      <h2>\ud83d\udcc7 Index</h2>
-      <p>Jede Karte und jeder Trainer im Spiel, komplett einsehbar \u2014 Werte, Bio, Marktwert, Bezugsquelle, Top-10-Ranglisten und mehr. Der kleine <span style="color:#3ddc84;">\u2713</span> unten links markiert, welche du selbst besitzt.</p>
+      <h2>Index</h2>
+      <p>Jede Karte und jeder Trainer im Spiel, komplett einsehbar \u2014 Werte, Bio, Marktwert, Bezugsquelle, Top-10-Ranglisten und mehr. Das Haken-Symbol unten links markiert Karten, die du besitzt.</p>
     </div>
     <div class="cardidx-summary">
-      <div class="cardidx-stat-tile"><div class="v">${ownedCount.toLocaleString('de-DE')} / ${universe.length.toLocaleString('de-DE')}</div><div class="l">\u2705 Im Besitz</div>
+      <div class="cardidx-stat-tile"><div class="l">${ico('check')}Im Besitz</div><div class="v">${ownedCount.toLocaleString('de-DE')}<small> / ${universe.length.toLocaleString('de-DE')}</small></div>
         <div class="cardidx-discovery-bar"><div style="width:${ownedPct}%;"></div></div></div>
-      <div class="cardidx-stat-tile"><div class="v">${totalCopies.toLocaleString('de-DE')}</div><div class="l">\ud83c\udfb4 Eigene Kopien insgesamt</div></div>
-      <div class="cardidx-stat-tile"><div class="v">${formatCoins(ownedRap)}</div><div class="l">\ud83d\udcb0 Gesamtwert (RAP)</div></div>
+      <div class="cardidx-stat-tile"><div class="l">${ico('card')}Eigene Kopien</div><div class="v">${totalCopies.toLocaleString('de-DE')}</div></div>
+      <div class="cardidx-stat-tile"><div class="l">${ico('coin')}Gesamtwert (RAP)</div><div class="v">${formatCoins(ownedRap)}</div></div>
     </div>
-    <div class="toolbar" style="margin-bottom:10px;">
-      <input id="cardidx-search" placeholder="\ud83d\udd0e Spieler/Trainer suchen..." value="${cardIndexFilter.q}">
+    <div class="filterbar">
+      <input id="cardidx-search" class="fb-search" type="search" placeholder="Spieler oder Trainer suchen \u2026" value="${escapeHtml(cardIndexFilter.q)}" aria-label="Suchen">
       <select id="cardidx-pos">
         <option value="ALL">Alle Positionen</option>
-        <option value="GK">\ud83e\udde4 Torh\u00fcter</option>
-        <option value="DEF">\ud83d\udee1\ufe0f Verteidiger</option>
-        <option value="MID">\u2699\ufe0f Mittelfeldspieler</option>
-        <option value="FWD">\u2694\ufe0f St\u00fcrmer</option>
-        <option value="MGR">\ud83d\udccb Trainer</option>
+        <option value="GK">Torh\u00fcter</option>
+        <option value="DEF">Verteidiger</option>
+        <option value="MID">Mittelfeldspieler</option>
+        <option value="FWD">St\u00fcrmer</option>
+        <option value="MGR">Trainer</option>
       </select>
       <select id="cardidx-nat">
         <option value="ALL">Alle Nationen</option>
@@ -23397,13 +23406,13 @@ function renderCardIndex(view){
         <option value="newest">Sortierung: Zuletzt erhalten</option>
         <option value="rap">Sortierung: Marktwert/RAP (hoch\u2192niedrig)</option>
       </select>
-      <input id="cardidx-min-ov" type="number" min="1" max="115" placeholder="Min. Rating" value="${cardIndexFilter.minOv||''}" style="max-width:110px;">
-      <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap;padding:0 4px;">
+      <input id="cardidx-min-ov" type="number" inputmode="numeric" min="1" max="115" placeholder="Min. Rating" value="${cardIndexFilter.minOv||''}" aria-label="Mindest-Rating">
+      <label class="check">
         <input type="checkbox" id="cardidx-owned-only" ${cardIndexFilter.ownedOnly?'checked':''}> Nur eigene Karten
       </label>
-      <button class="action-btn secondary" id="cardidx-filters-reset" style="width:auto;padding:8px 12px;font-size:11.5px;">Filter zur\u00fccksetzen</button>
+      <button class="action-btn secondary" id="cardidx-filters-reset">Filter zur\u00fccksetzen</button>
     </div>
-    <div class="mono hint" id="cardidx-summary-line" style="margin-bottom:10px;"></div>
+    <div class="club-summary" id="cardidx-summary-line"></div>
     <div class="club-grid" id="cardidx-grid"></div>
     <div class="cardidx-pagination" id="cardidx-pagination"></div>`;
   document.getElementById('cardidx-pos').value = cardIndexFilter.pos;
