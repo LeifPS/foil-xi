@@ -769,6 +769,34 @@ body.is-offline #offline-overlay{display:flex;}
 .leader-list{gap:8px;}
 .leader-row{background:var(--panel);border:1.5px solid var(--line);border-radius:var(--r1);padding:11px 14px;font-size:14px;gap:10px;}
 .icon-swap-banner{background:var(--panel);border:1.5px solid var(--line);border-left:5px solid #22d3ee;border-radius:var(--r2);padding:14px 18px;}
+
+/* ===== Spiel-Ansicht: Anzeigetafel, Mini-Anzeige, Gegnerkarten ===== */
+.vs-teams{display:flex;align-items:center;justify-content:center;gap:22px;margin:18px 0;}
+.team-blob{width:104px;}
+.team-blob .r{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:40px;line-height:1;color:var(--gold);}
+.team-blob .t{font-size:12.5px;font-weight:700;color:var(--chalk);margin-top:4px;word-break:break-word;}
+.team-blob .tb-manager{font-size:12px;opacity:.8;}
+.vs-x{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);color:var(--muted);font-size:24px;}
+.score{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:64px;line-height:1;letter-spacing:.04em;margin:10px 0;color:var(--chalk);font-variant-numeric:tabular-nums;}
+.live-scoreboard{background:var(--void);border:1.5px solid var(--line-strong);border-radius:var(--r2);padding:16px 16px 14px;margin-bottom:14px;position:relative;overflow:hidden;}
+.live-scoreboard::before{content:"";position:absolute;left:0;right:0;top:0;height:5px;background:var(--foil);}
+.live-minute-pill{display:flex;align-items:center;justify-content:center;gap:7px;font-family:var(--fb);font-variant-numeric:tabular-nums;font-size:13px;font-weight:800;color:var(--chalk);background:var(--panel2);border:1.5px solid var(--line);border-radius:100px;padding:4px 14px;margin:6px auto 12px;width:fit-content;}
+.live-minute-pill::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--danger);animation:liveMinuteDotPulse 1.4s ease-in-out infinite;flex-shrink:0;}
+.live-scoreboard-name{flex:1;min-width:0;font-size:15px;font-weight:800;color:var(--chalk);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.match-mini-widget{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:42;display:flex;align-items:center;gap:12px;background:var(--void);border:1.5px solid var(--line-strong);border-radius:100px;padding:8px 18px;box-shadow:0 10px 26px rgba(0,0,0,.55);animation:matchMiniPulse 2.4s ease-in-out infinite;}
+.mmw-minute{display:flex;align-items:center;gap:6px;font-family:var(--fb);font-variant-numeric:tabular-nums;font-size:12px;font-weight:800;color:var(--muted);white-space:nowrap;}
+.mmw-teams{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--chalk);white-space:nowrap;}
+.mmw-score{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:22px;color:var(--go);}
+.winprob-labels{font-size:12px;font-weight:700;text-transform:none;letter-spacing:0;}
+.winprob-pct-row span{font-size:14px;font-weight:800;}
+.match-log{background:var(--void);border:1.5px solid var(--line);border-radius:var(--r2);}
+.qsearch-name{font-size:13px;}
+.qsearch-rating{font-size:12px;}
+.qsearch-timer,.qsearch-status{font-size:13px;}
+.match-log{margin-top:14px;font-size:13px;color:var(--muted);text-align:left;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
+.live-scoreboard-name.me{text-align:right;}
+.live-scoreboard-name.opp{text-align:left;}
+.live-scoreboard .score{margin:0;flex-shrink:0;}
 /*@@NEU@@*/
 /* ---- (wird pro Ansicht neu gebaut) Markt, Live-Handel ---- */
 /* ---- pack grid ---- */
@@ -2981,14 +3009,14 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
 
 
 
-.vs-teams{display:flex;align-items:center;justify-content:center;gap:20px;margin:18px 0;}
-.team-blob{width:100px;}
-.team-blob .r{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:34px;}
+
+
+
 .team-blob .tb-crest{display:flex;justify-content:center;margin-top:4px;}
-.team-blob .t{font-size:11px;color:var(--muted);margin-top:2px;word-break:break-word;}
-.team-blob .tb-manager{font-size:11px;opacity:.75;margin-top:2px;}
-.vs-x{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);color:var(--muted);font-size:18px;}
-.score{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:52px;letter-spacing:.05em;margin:10px 0;text-shadow:0 2px 16px rgba(0,0,0,.5);}
+
+
+
+
 
 /* Online-Matchmaking-Suchscreen (siehe renderQueueSearchHTML/joinQueue): eigenes Wappen gegen ein
    pulsierendes "?"-Mysterium-Wappen statt reinem Text+Timer, plus Fortschrittsbalken bis zum
@@ -2997,8 +3025,8 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
 .qsearch-vs{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:18px;}
 .qsearch-side{width:104px;}
 .qsearch-crest{display:flex;justify-content:center;align-items:center;margin-bottom:6px;}
-.qsearch-name{font-size:11.5px;font-weight:700;color:var(--chalk);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.qsearch-rating{font-size:11px;color:var(--muted);margin-top:1px;}
+
+
 .qsearch-vs-badge{font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:15px;color:var(--muted);flex-shrink:0;}
 .qsearch-mystery{position:relative;width:46px;height:46px;margin-left:auto;margin-right:auto;}
 .qsearch-mystery-q{position:relative;z-index:1;font-family:var(--fd);font-stretch:var(--fd-wd);font-weight:var(--fd-wt);font-size:22px;color:var(--muted);
@@ -3018,21 +3046,16 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
 .qsearch-progress-fill{height:100%;width:0%;background:var(--turf-bright);border-radius:3px;
   transition:width .3s linear,background-color .3s;}
 .qsearch-progress-fill.qsearch-progress-urgent{background:var(--gold);}
-.qsearch-timer{font-size:11px;color:var(--muted);margin-bottom:12px;}
+
 
 /* Live match scoreboard card (see animateTimedMatch) - pulls the score/minute/win-probability out of a
    plain stack of centered lines into one cohesive scoreboard, team names flanking the score itself. */
-.live-scoreboard{background:linear-gradient(180deg,#181c25,#0e1117);border:1px solid var(--line);
-  border-radius:14px;padding:16px 14px 14px;margin-bottom:14px;}
-.live-minute-pill{display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--fb);font-variant-numeric:tabular-nums;
-  font-size:11px;font-weight:600;color:var(--chalk);background:var(--panel2);border:1px solid var(--line);
-  border-radius:100px;padding:3px 12px;margin:0 auto 12px;width:fit-content;letter-spacing:.03em;}
-.live-minute-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--danger);
-  animation:liveMinuteDotPulse 1.4s ease-in-out infinite;flex-shrink:0;}
+
+
+
 @keyframes liveMinuteDotPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
 .live-scoreboard-teams{display:flex;align-items:center;justify-content:center;gap:14px;}
-.live-scoreboard-name{flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--chalk);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
 .live-scoreboard-name.me{text-align:right;}
 .live-scoreboard-name.opp{text-align:left;}
 .live-scoreboard .score{margin:0;flex-shrink:0;}
@@ -3042,23 +3065,18 @@ body.gfx-no-badgeanim .is2-token-icon{animation:none !important;}
    contents) never removes it. Sits above the mobile bottom nav (#nav-mobile) on small screens, plain
    bottom-center on desktop. Score/time only (no goal log, no win-prob bar) - just enough to keep track
    of the match while browsing elsewhere, not a second full match viewer. */
-.match-mini-widget{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:42;
-  display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,#181c25,#0e1117);
-  border:1px solid var(--line);border-radius:100px;padding:7px 16px;box-shadow:0 8px 24px rgba(0,0,0,.5);
-  animation:matchMiniPulse 2.4s ease-in-out infinite;}
-@media(max-width:820px){ .match-mini-widget{bottom:82px;} }
+
+
 @keyframes matchMiniPulse{0%,100%{box-shadow:0 8px 24px rgba(0,0,0,.5);}50%{box-shadow:0 8px 24px rgba(0,0,0,.5), 0 0 0 1px var(--turf-bright);}}
-.mmw-minute{display:flex;align-items:center;gap:5px;font-family:var(--fb);font-variant-numeric:tabular-nums;font-size:10.5px;
-  font-weight:600;color:var(--muted);white-space:nowrap;}
+
 .mmw-minute::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--danger);
   animation:liveMinuteDotPulse 1.4s ease-in-out infinite;flex-shrink:0;}
-.mmw-teams{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--chalk);white-space:nowrap;}
-.mmw-score{font-family:var(--fb);font-variant-numeric:tabular-nums;color:var(--turf-bright);}
-.winprob-labels{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;
-  color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:14px 0 5px;}
+
+
+
 .winprob-labels span:first-child,.winprob-labels span:last-child{max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .winprob-pct-row{display:flex;justify-content:space-between;margin-top:4px;}
-.winprob-pct-row span{font-family:var(--fb);font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;}
+
 .winprob-pct-row span:first-child{color:var(--turf-bright);}
 .winprob-pct-row span:last-child{color:var(--danger);}
 
@@ -3559,7 +3577,7 @@ body.gfx-no-badgeanim .nt-prisma .nametag-symbol{ animation:none !important; }
 .cardidx-provenance{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);margin-top:6px;}
 .cardidx-discovery-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:8px;}
 .cardidx-discovery-bar > div{height:100%;background:linear-gradient(90deg,var(--turf-bright),var(--gold));border-radius:3px;transition:width .4s ease;}
-.match-log{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:left;background:#0c0f16;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px;}
+
 .goal-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:6px 10px;border-radius:8px;animation:trayIn .3s;}
 .goal-row.opp{border-left:2px solid var(--danger);}
 .goal-row.me{border-left:2px solid var(--turf-bright);}
