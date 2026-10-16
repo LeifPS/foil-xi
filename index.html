@@ -802,7 +802,6 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 @keyframes bdoWinGlow{0%,100%{box-shadow:0 16px 36px rgba(0,0,0,.7), 0 0 24px -2px rgba(255,214,110,.65);}50%{box-shadow:0 16px 36px rgba(0,0,0,.7), 0 0 44px 2px rgba(255,236,160,.8);}}
 .pcard.theme-bdo26win::before{animation:autoShine 2.4s ease-in-out infinite;}
 .pcard.theme-bdo26win .card-body{justify-content:flex-end;padding-bottom:9px;}
-.pcard.theme-bdo26win .face-photo{transform:scale(1.14);transform-origin:50% 28%;}
 .pcard.theme-bdo26win .top{filter:drop-shadow(0 1px 3px rgba(20,10,0,.95)) drop-shadow(0 0 6px rgba(20,10,0,.8));}
 .pcard.theme-bdo26win .ov{background:linear-gradient(100deg,#ffe9a8 25%,#fff 50%,#ffd45a 75%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 5px rgba(255,214,110,.8));}
 .pcard.theme-bdo26win .pos-label .pt{color:#fff;}
@@ -857,6 +856,62 @@ body.gfx-no-confetti .wm26-trophy-confetti{ display:none !important; }
 .bdo-own-grid{display:flex;flex-wrap:wrap;gap:8px;}
 .bdo-own.off{opacity:.3;filter:grayscale(.9);}
 @media (max-width:560px){.bdo-head{flex-direction:column;text-align:center;}}
+/* ----- Ballon d'Or: Design v2 - kleines Rundfoto im Goldring, Lorbeerkranz, Strahlenglanz, Zierrahmen, Band ----- */
+.pcard.bdo-card{--bdo-d:108px;--bdo-top:30px;}
+.pcard.mini.bdo-card{--bdo-d:76px;--bdo-top:22px;}
+.pcard.xs.bdo-card{--bdo-d:46px;--bdo-top:12px;}
+.pcard.bdo-card .photo-frame{width:var(--bdo-d);height:var(--bdo-d);margin:var(--bdo-top) auto 0;border-radius:50%;overflow:hidden;z-index:1;
+  border:3px solid #f2c14e;box-shadow:0 0 0 2px rgba(20,12,2,.9), 0 0 0 4px rgba(255,226,140,.55), 0 0 22px rgba(255,214,110,.65), inset 0 0 16px rgba(0,0,0,.45);}
+.pcard.xs.bdo-card .photo-frame{border-width:2px;box-shadow:0 0 0 1px rgba(20,12,2,.9), 0 0 0 2px rgba(255,226,140,.5), 0 0 10px rgba(255,214,110,.55);}
+.pcard.bdo-card .face-photo,.pcard.bdo-card .avatar{-webkit-mask-image:none;mask-image:none;object-position:center 18%;transform:none;border-radius:50%;}
+.pcard.bdo-card.bdo-win .photo-frame{border-color:#fff1b0;box-shadow:0 0 0 2px rgba(20,12,2,.9), 0 0 0 4px rgba(255,236,160,.8), 0 0 30px rgba(255,226,120,.9), inset 0 0 16px rgba(0,0,0,.4);}
+.pcard.bdo-card .bdo-deco{position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:var(--radius);overflow:hidden;}
+.pcard.bdo-card .bdo-burst{position:absolute;left:50%;top:calc(var(--bdo-top) + var(--bdo-d)/2);width:240px;height:240px;margin:-120px 0 0 -120px;border-radius:50%;
+  background:repeating-conic-gradient(from 0deg, rgba(255,226,140,.13) 0deg 3deg, transparent 3deg 15deg);
+  -webkit-mask-image:radial-gradient(circle, #000 18%, transparent 68%);mask-image:radial-gradient(circle, #000 18%, transparent 68%);animation:goatHaloSpin 40s linear infinite;}
+.pcard.bdo-card.bdo-win .bdo-burst{background:repeating-conic-gradient(from 0deg, rgba(255,240,170,.24) 0deg 3deg, transparent 3deg 12deg);animation-duration:24s;}
+.pcard.bdo-card .bdo-wreath{position:absolute;left:50%;width:calc(var(--bdo-d) + 50px);height:calc(var(--bdo-d) + 50px);
+  top:calc(var(--bdo-top) + var(--bdo-d)/2 - (var(--bdo-d) + 50px)/2);transform:translateX(-50%);filter:drop-shadow(0 0 5px rgba(255,200,70,.55));opacity:.95;}
+.pcard.bdo-card .bdo-frame{position:absolute;inset:5px;border-radius:calc(var(--radius) - 4px);border:1px solid rgba(255,225,150,.42);box-shadow:inset 0 0 14px rgba(255,200,80,.12);}
+.pcard.bdo-card .bdo-frame::before,.pcard.bdo-card .bdo-frame::after{content:"";position:absolute;width:13px;height:13px;border:2px solid #ffe28a;}
+.pcard.bdo-card .bdo-frame::before{top:-2px;left:-2px;border-right:none;border-bottom:none;border-top-left-radius:8px;}
+.pcard.bdo-card .bdo-frame::after{bottom:-2px;right:-2px;border-left:none;border-top:none;border-bottom-right-radius:8px;}
+.pcard.xs.bdo-card .bdo-frame{inset:3px;}.pcard.xs.bdo-card .bdo-frame::before,.pcard.xs.bdo-card .bdo-frame::after{width:7px;height:7px;}
+.pcard.bdo-card .bdo-ribbon{position:absolute;left:50%;top:calc(var(--bdo-top) + var(--bdo-d) - 7px);transform:translateX(-50%);z-index:3;white-space:nowrap;
+  font-family:'JetBrains Mono';font-weight:800;font-size:8.5px;letter-spacing:.14em;padding:3px 11px;border-radius:100px;color:#2a1d02;
+  background:linear-gradient(100deg,#c98f16,#ffe28a 45%,#fff6cc 55%,#d9a21f);border:1px solid #6b4a07;box-shadow:0 2px 6px rgba(0,0,0,.55), 0 0 10px rgba(255,214,110,.5);}
+.pcard.bdo-card.bdo-win .bdo-ribbon{font-size:9px;background:linear-gradient(100deg,#fff1b0,#ffd45a 40%,#fff 52%,#ffbf3a);box-shadow:0 2px 6px rgba(0,0,0,.55), 0 0 14px rgba(255,236,160,.85);}
+.pcard.mini.bdo-card .bdo-ribbon{font-size:6.5px;padding:2px 8px;letter-spacing:.1em;top:calc(var(--bdo-top) + var(--bdo-d) - 5px);}
+.pcard.xs.bdo-card .bdo-ribbon{display:none;}
+.pcard.bdo-card .card-body{margin-top:14px;}
+.pcard.mini.bdo-card .card-body{margin-top:9px;}
+.pcard.xs.bdo-card .card-body{margin-top:3px;}
+.pcard.bdo-win.theme-bdo26win .card-body{margin-top:0;}
+.pcard.bdo-card .top{z-index:3;}
+/* Hintergrund: beide bekommen ein feines Art-déco-Linienmuster, Gewinner zusätzlich einen hellen Strahlenkranz oben */
+.pcard.bdo-nom{background:
+    radial-gradient(ellipse 90% 40% at 50% 14%, rgba(255,214,120,.30), transparent 70%) padding-box,
+    repeating-linear-gradient(115deg, rgba(255,214,110,.05) 0 2px, transparent 2px 11px) padding-box,
+    linear-gradient(172deg,#2d200a 0%,#18110a 52%,#0a0804 100%) padding-box,
+    linear-gradient(135deg,#fff1b0 0%,#d9a21f 38%,#fff1b0 55%,#a9740f 100%) border-box;}
+.pcard.bdo-win{background:
+    radial-gradient(ellipse 100% 42% at 50% 18%, rgba(255,240,170,.42), transparent 70%) padding-box,
+    radial-gradient(ellipse 100% 40% at 50% 100%, rgba(255,205,110,.40), transparent 72%) padding-box,
+    repeating-linear-gradient(115deg, rgba(255,226,140,.07) 0 2px, transparent 2px 11px) padding-box,
+    linear-gradient(176deg,#3d2c09 0%,#241a07 42%,#0d0904 100%) padding-box,
+    linear-gradient(135deg,#fffbe0,#ffd45a 30%,#fff 50%,#e0a31c 75%,#fffbe0) border-box;border:2px solid transparent;}
+/* Größen: die Kartenklassen .mini/.xs setzen eigene Fotohöhen - hier mit höherer Spezifität zurücksetzen, damit das Foto rund bleibt */
+.pcard.mini.bdo-card .photo-frame{width:var(--bdo-d);height:var(--bdo-d);margin:var(--bdo-top) auto 0;}
+.pcard.xs.bdo-card .photo-frame{width:var(--bdo-d);height:var(--bdo-d);margin:var(--bdo-top) auto 0;}
+.pcard.xs.bdo-card .bdo-wreath{display:none;}
+.pcard.mini.bdo-card .bdo-wreath{width:calc(var(--bdo-d) + 34px);height:calc(var(--bdo-d) + 34px);top:calc(var(--bdo-top) + var(--bdo-d)/2 - (var(--bdo-d) + 34px)/2);}
+/* Gewinner-Name in Signatur-Schrift (gleiches Layout wie Divine), mit goldenem, animiertem Verlauf */
+.pcard.theme-bdo26win .divine-name{font-family:'Jalliya','Brush Script MT',cursive;font-size:40px;line-height:1;text-align:center;white-space:nowrap;overflow:visible;padding:0 2px;margin-bottom:15px;
+  -webkit-text-stroke:.4px rgba(255,246,200,.35);animation:divineNameFlow 3.6s linear infinite;}
+.pcard.mini.theme-bdo26win .divine-name{font-size:29px;margin-bottom:9px;}
+.pcard.xs.theme-bdo26win .divine-name{font-size:20px;margin-bottom:5px;}
+.pcard.theme-bdo26win .divine-name.bdo-qqq{font-size:34px;-webkit-text-stroke:0;}
+@media (prefers-reduced-motion:reduce){.pcard.bdo-card .bdo-burst{animation:none;}}
 /* ===== DIVINE PACK: neue Seltenheit nach Ultimate, ganz unten im Kartenladen. Viele Effekte, alles im Glow-Farbschema
    (Violett/Rosé/Gold): kreisender Farbrand, atmender Glow, driftender Nebel, langsam drehende Lichtstrahlen,
    Sternenfeld, aufsteigende Partikel, Sternschnuppen. Dieselben Ebenen (.pack-divine-fx) in Shop-Kachel, großer
@@ -10020,6 +10075,24 @@ BDO26_COACHES.concat([BDO26_WIN_COACH_MEN, BDO26_WIN_COACH_WOMEN]).forEach(m=>{
   if(MGR_BY_ID.has(m.id)) console.error(`BDO26-TRAINER-ID-KOLLISION: ${m.id} bereits vergeben`);
   MGR_BY_ID.set(m.id, m);
 });
+// Lorbeerkranz (SVG, einmal erzeugt): zwei Zweige aus je 11 Blattpaaren, links/rechts gespiegelt, um das Rundfoto der Event-Karten.
+const BDO_WREATH_SVG = (()=>{
+  const cx=100, cy=100, R=80; let leaves='', stems='';
+  for(const side of [1,-1]){
+    let d=''; 
+    for(let k=0;k<8;k++){
+      const a = (112 + k*15.5) * Math.PI/180;           // von unten bis kurz vor die Mitte oben (oben bleibt der Kranz offen)
+      const x = cx + side*R*Math.cos(a)*-1, y = cy + R*Math.sin(a);
+      const rot = side*((112 + k*15.5) - 90) ;
+      d += (k?'L':'M') + x.toFixed(1)+' '+y.toFixed(1);
+      const len = 10.5 - k*0.35;
+      leaves += `<ellipse cx="${(x).toFixed(1)}" cy="${(y).toFixed(1)}" rx="${(len*0.36).toFixed(1)}" ry="${len.toFixed(1)}" transform="rotate(${(rot+38).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="url(#bdoLeaf)"/>`
+             + `<ellipse cx="${(x).toFixed(1)}" cy="${(y).toFixed(1)}" rx="${(len*0.36).toFixed(1)}" ry="${len.toFixed(1)}" transform="rotate(${(rot-38).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="url(#bdoLeaf)" opacity=".85"/>`;
+    }
+    stems += `<path d="${d}" fill="none" stroke="#c98f16" stroke-width="1.6" stroke-linecap="round"/>`;
+  }
+  return `<svg class="bdo-wreath" viewBox="0 0 200 200" aria-hidden="true"><defs><linearGradient id="bdoLeaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3b8"/><stop offset=".55" stop-color="#e9b42c"/><stop offset="1" stop-color="#a8730e"/></linearGradient></defs>${stems}${leaves}</svg>`;
+})();
 // Kategorien: Nominee-Liste, Gewinner-Karte und wie die Umwandlung heißt
 const BDO26_CATS = {
   men:        {label:'Ballon d’Or (Herren)',  nominees:BDO26_MEN,           win:BDO26_WIN_MEN,         coach:false},
@@ -10766,7 +10839,7 @@ function rarityInfo(ov){
 const THEME_ACC = {fs:'#3ddc84',otw:'#4da8ff',pm:'#b98bff',gb:'#ffb84d',wall:'#8fb4d1',
   tots:'#f5d76e',flash:'#ff7a59',sd:'#ff5fa8',icon:'#c78bf5',cent:'#ffd76a',
   phenom:'#6ee7d8',setpiece:'#ffcf5c',derby:'#ff8f6b',iron:'#7d94ad',wonder:'#8ee6a3',
-  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',goat:'#ffb020',divine:'#f6e3b0',wpmvp:'#ffd76a',mysteryrare:'#a33dff',sbcx:'#d9eef2',
+  hof:'#e8b74a',gal:'#ff9ff0',gg:'#5cc9ff',wc:'#ffd700',blk:'#c9a8ff',bh:'#ff7a1a',saph:'#3d8bff',rub:'#ff3d5c',dia:'#eafcff',goat:'#ffb020',divine:'#f6e3b0',bdo26:'#f2c14e',bdo26win:'#ffe08a',bdo26_mgr:'#f2c14e',bdo26win_mgr:'#ffe08a',wpmvp:'#ffd76a',mysteryrare:'#a33dff',sbcx:'#d9eef2',
   kontra_gk:'#a78bfa',kontra_def:'#5c9db8',kontra_mid:'#d6a94a',kontra_fwd:'#e14b4b',goat:'#ff2e63',
   wcchamp:'#ffd23f',goldenball:'#ffcc00',ggwm:'#4fd1c5',youngplayer:'#7ee787',
   semifinalist:'#ff9d5c',quarterfinalist:'#9fb4c7',
@@ -18669,6 +18742,10 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const isBdoWin = card.theme==='bdo26win';
   const bdoWinFxHTML = isBdoWin ? `<div class="bdo-fx"><div class="bdo-rays"></div>${[1,2,3].map(i=>`<i class="bdo-spark k${i}"></i>`).join('')}</div>` : '';
   const isSigLayout = isDivineTier || isBdoWin;
+  // Event-Karten (Spieler UND Trainer): kleines Rundfoto im Goldring, Lorbeerkranz, Strahlenglanz, Zierrahmen und Band darunter
+  const isBdoCard = card.theme==='bdo26' || card.theme==='bdo26win' || card.theme==='bdo26_mgr' || card.theme==='bdo26win_mgr';
+  const isBdoWinCard = card.theme==='bdo26win' || card.theme==='bdo26win_mgr';
+  const bdoDecoHTML = isBdoCard ? `<div class="bdo-deco"><div class="bdo-burst"></div>${BDO_WREATH_SVG}<div class="bdo-frame"></div></div><div class="bdo-ribbon">${isBdoWinCard?'WINNER 2026':'NOMINEE 2026'}</div>` : '';
   // Icon Swap: Remastered (variant/theme 'iconswap2') - each rarity tier gets its own distinct FX
   // markup (see the .iconswap2-tier-* CSS above cardEl for what each one actually looks like): common
   // is near-static cut glass, rare a drifting liquid current, epic a spinning faceted prism with two
@@ -18774,7 +18851,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
   const div = document.createElement('div');
   const isDiamondLevel = !card.isManager && card.level===4;
   const iconswap2TierClass = card.theme==='iconswap2' && card.iconswap2Tier ? `iconswap2-tier-${card.iconswap2Tier}` : '';
-  div.className = `pcard ${card.placeholder?'is-placeholder ':''}${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${iconswap2TierClass} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
+  div.className = `pcard ${isBdoCard?(isBdoWinCard?'bdo-card bdo-win ':'bdo-card bdo-nom '):''}${card.placeholder?'is-placeholder ':''}${r.cls} ${hasVariant?'theme-'+(card.isManager?'mgr':card.theme):''} ${iconswap2TierClass} ${family?'pattern-'+family:''} ${card.isManager?'is-manager':''} ${size}`.trim();
   if(card.isManager) div.style.setProperty('--acc', cardAccent(card));
   const boostText = card.isManager ? (card.boostType==='percent' ? `+${card.boostValue}%` : `+${card.boostValue}`) : '';
   const nameClass = (hasVariant || card.isManager) ? ' name-variant' : '';
@@ -18886,6 +18963,7 @@ function cardEl(card, size='', effOvs=null, pinnedPos=null, opts={}){
     ${goatFxHTML}
     ${divineFxHTML}
     ${bdoWinFxHTML}
+    ${bdoDecoHTML}
     ${iconswap2FxHTML}
     ${ogiconFxHTML}
     ${iconpromoFxHTML}

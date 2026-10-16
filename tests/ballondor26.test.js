@@ -31,6 +31,12 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const winNode = cardEl(BDO26_WIN_MEN, '');
     const winPlaceholderNode = winNode.classList.contains('theme-bdo26win') && winNode.classList.contains('is-placeholder') && !winNode.querySelector('.stats')
       && winNode.querySelector('.divine-name').textContent==='???' && winNode.querySelector('.ov').textContent==='???' && !!winNode.querySelector('.bdo-rays');
+    // Design v2: kleines Rundfoto + Lorbeerkranz + Band auf Nominee-, Gewinner- UND Trainerkarten
+    const deco = (c)=>{ const n = cardEl(c,''); return n.classList.contains('bdo-card') && !!n.querySelector('.bdo-wreath') && !!n.querySelector('.bdo-frame') && !!n.querySelector('.bdo-burst') ? n.querySelector('.bdo-ribbon').textContent : null; };
+    const designV2 = deco(BDO26_MEN[0])==='NOMINEE 2026' && deco(BDO26_COACHES[0])==='NOMINEE 2026' && deco(BDO26_WIN_MEN)==='WINNER 2026' && deco(BDO26_WIN_COACH_MEN)==='WINNER 2026';
+    const roundPhoto = (()=>{ const host = document.createElement('div'); host.style.cssText='position:absolute;left:-9999px;'; document.body.appendChild(host); const out = {};
+      ['','mini','xs'].forEach(sz=>{ const n = cardEl(BDO26_MEN[0], sz); host.appendChild(n); const f = n.querySelector('.photo-frame').getBoundingClientRect(); out[sz||'normal'] = Math.abs(f.width-f.height)<1.5 && f.width<125 && getComputedStyle(n.querySelector('.photo-frame')).borderRadius.indexOf('50%')>=0; }); host.remove(); return out.normal && out.mini && out.xs; })();
+    const winnerSignatureFont = (()=>{ const host = document.createElement('div'); host.style.cssText='position:absolute;left:-9999px;'; document.body.appendChild(host); const n = cardEl(BDO26_WIN_MEN,''); host.appendChild(n); const ff = getComputedStyle(n.querySelector('.divine-name')).fontFamily; host.remove(); return /Jalliya/.test(ff); })();
     const coachNode = cardEl(BDO26_COACHES[4], '');
     const coachHasPhoto = !!coachNode.querySelector('img.face-photo') && /\+8%/.test(coachNode.textContent);
     const missingCard = {...BDO26_MEN[0], img:BDO26_PLACEHOLDER_IMG};
@@ -130,7 +136,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const bannerBefore = renderBdo26Banner();
     const bannerOk = bdo26Phase()==='ended' ? bannerBefore==='' : bannerBefore.includes('bdo-banner');
 
-    return { withPhoto, photosMapped, dataOk, idsUnique, noCollision, mgrCollision, nomineeProps, coachProps, placeholders, notInPacks, nomineeNode, winPlaceholderNode, coachHasPhoto, placeholderImgDirect,
+    return { designV2, roundPhoto, winnerSignatureFont, withPhoto, photosMapped, dataOk, idsUnique, noCollision, mgrCollision, nomineeProps, coachProps, placeholders, notInPacks, nomineeNode, winPlaceholderNode, coachHasPhoto, placeholderImgDirect,
       phasesOk, hubRendered, matchTargets130, winGivesToken, lossNoToken, playerPackOk, noTokenNoPack, coachNeeds3, coachPackOk, bothGendersDrawn, doubleClickSafe, lockedAfterAnnouncement,
       winnerFilled, noEarlyConvert, oneCopyOnly, uidKept, unrelatedUntouched, coachConverted, noCardNoConversion, secondRunNoop, resolvesToWinnerCard, lateConvert,
       selects, optionCounts, adminSaved, bannerOk };
@@ -150,6 +156,9 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   E('nomineeNode','Nominee-Karte rendert mit Event-Design und normalen Stats');
   E('winPlaceholderNode','Gewinner-Platzhalter: "???", Signatur-Layout ohne Stats, Lichtstrahlen');
   E('coachHasPhoto','Trainerkarte zeigt ein Foto (Platzhalter) und +8 %');
+  E('designV2','Nominee-, Gewinner- und Trainerkarten haben Rundfoto-Dekor (Kranz, Rahmen, Strahlen) und das Band NOMINEE/WINNER 2026');
+  E('roundPhoto','das Foto ist in allen Größen (normal/mini/xs) klein und wirklich rund (Breite = Höhe)');
+  E('winnerSignatureFont','der Gewinner-Name nutzt die Signatur-Schrift Jalliya');
   E('withPhoto','Karten mit Bildlink zeigen das echte Foto (über den Bildproxy, Original als Fallback)');
   E('photosMapped','alle 70 Bilder eingetragen (60 Spieler/innen, 10 Trainer)');
   E('placeholderImgDirect','Platzhalterbild wird direkt eingebunden (nicht über den Bildproxy)');
