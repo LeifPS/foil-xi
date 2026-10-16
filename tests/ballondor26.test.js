@@ -1,4 +1,4 @@
-// Regressionstest: Ballon d'Or 2026 Event (19.10.-02.11.2026). 30+30 Nominee-Karten (107), 5+5 Trainer (+8 %), 4 Gewinner-
+// Regressionstest: Ballon d'Or 2026 Event (19.10.-27.10.2026 00:00). 30+30 Nominee-Karten (107), 5+5 Trainer (+8 %), 4 Gewinner-
 // Platzhalter (126 / +10 %), Token aus 130er-Matches, Packs (1 bzw. 3 Token), Umwandlung am Verkündungstag, Admin-Gewinner.
 const { withPage } = require('./lib/browser');
 const { ok, eq, noErrors, summary } = require('./lib/assert');
@@ -48,8 +48,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     // ---------- Phasen ----------
     const t = (s)=>new Date(s).getTime();
     const phases = [bdo26Phase(t('2026-10-18T23:59:59')), bdo26Phase(t('2026-10-19T00:00:00')), bdo26Phase(t('2026-10-25T23:59:59')),
-                    bdo26Phase(t('2026-10-26T00:00:00')), bdo26Phase(t('2026-11-01T23:59:59')), bdo26Phase(t('2026-11-02T00:00:00'))];
-    const phasesOk = JSON.stringify(phases)===JSON.stringify(['before','earn','earn','convert','convert','ended']);
+                    bdo26Phase(t('2026-10-26T00:00:00')), bdo26Phase(t('2026-10-26T23:59:59')), bdo26Phase(t('2026-10-27T00:00:00')), bdo26Phase(t('2026-11-02T00:00:00'))];
+    const phasesOk = JSON.stringify(phases)===JSON.stringify(['before','earn','earn','convert','convert','ended','ended']);
 
     // ---------- Event-Woche: Matches, Token, Packs (Phase 'earn' erzwingen) ----------
     const realPhase = bdo26Phase;
