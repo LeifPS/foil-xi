@@ -33,7 +33,11 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       && winNode.querySelector('.divine-name').textContent==='???' && winNode.querySelector('.ov').textContent==='???' && !!winNode.querySelector('.bdo-rays');
     const coachNode = cardEl(BDO26_COACHES[4], '');
     const coachHasPhoto = !!coachNode.querySelector('img.face-photo') && /\+8%/.test(coachNode.textContent);
-    const placeholderImgDirect = nomNode.querySelector('img.face-photo').src.startsWith('data:image/svg+xml');
+    const missingCard = BDO26_MEN.find(c=>c.slug==='vitinha');
+    const placeholderImgDirect = cardEl(missingCard,'').querySelector('img.face-photo').src.startsWith('data:image/svg+xml');
+    const withPhoto = BDO26_MEN[10].img.startsWith('https://sportal365images.com/') && cardEl(BDO26_MEN[10],'').querySelector('img.face-photo').dataset.raw===BDO26_MEN[10].img;
+    const photoCount = BDO26_NOMINEES.concat(BDO26_COACHES).filter(c=>c.img.startsWith('https://')).length;
+    const photosMapped = photoCount===64 && BDO26_COACHES.every(c=>c.img.startsWith('https://')); // 54 Spieler:innen + 10 Trainer; 6 Spieler:innen fehlen noch
 
     // ---------- Phasen ----------
     const t = (s)=>new Date(s).getTime();
@@ -126,7 +130,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const bannerBefore = renderBdo26Banner();
     const bannerOk = bdo26Phase()==='ended' ? bannerBefore==='' : bannerBefore.includes('bdo-banner');
 
-    return { dataOk, idsUnique, noCollision, mgrCollision, nomineeProps, coachProps, placeholders, notInPacks, nomineeNode, winPlaceholderNode, coachHasPhoto, placeholderImgDirect,
+    return { withPhoto, photosMapped, dataOk, idsUnique, noCollision, mgrCollision, nomineeProps, coachProps, placeholders, notInPacks, nomineeNode, winPlaceholderNode, coachHasPhoto, placeholderImgDirect,
       phasesOk, hubRendered, matchTargets130, winGivesToken, lossNoToken, playerPackOk, noTokenNoPack, coachNeeds3, coachPackOk, bothGendersDrawn, doubleClickSafe, lockedAfterAnnouncement,
       winnerFilled, noEarlyConvert, oneCopyOnly, uidKept, unrelatedUntouched, coachConverted, noCardNoConversion, secondRunNoop, resolvesToWinnerCard, lateConvert,
       selects, optionCounts, adminSaved, bannerOk };
@@ -146,6 +150,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   E('nomineeNode','Nominee-Karte rendert mit Event-Design und normalen Stats');
   E('winPlaceholderNode','Gewinner-Platzhalter: "???", Signatur-Layout ohne Stats, Lichtstrahlen');
   E('coachHasPhoto','Trainerkarte zeigt ein Foto (Platzhalter) und +8 %');
+  E('withPhoto','Karten mit Bildlink zeigen das echte Foto (über den Bildproxy, Original als Fallback)');
+  E('photosMapped','64 Bilder eingetragen (alle 10 Trainer, 54 Spieler/innen)');
   E('placeholderImgDirect','Platzhalterbild wird direkt eingebunden (nicht über den Bildproxy)');
   E('phasesOk','Phasen: vor Start / Event-Woche / Umwandlung / beendet an den richtigen Zeitpunkten');
   E('hubRendered','Event-Hub rendert Kopf und Sammlungsraster (30+30+10 Karten)');
