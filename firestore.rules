@@ -42,7 +42,7 @@ service cloud.firestore {
     // andere config-Eintrag bleibt wie gehabt offen.
     match /config/{docId} {
       allow read: if true;
-      allow write: if docId != 'resetEvent'
+      allow write: if (docId != 'resetEvent' && docId != 'ballondor2026')
         || (isClub() && request.auth.token.email in ['leifps@foileleven-club.auth', 'test@foileleven-club.auth']);
     }
 

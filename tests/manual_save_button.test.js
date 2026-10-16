@@ -15,6 +15,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const toasts = []; toast = (m) => toasts.push(m);
     const btn = document.getElementById('manual-save-btn');
     ok_manualSaveBtnExists = !!btn;
+    const iconIsRealEmoji = btn.textContent.trim()==='\u{1F4BE}' && document.getElementById('sound-toggle').textContent.indexOf('\\u')===-1;
 
     // ---------- (1) Erfolgreicher manueller Save: legt einen Snapshot an, bestätigt per Toast, Knopf
     // ist danach wieder normal bedienbar (nicht dauerhaft "eingefroren"). ----------
@@ -63,6 +64,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const buttonReenabledAfterFailure = btn.disabled === false;
 
     return {
+      iconIsRealEmoji,
       manualSaveBtnExists: ok_manualSaveBtnExists,
       snapshotWritten, successToastShown, iconRestoredAfterSuccess, buttonReenabledAfterSuccess,
       showedBusyIconWhileSaving, secondClickIgnoredWhileBusy, exactlyOneWriteAfterResolving,
@@ -72,6 +74,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
 
   console.log('Manueller-Speichern-Knopf-Test');
   noErrors(errors, 'Seite');
+  eq(result.iconIsRealEmoji, true, 'der Speichern-Knopf zeigt das echte 💾-Zeichen, nicht den Rohtext \\u{1F4BE} (Regression)');
   ok(result.manualSaveBtnExists, 'der Speichern-Knopf ist Teil des immer sichtbaren Topbars');
   eq(result.snapshotWritten, true, 'ein Klick legt sofort einen neuen Wiederherstellungspunkt mit dem aktuellen Spielstand an');
   ok(result.successToastShown, 'ein Erfolgs-Toast bestätigt dem Spieler, dass gerade wirklich gesichert wurde');
