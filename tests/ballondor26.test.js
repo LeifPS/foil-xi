@@ -33,11 +33,11 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
       && winNode.querySelector('.divine-name').textContent==='???' && winNode.querySelector('.ov').textContent==='???' && !!winNode.querySelector('.bdo-rays');
     const coachNode = cardEl(BDO26_COACHES[4], '');
     const coachHasPhoto = !!coachNode.querySelector('img.face-photo') && /\+8%/.test(coachNode.textContent);
-    const missingCard = BDO26_MEN.find(c=>c.slug==='vitinha');
+    const missingCard = {...BDO26_MEN[0], img:BDO26_PLACEHOLDER_IMG};
     const placeholderImgDirect = cardEl(missingCard,'').querySelector('img.face-photo').src.startsWith('data:image/svg+xml');
     const withPhoto = BDO26_MEN[10].img.startsWith('https://sportal365images.com/') && cardEl(BDO26_MEN[10],'').querySelector('img.face-photo').dataset.raw===BDO26_MEN[10].img;
     const photoCount = BDO26_NOMINEES.concat(BDO26_COACHES).filter(c=>c.img.startsWith('https://')).length;
-    const photosMapped = photoCount===64 && BDO26_COACHES.every(c=>c.img.startsWith('https://')); // 54 Spieler:innen + 10 Trainer; 6 Spieler:innen fehlen noch
+    const photosMapped = photoCount===70 && BDO26_COACHES.every(c=>c.img.startsWith('https://')); // alle 60 Spieler:innen + 10 Trainer
 
     // ---------- Phasen ----------
     const t = (s)=>new Date(s).getTime();
@@ -151,7 +151,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   E('winPlaceholderNode','Gewinner-Platzhalter: "???", Signatur-Layout ohne Stats, Lichtstrahlen');
   E('coachHasPhoto','Trainerkarte zeigt ein Foto (Platzhalter) und +8 %');
   E('withPhoto','Karten mit Bildlink zeigen das echte Foto (über den Bildproxy, Original als Fallback)');
-  E('photosMapped','64 Bilder eingetragen (alle 10 Trainer, 54 Spieler/innen)');
+  E('photosMapped','alle 70 Bilder eingetragen (60 Spieler/innen, 10 Trainer)');
   E('placeholderImgDirect','Platzhalterbild wird direkt eingebunden (nicht über den Bildproxy)');
   E('phasesOk','Phasen: vor Start / Event-Woche / Umwandlung / beendet an den richtigen Zeitpunkten');
   E('hubRendered','Event-Hub rendert Kopf und Sammlungsraster (30+30+10 Karten)');
