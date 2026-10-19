@@ -59,19 +59,22 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     buildFixedRatingOpponent = (r)=>{ buildFixedRatingOpponent.last = r; return {owner:'Gegner', rating:r, players:[], managerName:'X'}; };
     let nextResult = 'WIN';
     runLocalMatch = async (rating, opp, o)=>{ await o.onComplete({result:nextResult}); };
-    view = document.getElementById('view'); currentTab = 'bdo26';
+    view = document.getElementById('view'); currentTab = 'store'; // wie im echten Spiel: Banner -> renderView('bdo26') setzt currentTab nicht
     renderBdo26Hub(view);
     const hubRendered = !!document.querySelector('.bdo-head') && document.querySelectorAll('.bdo-own-grid .pcard').length===70;
     profile.bdo26Tokens = 0;
     await playBdo26Match();
     const matchTargets130 = buildFixedRatingOpponent.last===130;
     const winGivesToken = profile.bdo26Tokens===1 && profile.bdo26Wins===1;
+    const liveHudAfterWin = document.querySelector('.bdo-head-tokens').textContent.trim().startsWith('1') && document.getElementById('bdo26-wins').textContent==='1'
+      && document.getElementById('bdo26-open-pack').disabled===false && document.getElementById('bdo26-match-btn').style.display!=='none';
     nextResult = 'LOSS'; await playBdo26Match();
     const lossNoToken = profile.bdo26Tokens===1;
     // Pack: 1 Token -> 1 Nominee (Karte in Sammlung, Token weg); ohne Token nichts
     showPackOpening = (pack, drawn, o)=>{ showPackOpening.last = {pack, drawn, o}; collection.push(...drawn.filter(c=>!c.isManager).map(c=>({uid:'u'+Math.random(), cardId:c.id}))); managerCollection.push(...drawn.filter(c=>c.isManager).map(c=>({uid:'m'+Math.random(), mgrId:c.id}))); };
     profile.bdo26Tokens = 1;
     await openBdo26Pack('player');
+    const liveHudAfterPack = document.querySelector('.bdo-head-tokens').textContent.trim().startsWith('0') && document.getElementById('bdo26-open-pack').disabled===true;
     const playerPackOk = profile.bdo26Tokens===0 && collection.length===1 && showPackOpening.last.drawn.length===1 && BDO26_NOMINEES.includes(showPackOpening.last.drawn[0]) && showPackOpening.last.o.untradable===true;
     await openBdo26Pack('player');
     const noTokenNoPack = collection.length===1;
@@ -137,7 +140,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const bannerOk = bdo26Phase()==='ended' ? bannerBefore==='' : bannerBefore.includes('bdo-banner');
 
     return { designV2, roundPhoto, winnerSignatureFont, withPhoto, photosMapped, dataOk, idsUnique, noCollision, mgrCollision, nomineeProps, coachProps, placeholders, notInPacks, nomineeNode, winPlaceholderNode, coachHasPhoto, placeholderImgDirect,
-      phasesOk, hubRendered, matchTargets130, winGivesToken, lossNoToken, playerPackOk, noTokenNoPack, coachNeeds3, coachPackOk, bothGendersDrawn, doubleClickSafe, lockedAfterAnnouncement,
+      phasesOk, hubRendered, matchTargets130, winGivesToken, liveHudAfterWin, liveHudAfterPack, lossNoToken, playerPackOk, noTokenNoPack, coachNeeds3, coachPackOk, bothGendersDrawn, doubleClickSafe, lockedAfterAnnouncement,
       winnerFilled, noEarlyConvert, oneCopyOnly, uidKept, unrelatedUntouched, coachConverted, noCardNoConversion, secondRunNoop, resolvesToWinnerCard, lateConvert,
       selects, optionCounts, adminSaved, bannerOk };
   }));
@@ -166,6 +169,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   E('hubRendered','Event-Hub rendert Kopf und Sammlungsraster (30+30+10 Karten)');
   E('matchTargets130','das Event-Match baut ein 130er-Team');
   E('winGivesToken','ein Sieg gibt genau 1 Token');
+  E('liveHudAfterWin','nach einem Sieg aktualisieren sich Token-Anzeige, Sieg-Zähler, Pack-Knopf und Match-Knopf sofort (Hub über renderView geöffnet, ohne Tab-Wechsel)');
+  E('liveHudAfterPack','nach dem Pack-Öffnen sinkt die Token-Anzeige sofort und der Pack-Knopf sperrt sich');
   E('lossNoToken','eine Niederlage gibt keinen Token');
   E('playerPackOk','1 Token = 1 Pack mit genau 1 zufälliger Nominee-Karte (untradable)');
   E('noTokenNoPack','ohne Token lässt sich kein Pack öffnen');

@@ -36617,8 +36617,20 @@ async function playBdo26Match(){
     } else {
       toast('Verloren — versuch es jederzeit erneut.');
     }
-    if(currentTab==='bdo26') renderBdo26Hub(document.getElementById('view'));
+    bdo26RefreshHub(true);
   }});
+}
+// Hub live aktualisieren (Token, Siege, Pack-Knöpfe, Match-Knopf) - ohne currentTab, denn der Banner öffnet den Hub per renderView().
+function bdo26RefreshHub(keepMatchArea){
+  const btn = document.getElementById('bdo26-match-btn');
+  if(!btn) return; // Hub nicht offen
+  if(!keepMatchArea){ renderBdo26Hub(document.getElementById('view')); return; }
+  const earn = bdo26Phase()==='earn', t = bdo26Tokens();
+  const hud = document.querySelector('.bdo-head-tokens'); if(hud) hud.innerHTML = `${bdo26TokenHTML(t, 26)} <span>Token</span>`;
+  const w = document.getElementById('bdo26-wins'); if(w) w.textContent = profile.bdo26Wins||0;
+  const pk = document.getElementById('bdo26-open-pack'); if(pk) pk.disabled = !(earn && t>=BDO26_PACK_COST);
+  const co = document.getElementById('bdo26-open-coach'); if(co) co.disabled = !(earn && t>=BDO26_COACH_PACK_COST);
+  btn.style.display = ''; btn.textContent = 'Nochmal spielen';
 }
 // ----- Packs: 1 Token = 1 Nominee (Herren/Damen, 107), 3 Token = 1 Trainer-Nominee (+8 %) -----
 async function openBdo26Pack(kind){
@@ -36632,7 +36644,7 @@ async function openBdo26Pack(kind){
   await sSet('profile', profile);
   const pack = {id:coach?'bdo26coach':'bdo26', name: coach ? 'Ballon d’Or 2026 Trainer-Pack' : 'Ballon d’Or 2026 Pack', tier:'ultimate', count:1};
   showPackOpening(pack, [card], {untradable:true});
-  if(currentTab==='bdo26') renderBdo26Hub(document.getElementById('view'));
+  bdo26RefreshHub(false);
 }
 // ----- Banner im Kartenladen -----
 function renderBdo26Banner(){
@@ -36693,7 +36705,7 @@ function renderBdo26Hub(view){
       <p class="hint" style="margin:0 0 10px;">Unbegrenzt spielbar — jeder Sieg zählt. Gespielt wird mit deiner aktuellen Aufstellung.</p>
       <div id="bdo26-match-area" style="text-align:center;"></div>
       <button class="action-btn" id="bdo26-match-btn" ${phase==='earn'?'':'disabled'} style="width:260px;">${phase==='earn'?'Match gegen 130er-Team starten':(phase==='before'?'Startet am Montag':'Nur in der Event-Woche')}</button>
-      <div class="hint" style="margin:10px 0 0;">Bisherige Siege im Event: <b>${profile.bdo26Wins||0}</b></div>
+      <div class="hint" style="margin:10px 0 0;">Bisherige Siege im Event: <b id="bdo26-wins">${profile.bdo26Wins||0}</b></div>
     </div>
     <div class="bdo-packs">
       <div class="bdo-pack-card">
