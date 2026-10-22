@@ -36640,7 +36640,10 @@ async function openBdo26Pack(kind){
   if(bdo26Tokens() < cost){ toast(`Dir fehlen noch ${cost-bdo26Tokens()} Token.`); return; }
   profile.bdo26Tokens = bdo26Tokens() - cost; // synchron VOR dem ersten await (Doppelklick-Schutz)
   profile.bdo26PacksOpened = (profile.bdo26PacksOpened||0) + 1;
-  const card = pick(coach ? BDO26_COACHES : BDO26_NOMINEES);
+  // Immer eine Karte, die du noch nicht hast - erst wenn alle gesammelt sind, kommen Duplikate.
+  const poolAll = coach ? BDO26_COACHES : BDO26_NOMINEES, own = bdo26OwnedIds();
+  const poolNew = poolAll.filter(c=>!(coach ? own.mgrs : own.cards).has(c.id));
+  const card = pick(poolNew.length ? poolNew : poolAll);
   await sSet('profile', profile);
   const pack = {id:coach?'bdo26coach':'bdo26', name: coach ? 'Ballon d’Or 2026 Trainer-Pack' : 'Ballon d’Or 2026 Pack', tier:'ultimate', count:1};
   showPackOpening(pack, [card], {untradable:true});
