@@ -83,6 +83,13 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const coachNeeds3 = profile.bdo26Tokens===2 && managerCollection.length===0;
     profile.bdo26Tokens = 3; await openBdo26Pack('coach');
     const coachPackOk = profile.bdo26Tokens===0 && managerCollection.length===1 && BDO26_COACHES.some(c=>c.id===managerCollection[0].mgrId);
+    // Packs liefern immer neue Karten, bis alles gesammelt ist
+    collection = BDO26_NOMINEES.slice(0,-1).map((c,i)=>({uid:'n'+i, cardId:c.id})); profile.bdo26Tokens = 1;
+    await openBdo26Pack('player');
+    const lastMissingDrawn = showPackOpening.last.drawn[0]===BDO26_NOMINEES[BDO26_NOMINEES.length-1];
+    collection = BDO26_NOMINEES.map((c,i)=>({uid:'f'+i, cardId:c.id})); profile.bdo26Tokens = 1;
+    await openBdo26Pack('player');
+    const dupesWhenComplete = BDO26_NOMINEES.includes(showPackOpening.last.drawn[0]);
     // Herren UND Damen werden gezogen (Gleichverteilung grob)
     let m=0,w=0; for(let i=0;i<400;i++){ const c = pick(BDO26_NOMINEES); if(c.gender==='m') m++; else w++; }
     const bothGendersDrawn = m>120 && w>120;
@@ -140,7 +147,7 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
     const bannerOk = bdo26Phase()==='ended' ? bannerBefore==='' : bannerBefore.includes('bdo-banner');
 
     return { designV2, roundPhoto, winnerSignatureFont, withPhoto, photosMapped, dataOk, idsUnique, noCollision, mgrCollision, nomineeProps, coachProps, placeholders, notInPacks, nomineeNode, winPlaceholderNode, coachHasPhoto, placeholderImgDirect,
-      phasesOk, hubRendered, matchTargets130, winGivesToken, liveHudAfterWin, liveHudAfterPack, lossNoToken, playerPackOk, noTokenNoPack, coachNeeds3, coachPackOk, bothGendersDrawn, doubleClickSafe, lockedAfterAnnouncement,
+      phasesOk, hubRendered, matchTargets130, winGivesToken, lastMissingDrawn, dupesWhenComplete, liveHudAfterWin, liveHudAfterPack, lossNoToken, playerPackOk, noTokenNoPack, coachNeeds3, coachPackOk, bothGendersDrawn, doubleClickSafe, lockedAfterAnnouncement,
       winnerFilled, noEarlyConvert, oneCopyOnly, uidKept, unrelatedUntouched, coachConverted, noCardNoConversion, secondRunNoop, resolvesToWinnerCard, lateConvert,
       selects, optionCounts, adminSaved, bannerOk };
   }));
@@ -168,6 +175,8 @@ const { ok, eq, noErrors, summary } = require('./lib/assert');
   E('phasesOk','Phasen: vor Start / Event-Woche / Umwandlung / beendet an den richtigen Zeitpunkten');
   E('hubRendered','Event-Hub rendert Kopf und Sammlungsraster (30+30+10 Karten)');
   E('matchTargets130','das Event-Match baut ein 130er-Team');
+  E('lastMissingDrawn','ein Pack zieht nur Karten, die man noch nicht hat (fehlt nur eine, kommt genau diese)');
+  E('dupesWhenComplete','sind alle gesammelt, kommen weiter Karten (Duplikate)');
   E('winGivesToken','ein Sieg gibt genau 1 Token');
   E('liveHudAfterWin','nach einem Sieg aktualisieren sich Token-Anzeige, Sieg-Zähler, Pack-Knopf und Match-Knopf sofort (Hub über renderView geöffnet, ohne Tab-Wechsel)');
   E('liveHudAfterPack','nach dem Pack-Öffnen sinkt die Token-Anzeige sofort und der Pack-Knopf sperrt sich');
